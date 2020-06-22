@@ -49,8 +49,6 @@ Operation::Operation(unsigned op_code_, unsigned size_, Operation *eq_class_)
       operands(this),
       eq_class(eq_class_->CreateWeakUse(this)) {}
 
-EquivalenceClass::~EquivalenceClass(void) {}
-
 namespace {
 
 static unsigned SizeOfValue(llvm::Instruction *inst) {
@@ -59,16 +57,34 @@ static unsigned SizeOfValue(llvm::Instruction *inst) {
   return static_cast<unsigned>(dl.getTypeSizeInBits(inst->getType()));
 }
 
+static unsigned Predicate(llvm::Instruction *inst) {
+  if (auto cmp = llvm::dyn_cast<llvm::CmpInst>(inst); cmp) {
+    return cmp->getPredicate();
+  } else {
+    return static_cast<unsigned>(llvm::CmpInst::BAD_ICMP_PREDICATE);
+  }
+}
+
 }  // namespace
 
-LLVMOperation::LLVMOperation(llvm::Instruction *inst_)
-    : Operation(Operation::kLLVMOperation, SizeOfValue(inst_)),
-      llvm_value(inst_) {}
+LLVMOperation::LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
+                             unsigned size_)
+    : Operation(Operation::kLLVMOperation, size_),
+      llvm_op_code(llvm_opcode_),
+      llvm_predicate(llvm_predicate_) {}
 
-LLVMOperation::LLVMOperation(llvm::Instruction *inst_, Operation *eq_class_)
-    : Operation(Operation::kLLVMOperation, SizeOfValue(inst_),
-                eq_class_),
-      llvm_value(inst_) {}
+LLVMOperation::LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
+                             unsigned size_, Operation *eq_class_)
+    : Operation(Operation::kLLVMOperation, size_, eq_class_),
+      llvm_op_code(llvm_opcode_),
+      llvm_predicate(llvm_predicate_) {}
+
+LLVMOperation::LLVMOperation(llvm::Instruction *inst)
+    : LLVMOperation(inst->getOpcode(), Predicate(inst), SizeOfValue(inst)) {}
+
+LLVMOperation::LLVMOperation(llvm::Instruction *inst, Operation *eq_class_)
+    : LLVMOperation(inst->getOpcode(), Predicate(inst),
+                    SizeOfValue(inst), eq_class_) {}
 
 #define COMMON_METHODS(cls) \
     cls::~cls(void) {} \
@@ -88,13 +104,19 @@ LLVMOperation::LLVMOperation(llvm::Instruction *inst_, Operation *eq_class_)
 COMMON_METHODS(LLVMOperation)
 std::string LLVMOperation::Name(void) const {
   std::stringstream ss;
-  ss << "LLVM_" << llvm::Instruction::getOpcodeName(llvm_value->getOpcode());
-  if (auto cmp = llvm::dyn_cast<llvm::CmpInst>(llvm_value); cmp) {
-    ss << '_' << llvm::CmpInst::getPredicateName(cmp->getPredicate()).str();
+  ss << "LLVM_" << llvm::Instruction::getOpcodeName(llvm_op_code);
+  if (auto pred = static_cast<llvm::CmpInst::Predicate>(llvm_predicate);
+      pred != llvm::CmpInst::BAD_ICMP_PREDICATE) {
+    ss << '_' << llvm::CmpInst::getPredicateName(pred).str();
   }
   ss << '_' << size;
   return ss.str();
 }
+
+
+
+COMMON_METHODS(EquivalenceClass)
+STREAM_NAME(EquivalenceClass, "EQ_CLASS_" << size);
 
 COMMON_METHODS(Constant)
 STREAM_NAME(Constant, "CONST_" << size << "_" << bits)

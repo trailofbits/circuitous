@@ -210,13 +210,19 @@ class Operation : public User, public Def<Operation> {
 // Mirrors an instruction from LLVM. `op_code` is `inst->getOpcode()`.
 class LLVMOperation final : public Operation {
  public:
+  explicit LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
+                         unsigned size_);
+  explicit LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
+                         unsigned size_, Operation *eq_class_);
+
   explicit LLVMOperation(llvm::Instruction *inst_);
   explicit LLVMOperation(llvm::Instruction *inst_, Operation *eq_class_);
   virtual ~LLVMOperation(void);
 
   std::string Name(void) const override;
 
-  llvm::Instruction * const llvm_value;
+  const unsigned llvm_op_code;
+  const unsigned llvm_predicate;
 };
 
 class Constant final : public Operation {
