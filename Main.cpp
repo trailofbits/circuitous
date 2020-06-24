@@ -126,23 +126,30 @@ int main(int argc, char *argv[]) {
 
     auto do_op = [&] (circuitous::Operation *op) {
       const auto id = reinterpret_cast<uintptr_t>(op);
-      os << "  v" << id << ".append(\"" << op->Name() << "\")\n"
-         << "  v" << id << ".append(" << static_cast<unsigned>(op->op_code) << ")\n"
-         << "  v" << id << ".append(" << op->size << ")\n";
+      os << "  v" << std::hex << id << ".append(\"" << op->Name() << "\")\n"
+         << "  v" << std::hex << id << ".append("
+         << std::dec << static_cast<unsigned>(op->op_code) << ")\n"
+         << "  v" << std::hex << id << ".append("
+         << std::dec << op->size << ")\n";
 
       if (auto llvm_op = dynamic_cast<circuitous::LLVMOperation *>(op); llvm_op) {
-        os << "  v" << id << ".append(" << llvm_op->llvm_op_code << ")\n"
-           << "  v" << id << ".append(" << llvm_op->llvm_predicate << ")\n";
+        os << "  v" << std::hex << id << ".append("
+           << std::dec << llvm_op->llvm_op_code << ")\n"
+           << "  v" << std::hex << id << ".append("
+           << std::dec << llvm_op->llvm_predicate << ")\n";
 
       } else if (auto extract_op = dynamic_cast<circuitous::Extract *>(op);
                  extract_op) {
-        os << "  v" << id << ".append(" << extract_op->high_hit_exc << ")\n"
-           << "  v" << id << ".append(" << extract_op->low_bit_inc << ")\n";
+        os << "  v" << std::hex << id << ".append("
+           << std::dec << extract_op->high_hit_exc << ")\n"
+           << "  v" << std::hex << id << ".append("
+           << std::dec << extract_op->low_bit_inc << ")\n";
       }
 
       for (auto sub_op : op->operands) {
-        os << "  v" << id << ".append(v"
-           << reinterpret_cast<uintptr_t>(sub_op) << ")\n";
+        os << "  v" << std::hex << id << ".append(v"
+           << reinterpret_cast<uintptr_t>(sub_op)
+           << std::dec << ")\n";
       }
     };
 
