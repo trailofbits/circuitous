@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
 
     auto do_op = [&] (circuitous::Operation *op) {
       const auto id = reinterpret_cast<uintptr_t>(op);
-      os << "  v" << id << ".append(\"" << op->Name() << ")\n"
+      os << "  v" << id << ".append(\"" << op->Name() << "\")\n"
          << "  v" << id << ".append(" << static_cast<unsigned>(op->op_code) << ")\n"
          << "  v" << id << ".append(" << op->size << ")\n";
 
