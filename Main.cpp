@@ -133,6 +133,11 @@ int main(int argc, char *argv[]) {
       if (auto llvm_op = dynamic_cast<circuitous::LLVMOperation *>(op); llvm_op) {
         os << "  v" << id << ".append(" << llvm_op->llvm_op_code << ")\n"
            << "  v" << id << ".append(" << llvm_op->llvm_predicate << ")\n";
+
+      } else if (auto extract_op = dynamic_cast<circuitous::Extract *>(op);
+                 extract_op) {
+        os << "  v" << id << ".append(" << extract_op->high_hit_exc << ")\n"
+           << "  v" << id << ".append(" << extract_op->low_bit_inc << ")\n";
       }
 
       for (auto sub_op : op->operands) {
