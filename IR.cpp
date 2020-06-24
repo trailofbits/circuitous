@@ -49,6 +49,10 @@ Operation::Operation(unsigned op_code_, unsigned size_, Operation *eq_class_)
       operands(this),
       eq_class(eq_class_->CreateWeakUse(this)) {}
 
+
+const unsigned LLVMOperation::kInvalidLLVMPredicate = \
+    static_cast<unsigned>(llvm::CmpInst::BAD_ICMP_PREDICATE);
+
 namespace {
 
 static unsigned SizeOfValue(llvm::Instruction *inst) {
@@ -61,7 +65,7 @@ static unsigned Predicate(llvm::Instruction *inst) {
   if (auto cmp = llvm::dyn_cast<llvm::CmpInst>(inst); cmp) {
     return cmp->getPredicate();
   } else {
-    return static_cast<unsigned>(llvm::CmpInst::BAD_ICMP_PREDICATE);
+    return LLVMOperation::kInvalidLLVMPredicate;
   }
 }
 
@@ -105,15 +109,13 @@ COMMON_METHODS(LLVMOperation)
 std::string LLVMOperation::Name(void) const {
   std::stringstream ss;
   ss << "LLVM_" << llvm::Instruction::getOpcodeName(llvm_op_code);
-  if (auto pred = static_cast<llvm::CmpInst::Predicate>(llvm_predicate);
-      pred != llvm::CmpInst::BAD_ICMP_PREDICATE) {
+  if (llvm_predicate != LLVMOperation::kInvalidLLVMPredicate) {
+    const auto pred = static_cast<llvm::CmpInst::Predicate>(llvm_predicate);
     ss << '_' << llvm::CmpInst::getPredicateName(pred).str();
   }
   ss << '_' << size;
   return ss.str();
 }
-
-
 
 COMMON_METHODS(EquivalenceClass)
 STREAM_NAME(EquivalenceClass, "EQ_CLASS_" << size);

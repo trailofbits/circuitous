@@ -22,6 +22,7 @@ DECLARE_string(arch);
 DECLARE_string(os);
 DEFINE_string(binary_in, "", "Path to a file containing only machine code instructions.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
+DEFINE_string(python_out, "", "Path to the output Python file.");
 
 namespace circuitous {
 namespace {
@@ -108,6 +109,40 @@ int main(int argc, char *argv[]) {
     std::ofstream os(FLAGS_dot_out);
     circuitous::DOTPrinter dot_os(os);
     dot_os.Visit(circuit.get());
+  }
+
+  if (!FLAGS_python_out.empty()) {
+    if (FLAGS_python_out == "-") {
+      FLAGS_python_out = "/dev/stderr";
+    }
+
+    std::ofstream os(FLAGS_python_out);
+    os << "def circuit():\n"
+       << "  v" << std::hex << reinterpret_cast<uintptr_t>(circuit.get()) << " = []\n";
+
+    circuit->ForEachOperation([&] (circuitous::Operation *op) {
+      os << "  v" << reinterpret_cast<uintptr_t>(op) << " = []\n";
+    });
+
+    circuit->ForEachOperation([&] (circuitous::Operation *op) {
+      const auto id = reinterpret_cast<uintptr_t>(op);
+      os << "  v" << id << ".append(\"" << op->Name() << ")\n"
+         << "  v" << id << ".append(" << static_cast<unsigned>(op->op_code) << ")\n"
+         << "  v" << id << ".append(" << op->size << ")\n";
+
+      if (auto llvm_op = dynamic_cast<circuitous::LLVMOperation *>(op); llvm_op) {
+        os << "  v" << id << ".append(" << llvm_op->llvm_op_code << ")\n"
+           << "  v" << id << ".append(" << llvm_op->llvm_predicate << ")\n";
+      }
+
+      for (auto sub_op : op->operands) {
+        os << "  v" << id << ".append(v"
+           << reinterpret_cast<uintptr_t>(sub_op) << ")\n";
+      }
+    });
+
+    os << "  return v" << std::hex << reinterpret_cast<uintptr_t>(circuit.get())
+       << "\n\n" << std::dec;
   }
 
 //  for (auto &block : circuit_func) {

@@ -223,6 +223,8 @@ class LLVMOperation final : public Operation {
 
   const unsigned llvm_op_code;
   const unsigned llvm_predicate;
+
+  static const unsigned kInvalidLLVMPredicate;
 };
 
 class Constant final : public Operation {

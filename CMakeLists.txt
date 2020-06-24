@@ -39,9 +39,11 @@ add_executable(circuitous
     CircuitBuilder.cpp
     IR.h
     IR.cpp
+    Main.cpp
+    Saturate.h
+    Saturate.cpp
     UseDef.h
-    UseDef.cpp
-    Main.cpp)
+    UseDef.cpp)
 
 target_compile_definitions(circuitous PUBLIC
     ${PROJECT_DEFINITIONS})
