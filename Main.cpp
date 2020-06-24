@@ -124,7 +124,7 @@ int main(int argc, char *argv[]) {
       os << "  v" << reinterpret_cast<uintptr_t>(op) << " = []\n";
     });
 
-    circuit->ForEachOperation([&] (circuitous::Operation *op) {
+    auto do_op = [&] (circuitous::Operation *op) {
       const auto id = reinterpret_cast<uintptr_t>(op);
       os << "  v" << id << ".append(\"" << op->Name() << ")\n"
          << "  v" << id << ".append(" << static_cast<unsigned>(op->op_code) << ")\n"
@@ -139,7 +139,10 @@ int main(int argc, char *argv[]) {
         os << "  v" << id << ".append(v"
            << reinterpret_cast<uintptr_t>(sub_op) << ")\n";
       }
-    });
+    };
+
+    circuit->ForEachOperation(do_op);
+    do_op(circuit.get());
 
     os << "  return v" << std::hex << reinterpret_cast<uintptr_t>(circuit.get())
        << "\n\n" << std::dec;
