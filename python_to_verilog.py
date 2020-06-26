@@ -316,6 +316,9 @@ def wire_declare_string(wire_name, wire_size):
 def variable_assign_string(wire_name, assignment):
     return f"assign {wire_name} = {assignment}"
 
+def remove_digits(string):
+    return "".join([i for i in string if not i.isdigit()])
+
 # this passes through the ordering of the DAG and deduces types and code for each variable assign as it goes along
 def compute_verilog(inputs, ordering, operations):
     inputs_outputs = []
@@ -341,7 +344,7 @@ def compute_verilog(inputs, ordering, operations):
             elif isplit[0] == "ONE" and isplit[1] == "OF":
                 variable_assigns.append((node, " | ".join(ops[3:])))
             elif "LLVM" == isplit[0]:
-                llvm_instr = "".join([i for i in ops[0] if not i.isdigit()])
+                llvm_instr = remove_digits(ops[0])
                 if llvm_instr in llvm_infixes:
                     variable_assigns.append(
                         (node, " ".join([ops[5], llvm_infixes[llvm_instr], ops[6]]))
@@ -350,6 +353,10 @@ def compute_verilog(inputs, ordering, operations):
                     variable_assigns.append(
                         (node, "{* PLACEHOLDER FOR " + str(ops) + " *}")
                     )
+            elif 'OUTPUT_REGISTER_CHECK' in ops[0] or 'PRESERED_REGISTER_CHECK' in ops[0] or 'INSTRUCTION_BITS_CHECK' in ops[0]:
+                variable_assigns.append((node, " ".join([ops[3], " == ", ops[4]])))
+            elif 'POPULATION_COUNT' in ops[0]:
+                variable_assigns.append((node, f'$countbits {ops[3]}'))
             else:
                 variable_assigns.append(
                     (node, "{* PLACEHOLDER FOR " + str(ops) + " *}")
