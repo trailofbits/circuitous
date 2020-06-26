@@ -165,6 +165,13 @@ std::unique_ptr<Circuit> CircuitBuilder::Build(llvm::StringRef buff) {
 //      BuildCircuit2(
 //          BuildCircuit1(
 //              BuildCircuit0(std::move(isels)))));
+  // auto func = BuildCircuit3(
+  //                           BuildCircuit2(
+  //                                         BuildCircuit1(
+  //                                                       BuildCircuit0(std::move(isels)))));
+  // func->print(llvm::outs());
+  // exit(EXIT_FAILURE);
+  // return nullptr;
 }
 
 // Update any references we might have held to functions that could be
