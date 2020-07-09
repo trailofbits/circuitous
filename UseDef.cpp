@@ -9,6 +9,6 @@ namespace circuitous {
 uint64_t User::gNextTimestamp = 0;
 
 User::~User(void) {}
-void User::Updated(uint64_t) {}
+void User::Update(uint64_t) {}
 
 }  // namespace circuitous
