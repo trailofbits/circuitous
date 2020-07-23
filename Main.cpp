@@ -21,85 +21,67 @@
 DECLARE_string(arch);
 DECLARE_string(os);
 DEFINE_string(binary_in, "", "Path to a file containing only machine code instructions.");
+DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
+DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "Path to the output Python file.");
 
 namespace circuitous {
-namespace {
 
-static const char * const kBeginDOTNode = "[label=<<TABLE cellpadding=\"0\" cellspacing=\"0\" border=\"1\"><TR>";
-static const char * const kEndDOTNode = "</TR></TABLE>>];\n";
+void PrintDOT(std::ostream &os, Circuit *circuit);
+void PrintPython(std::ostream &os, Circuit *circuit);
+void Serialize(std::ostream &os, Circuit *circuit);
+std::unique_ptr<Circuit> Deserialize(std::istream &is);
 
-class DOTPrinter : public UniqueVisitor<DOTPrinter> {
- public:
-  explicit DOTPrinter(std::ostream &os_)
-      : os(os_) {}
-
-  void PrintOperands(Operation *op) {
-    if (!op->operands.Empty()) {
-      os << "</TR><TR>";
-      for (auto sub_op : op->operands) {
-        const auto sub_id = reinterpret_cast<uintptr_t>(sub_op);
-        os << "<TD port=\"s" << sub_id << "\"> &nbsp; </TD>";
-      }
-    }
-    os << kEndDOTNode;
-    const auto id = reinterpret_cast<uintptr_t>(op);
-    for (auto sub_op : op->operands) {
-      const auto sub_id = reinterpret_cast<uintptr_t>(sub_op);
-      os << 'o' << id << ":s" << sub_id << " -> o" << sub_id << ":id;\n";
-    }
-  }
-
-  void PrintNodeName(Operation *op) {
-    const auto id = reinterpret_cast<uintptr_t>(op);
-    os << "o" << id << " " << kBeginDOTNode << "<TD port=\"id\"";
-    if (!op->operands.Empty()) {
-      os << " colspan=\"" << op->operands.Size()<< "\"";
-    }
-    os << ">" << op->Name() << "</TD>";
-  }
-
-  void VisitOperation(Operation *op) {
-    op->Traverse(*this);
-    PrintNodeName(op);
-    PrintOperands(op);
-  }
-
-  void VisitCircuit(Circuit *op) {
-    os << "digraph {\n"
-       << "node [shape=plain];\n";
-    op->Traverse(*this);
-    PrintNodeName(op);
-    PrintOperands(op);
-    os << "}\n";
-  }
-
- private:
-  std::ostream &os;
-};
-
-}  // namespace
 }  // namespace circuitous
 
 int main(int argc, char *argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
 
+  std::unique_ptr<circuitous::Circuit> circuit;
 
-  auto maybe_buff = llvm::MemoryBuffer::getFile(FLAGS_binary_in, -1, false);
-  if (remill::IsError(maybe_buff)) {
-    std::cerr << remill::GetErrorString(maybe_buff) << std::endl;
+  if (!FLAGS_binary_in.empty()) {
+    auto maybe_buff = llvm::MemoryBuffer::getFile(FLAGS_binary_in, -1, false);
+    if (remill::IsError(maybe_buff)) {
+      std::cerr << remill::GetErrorString(maybe_buff) << std::endl;
+      return EXIT_FAILURE;
+    }
+
+    const auto buff = remill::GetReference(maybe_buff)->getBuffer();
+
+    circuitous::CircuitBuilder builder([] (llvm::LLVMContext &context) {
+      return remill::Arch::GetTargetArch(context);
+    });
+
+    builder.Build(buff).swap(circuit);
+
+  } else if (!FLAGS_ir_in.empty()) {
+    if (FLAGS_ir_in == "-") {
+      FLAGS_ir_in = "/dev/stdin";
+    }
+
+    std::ifstream is(FLAGS_ir_in);
+    circuitous::Deserialize(is).swap(circuit);
+
+  } else {
+    std::cerr << "Expected one of `--binary_in` or `--ir_in`" << std::endl;
     return EXIT_FAILURE;
   }
 
-  const auto buff = remill::GetReference(maybe_buff)->getBuffer();
+  if (!circuit) {
+    std::cerr << "Failed to get circuit IR" << std::endl;
+    return EXIT_FAILURE;
+  }
 
-  circuitous::CircuitBuilder builder([] (llvm::LLVMContext &context) {
-    return remill::Arch::GetTargetArch(context);
-  });
+  if (!FLAGS_ir_out.empty()) {
+    if (FLAGS_ir_out == "-") {
+      FLAGS_ir_out = "/dev/stdout";
+    }
 
-  auto circuit = builder.Build(buff);
+    std::ofstream os(FLAGS_ir_out);
+    circuitous::Serialize(os, circuit.get());
+  }
 
   if (!FLAGS_dot_out.empty()) {
     if (FLAGS_dot_out == "-") {
@@ -107,8 +89,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::ofstream os(FLAGS_dot_out);
-    circuitous::DOTPrinter dot_os(os);
-    dot_os.Visit(circuit.get());
+    circuitous::PrintDOT(os, circuit.get());
   }
 
   if (!FLAGS_python_out.empty()) {
@@ -117,67 +98,8 @@ int main(int argc, char *argv[]) {
     }
 
     std::ofstream os(FLAGS_python_out);
-    os << "def circuit():\n"
-       << "  operations = {}\n"
-       << "  result = 'v" << std::hex << reinterpret_cast<uintptr_t>(circuit.get()) << "'\n"
-       << "  operations[result] = []\n";
-
-    circuit->ForEachOperation([&] (circuitous::Operation *op) {
-      os << "  operations['v" << reinterpret_cast<uintptr_t>(op) << "'] = []\n";
-    });
-
-    auto do_op = [&] (circuitous::Operation *op) {
-      const auto id = reinterpret_cast<uintptr_t>(op);
-      os << "  operations['v" << std::hex << id << "'].append(\"" << op->Name() << "\")\n"
-         << "  operations['v" << std::hex << id << "'].append("
-         << std::dec << static_cast<unsigned>(op->op_code) << ")\n"
-         << "  operations['v" << std::hex << id << "'].append("
-         << std::dec << op->size << ")\n";
-
-      if (auto llvm_op = dynamic_cast<circuitous::LLVMOperation *>(op); llvm_op) {
-        os << "  operations['v" << std::hex << id << "'].append("
-           << std::dec << llvm_op->llvm_op_code << ")\n"
-           << "  operations['v" << std::hex << id << "'].append("
-           << std::dec << llvm_op->llvm_predicate << ")\n";
-
-      } else if (auto extract_op = dynamic_cast<circuitous::Extract *>(op);
-                 extract_op) {
-        os << "  operations['v" << std::hex << id << "'].append("
-           << std::dec << extract_op->high_hit_exc << ")\n"
-           << "  operations['v" << std::hex << id << "'].append("
-           << std::dec << extract_op->low_bit_inc << ")\n";
-      }
-
-      for (auto sub_op : op->operands) {
-        os << "  operations['v" << std::hex << id << "'].append('v"
-           << reinterpret_cast<uintptr_t>(sub_op)
-           << std::dec << "')\n";
-      }
-    };
-
-    circuit->ForEachOperation(do_op);
-    do_op(circuit.get());
-
-    //os << "  return v" << std::hex << reinterpret_cast<uintptr_t>(circuit.get())
-    os << "  return operations"
-       << "\n\n" << std::dec;
+    circuitous::PrintPython(os, circuit.get());
   }
-
-//  for (auto &block : circuit_func) {
-//    for (auto &inst : block) {
-//      if (auto cmp_inst = llvm::dyn_cast<llvm::CmpInst>(&inst);
-//          cmp_inst &&
-//          (cmp_inst->getPredicate() == llvm::CmpInst::ICMP_EQ ||
-//           cmp_inst->getPredicate() == llvm::CmpInst::FCMP_OEQ) &&
-//          llvm::isa<llvm::Argument>(cmp_inst->getOperand(0)) &&
-//          llvm::isa<llvm::Argument>(cmp_inst->getOperand(1))) {
-//
-//      }
-//    }
-//  }
-
-//  circuit_func->print(llvm::outs());
-
 
   return EXIT_SUCCESS;
 }

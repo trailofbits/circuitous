@@ -229,22 +229,18 @@ class LLVMOperation final : public Operation {
 
 class Constant final : public Operation {
  public:
-  inline explicit Constant(llvm::Constant *c_, std::string bits_, unsigned size_)
+  inline explicit Constant(std::string bits_, unsigned size_)
       : Operation(Operation::kConstant, size_),
-        llvm_value(c_),
         bits(bits_) {}
 
-  inline explicit Constant(llvm::Constant *c_, std::string bits_,
-                           unsigned size_, Operation *eq_class_)
+  inline explicit Constant(std::string bits_, unsigned size_,
+                           Operation *eq_class_)
       : Operation(Operation::kConstant, size_, eq_class_),
-        llvm_value(c_),
         bits(bits_) {}
 
   virtual ~Constant(void);
 
   std::string Name(void) const override;
-
-  llvm::Constant * const llvm_value;
 
   // Value of this constant.
   const std::string bits;

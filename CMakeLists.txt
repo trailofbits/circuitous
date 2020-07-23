@@ -37,11 +37,14 @@ endif()
 add_executable(circuitous
     CircuitBuilder.h
     CircuitBuilder.cpp
+    DOT.cpp
     IR.h
     IR.cpp
     Main.cpp
+    Python.cpp
     Saturate.h
     Saturate.cpp
+    Serialize.cpp
     UseDef.h
     UseDef.cpp)
 

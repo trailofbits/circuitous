@@ -517,8 +517,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     CHECK_EQ(num_bits, bits_str.size());
 
-    bits_op = impl->constants.Create(val, std::move(bits_str),
-                                     static_cast<unsigned>(num_bits));
+    bits_op = impl->constants.Create(
+        std::move(bits_str), static_cast<unsigned>(num_bits));
     op = bits_op;
   }
 
