@@ -40,11 +40,12 @@ add_executable(circuitous
     DOT.cpp
     IR.h
     IR.cpp
+    IRToSMTVisitor.cpp
     Main.cpp
     Python.cpp
     Saturate.h
     Saturate.cpp
-    Serialize.cpp
+    # Serialize.cpp
     UseDef.h
     UseDef.cpp)
 

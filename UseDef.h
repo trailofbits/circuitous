@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <iterator>
 #include <vector>
+#include <cassert>
+#include <memory>
 
 namespace circuitous {
 
