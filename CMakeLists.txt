@@ -30,6 +30,12 @@ if(NOT TARGET remill)
   find_package(remill REQUIRED ${REMILL_FINDPACKAGE_HINTS})
 endif()
 
+# z3
+set(LLVM_Z3_INSTALL_DIR "${Z3_INSTALL_PREFIX}")
+find_package(Z3 4.7.1 REQUIRED MODULE)
+list(APPEND PROJECT_INCLUDEDIRECTORIES ${Z3_INCLUDE_DIR})
+list(APPEND PROJECT_LIBRARIES ${Z3_LIBRARIES})
+
 #
 # tool target settings
 #
@@ -55,8 +61,9 @@ target_compile_definitions(circuitous PUBLIC
 target_compile_options(circuitous PUBLIC
     ${PROJECT_CXXFLAGS})
 
-target_link_libraries(circuitous PUBLIC remill)
+target_link_libraries(circuitous PUBLIC remill ${PROJECT_LIBRARIES})
 
+target_include_directories(circuitous SYSTEM PUBLIC ${PROJECT_INCLUDEDIRECTORIES})
 
 #
 # install settings
