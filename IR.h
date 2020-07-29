@@ -6,7 +6,7 @@
 
 #include <bitset>
 #include <memory>
-#include <ostream>
+#include <iosfwd>
 #include <string>
 #include <vector>
 #include <unordered_set>
@@ -263,16 +263,17 @@ class Extract final : public BitOperation {
   inline explicit Extract(unsigned low_bit_inc_, unsigned high_bit_exc_)
       : BitOperation(Operation::kExtract, high_bit_exc_ - low_bit_inc_),
         low_bit_inc(low_bit_inc_),
-        high_hit_exc(high_bit_exc_) {}
+        high_bit_exc(high_bit_exc_) {}
 
   inline explicit Extract(unsigned low_bit_inc_, unsigned high_bit_exc_,
                           Operation *eq_class_)
-  : BitOperation(Operation::kExtract, high_bit_exc_ - low_bit_inc_, eq_class_),
-    low_bit_inc(low_bit_inc_),
-    high_hit_exc(high_bit_exc_) {}
+      : BitOperation(Operation::kExtract, high_bit_exc_ - low_bit_inc_,
+                     eq_class_),
+        low_bit_inc(low_bit_inc_),
+        high_bit_exc(high_bit_exc_) {}
 
   const unsigned low_bit_inc;
-  const unsigned high_hit_exc;
+  const unsigned high_bit_exc;
 };
 
 // Concatenate two bitvectors.
@@ -494,6 +495,10 @@ class Circuit : public Condition {
 
   static std::unique_ptr<Circuit> Create(const remill::Arch *arch,
                                         llvm::Function *func);
+
+  void Serialize(std::ostream &os);
+
+  static std::unique_ptr<Circuit> Deserialize(std::istream &is);
 
 #define FOR_EACH_OPERATION(cb) \
     cb(Constant, constants) \

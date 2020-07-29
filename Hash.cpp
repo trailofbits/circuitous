@@ -7,6 +7,8 @@
 #include <string>
 #include <unordered_map>
 
+#include <llvm/IR/Instruction.h>
+
 #include "BitManipulation.h"
 #include "IR.h"
 
@@ -17,11 +19,12 @@ static const std::hash<std::string> kStringHasher = {};
 
 }  // namespace
 
-class HashVisitor::Impl : protected Visitor<HashVisitor::Impl> {
+class HashVisitor::Impl : public Visitor<HashVisitor::Impl> {
  public:
   uint64_t Lookup(Operation *op);
 
   void VisitOperation(Operation *op);
+  void VisitLLVMOperation(LLVMOperation *op);
   void VisitConstant(Constant *op);
   void VisitInputRegister(InputRegister *op);
   void VisitOutputRegister(OutputRegister *op);
@@ -32,22 +35,33 @@ class HashVisitor::Impl : protected Visitor<HashVisitor::Impl> {
 };
 
 uint64_t HashVisitor::Impl::Lookup(Operation *op) {
-  auto it = impl->op_hash.find(op);
-  if (it == impl->op_hash.end()) {
+  auto it = op_hash.find(op);
+  if (it == op_hash.end()) {
     Visit(op);
-    it = impl->op_hash.find(op);
+    it = op_hash.find(op);
   }
   return it->second;
 }
 
 void HashVisitor::Impl::VisitOperation(Operation *op) {
-  uint64_t hash = 0u;
+  uint64_t hash = kStringHasher(op->Name());
   for (auto sub_op : op->operands) {
     hash ^= RotateRight64(hash, 33u) * Lookup(sub_op);
   }
+  op_hash.emplace(op, hash);
+}
 
-  hash ^= RotateRight64(hash, 33u) * (op->op_code + 7u);
-  hash ^= RotateRight64(hash, 33u) * (op->size + 13u);
+void HashVisitor::Impl::VisitLLVMOperation(LLVMOperation *op) {
+  uint64_t hash = kStringHasher(op->Name());
+  if (llvm::Instruction::isAssociative(op->op_code)) {
+    for (auto sub_op : op->operands) {
+      hash ^= Lookup(sub_op);
+    }
+  } else {
+    for (auto sub_op : op->operands) {
+      hash ^= RotateRight64(hash, 33u) * Lookup(sub_op);
+    }
+  }
   op_hash.emplace(op, hash);
 }
 
@@ -70,10 +84,8 @@ void HashVisitor::Impl::VisitOutputRegister(OutputRegister *op) {
 }
 
 void HashVisitor::Impl::VisitExtract(Extract *op) {
-  auto hash = Lookup(op->operands[0]);
-  hash ^= RotateRight64(hash, 33u) * (op->op_code + 7u);
-  hash ^= RotateRight64(hash, 33u) * (op->high_hit_exc + 13u);
-  hash ^= RotateRight64(hash, 33u) * (op->low_bit_inc + 17u);
+  auto hash = kStringHasher(op->Name());
+  hash ^= RotateRight64(hash, 33u) * Lookup(op->operands[0]);
   op_hash.emplace(op, hash);
 }
 
@@ -84,6 +96,8 @@ void HashVisitor::Impl::VisitEquivalenceClass(EquivalenceClass *op) {
   }
   op_hash.emplace(op, hash);
 }
+
+HashVisitor::~HashVisitor(void) {}
 
 HashVisitor::HashVisitor(void)
     : impl(new Impl) {}

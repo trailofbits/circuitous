@@ -38,6 +38,8 @@ add_executable(circuitous
     CircuitBuilder.h
     CircuitBuilder.cpp
     DOT.cpp
+    Hash.h
+    Hash.cpp
     IR.h
     IR.cpp
     Main.cpp

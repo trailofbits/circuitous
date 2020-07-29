@@ -30,8 +30,6 @@ namespace circuitous {
 
 void PrintDOT(std::ostream &os, Circuit *circuit);
 void PrintPython(std::ostream &os, Circuit *circuit);
-void Serialize(std::ostream &os, Circuit *circuit);
-std::unique_ptr<Circuit> Deserialize(std::istream &is);
 
 }  // namespace circuitous
 
@@ -61,8 +59,8 @@ int main(int argc, char *argv[]) {
       FLAGS_ir_in = "/dev/stdin";
     }
 
-    std::ifstream is(FLAGS_ir_in);
-    circuitous::Deserialize(is).swap(circuit);
+    std::ifstream is(FLAGS_ir_in, std::ios::binary);
+    circuitous::Circuit::Deserialize(is).swap(circuit);
 
   } else {
     std::cerr << "Expected one of `--binary_in` or `--ir_in`" << std::endl;
@@ -79,8 +77,8 @@ int main(int argc, char *argv[]) {
       FLAGS_ir_out = "/dev/stdout";
     }
 
-    std::ofstream os(FLAGS_ir_out);
-    circuitous::Serialize(os, circuit.get());
+    std::ofstream os(FLAGS_ir_out, std::ios::binary | std::ios::trunc);
+    circuit->Serialize(os);
   }
 
   if (!FLAGS_dot_out.empty()) {

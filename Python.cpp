@@ -35,7 +35,7 @@ void PrintPython(std::ostream &os, Circuit *circuit) {
     } else if (auto extract_op = dynamic_cast<circuitous::Extract *>(op);
                extract_op) {
       os << "  operations['v" << std::hex << id << "'].append("
-         << std::dec << extract_op->high_hit_exc << ")\n"
+         << std::dec << extract_op->high_bit_exc << ")\n"
          << "  operations['v" << std::hex << id << "'].append("
          << std::dec << extract_op->low_bit_inc << ")\n";
     }

@@ -126,7 +126,7 @@ STREAM_NAME(Constant, "CONST_" << size << "_" << bits)
 BitOperation::~BitOperation(void) {}
 
 COMMON_METHODS(Extract)
-STREAM_NAME(Extract, "EXTRACT_" << high_hit_exc << "_" << low_bit_inc)
+STREAM_NAME(Extract, "EXTRACT_" << high_bit_exc << "_" << low_bit_inc)
 
 COMMON_METHODS(Concat)
 RETURN_NAME(Concat, "CONCAT")

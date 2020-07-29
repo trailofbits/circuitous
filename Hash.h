@@ -11,6 +11,7 @@ class Operation;
 
 class HashVisitor {
  public:
+  ~HashVisitor(void);
   HashVisitor(void);
 
   // Lookup an operator.
