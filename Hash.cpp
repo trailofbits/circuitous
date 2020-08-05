@@ -4,10 +4,10 @@
 
 #include "Hash.h"
 
+#include <llvm/IR/Instruction.h>
+
 #include <string>
 #include <unordered_map>
-
-#include <llvm/IR/Instruction.h>
 
 #include "BitManipulation.h"
 #include "IR.h"
@@ -99,8 +99,7 @@ void HashVisitor::Impl::VisitEquivalenceClass(EquivalenceClass *op) {
 
 HashVisitor::~HashVisitor(void) {}
 
-HashVisitor::HashVisitor(void)
-    : impl(new Impl) {}
+HashVisitor::HashVisitor(void) : impl(new Impl) {}
 
 uint64_t HashVisitor::operator[](Operation *op) {
   return impl->Lookup(op);

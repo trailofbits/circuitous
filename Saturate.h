@@ -4,6 +4,4 @@
 
 #pragma once
 
-namespace circuitous {
-
-}  // namespace circuitous
+namespace circuitous {}  // namespace circuitous

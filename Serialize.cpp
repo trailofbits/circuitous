@@ -2,8 +2,6 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include "IR.h"
-
 #include <glog/logging.h>
 
 #include <cstdint>
@@ -13,16 +11,17 @@
 #include <unordered_set>
 
 #include "Hash.h"
+#include "IR.h"
 
 #if 0
-#define DEBUG_WRITE(str) \
+#  define DEBUG_WRITE(str) \
     do { \
       for (auto i = 0u; str[i]; ++i) { \
         Write(static_cast<int8_t>(str[i])); \
       } \
     } while (false)
 
-#define DEBUG_READ(str) \
+#  define DEBUG_READ(str) \
     do { \
       int8_t ch; \
       for (auto i = 0u; str[i]; ++i) { \
@@ -31,8 +30,8 @@
       } \
     } while (false)
 #else
-#define DEBUG_READ(...)
-#define DEBUG_WRITE(...)
+#  define DEBUG_READ(...)
+#  define DEBUG_WRITE(...)
 #endif
 
 namespace circuitous {
@@ -40,9 +39,7 @@ namespace {
 
 class SerializeVisitor : public Visitor<SerializeVisitor> {
  public:
-  explicit SerializeVisitor(std::ostream &os_)
-      : os(os_),
-        hasher() {}
+  explicit SerializeVisitor(std::ostream &os_) : os(os_), hasher() {}
 
   void Write(Operation *op) {
     auto offset_it = offset.find(op);
@@ -178,15 +175,13 @@ class DeserializeVisitor {
   Operation *Decode(unsigned op_code) {
     switch (op_code) {
 #define GOTO_VISITOR(type, field) \
-    case Operation::k ## type: \
-      return this->Decode ## type(); \
+  case Operation::k##type: return this->Decode##type();
 
-  FOR_EACH_OPERATION(GOTO_VISITOR)
+      FOR_EACH_OPERATION(GOTO_VISITOR)
 #undef GOTO_VISITOR
 
       default:
-        LOG(FATAL)
-            << "Cannot deserialize opcode " << op_code;
+        LOG(FATAL) << "Cannot deserialize opcode " << op_code;
         return nullptr;
     }
   }
@@ -208,6 +203,7 @@ class DeserializeVisitor {
 
       auto range = hash_to_ops.equal_range(hash);
       for (auto it = range.first; it != range.second; ++it) {
+
         // TODO(pag): Check for equivalence.
       }
 
@@ -223,15 +219,13 @@ class DeserializeVisitor {
       auto op_offset = prev_offset - disp;
       auto op_it = offset_to_op.find(op_offset);
       if (op_it == offset_to_op.end()) {
-        LOG(FATAL)
-            << "Could not find node at offset " << op_offset;
+        LOG(FATAL) << "Could not find node at offset " << op_offset;
       } else {
         op = op_it->second;
       }
 
     } else {
-      LOG(FATAL)
-          << "Unexpected tag for an operation reference: " << sel;
+      LOG(FATAL) << "Unexpected tag for an operation reference: " << sel;
     }
   }
 
@@ -365,29 +359,29 @@ class DeserializeVisitor {
   }
 
 #define DECODE_GENERIC(cls, field) \
-    cls * Decode ## cls (void) { \
-      unsigned size = 0; \
-      DEBUG_READ("{size="); \
-      Read(size); \
-      auto op = circuit->field.Create(size); \
-      DEBUG_READ(";operands="); \
-      Read(op->operands); \
-      DEBUG_READ("}"); \
-      return op; \
-    }
+  cls *Decode##cls(void) { \
+    unsigned size = 0; \
+    DEBUG_READ("{size="); \
+    Read(size); \
+    auto op = circuit->field.Create(size); \
+    DEBUG_READ(";operands="); \
+    Read(op->operands); \
+    DEBUG_READ("}"); \
+    return op; \
+  }
 
 #define DECODE_CONDITION(cls, field) \
-    cls * Decode ## cls (void) { \
-      unsigned size = 0; \
-      DEBUG_READ("{size="); \
-      Read(size); \
-      CHECK_EQ(size, 1); \
-      auto op = circuit->field.Create(); \
-      DEBUG_READ(";operands="); \
-      Read(op->operands); \
-      DEBUG_READ("}"); \
-      return op; \
-    }
+  cls *Decode##cls(void) { \
+    unsigned size = 0; \
+    DEBUG_READ("{size="); \
+    Read(size); \
+    CHECK_EQ(size, 1); \
+    auto op = circuit->field.Create(); \
+    DEBUG_READ(";operands="); \
+    Read(op->operands); \
+    DEBUG_READ("}"); \
+    return op; \
+  }
 
   DECODE_GENERIC(Concat, concats)
   DECODE_GENERIC(PopulationCount, popcounts)
@@ -407,14 +401,13 @@ class DeserializeVisitor {
   DECODE_CONDITION(VerifyInstruction, verifications)
 
   Operation *DecodeOnlyOneCondition(void) {
-    LOG(FATAL)
-        << "OnlyOneCondition nodes should not appear in serialized file";
+    LOG(FATAL) << "OnlyOneCondition nodes should not appear in serialized file";
     return nullptr;
   }
 
  private:
   std::istream &is;
-  Circuit * const circuit;
+  Circuit *const circuit;
   int32_t curr_offset{0};
   std::unordered_map<int32_t, Operation *> offset_to_op;
   std::unordered_multimap<uint64_t, Operation *> hash_to_ops;
@@ -432,8 +425,8 @@ void Circuit::Serialize(std::ostream &os) {
           verify_inst) {
         vis.VisitVerifyInstruction(verify_inst);
       } else {
-        LOG(FATAL)
-            << "Unexpected operation type passed to XOR ALL: " << op->Name();
+        LOG(FATAL) << "Unexpected operation type passed to XOR ALL: "
+                   << op->Name();
       }
     }
   }
@@ -466,7 +459,8 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
 
   for (const auto &[name, op] : in_regs) {
     if (!out_regs.count(name)) {
-      out_regs.emplace(name, circuit->output_regs.Create(op->size, op->reg_name));
+      out_regs.emplace(name,
+                       circuit->output_regs.Create(op->size, op->reg_name));
     }
   }
 

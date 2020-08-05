@@ -4,15 +4,11 @@
 
 #pragma once
 
-#include <bitset>
-#include <vector>
-
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/MemoryBuffer.h>
-
 #include <remill/Arch/Arch.h>
 #include <remill/BC/Compat/Error.h>
 #include <remill/BC/IntrinsicTable.h>
@@ -20,13 +16,14 @@
 #include <remill/BC/Optimizer.h>
 #include <remill/BC/Util.h>
 
+#include <bitset>
+#include <vector>
+
 #include "IR.h"
 
 namespace circuitous {
 
-enum : size_t {
-  kMaxNumInstBits = 15 * 8
-};
+enum : size_t { kMaxNumInstBits = 15 * 8 };
 
 using InstructionEncoding = std::bitset<kMaxNumInstBits>;
 
@@ -67,7 +64,6 @@ using EncodedInstructionParts = std::vector<EncodedInstructionPart>;
 
 class CircuitBuilder {
  public:
-
   template <typename T>
   explicit CircuitBuilder(T initialize_arch)
       : arch(initialize_arch(context)),
@@ -78,10 +74,10 @@ class CircuitBuilder {
         bool_type(llvm::Type::getInt1Ty(context)),
         true_value(llvm::ConstantInt::get(bool_type, 1)),
         false_value(llvm::ConstantInt::get(bool_type, 0)),
-        xor_all_func(llvm::Function::Create(
-            llvm::FunctionType::get(bool_type, true),
-            llvm::GlobalValue::ExternalLinkage, "__circuitous_xor_all",
-            module.get())),
+        xor_all_func(
+            llvm::Function::Create(llvm::FunctionType::get(bool_type, true),
+                                   llvm::GlobalValue::ExternalLinkage,
+                                   "__circuitous_xor_all", module.get())),
         verify_inst_func(llvm::Function::Create(
             llvm::FunctionType::get(bool_type, {bool_type}, true),
             llvm::GlobalValue::ExternalLinkage, "__circuitous_verify_inst",
@@ -100,7 +96,7 @@ class CircuitBuilder {
     verify_decode_func->addFnAttr(llvm::Attribute::ReadNone);
 
     // The remaining parameters will be input/output registers for verification.
-    arch->ForEachRegister([&] (const remill::Register *reg_) {
+    arch->ForEachRegister([&](const remill::Register *reg_) {
       if (auto reg = reg_->EnclosingRegister(); reg == reg_) {
         regs.push_back(reg);
       }
@@ -127,8 +123,8 @@ class CircuitBuilder {
 
   // Breaks apart the instruction encoding into runs of always-known or maybe-
   // known bits.
-  EncodedInstructionParts CreateEncodingTable(
-      const std::vector<InstructionSelection> &isels);
+  EncodedInstructionParts
+  CreateEncodingTable(const std::vector<InstructionSelection> &isels);
 
   // Decode all instructions in `buff` using `arch`.
   void LiftInstructions(std::vector<InstructionSelection> &isels);
@@ -157,7 +153,6 @@ class CircuitBuilder {
   llvm::Function *BuildCircuit3(llvm::Function *circuit2_func);
 
  private:
-
   llvm::CallInst *FinalXor(llvm::Function *in_func) const;
 
   // Update any references we might have held to functions that could be
@@ -174,10 +169,10 @@ class CircuitBuilder {
   const std::unique_ptr<llvm::Module> module;
 
   // The LLVM type of `State *` in Remill semantics.
-  llvm::PointerType * const state_ptr_type;
+  llvm::PointerType *const state_ptr_type;
 
   // The LLVM type of the opawue `Memory *` in Remill semantics.
-  llvm::PointerType * const mem_ptr_type;
+  llvm::PointerType *const mem_ptr_type;
 
   // The maximum number of bits needed to hold any instruction that can be
   // verified by this ciruit.
@@ -186,10 +181,10 @@ class CircuitBuilder {
   // The number of distinct "parts" to instructions.
   unsigned num_instruction_parts{0};
 
-  llvm::Type * const i32_type;
-  llvm::Type * const bool_type;
-  llvm::Value * const true_value;
-  llvm::Value * const false_value;
+  llvm::Type *const i32_type;
+  llvm::Type *const bool_type;
+  llvm::Value *const true_value;
+  llvm::Value *const false_value;
 
   // This function is used as a final step in the circuit. Every instruction
   // goes through two general phases: state transition verification, and
@@ -202,17 +197,17 @@ class CircuitBuilder {
   //        fail at either the state check step, or the encoding verification
   //        step, and thus the result of XORing all the bits will be `1`, i.e.
   //        that we successfully verified.
-  llvm::Function * const xor_all_func;
+  llvm::Function *const xor_all_func;
 
   // Verify that an instruction completed a successful state transfer. This
   // has the equivalent meaning of an "all ones" function, except that the
   // first parameter is whether or not we verified the decoding for this
   // instruction's selection.
-  llvm::Function * const verify_inst_func;
+  llvm::Function *const verify_inst_func;
 
   // Verify that we decoded an instruction category/semantic. This
   // has the equivalent meaning of an "all ones" function
-  llvm::Function * const verify_decode_func;
+  llvm::Function *const verify_decode_func;
 
   // Encodes an instruction by concatenating zero bits with variable bits
   // produced by verified the register state transfer of a given instruction.

@@ -12,4 +12,4 @@ struct UpHasher {
 
 void UpHash()
 
-}  // namespace ciruitous
+}  // namespace circuitous

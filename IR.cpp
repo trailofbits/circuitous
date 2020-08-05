@@ -5,31 +5,27 @@
 #include "IR.h"
 
 #include <glog/logging.h>
-
-#include <sstream>
-#include <unordered_map>
-
 #include <llvm/ADT/SmallString.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Function.h>
+#include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
-#include <llvm/IR/InstrTypes.h>
 #include <llvm/IR/Intrinsics.h>
 #include <llvm/IR/Module.h>
 #include <llvm/Support/raw_ostream.h>
-
 #include <remill/Arch/Arch.h>
 #include <remill/BC/Util.h>
+
+#include <sstream>
+#include <unordered_map>
 
 namespace circuitous {
 namespace {
 
-enum : unsigned {
-  kMaxNumBytesRead = 16u
-};
+enum : unsigned { kMaxNumBytesRead = 16u };
 
 }  // namespace
 
@@ -50,7 +46,7 @@ Operation::Operation(unsigned op_code_, unsigned size_, Operation *eq_class_)
       eq_class(eq_class_->CreateWeakUse(this)) {}
 
 
-const unsigned LLVMOperation::kInvalidLLVMPredicate = \
+const unsigned LLVMOperation::kInvalidLLVMPredicate =
     static_cast<unsigned>(llvm::CmpInst::BAD_ICMP_PREDICATE);
 
 namespace {
@@ -87,23 +83,23 @@ LLVMOperation::LLVMOperation(llvm::Instruction *inst)
     : LLVMOperation(inst->getOpcode(), Predicate(inst), SizeOfValue(inst)) {}
 
 LLVMOperation::LLVMOperation(llvm::Instruction *inst, Operation *eq_class_)
-    : LLVMOperation(inst->getOpcode(), Predicate(inst),
-                    SizeOfValue(inst), eq_class_) {}
+    : LLVMOperation(inst->getOpcode(), Predicate(inst), SizeOfValue(inst),
+                    eq_class_) {}
 
 #define COMMON_METHODS(cls) \
-    cls::~cls(void) {} \
+  cls::~cls(void) {}
 
 #define STREAM_NAME(cls, ...) \
-    std::string cls::Name(void) const { \
-      std::stringstream ss; \
-      ss << __VA_ARGS__; \
-      return ss.str(); \
-    }
+  std::string cls::Name(void) const { \
+    std::stringstream ss; \
+    ss << __VA_ARGS__; \
+    return ss.str(); \
+  }
 
 #define RETURN_NAME(cls, ...) \
-    std::string cls::Name(void) const { \
-      return __VA_ARGS__; \
-    }
+  std::string cls::Name(void) const { \
+    return __VA_ARGS__; \
+  }
 
 COMMON_METHODS(LLVMOperation)
 std::string LLVMOperation::Name(void) const {
@@ -161,13 +157,22 @@ COMMON_METHODS(OutputRegister)
 STREAM_NAME(OutputRegister, "OUTPUT_REGISTER_" << reg_name << "_" << size)
 
 COMMON_METHODS(RegisterCondition)
-STREAM_NAME(RegisterCondition, "OUTPUT_REGISTER_CHECK_" << dynamic_cast<OutputRegister *>(operands[1])->reg_name << "_" << operands[1]->size)
+STREAM_NAME(RegisterCondition,
+            "OUTPUT_REGISTER_CHECK_"
+                << dynamic_cast<OutputRegister *>(operands[1])->reg_name << "_"
+                << operands[1]->size)
 
 COMMON_METHODS(PreservedCondition)
-STREAM_NAME(PreservedCondition, "PRESERED_REGISTER_CHECK_" << dynamic_cast<OutputRegister *>(operands[1])->reg_name << "_" << operands[1]->size)
+STREAM_NAME(PreservedCondition,
+            "PRESERED_REGISTER_CHECK_"
+                << dynamic_cast<OutputRegister *>(operands[1])->reg_name << "_"
+                << operands[1]->size)
 
 COMMON_METHODS(CopyCondition)
-STREAM_NAME(CopyCondition, "COPIED_REGISTER_CHECK_" << dynamic_cast<OutputRegister *>(operands[1])->reg_name << "_" << operands[1]->size)
+STREAM_NAME(CopyCondition,
+            "COPIED_REGISTER_CHECK_"
+                << dynamic_cast<OutputRegister *>(operands[1])->reg_name << "_"
+                << operands[1]->size)
 
 COMMON_METHODS(Hint)
 STREAM_NAME(Hint, "HINT_" << size)
@@ -187,9 +192,9 @@ STREAM_NAME(OnlyOneCondition, "ONE_OF_" << operands.Size())
 Circuit::~Circuit(void) {
   operands.ClearWithoutErasure();
 #define CLEAR_FIELD(type, field) \
-    for (auto op : field) { \
-      op->operands.ClearWithoutErasure(); \
-    }
+  for (auto op : field) { \
+    op->operands.ClearWithoutErasure(); \
+  }
 
   FOR_EACH_OPERATION(CLEAR_FIELD)
 #undef CLEAR_FIELD
@@ -197,12 +202,10 @@ Circuit::~Circuit(void) {
 
 RETURN_NAME(Circuit, "RESULT")
 
-#define INIT_FIELD(type, field) \
-    , field(this)
+#define INIT_FIELD(type, field) , field(this)
 
 Circuit::Circuit(void)
-    : Condition(Operation::kCircuit)
-      FOR_EACH_OPERATION(INIT_FIELD) {}
+    : Condition(Operation::kCircuit) FOR_EACH_OPERATION(INIT_FIELD) {}
 
 #undef INIT_FIELD
 
@@ -211,7 +214,8 @@ namespace {
 // Apply a callback `cb(llvm::CallInst *)` to each call of `callee` in the
 // function `caller`.
 template <typename T>
-static void ForEachCallTo(llvm::Function *caller, llvm::Function *callee, T cb) {
+static void ForEachCallTo(llvm::Function *caller, llvm::Function *callee,
+                          T cb) {
   if (!callee) {
     return;
   }
@@ -235,7 +239,8 @@ class BottomUpDependencyVisitor {
  public:
   void VisitArgument(llvm::Function *, llvm::Use &, llvm::Argument *) {}
   void VisitFunctionCall(llvm::Function *, llvm::Use &, llvm::CallInst *) {}
-  void VisitBinaryOperator(llvm::Function *, llvm::Use &, llvm::Instruction *) {}
+  void VisitBinaryOperator(llvm::Function *, llvm::Use &, llvm::Instruction *) {
+  }
   void VisitUnaryOperator(llvm::Function *, llvm::Use &, llvm::Instruction *) {}
   void VisitConstantInt(llvm::Function *, llvm::Use &, llvm::ConstantInt *) {}
   void VisitConstantFP(llvm::Function *, llvm::Use &, llvm::ConstantFP *) {}
@@ -244,7 +249,8 @@ class BottomUpDependencyVisitor {
 
 // Analyze how `use_` is produced.
 template <typename T>
-void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context, llvm::Use &use) {
+void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
+                                         llvm::Use &use) {
   auto self = static_cast<T *>(this);
 
   const auto val = use.get();
@@ -254,17 +260,16 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context, llvm::Use &use
     self->VisitArgument(context, use, arg_val);
 
   // Instruction; follow the dependency chain.
-  } else if (auto inst_val = llvm::dyn_cast<llvm::Instruction>(val);
-             inst_val) {
+  } else if (auto inst_val = llvm::dyn_cast<llvm::Instruction>(val); inst_val) {
     if (auto call_val = llvm::dyn_cast<llvm::CallInst>(inst_val); call_val) {
-      for (auto &op_use: call_val->arg_operands()) {
+      for (auto &op_use : call_val->arg_operands()) {
         self->Visit(context, op_use);
       }
 
       self->VisitFunctionCall(context, use, call_val);
 
     } else {
-      for (auto &op_use: inst_val->operands()) {
+      for (auto &op_use : inst_val->operands()) {
         self->Visit(context, op_use);
       }
 
@@ -276,15 +281,13 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context, llvm::Use &use
         self->VisitUnaryOperator(context, use, inst_val);
 
       } else {
-        LOG(FATAL)
-            << "Unexpected value during visit: "
-            << remill::LLVMThingToString(inst_val);
+        LOG(FATAL) << "Unexpected value during visit: "
+                   << remill::LLVMThingToString(inst_val);
       }
     }
 
   // Bottom out at a constant, ignore for now.
-  } else if (auto const_val = llvm::dyn_cast<llvm::Constant>(val);
-             const_val) {
+  } else if (auto const_val = llvm::dyn_cast<llvm::Constant>(val); const_val) {
     if (auto ce = llvm::dyn_cast<llvm::ConstantExpr>(const_val); ce) {
       auto ce_inst = ce->getAsInstruction();
       auto &entry_block = context->getEntryBlock();
@@ -305,9 +308,8 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context, llvm::Use &use
           << remill::LLVMThingToString(val);
     }
   } else {
-    LOG(FATAL)
-        << "Unexpected value encountered during dependency visitor: "
-        << remill::LLVMThingToString(val);
+    LOG(FATAL) << "Unexpected value encountered during dependency visitor: "
+               << remill::LLVMThingToString(val);
   }
 }
 
@@ -391,17 +393,15 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       return;
     }
 
-    const auto res_size = static_cast<unsigned>(
-        dl.getTypeSizeInBits(val->getType()));
+    const auto res_size =
+        static_cast<unsigned>(dl.getTypeSizeInBits(val->getType()));
 
     const auto func = val->getCalledFunction();
-    LOG_IF(FATAL, !func)
-        << "Cannot find called function used in call: "
-        << remill::LLVMThingToString(val);
+    LOG_IF(FATAL, !func) << "Cannot find called function used in call: "
+                         << remill::LLVMThingToString(val);
 
     switch (func->getIntrinsicID()) {
-      case llvm::Intrinsic::not_intrinsic:
-        break;
+      case llvm::Intrinsic::not_intrinsic: break;
       case llvm::Intrinsic::ctpop: {
         op = impl->popcounts.Create(res_size);
         op->operands.AddUse(val_to_op[val->getArgOperand(0u)]);
@@ -418,8 +418,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
         return;
       }
       default:
-        LOG(FATAL)
-            << "Unsupported intrinsic call: " << remill::LLVMThingToString(val);
+        LOG(FATAL) << "Unsupported intrinsic call: "
+                   << remill::LLVMThingToString(val);
         return;
     }
 
@@ -443,19 +443,16 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       } else if (name.endswith("_f128")) {
         size = 128u;
       } else {
-        LOG(FATAL)
-            << "Unsupported memory read intrinsic: "
-            << remill::LLVMThingToString(val);
+        LOG(FATAL) << "Unsupported memory read intrinsic: "
+                   << remill::LLVMThingToString(val);
       }
 
       op = CreateMemoryRead(val, size);
 
     } else if (name.startswith("__remill_write_memory_")) {
-      LOG(FATAL)
-          << "Memory write intrinsics not yet supported";
+      LOG(FATAL) << "Memory write intrinsics not yet supported";
     } else {
-      LOG(FATAL)
-          << "Unsupported function: " << remill::LLVMThingToString(val);
+      LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(val);
     }
   }
 
@@ -517,8 +514,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     CHECK_EQ(num_bits, bits_str.size());
 
-    bits_op = impl->constants.Create(
-        std::move(bits_str), static_cast<unsigned>(num_bits));
+    bits_op = impl->constants.Create(std::move(bits_str),
+                                     static_cast<unsigned>(num_bits));
     op = bits_op;
   }
 
@@ -530,9 +527,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     VisitAPInt(val, val->getValueAPF().bitcastToAPInt());
   }
 
-  const remill::Arch * const arch;
+  const remill::Arch *const arch;
   const llvm::DataLayout &dl;
-  Circuit * const impl;
+  Circuit *const impl;
   VerifyInstruction *verifier{nullptr};
 
   llvm::SmallString<128> bits;
@@ -547,7 +544,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 }  // namespace
 
 std::unique_ptr<Circuit> Circuit::Create(const remill::Arch *arch,
-                                       llvm::Function *circuit_func) {
+                                         llvm::Function *circuit_func) {
   const auto module = circuit_func->getParent();
   const auto &dl = module->getDataLayout();
 
@@ -564,14 +561,13 @@ std::unique_ptr<Circuit> Circuit::Create(const remill::Arch *arch,
     if (arg.hasName() && !arg.getName().empty()) {
       break;
     }
-    num_inst_bits += static_cast<unsigned>(
-        dl.getTypeSizeInBits(arg.getType()));
+    num_inst_bits += static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
   }
 
   const auto inst_bits = impl->inst_bits.Create(num_inst_bits);
   for (auto &arg : circuit_func->args()) {
-    const auto arg_size = static_cast<unsigned>(
-        dl.getTypeSizeInBits(arg.getType()));
+    const auto arg_size =
+        static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
     Operation *op = nullptr;
     if (arg.hasName() && !arg.getName().empty()) {
       CHECK(num_inst_parts);
@@ -613,90 +609,91 @@ std::unique_ptr<Circuit> Circuit::Create(const remill::Arch *arch,
   auto all_verifications = impl->xor_all.Create();
   impl->operands.AddUse(all_verifications);
 
-  ForEachCallTo(circuit_func, verify_isnt_func, [&] (llvm::CallInst *verify_isnt_call) {
+  ForEachCallTo(
+      circuit_func, verify_isnt_func, [&](llvm::CallInst *verify_isnt_call) {
+        const auto verify_inst = impl->verifications.Create();
+        importer.verifier = verify_inst;
+        all_verifications->operands.AddUse(verify_inst);
 
-    const auto verify_inst = impl->verifications.Create();
-    importer.verifier = verify_inst;
-    all_verifications->operands.AddUse(verify_inst);
+        seen.clear();
 
-    seen.clear();
-
-    for (auto &arg_use : verify_isnt_call->arg_operands()) {
-      const auto val = arg_use.get();
-      auto &op = importer.val_to_op[val];
-      if (op) {
-        if (seen.count(op)) {
-          continue;
-        }
-        seen.insert(op);
-        verify_inst->operands.AddUse(op);
-        continue;
-      }
-
-      const auto arg_cmp = llvm::dyn_cast<llvm::CallInst>(arg_use.get());
-      CHECK_NOTNULL(arg_cmp);
-      CHECK(arg_cmp->getCalledFunction()->getName().startswith("__circuitous_icmp_eq_"));
-
-      const auto proposed_val = arg_cmp->getArgOperand(0u);
-      const auto expected_val = arg_cmp->getArgOperand(1u);
-
-      // Usually this means expected val is some instruction bits.
-      if (llvm::isa<llvm::Constant>(expected_val)) {
-        importer.Visit(circuit_func, arg_cmp->getArgOperandUse(1u));
-      }
-
-      auto &lhs_op = importer.val_to_op[proposed_val];
-      const auto rhs_op = importer.val_to_op[expected_val];
-
-      CHECK_NOTNULL(rhs_op);
-
-      if (const auto output_reg = dynamic_cast<OutputRegister *>(rhs_op);
-          output_reg) {
-
-        // Proposed valid
-        if (lhs_op) {
-          if (const auto input_reg = dynamic_cast<InputRegister *>(lhs_op);
-              input_reg) {
-            if (input_reg->reg_name == output_reg->reg_name) {
-              op = impl->preserved_regs.Create();
-            } else {
-              op = impl->copied_regs.Create();
+        for (auto &arg_use : verify_isnt_call->arg_operands()) {
+          const auto val = arg_use.get();
+          auto &op = importer.val_to_op[val];
+          if (op) {
+            if (seen.count(op)) {
+              continue;
             }
-          } else {
-            op = impl->transitions.Create();
+            seen.insert(op);
+            verify_inst->operands.AddUse(op);
+            continue;
           }
 
-        // Proposed value of this register is dynamically computed.
-        } else {
-          importer.Visit(circuit_func, arg_cmp->getArgOperandUse(0u));
-          CHECK_NOTNULL(lhs_op);
-          op = impl->transitions.Create();
+          const auto arg_cmp = llvm::dyn_cast<llvm::CallInst>(arg_use.get());
+          CHECK_NOTNULL(arg_cmp);
+          CHECK(arg_cmp->getCalledFunction()->getName().startswith(
+              "__circuitous_icmp_eq_"));
+
+          const auto proposed_val = arg_cmp->getArgOperand(0u);
+          const auto expected_val = arg_cmp->getArgOperand(1u);
+
+          // Usually this means expected val is some instruction bits.
+          if (llvm::isa<llvm::Constant>(expected_val)) {
+            importer.Visit(circuit_func, arg_cmp->getArgOperandUse(1u));
+          }
+
+          auto &lhs_op = importer.val_to_op[proposed_val];
+          const auto rhs_op = importer.val_to_op[expected_val];
+
+          CHECK_NOTNULL(rhs_op);
+
+          if (const auto output_reg = dynamic_cast<OutputRegister *>(rhs_op);
+              output_reg) {
+
+            // Proposed valid
+            if (lhs_op) {
+              if (const auto input_reg = dynamic_cast<InputRegister *>(lhs_op);
+                  input_reg) {
+                if (input_reg->reg_name == output_reg->reg_name) {
+                  op = impl->preserved_regs.Create();
+                } else {
+                  op = impl->copied_regs.Create();
+                }
+              } else {
+                op = impl->transitions.Create();
+              }
+
+            // Proposed value of this register is dynamically computed.
+            } else {
+              importer.Visit(circuit_func, arg_cmp->getArgOperandUse(0u));
+              CHECK_NOTNULL(lhs_op);
+              op = impl->transitions.Create();
+            }
+
+          } else if (const auto output_bits = dynamic_cast<Extract *>(rhs_op);
+                     output_bits) {
+
+            CHECK_EQ(output_bits->operands[0]->op_code,
+                     Operation::kInputInstructionBits);
+
+            if (!lhs_op) {
+              importer.Visit(circuit_func, arg_cmp->getArgOperandUse(0u));
+              CHECK_NOTNULL(lhs_op);
+            }
+
+            op = impl->decode_conditions.Create();
+
+          } else {
+            LOG(FATAL) << "Unexpected argument: "
+                       << remill::LLVMThingToString(expected_val);
+          }
+
+          op->operands.AddUse(lhs_op);
+          op->operands.AddUse(rhs_op);
+          verify_inst->operands.AddUse(op);
+          seen.insert(op);
         }
-
-      } else if (const auto output_bits = dynamic_cast<Extract *>(rhs_op);
-                 output_bits) {
-
-        CHECK_EQ(output_bits->operands[0]->op_code,
-                 Operation::kInputInstructionBits);
-
-        if (!lhs_op) {
-          importer.Visit(circuit_func, arg_cmp->getArgOperandUse(0u));
-          CHECK_NOTNULL(lhs_op);
-        }
-
-        op = impl->decode_conditions.Create();
-
-      } else {
-        LOG(FATAL)
-            << "Unexpected argument: " << remill::LLVMThingToString(expected_val);
-      }
-
-      op->operands.AddUse(lhs_op);
-      op->operands.AddUse(rhs_op);
-      verify_inst->operands.AddUse(op);
-      seen.insert(op);
-    }
-  });
+      });
 
   return impl;
 }

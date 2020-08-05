@@ -24,4 +24,4 @@ inline static uint64_t RotateRight64(uint64_t val, unsigned rot) {
 #endif
 }
 
-}  // namespace hyde
+}  // namespace circuitous
