@@ -491,23 +491,33 @@ class Circuit : public Condition {
 
   static std::unique_ptr<Circuit> Deserialize(std::istream &is);
 
+// clang-format off
+
 #define FOR_EACH_OPERATION(cb) \
-  cb(Constant, constants) cb(LLVMOperation, llvm_insts) cb(Concat, concats) \
-      cb(CountLeadingZeroes, clzs) cb(CountTrailingZeroes, ctzs) \
-          cb(Extract, extracts) cb(PopulationCount, popcounts) \
-              cb(SignExtend, sign_exts) cb(ZeroFillLeft, left_zfills) cb( \
-                  ZeroFillRight, right_zfills) cb(InputRegister, input_regs) \
-                  cb(OutputRegister, output_regs) \
-                      cb(InputInstructionBits, inst_bits) \
-                          cb(RegisterCondition, transitions) \
-                              cb(PreservedCondition, preserved_regs) \
-                                  cb(CopyCondition, copied_regs) cb( \
-                                      DecodeCondition, decode_conditions) \
-                                      cb(VerifyInstruction, verifications) cb( \
-                                          ReadMemoryCondition, memory_reads) \
-                                          cb(OnlyOneCondition, xor_all) cb( \
-                                              Hint, hints) \
-                                              cb(EquivalenceClass, eq_classes)
+  cb(Constant, constants) \
+  cb(LLVMOperation, llvm_insts) \
+  cb(Concat, concats) \
+  cb(CountLeadingZeroes, clzs) \
+  cb(CountTrailingZeroes, ctzs) \
+  cb(Extract, extracts) \
+  cb(PopulationCount, popcounts) \
+  cb(SignExtend, sign_exts) \
+  cb(ZeroFillLeft, left_zfills) \
+  cb(ZeroFillRight, right_zfills) \
+  cb(InputRegister, input_regs) \
+  cb(OutputRegister, output_regs) \
+  cb(InputInstructionBits, inst_bits) \
+  cb(RegisterCondition, transitions) \
+  cb(PreservedCondition, preserved_regs) \
+  cb(CopyCondition, copied_regs) \
+  cb(DecodeCondition, decode_conditions) \
+  cb(VerifyInstruction, verifications) \
+  cb(ReadMemoryCondition, memory_reads) \
+  cb(OnlyOneCondition, xor_all) \
+  cb(Hint, hints) \
+  cb(EquivalenceClass, eq_classes)
+
+// clang-format on
 
 #define DECLARE_MEMBER(type, field) DefList<type> field;
 
