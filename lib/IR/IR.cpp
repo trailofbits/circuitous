@@ -2,8 +2,7 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include "IR.h"
-
+#include <circuitous/IR/IR.h>
 #include <glog/logging.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/IR/BasicBlock.h>

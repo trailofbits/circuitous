@@ -2,15 +2,13 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include "Hash.h"
-
+#include <circuitous/IR/Hash.h>
+#include <circuitous/IR/IR.h>
+#include <circuitous/Util/BitManipulation.h>
 #include <llvm/IR/Instruction.h>
 
 #include <string>
 #include <unordered_map>
-
-#include "BitManipulation.h"
-#include "IR.h"
 
 namespace circuitous {
 namespace {

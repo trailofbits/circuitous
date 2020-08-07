@@ -2,6 +2,8 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
+#include <circuitous/IR/Hash.h>
+#include <circuitous/IR/IR.h>
 #include <glog/logging.h>
 
 #include <cstdint>
@@ -9,9 +11,6 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-
-#include "Hash.h"
-#include "IR.h"
 
 #if 0
 #  define DEBUG_WRITE(str) \

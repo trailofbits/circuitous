@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <circuitous/IR/IR.h>
+#include <circuitous/Lifter/Remill.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
@@ -18,8 +20,6 @@
 
 #include <bitset>
 #include <vector>
-
-#include "IR.h"
 
 namespace circuitous {
 

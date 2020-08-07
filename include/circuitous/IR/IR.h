@@ -4,14 +4,14 @@
 
 #pragma once
 
+#include <circuitous/Util/UseDef.h>
+
 #include <bitset>
 #include <iosfwd>
 #include <memory>
 #include <string>
 #include <unordered_set>
 #include <vector>
-
-#include "UseDef.h"
 
 namespace remill {
 class Arch;

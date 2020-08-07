@@ -2,9 +2,9 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <ostream>
+#include <circuitous/IR/IR.h>
 
-#include "IR.h"
+#include <ostream>
 
 namespace circuitous {
 namespace {
