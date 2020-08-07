@@ -2,7 +2,7 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include "UseDef.h"
+#include <circuitous/Util/UseDef.h>
 
 namespace circuitous {
 

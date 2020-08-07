@@ -2,25 +2,17 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <glog/logging.h>
+#include <circuitous/Lifter/Remill.h>
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 
-#include <iostream>
 #include <fstream>
-
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
-#include <llvm/Support/MemoryBuffer.h>
-
-#include <remill/Arch/Arch.h>
-#include <remill/BC/Compat/Error.h>
-#include <remill/BC/Util.h>
-
-#include "CircuitBuilder.h"
+#include <iostream>
 
 DECLARE_string(arch);
 DECLARE_string(os);
-DEFINE_string(binary_in, "", "Path to a file containing only machine code instructions.");
+DEFINE_string(binary_in, "",
+              "Path to a file containing only machine code instructions.");
 DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
@@ -40,19 +32,8 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<circuitous::Circuit> circuit;
 
   if (!FLAGS_binary_in.empty()) {
-    auto maybe_buff = llvm::MemoryBuffer::getFile(FLAGS_binary_in, -1, false);
-    if (remill::IsError(maybe_buff)) {
-      std::cerr << remill::GetErrorString(maybe_buff) << std::endl;
-      return EXIT_FAILURE;
-    }
-
-    const auto buff = remill::GetReference(maybe_buff)->getBuffer();
-
-    circuitous::CircuitBuilder builder([] (llvm::LLVMContext &context) {
-      return remill::Arch::GetTargetArch(context);
-    });
-
-    builder.Build(buff).swap(circuit);
+    circuitous::LiftInstructionsInFile(FLAGS_arch, FLAGS_os, FLAGS_binary_in)
+        .swap(circuit);
 
   } else if (!FLAGS_ir_in.empty()) {
     if (FLAGS_ir_in == "-") {

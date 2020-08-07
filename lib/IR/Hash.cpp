@@ -2,15 +2,13 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include "Hash.h"
+#include <circuitous/IR/Hash.h>
+#include <circuitous/IR/IR.h>
+#include <circuitous/Util/BitManipulation.h>
+#include <llvm/IR/Instruction.h>
 
 #include <string>
 #include <unordered_map>
-
-#include <llvm/IR/Instruction.h>
-
-#include "BitManipulation.h"
-#include "IR.h"
 
 namespace circuitous {
 namespace {
@@ -99,8 +97,7 @@ void HashVisitor::Impl::VisitEquivalenceClass(EquivalenceClass *op) {
 
 HashVisitor::~HashVisitor(void) {}
 
-HashVisitor::HashVisitor(void)
-    : impl(new Impl) {}
+HashVisitor::HashVisitor(void) : impl(new Impl) {}
 
 uint64_t HashVisitor::operator[](Operation *op) {
   return impl->Lookup(op);
