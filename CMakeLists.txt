@@ -69,9 +69,7 @@ target_link_libraries(circuitous-ir PUBLIC
     circuitous-settings
 )
 
-add_library(circuitous-lifter STATIC
-    include/circuitous/Lifter/Remill.h
-    
+add_library(circuitous-lifter STATIC    
     lib/Lifter/CircuitBuilder.h
     lib/Lifter/CircuitBuilder.cpp
     lib/Lifter/Remill.cpp

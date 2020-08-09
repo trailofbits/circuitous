@@ -107,7 +107,7 @@ static llvm::IntegerType *IntegralRegisterType(llvm::Module &module,
 
 }  // namespace
 
-std::unique_ptr<Circuit> CircuitBuilder::Build(llvm::StringRef buff) {
+llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
   if (auto used = module->getGlobalVariable("llvm.used"); used) {
     used->eraseFromParent();
   }
@@ -128,8 +128,6 @@ std::unique_ptr<Circuit> CircuitBuilder::Build(llvm::StringRef buff) {
   //            the sign bit, getting the low N bits of an instruction (i.e.
   //            convert the AND into a function call.
 
-  // TODO(pag):
-
   auto isels = DecodeInstructions(buff);
   LiftInstructions(isels);
 
@@ -145,33 +143,7 @@ std::unique_ptr<Circuit> CircuitBuilder::Build(llvm::StringRef buff) {
     mark_as_used->eraseFromParent();
   }
 
-  // TODO(pag): Eventually replace calls to `__circuitous_verify_inst` with
-  //            lower level `__circuitous_and_all`. But, analyze the operands
-  //            across all such calls and try to find all subsets, and break
-  //            them up into AND subexpressions, so as to minimize the total
-  //            number of AND gates needed.
-  //
-  //            For example, several instructions don't touch the flags
-  //            registers, so the above mentioned optimization should be
-  //            able to identify that it can summarize the flag comparisons
-  //            into a single value that is used anywhere that all of those
-  //            flags comparisons are used.
-
-  return Circuit::Create(arch.get(),
-                         BuildCircuit1(BuildCircuit0(std::move(isels))));
-
-  //
-  //  return BuildCircuit3(
-  //      BuildCircuit2(
-  //          BuildCircuit1(
-  //              BuildCircuit0(std::move(isels)))));
-  // auto func = BuildCircuit3(
-  //                           BuildCircuit2(
-  //                                         BuildCircuit1(
-  //                                                       BuildCircuit0(std::move(isels)))));
-  // func->print(llvm::outs());
-  // exit(EXIT_FAILURE);
-  // return nullptr;
+  return BuildCircuit1(BuildCircuit0(std::move(isels)));
 }
 
 // Update any references we might have held to functions that could be

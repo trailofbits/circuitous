@@ -484,8 +484,9 @@ class Circuit : public Condition {
   virtual ~Circuit(void);
   std::string Name(void) const override;
 
-  static std::unique_ptr<Circuit> Create(const remill::Arch *arch,
-                                         llvm::Function *func);
+  static std::unique_ptr<Circuit> CreateFromInstructions(
+      const std::string &arch_name, const std::string &os_name,
+      const std::string &file_name);
 
   void Serialize(std::ostream &os);
 

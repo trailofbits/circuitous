@@ -5,7 +5,6 @@
 #pragma once
 
 #include <circuitous/IR/IR.h>
-#include <circuitous/Lifter/Remill.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/LLVMContext.h>
@@ -62,6 +61,8 @@ struct EncodedInstructionPart {
 // Represents the components of an instruction decoding.
 using EncodedInstructionParts = std::vector<EncodedInstructionPart>;
 
+enum : unsigned { kMaxNumBytesRead = 16u };
+
 class CircuitBuilder {
  public:
   template <typename T>
@@ -103,7 +104,7 @@ class CircuitBuilder {
     });
   }
 
-  std::unique_ptr<Circuit> Build(llvm::StringRef buff);
+  llvm::Function *Build(llvm::StringRef buff);
 
  protected:
   // Return a function that does a bitwise comparison of two values of
@@ -152,13 +153,7 @@ class CircuitBuilder {
   // sub-expressions.
   llvm::Function *BuildCircuit3(llvm::Function *circuit2_func);
 
- private:
-  llvm::CallInst *FinalXor(llvm::Function *in_func) const;
-
-  // Update any references we might have held to functions that could be
-  // optimized away.
-  void Refresh(void);
-
+ public:
   llvm::LLVMContext context;
 
   // The architecture associated with
@@ -167,6 +162,13 @@ class CircuitBuilder {
   // Module into which we'll do most lifting. It will contain `arch`-specific
   // semantics.
   const std::unique_ptr<llvm::Module> module;
+
+ private:
+  llvm::CallInst *FinalXor(llvm::Function *in_func) const;
+
+  // Update any references we might have held to functions that could be
+  // optimized away.
+  void Refresh(void);
 
   // The LLVM type of `State *` in Remill semantics.
   llvm::PointerType *const state_ptr_type;

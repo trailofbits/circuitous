@@ -2,7 +2,7 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <circuitous/Lifter/Remill.h>
+#include <circuitous/IR/IR.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
@@ -32,8 +32,8 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<circuitous::Circuit> circuit;
 
   if (!FLAGS_binary_in.empty()) {
-    circuitous::LiftInstructionsInFile(FLAGS_arch, FLAGS_os, FLAGS_binary_in)
-        .swap(circuit);
+    circuitous::Circuit::CreateFromInstructions(
+        FLAGS_arch, FLAGS_os, FLAGS_binary_in).swap(circuit);
 
   } else if (!FLAGS_ir_in.empty()) {
     if (FLAGS_ir_in == "-") {
