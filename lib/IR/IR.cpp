@@ -33,7 +33,8 @@ Operation::Operation(unsigned op_code_, unsigned size_, Operation *eq_class_)
       eq_class(eq_class_->CreateWeakUse(this)) {}
 
 bool Operation::Equals(const Operation *that) const {
-  if (eq_class && eq_class.get() == that->eq_class.get()) {
+  if (this == that ||
+      (eq_class && eq_class.get() == that->eq_class.get())) {
     return true;
   }
 
@@ -121,7 +122,9 @@ std::string LLVMOperation::Name(void) const {
 }
 
 bool LLVMOperation::Equals(const Operation *that_) const {
-  if (auto that = dynamic_cast<const LLVMOperation *>(that_); that) {
+  if (this == that_) {
+    return true;
+  } else if (auto that = dynamic_cast<const LLVMOperation *>(that_); that) {
     if (size != that->size ||
         llvm_op_code != that->llvm_op_code ||
         llvm_predicate != that->llvm_predicate) {
@@ -194,7 +197,9 @@ COMMON_METHODS(Extract)
 STREAM_NAME(Extract, "EXTRACT_" << high_bit_exc << "_" << low_bit_inc)
 
 bool Extract::Equals(const Operation *that_) const {
-  if (auto that = dynamic_cast<const Extract *>(that_); that) {
+  if (this == that_) {
+    return true;
+  } else if (auto that = dynamic_cast<const Extract *>(that_); that) {
     return size == that->size && high_bit_exc == that->high_bit_exc &&
            low_bit_inc == that->low_bit_inc &&
            operands[0]->Equals(that->operands[0]);
@@ -233,7 +238,9 @@ COMMON_METHODS(InputRegister)
 STREAM_NAME(InputRegister, "INPUT_REGISTER_" << reg_name << "_" << size)
 
 bool InputRegister::Equals(const Operation *that_) const {
-  if (auto that = dynamic_cast<const InputRegister *>(that_); that) {
+  if (this == that_) {
+    return true;
+  } else if (auto that = dynamic_cast<const InputRegister *>(that_); that) {
     return reg_name == that->reg_name;
   } else {
     return this->Operation::Equals(that_);
@@ -244,7 +251,9 @@ COMMON_METHODS(OutputRegister)
 STREAM_NAME(OutputRegister, "OUTPUT_REGISTER_" << reg_name << "_" << size)
 
 bool OutputRegister::Equals(const Operation *that_) const {
-  if (auto that = dynamic_cast<const OutputRegister *>(that_); that) {
+  if (this == that_) {
+    return true;
+  } else if (auto that = dynamic_cast<const OutputRegister *>(that_); that) {
     return reg_name == that->reg_name;
   } else {
     return this->Operation::Equals(that_);
