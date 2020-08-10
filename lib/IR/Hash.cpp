@@ -6,6 +6,7 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/Util/BitManipulation.h>
 #include <llvm/IR/Instruction.h>
+#include <llvm/IR/Instructions.h>
 
 #include <string>
 #include <unordered_map>
@@ -51,7 +52,9 @@ void HashVisitor::Impl::VisitOperation(Operation *op) {
 
 void HashVisitor::Impl::VisitLLVMOperation(LLVMOperation *op) {
   uint64_t hash = kStringHasher(op->Name());
-  if (llvm::Instruction::isAssociative(op->op_code)) {
+  if (llvm::Instruction::isCommutative(op->op_code) ||
+      llvm::CmpInst::ICMP_EQ == op->llvm_predicate ||
+      llvm::CmpInst::ICMP_NE == op->llvm_predicate) {
     for (auto sub_op : op->operands) {
       hash ^= Lookup(sub_op);
     }

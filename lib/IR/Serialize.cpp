@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#if 0
+#if 1
 #  define DEBUG_WRITE(str) \
     do { \
       for (auto i = 0u; str[i]; ++i) { \
@@ -201,12 +201,20 @@ class DeserializeVisitor {
       DEBUG_READ(";");
 
       auto range = hash_to_ops.equal_range(hash);
+      Operation *found_op = nullptr;
       for (auto it = range.first; it != range.second; ++it) {
-
-        // TODO(pag): Check for equivalence.
+        if (op->Equals(it->second)) {
+          found_op = it->second;
+          break;
+        }
       }
 
-      hash_to_ops.emplace(hash, op);
+      if (!found_op) {
+        hash_to_ops.emplace(hash, op);
+      } else {
+        op->ReplaceAllUsesWith(found_op);
+        op = found_op;
+      }
       offset_to_op.emplace(prev_offset, op);
 
     } else if (sel == 0xffu) {
@@ -404,7 +412,6 @@ class DeserializeVisitor {
     return nullptr;
   }
 
- private:
   std::istream &is;
   Circuit *const circuit;
   int32_t curr_offset{0};
@@ -420,13 +427,7 @@ void Circuit::Serialize(std::ostream &os) {
   SerializeVisitor vis(os);
   for (auto xor_all_op : xor_all) {
     for (auto op : xor_all_op->operands) {
-      if (auto verify_inst = dynamic_cast<VerifyInstruction *>(op);
-          verify_inst) {
-        vis.VisitVerifyInstruction(verify_inst);
-      } else {
-        LOG(FATAL) << "Unexpected operation type passed to XOR ALL: "
-                   << op->Name();
-      }
+      vis.Write(op);
     }
   }
   os.flush();
@@ -436,12 +437,15 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   std::unique_ptr<Circuit> circuit(new Circuit);
   DeserializeVisitor vis(is, circuit.get());
 
-
   auto old_flags = is.flags();
   is.unsetf(std::ios::skipws);
 
   while (is.good() && !is.eof() && EOF != is.peek()) {
-    vis.Decode(Operation::kVerifyInstruction);
+    Operation *op = nullptr;
+    vis.Read(op);
+    if (!op) {
+      break;
+    }
   }
   is.flags(old_flags);
 
@@ -482,7 +486,13 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   auto xor_all = circuit->xor_all.Create();
   circuit->operands.AddUse(xor_all);
 
-  for (auto verify : circuit->verifications) {
+  for (auto [offset, op] : vis.offset_to_op) {
+    (void) offset;
+    auto verify = dynamic_cast<VerifyInstruction *>(op);
+    if (!verify) {
+      continue;
+    }
+
     xor_all->operands.AddUse(verify);
 
     seen_reg_names.clear();
@@ -521,6 +531,12 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
       }
     }
   }
+
+#define CLEAR_UNUSED(cls, field) \
+    circuit->field.RemoveUnused();
+
+  FOR_EACH_OPERATION(CLEAR_UNUSED)
+#undef CLEAR_UNUSED
 
   return circuit;
 }

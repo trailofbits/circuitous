@@ -35,6 +35,8 @@ class Operation : public User, public Def<Operation> {
 
   virtual std::string Name(void) const = 0;
 
+  virtual bool Equals(const Operation *that) const;
+
   enum : unsigned {
 
     // Some sequence of bits.
@@ -220,6 +222,7 @@ class LLVMOperation final : public Operation {
   virtual ~LLVMOperation(void);
 
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 
   const unsigned llvm_op_code;
   const unsigned llvm_predicate;
@@ -241,6 +244,7 @@ class Constant final : public Operation {
   virtual ~Constant(void);
 
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 
   // Value of this constant.
   const std::string bits;
@@ -260,6 +264,7 @@ class Extract final : public BitOperation {
  public:
   virtual ~Extract(void);
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 
   inline explicit Extract(unsigned low_bit_inc_, unsigned high_bit_exc_)
       : BitOperation(Operation::kExtract, high_bit_exc_ - low_bit_inc_),
@@ -364,6 +369,7 @@ class InputRegister : public Operation {
  public:
   virtual ~InputRegister(void);
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 
   inline explicit InputRegister(unsigned size_, std::string reg_name_)
       : Operation(Operation::kInputRegister, size_),
@@ -377,6 +383,7 @@ class OutputRegister : public Operation {
  public:
   virtual ~OutputRegister(void);
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 
   inline explicit OutputRegister(unsigned size_, std::string reg_name_)
       : Operation(Operation::kOutputRegister, size_),
@@ -459,6 +466,7 @@ class EquivalenceClass final : public Operation {
   FORWARD_CONSTRUCTOR(Operation, EquivalenceClass)
   virtual ~EquivalenceClass(void);
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 };
 
 class VerifyInstruction final : public Condition {

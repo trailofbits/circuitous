@@ -16,6 +16,7 @@
 namespace circuitous {
 
 Operation::~Operation(void) {}
+
 Operation::Operation(unsigned op_code_, unsigned size_)
     : User(this),
       Def<Operation>(this),
@@ -31,6 +32,26 @@ Operation::Operation(unsigned op_code_, unsigned size_, Operation *eq_class_)
       operands(this),
       eq_class(eq_class_->CreateWeakUse(this)) {}
 
+bool Operation::Equals(const Operation *that) const {
+  if (eq_class && eq_class.get() == that->eq_class.get()) {
+    return true;
+  }
+
+  const auto num_ops = operands.Size();
+  if (op_code != that->op_code ||
+      size != that->size ||
+      num_ops != that->operands.Size()) {
+    return false;
+  }
+
+  for (auto i = 0u; i < num_ops; ++i) {
+    if (!operands[i]->Equals(that->operands[i])) {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 const unsigned LLVMOperation::kInvalidLLVMPredicate =
     static_cast<unsigned>(llvm::CmpInst::BAD_ICMP_PREDICATE);
@@ -99,16 +120,88 @@ std::string LLVMOperation::Name(void) const {
   return ss.str();
 }
 
+bool LLVMOperation::Equals(const Operation *that_) const {
+  if (auto that = dynamic_cast<const LLVMOperation *>(that_); that) {
+    if (size != that->size ||
+        llvm_op_code != that->llvm_op_code ||
+        llvm_predicate != that->llvm_predicate) {
+      return false;
+    }
+
+    const auto num_ops = operands.Size();
+    if (2u == num_ops) {
+      const auto this_lhs = operands[0];
+      const auto that_lhs = that->operands[0];
+      const auto this_rhs = operands[1];
+      const auto that_rhs = that->operands[1];
+      if (llvm::Instruction::isCommutative(llvm_op_code) ||
+          llvm::CmpInst::ICMP_EQ == llvm_predicate ||
+          llvm::CmpInst::ICMP_NE == llvm_predicate) {
+        return (this_lhs->Equals(that_lhs) && this_rhs->Equals(that_rhs)) ||
+               (this_lhs->Equals(that_rhs) && this_rhs->Equals(that_lhs));
+      } else {
+        return this_lhs->Equals(that_lhs) && this_rhs->Equals(that_rhs);
+      }
+
+    } else if (1u == num_ops) {
+      return operands[0]->Equals(that->operands[1]);
+
+    }
+  }
+  return this->Operation::Equals(that_);
+}
+
 COMMON_METHODS(EquivalenceClass)
 STREAM_NAME(EquivalenceClass, "EQ_CLASS_" << size);
 
+bool EquivalenceClass::Equals(const Operation *that_) const {
+  if (that_ == this ||
+      that_->eq_class.get() == this ||
+      eq_class.get() == that_) {
+    return true;
+  }
+
+  if (auto that = dynamic_cast<const EquivalenceClass *>(that_); that) {
+    for (auto sub_op : operands) {
+      if (that->Equals(sub_op)) {
+        return true;
+      }
+    }
+  } else {
+    for (auto sub_op : operands) {
+      if (sub_op->Equals(that_)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 COMMON_METHODS(Constant)
 STREAM_NAME(Constant, "CONST_" << size << "_" << bits)
+
+bool Constant::Equals(const Operation *that_) const {
+  if (auto that = dynamic_cast<const Constant *>(that_); that) {
+    return bits == that->bits;
+  } else {
+    return this->Operation::Equals(that_);
+  }
+}
 
 BitOperation::~BitOperation(void) {}
 
 COMMON_METHODS(Extract)
 STREAM_NAME(Extract, "EXTRACT_" << high_bit_exc << "_" << low_bit_inc)
+
+bool Extract::Equals(const Operation *that_) const {
+  if (auto that = dynamic_cast<const Extract *>(that_); that) {
+    return size == that->size && high_bit_exc == that->high_bit_exc &&
+           low_bit_inc == that->low_bit_inc &&
+           operands[0]->Equals(that->operands[0]);
+  } else {
+    return this->Operation::Equals(that_);
+  }
+}
 
 COMMON_METHODS(Concat)
 RETURN_NAME(Concat, "CONCAT")
@@ -139,8 +232,24 @@ STREAM_NAME(ReadMemoryCondition, "CHECK_MEM_READ_ADDR_" << operands[0]->size)
 COMMON_METHODS(InputRegister)
 STREAM_NAME(InputRegister, "INPUT_REGISTER_" << reg_name << "_" << size)
 
+bool InputRegister::Equals(const Operation *that_) const {
+  if (auto that = dynamic_cast<const InputRegister *>(that_); that) {
+    return reg_name == that->reg_name;
+  } else {
+    return this->Operation::Equals(that_);
+  }
+}
+
 COMMON_METHODS(OutputRegister)
 STREAM_NAME(OutputRegister, "OUTPUT_REGISTER_" << reg_name << "_" << size)
+
+bool OutputRegister::Equals(const Operation *that_) const {
+  if (auto that = dynamic_cast<const OutputRegister *>(that_); that) {
+    return reg_name == that->reg_name;
+  } else {
+    return this->Operation::Equals(that_);
+  }
+}
 
 COMMON_METHODS(RegisterCondition)
 STREAM_NAME(RegisterCondition,
