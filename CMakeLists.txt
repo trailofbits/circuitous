@@ -80,16 +80,27 @@ target_link_libraries(circuitous-lifter PUBLIC
     circuitous-settings
 )
 
-add_executable(circuitous
+add_library(circuitous-printers STATIC    
+    include/circuitous/Printers.h
+    
     lib/Printers/DOT.cpp
     lib/Printers/Python.cpp
     lib/Printers/Topology.cpp
+)
+
+target_link_libraries(circuitous-printers PUBLIC
+    circuitous-ir
+    circuitous-settings
+)
+
+add_executable(circuitous
     Main.cpp
 )
 
 target_link_libraries(circuitous PUBLIC
     circuitous-lifter
     circuitous-ir
+    circuitous-printers
     circuitous-util
     circuitous-settings
 )

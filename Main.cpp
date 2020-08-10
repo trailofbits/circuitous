@@ -3,6 +3,8 @@
  */
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/Printers.h>
+
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
@@ -17,13 +19,6 @@ DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "Path to the output Python file.");
-
-namespace circuitous {
-
-void PrintDOT(std::ostream &os, Circuit *circuit);
-void PrintPython(std::ostream &os, Circuit *circuit);
-
-}  // namespace circuitous
 
 int main(int argc, char *argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
