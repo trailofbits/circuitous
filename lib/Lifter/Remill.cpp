@@ -347,9 +347,10 @@ static void ForEachCallTo(llvm::Function *caller, llvm::Function *callee,
 
 }  // namespace
 
-std::unique_ptr<Circuit> Circuit::CreateFromInstructions(
-    const std::string &arch_name, const std::string &os_name,
-    const std::string &file_name) {
+std::unique_ptr<Circuit>
+Circuit::CreateFromInstructions(const std::string &arch_name,
+                                const std::string &os_name,
+                                const std::string &file_name) {
 
   auto maybe_buff = llvm::MemoryBuffer::getFile(file_name, -1, false);
   if (remill::IsError(maybe_buff)) {

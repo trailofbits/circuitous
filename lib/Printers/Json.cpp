@@ -14,11 +14,14 @@ void PrintJSON(std::ostream &os, Circuit *circuit) {
   auto do_op = [&](circuitous::Operation *op) {
     if (!first) {
       os << ",\n";
-    } else {first = false;}
+    } else {
+      first = false;
+    }
     os << "\"v" << std::hex << reinterpret_cast<uintptr_t>(op) << "\":{";
     os << "\"op_name\":\"" << op->Name() << "\",";
     os << "\"op_size\":" << std::dec << op->size << ",";
-    os << "\"op_code\":" << std::dec << static_cast<unsigned>(op->op_code) << ",";
+    os << "\"op_code\":" << std::dec << static_cast<unsigned>(op->op_code)
+       << ",";
 
     if (auto llvm_op = dynamic_cast<circuitous::LLVMOperation *>(op); llvm_op) {
       os << "\"node_type\":{\"LLVMOp\":{";
@@ -39,7 +42,9 @@ void PrintJSON(std::ostream &os, Circuit *circuit) {
     for (auto sub_op : op->operands) {
       if (!first2) {
         os << ",";
-      } else {first2 = false;}
+      } else {
+        first2 = false;
+      }
       os << "\"v" << std::hex << reinterpret_cast<uintptr_t>(sub_op) << "\"";
     }
     os << "]}";

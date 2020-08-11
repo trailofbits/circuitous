@@ -4,8 +4,8 @@
 
 #pragma once
 
-#include <ostream>
 #include <functional>
+#include <ostream>
 
 namespace circuitous {
 

@@ -4,7 +4,6 @@
 
 #include <circuitous/IR/IR.h>
 #include <circuitous/Printers.h>
-
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
@@ -28,8 +27,9 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<circuitous::Circuit> circuit;
 
   if (!FLAGS_binary_in.empty()) {
-    circuitous::Circuit::CreateFromInstructions(
-        FLAGS_arch, FLAGS_os, FLAGS_binary_in).swap(circuit);
+    circuitous::Circuit::CreateFromInstructions(FLAGS_arch, FLAGS_os,
+                                                FLAGS_binary_in)
+        .swap(circuit);
 
   } else if (!FLAGS_ir_in.empty()) {
     if (FLAGS_ir_in == "-") {
@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
   }
 
   if (!FLAGS_json_out.empty()) {
-    if (FLAGS_json_out== "-") {
+    if (FLAGS_json_out == "-") {
       FLAGS_json_out = "/dev/stderr";
     }
 

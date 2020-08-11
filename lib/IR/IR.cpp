@@ -4,7 +4,6 @@
 
 #include <circuitous/IR/IR.h>
 #include <glog/logging.h>
-
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
@@ -33,14 +32,12 @@ Operation::Operation(unsigned op_code_, unsigned size_, Operation *eq_class_)
       eq_class(eq_class_->CreateWeakUse(this)) {}
 
 bool Operation::Equals(const Operation *that) const {
-  if (this == that ||
-      (eq_class && eq_class.get() == that->eq_class.get())) {
+  if (this == that || (eq_class && eq_class.get() == that->eq_class.get())) {
     return true;
   }
 
   const auto num_ops = operands.Size();
-  if (op_code != that->op_code ||
-      size != that->size ||
+  if (op_code != that->op_code || size != that->size ||
       num_ops != that->operands.Size()) {
     return false;
   }
@@ -125,8 +122,7 @@ bool LLVMOperation::Equals(const Operation *that_) const {
   if (this == that_) {
     return true;
   } else if (auto that = dynamic_cast<const LLVMOperation *>(that_); that) {
-    if (size != that->size ||
-        llvm_op_code != that->llvm_op_code ||
+    if (size != that->size || llvm_op_code != that->llvm_op_code ||
         llvm_predicate != that->llvm_predicate) {
       return false;
     }
@@ -148,7 +144,6 @@ bool LLVMOperation::Equals(const Operation *that_) const {
 
     } else if (1u == num_ops) {
       return operands[0]->Equals(that->operands[1]);
-
     }
   }
   return this->Operation::Equals(that_);
@@ -158,8 +153,7 @@ COMMON_METHODS(EquivalenceClass)
 STREAM_NAME(EquivalenceClass, "EQ_CLASS_" << size);
 
 bool EquivalenceClass::Equals(const Operation *that_) const {
-  if (that_ == this ||
-      that_->eq_class.get() == this ||
+  if (that_ == this || that_->eq_class.get() == this ||
       eq_class.get() == that_) {
     return true;
   }

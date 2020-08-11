@@ -23,9 +23,7 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
     case Operation::kOutputRegister:
     case Operation::kInputInstructionBits:
     case Operation::kHint:
-    case Operation::kEquivalenceClass:
-      os << 'V' << op->size;
-      break;
+    case Operation::kEquivalenceClass: os << 'V' << op->size; break;
     case Operation::kLLVMOperation:
       os << "(L" << op->size;
       for (auto sub_op : op->operands) {
@@ -86,4 +84,4 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
   }
 }
 
-}
+}  // namespace circuitous
