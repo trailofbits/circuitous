@@ -10,13 +10,9 @@ namespace circuitous {
 
 void PrintJSON(std::ostream &os, Circuit *circuit) {
   os << "{\n";
-  bool first = true;
+  auto sep = "";
   auto do_op = [&](circuitous::Operation *op) {
-    if (!first) {
-      os << ",\n";
-    } else {
-      first = false;
-    }
+    os << sep;
     os << "\"v" << std::hex << reinterpret_cast<uintptr_t>(op) << "\":{";
     os << "\"op_name\":\"" << op->Name() << "\",";
     os << "\"op_size\":" << std::dec << op->size << ",";
@@ -38,16 +34,14 @@ void PrintJSON(std::ostream &os, Circuit *circuit) {
     }
 
     os << "\"operands\":[";
-    bool first2 = true;
+    sep = "";
     for (auto sub_op : op->operands) {
-      if (!first2) {
-        os << ",";
-      } else {
-        first2 = false;
-      }
+      os << sep;
       os << "\"v" << std::hex << reinterpret_cast<uintptr_t>(sub_op) << "\"";
+      sep = ",";
     }
     os << "]}";
+    sep = ",\n";
   };
 
   circuit->ForEachOperation(do_op);
