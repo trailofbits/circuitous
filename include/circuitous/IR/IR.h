@@ -492,15 +492,16 @@ class Circuit : public Condition {
   virtual ~Circuit(void);
   std::string Name(void) const override;
 
-  static std::unique_ptr<Circuit> CreateFromInstructions(
-      const std::string &arch_name, const std::string &os_name,
-      const std::string &file_name);
+  static std::unique_ptr<Circuit>
+  CreateFromInstructions(const std::string &arch_name,
+                         const std::string &os_name,
+                         const std::string &file_name);
 
   void Serialize(std::ostream &os);
 
   static std::unique_ptr<Circuit> Deserialize(std::istream &is);
 
-// clang-format off
+  // clang-format off
 
 #define FOR_EACH_OPERATION(cb) \
   cb(Constant, constants) \
@@ -526,7 +527,7 @@ class Circuit : public Condition {
   cb(Hint, hints) \
   cb(EquivalenceClass, eq_classes)
 
-// clang-format on
+  // clang-format on
 
 #define DECLARE_MEMBER(type, field) DefList<type> field;
 

@@ -532,8 +532,7 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
     }
   }
 
-#define CLEAR_UNUSED(cls, field) \
-    circuit->field.RemoveUnused();
+#define CLEAR_UNUSED(cls, field) circuit->field.RemoveUnused();
 
   FOR_EACH_OPERATION(CLEAR_UNUSED)
 #undef CLEAR_UNUSED
