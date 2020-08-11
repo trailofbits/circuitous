@@ -9,6 +9,7 @@
 namespace circuitous {
 
 void PrintJSON(std::ostream &os, Circuit *circuit) {
+  os << "[\"v" << std::hex << reinterpret_cast<uintptr_t>(circuit) << "\",\n";
   os << "{\n";
   auto sep = "";
   auto do_op = [&](circuitous::Operation *op) {
@@ -47,7 +48,7 @@ void PrintJSON(std::ostream &os, Circuit *circuit) {
   circuit->ForEachOperation(do_op);
   do_op(circuit);
 
-  os << "\n}"
+  os << "\n}]"
      << "\n"
      << std::dec;
 }
