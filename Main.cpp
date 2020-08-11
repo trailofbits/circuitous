@@ -19,6 +19,7 @@ DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "Path to the output Python file.");
+DEFINE_string(json_out, "", "Path to the output JSON file.");
 
 int main(int argc, char *argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -75,5 +76,13 @@ int main(int argc, char *argv[]) {
     circuitous::PrintPython(os, circuit.get());
   }
 
+  if (!FLAGS_json_out.empty()) {
+    if (FLAGS_json_out== "-") {
+      FLAGS_json_out = "/dev/stderr";
+    }
+
+    std::ofstream os(FLAGS_json_out);
+    circuitous::PrintJSON(os, circuit.get());
+  }
   return EXIT_SUCCESS;
 }
