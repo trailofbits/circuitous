@@ -7,11 +7,11 @@
 #include <glog/logging.h>
 
 #include <algorithm>
+#include <cassert>
 #include <cstdint>
 #include <iterator>
-#include <vector>
-#include <cassert>
 #include <memory>
+#include <vector>
 
 namespace circuitous {
 

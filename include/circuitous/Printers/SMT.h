@@ -13,6 +13,7 @@ namespace circuitous {
 class IRToSMTVisitor : public UniqueVisitor<IRToSMTVisitor> {
  private:
   z3::context &z3_ctx;
+
   // Expression map
   z3::expr_vector z3_expr_vec;
   std::unordered_map<Operation *, unsigned> z3_expr_map;
