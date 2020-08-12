@@ -1,4 +1,3 @@
-
 # Copyright (c) 2020 Trail of Bits, Inc.
 
 project(circuitous)
@@ -8,14 +7,6 @@ include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/settings.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake")
 
 FindAndSelectClangCompiler()
-
-# warnings and compiler settings
-if(NOT DEFINED WIN32)
-  set(PROJECT_CXXFLAGS
-    ${GLOBAL_CXXFLAGS} -Werror -Wconversion -pedantic 
-    -Wno-unreachable-code-return 
-  )
-endif()
 
 #
 # libraries
@@ -33,37 +24,94 @@ endif()
 # z3
 set(LLVM_Z3_INSTALL_DIR "${Z3_INSTALL_PREFIX}")
 find_package(Z3 4.7.1 REQUIRED MODULE)
-list(APPEND PROJECT_INCLUDEDIRECTORIES ${Z3_INCLUDE_DIR})
-list(APPEND PROJECT_LIBRARIES ${Z3_LIBRARIES})
 
 #
 # tool target settings
 #
 
+add_library(circuitous-settings INTERFACE)
+
+target_compile_definitions(circuitous-settings INTERFACE
+    ${PROJECT_DEFINITIONS}
+)
+
+target_compile_options(circuitous-settings INTERFACE
+    ${GLOBAL_CXXFLAGS}
+    -Werror -Wconversion -pedantic 
+    -Wno-unreachable-code-return
+)
+
+target_include_directories(circuitous-settings INTERFACE
+   "${CMAKE_CURRENT_SOURCE_DIR}/include"
+   ${Z3_INCLUDE_DIR}
+)
+
+target_link_libraries(circuitous-settings INTERFACE
+    remill
+    ${Z3_LIBRARIES}
+)
+
+add_library(circuitous-util STATIC
+    include/circuitous/Util/UseDef.h
+    include/circuitous/Util/BitManipulation.h
+    lib/Util/UseDef.cpp
+)
+
+target_link_libraries(circuitous-util PUBLIC
+    circuitous-settings
+)
+
+add_library(circuitous-ir STATIC
+    include/circuitous/IR/IR.h
+    include/circuitous/IR/Hash.h
+    
+    lib/IR/Hash.cpp
+    lib/IR/IR.cpp
+    lib/IR/Serialize.cpp
+)
+
+target_link_libraries(circuitous-ir PUBLIC
+    circuitous-util
+    circuitous-settings
+)
+
+add_library(circuitous-lifter STATIC    
+    lib/Lifter/CircuitBuilder.h
+    lib/Lifter/CircuitBuilder.cpp
+    lib/Lifter/Remill.cpp
+)
+
+target_link_libraries(circuitous-lifter PUBLIC
+    circuitous-ir
+    circuitous-settings
+)
+
+add_library(circuitous-printers STATIC    
+    include/circuitous/Printers.h
+    
+    lib/Printers/DOT.cpp
+    lib/Printers/Python.cpp
+    lib/Printers/Json.cpp
+    lib/Printers/Topology.cpp
+    lib/Printers/SMT.cpp
+)
+
+target_link_libraries(circuitous-printers PUBLIC
+    circuitous-ir
+    circuitous-settings
+)
+
 add_executable(circuitous
-    CircuitBuilder.h
-    CircuitBuilder.cpp
-    DOT.cpp
-    IR.h
-    IR.cpp
-    IRToSMTVisitor.cpp
     Main.cpp
-    Python.cpp
-    Saturate.h
-    Saturate.cpp
-    # Serialize.cpp
-    UseDef.h
-    UseDef.cpp)
+)
 
-target_compile_definitions(circuitous PUBLIC
-    ${PROJECT_DEFINITIONS})
-
-target_compile_options(circuitous PUBLIC
-    ${PROJECT_CXXFLAGS})
-
-target_link_libraries(circuitous PUBLIC remill ${PROJECT_LIBRARIES})
-
-target_include_directories(circuitous SYSTEM PUBLIC ${PROJECT_INCLUDEDIRECTORIES})
+target_link_libraries(circuitous PUBLIC
+    circuitous-lifter
+    circuitous-ir
+    circuitous-printers
+    circuitous-util
+    circuitous-settings
+)
 
 #
 # install settings

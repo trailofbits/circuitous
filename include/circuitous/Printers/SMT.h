@@ -3,9 +3,10 @@
  */
 #pragma once
 
+#include <circuitous/IR/IR.h>
 #include <z3++.h>
+
 #include <unordered_map>
-#include "IR.h"
 
 namespace circuitous {
 

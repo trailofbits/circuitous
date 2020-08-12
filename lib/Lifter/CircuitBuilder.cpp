@@ -4,8 +4,8 @@
 
 #include "CircuitBuilder.h"
 
-#include <glog/logging.h>
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 
 #include <algorithm>
 #include <cstdlib>
@@ -42,8 +42,7 @@ static void ForEachInstructionInBuffer(const remill::Arch::ArchPtr &arch,
     std::string_view bytes(&(buff.data()[i]), next_i - i);
 
     if (!arch->DecodeInstruction(0, bytes, inst) || !inst.IsValid()) {
-      LOG(ERROR)
-          << "Unable to decode instruction at byte offset " << i;
+      LOG(ERROR) << "Unable to decode instruction at byte offset " << i;
       ++i;
     } else {
       cb(inst);
@@ -55,8 +54,8 @@ static void ForEachInstructionInBuffer(const remill::Arch::ArchPtr &arch,
 // Check that the decoding of a particular instruction results in position-
 // independent operands. It's possible that some operands have PC-relative
 // operands and have pre-calculated those values.
-static bool IsDecodePositionIndependent(
-    const remill::Arch::ArchPtr &arch, const remill::Instruction &inst) {
+static bool IsDecodePositionIndependent(const remill::Arch::ArchPtr &arch,
+                                        const remill::Instruction &inst) {
   remill::Instruction copy;
   if (!arch->DecodeInstruction(inst.pc + 32, inst.bytes, copy) ||
       inst.operands.size() != copy.operands.size()) {
@@ -82,15 +81,14 @@ static const std::string kFlagRegisters =
 
 // Return an integral type that is big enough to hold any value can inhabit the
 // register associated with `reg`.
-static llvm::IntegerType *IntegralRegisterType(
-    llvm::Module &module, const remill::Register *reg) {
+static llvm::IntegerType *IntegralRegisterType(llvm::Module &module,
+                                               const remill::Register *reg) {
   if (reg->type->isIntegerTy()) {
 
     // Optimization for flag registers, which should only occupy a single
     // bit. We look to see if it's in the set of
     if (auto found_at = kFlagRegisters.find(reg->name);
-        found_at != std::string::npos &&
-        0 < found_at &&
+        found_at != std::string::npos && 0 < found_at &&
         (found_at + 1u) < kFlagRegisters.size() &&
         kFlagRegisters[found_at - 1u] == ',' &&
         kFlagRegisters[found_at + reg->name.size()] == ',') {
@@ -109,7 +107,7 @@ static llvm::IntegerType *IntegralRegisterType(
 
 }  // namespace
 
-std::unique_ptr<Circuit> CircuitBuilder::Build(llvm::StringRef buff) {
+llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
   if (auto used = module->getGlobalVariable("llvm.used"); used) {
     used->eraseFromParent();
   }
@@ -130,8 +128,6 @@ std::unique_ptr<Circuit> CircuitBuilder::Build(llvm::StringRef buff) {
   //            the sign bit, getting the low N bits of an instruction (i.e.
   //            convert the AND into a function call.
 
-  // TODO(pag):
-
   auto isels = DecodeInstructions(buff);
   LiftInstructions(isels);
 
@@ -147,31 +143,7 @@ std::unique_ptr<Circuit> CircuitBuilder::Build(llvm::StringRef buff) {
     mark_as_used->eraseFromParent();
   }
 
-  // TODO(pag): Eventually replace calls to `__circuitous_verify_inst` with
-  //            lower level `__circuitous_and_all`. But, analyze the operands
-  //            across all such calls and try to find all subsets, and break
-  //            them up into AND subexpressions, so as to minimize the total
-  //            number of AND gates needed.
-  //
-  //            For example, several instructions don't touch the flags
-  //            registers, so the above mentioned optimization should be
-  //            able to identify that it can summarize the flag comparisons
-  //            into a single value that is used anywhere that all of those
-  //            flags comparisons are used.
-
-  return Circuit::Create(arch.get(), BuildCircuit1(BuildCircuit0(std::move(isels))));
-//
-//  return BuildCircuit3(
-//      BuildCircuit2(
-//          BuildCircuit1(
-//              BuildCircuit0(std::move(isels)))));
-  // auto func = BuildCircuit3(
-  //                           BuildCircuit2(
-  //                                         BuildCircuit1(
-  //                                                       BuildCircuit0(std::move(isels)))));
-  // func->print(llvm::outs());
-  // exit(EXIT_FAILURE);
-  // return nullptr;
+  return BuildCircuit1(BuildCircuit0(std::move(isels)));
 }
 
 // Update any references we might have held to functions that could be
@@ -244,9 +216,9 @@ llvm::Function *CircuitBuilder::BitConcatFunc(llvm::Type *type_) {
   if (!func) {
     std::stringstream ss;
     ss << "__circuitous_concat_" << num_bits;
-    func = llvm::Function::Create(
-        llvm::FunctionType::get(type, true),
-        llvm::GlobalValue::ExternalLinkage, ss.str(), module.get());
+    func = llvm::Function::Create(llvm::FunctionType::get(type, true),
+                                  llvm::GlobalValue::ExternalLinkage, ss.str(),
+                                  module.get());
     func->addFnAttr(llvm::Attribute::ReadNone);
   }
 
@@ -254,8 +226,8 @@ llvm::Function *CircuitBuilder::BitConcatFunc(llvm::Type *type_) {
 }
 
 // Return a function that selects from one or more values.
-llvm::Function *CircuitBuilder::SelectorFunc(
-    llvm::Type *selector_type, llvm::Type *type_) {
+llvm::Function *CircuitBuilder::SelectorFunc(llvm::Type *selector_type,
+                                             llvm::Type *type_) {
   const auto type = llvm::dyn_cast<llvm::IntegerType>(type_);
   CHECK_NOTNULL(type);
   const auto num_bits = type->getScalarSizeInBits();
@@ -287,21 +259,20 @@ llvm::CallInst *CircuitBuilder::FinalXor(llvm::Function *in_func) const {
     }
   }
 
-  LOG(FATAL)
-      << "Could not find call to function __circuitous_xor_all in "
-      << in_func->getName().str();
+  LOG(FATAL) << "Could not find call to function __circuitous_xor_all in "
+             << in_func->getName().str();
   return nullptr;
 }
 
 // Decode all instructions in `buff` using `arch`. Group the instructions in
 // terms of a general semantic category/class.
-std::vector<InstructionSelection> CircuitBuilder::DecodeInstructions(
-    llvm::StringRef buff) {
+std::vector<InstructionSelection>
+CircuitBuilder::DecodeInstructions(llvm::StringRef buff) {
   std::vector<InstructionSelection> grouped_insts;
   std::set<std::string> inst_bytes;
   std::unordered_map<std::string, size_t> isel_index;
 
-  ForEachInstructionInBuffer(arch, buff, [&] (remill::Instruction &inst) {
+  ForEachInstructionInBuffer(arch, buff, [&](remill::Instruction &inst) {
     auto all_zeroes = true;
     for (auto b : inst.bytes) {
       if (b) {
@@ -319,9 +290,8 @@ std::vector<InstructionSelection> CircuitBuilder::DecodeInstructions(
     // dependent operands into the operands list, so try to catch that, warn
     // about them, and skip them.
     if (!IsDecodePositionIndependent(arch, inst)) {
-      LOG(ERROR)
-          << "Skipping position-dependent instruction: "
-          << inst.Serialize();
+      LOG(ERROR) << "Skipping position-dependent instruction: "
+                 << inst.Serialize();
       return;
     }
 
@@ -340,8 +310,7 @@ std::vector<InstructionSelection> CircuitBuilder::DecodeInstructions(
 
       // Make the isel specific to the `inst.function` and its size.
       const auto isel = IselName(inst);
-      if (auto index_it = isel_index.find(isel);
-          index_it != isel_index.end()) {
+      if (auto index_it = isel_index.find(isel); index_it != isel_index.end()) {
         iclass = &(grouped_insts[index_it->second]);
         CHECK_EQ(inst.bytes.size(), iclass->instructions.back().bytes.size());
 
@@ -472,14 +441,13 @@ void CircuitBuilder::LiftInstructions(
           continue;
 
         case remill::LiftStatus::kLiftedUnsupportedInstruction:
-          LOG(ERROR)
-              << "Missing semantics for instruction: " << inst.Serialize();
+          LOG(ERROR) << "Missing semantics for instruction: "
+                     << inst.Serialize();
           func->eraseFromParent();
           continue;
 
         case remill::LiftStatus::kLiftedInvalidInstruction:
-          LOG(ERROR)
-              << "Invalid instruction: " << inst.Serialize();
+          LOG(ERROR) << "Invalid instruction: " << inst.Serialize();
           func->eraseFromParent();
           continue;
       }
@@ -507,8 +475,8 @@ void CircuitBuilder::ForEachVerification(llvm::Function *circuit_func, T cb) {
 
 // Build the first level circuit. We will analyze this function later to
 // get an accurate picture of instruction dependencies.
-llvm::Function *CircuitBuilder::BuildCircuit0(
-    std::vector<InstructionSelection> isels) {
+llvm::Function *
+CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
 
   const auto &dl = module->getDataLayout();
 
@@ -535,9 +503,9 @@ llvm::Function *CircuitBuilder::BuildCircuit0(
   // exists to get us to a point where we can analyze `circuit_0` and learn
   // about the dependencies of the instructions.
   auto circuit0_type = llvm::FunctionType::get(bool_type, param_types, false);
-  auto circuit0_func = llvm::Function::Create(
-      circuit0_type, llvm::GlobalValue::ExternalLinkage, "circuit_0",
-      module.get());
+  auto circuit0_func =
+      llvm::Function::Create(circuit0_type, llvm::GlobalValue::ExternalLinkage,
+                             "circuit_0", module.get());
   circuit0_func->addFnAttr(llvm::Attribute::ReadNone);
 
   auto entry_block = llvm::BasicBlock::Create(context, "", circuit0_func);
@@ -550,8 +518,10 @@ llvm::Function *CircuitBuilder::BuildCircuit0(
   // register values.
   //
   // NOTE(pag): The first argument is the encoded instruction.
-  std::vector<std::pair<const remill::Register *, llvm::Argument *>> input_reg_arg;
-  std::vector<std::pair<const remill::Register *, llvm::Argument *>> output_reg_arg;
+  std::vector<std::pair<const remill::Register *, llvm::Argument *>>
+      input_reg_arg;
+  std::vector<std::pair<const remill::Register *, llvm::Argument *>>
+      output_reg_arg;
 
   CHECK_LT(0, num_instruction_parts);
 
@@ -570,13 +540,12 @@ llvm::Function *CircuitBuilder::BuildCircuit0(
     }
   }
 
-  CHECK(pc != nullptr)
-      << "Couldn't find program counter register "
-      << arch->ProgramCounterRegisterName();
+  CHECK(pc != nullptr) << "Couldn't find program counter register "
+                       << arch->ProgramCounterRegisterName();
 
   llvm::Value *inst_func_args[remill::kNumBlockArgs] = {};
   inst_func_args[remill::kPCArgNum] = pc;
-  inst_func_args[remill::kMemoryPointerArgNum] = \
+  inst_func_args[remill::kMemoryPointerArgNum] =
       llvm::UndefValue::get(mem_ptr_type);
 
   // General parameters array. First used for collecting results of comparing
@@ -607,9 +576,9 @@ llvm::Function *CircuitBuilder::BuildCircuit0(
         eq_params.push_back(llvm::ConstantInt::get(
             encoded_part_type, encoded_part_bits_it->second, false));
         eq_params.push_back(actual_bits);
-        params.push_back(llvm::CallInst::Create(
-            BitMatcherFunc(encoded_part_type), eq_params, llvm::None,
-            "", exit_block));
+        params.push_back(
+            llvm::CallInst::Create(BitMatcherFunc(encoded_part_type), eq_params,
+                                   llvm::None, "", exit_block));
         ++num_known_parts;
       } else {
         params.push_back(nullptr);
@@ -645,18 +614,16 @@ llvm::Function *CircuitBuilder::BuildCircuit0(
         auto reg_addr = reg->AddressOf(state_ptr, inst_block);
         auto reg_addr_type = llvm::PointerType::get(reg_store_type, 0);
         if (reg_addr->getType() != reg_addr_type) {
-          reg_addr = new llvm::BitCastInst(reg_addr, reg_addr_type, "",
-                                           inst_block);
+          reg_addr =
+              new llvm::BitCastInst(reg_addr, reg_addr_type, "", inst_block);
         }
 
         llvm::Value *reg_val = arg;
         if (reg_type != reg_store_type) {
-          reg_val = new llvm::ZExtInst(reg_val, reg_store_type, "",
-                                       inst_block);
+          reg_val = new llvm::ZExtInst(reg_val, reg_store_type, "", inst_block);
         }
 
-        (void) new llvm::StoreInst(
-            reg_val, reg_addr, false, inst_block);
+        (void) new llvm::StoreInst(reg_val, reg_addr, false, inst_block);
       }
 
       inst_func_args[remill::kStatePointerArgNum] = state_ptr;
@@ -692,12 +659,11 @@ llvm::Function *CircuitBuilder::BuildCircuit0(
         const auto encoded_part_type = actual_bits->getType();
 
         eq_params.clear();
-        eq_params.push_back(llvm::ConstantInt::get(encoded_part_type,
-                                                   expected_val));
+        eq_params.push_back(
+            llvm::ConstantInt::get(encoded_part_type, expected_val));
         eq_params.push_back(actual_bits);
-        param = llvm::CallInst::Create(
-            BitMatcherFunc(encoded_part_type), eq_params, llvm::None,
-            "", exit_block);
+        param = llvm::CallInst::Create(BitMatcherFunc(encoded_part_type),
+                                       eq_params, llvm::None, "", exit_block);
       }
 
       // Final set of paramters are comparisons on whether or not the resulting
@@ -711,8 +677,8 @@ llvm::Function *CircuitBuilder::BuildCircuit0(
         auto reg_addr = reg->AddressOf(state_ptr, inst_block);
         auto reg_addr_type = llvm::PointerType::get(reg_store_type, 0);
         if (reg_addr->getType() != reg_addr_type) {
-          reg_addr = new llvm::BitCastInst(reg_addr, reg_addr_type, "",
-                                           inst_block);
+          reg_addr =
+              new llvm::BitCastInst(reg_addr, reg_addr_type, "", inst_block);
         }
 
         llvm::Value *reg_val = new llvm::LoadInst(reg_addr, "", inst_block);
@@ -722,8 +688,8 @@ llvm::Function *CircuitBuilder::BuildCircuit0(
 
         const auto eq_func = BitMatcherFunc(reg_type);
         llvm::Value *eq_args[] = {reg_val, expected_reg_val};
-        params.push_back(llvm::CallInst::Create(
-            eq_func, eq_args, "", inst_block));
+        params.push_back(
+            llvm::CallInst::Create(eq_func, eq_args, "", inst_block));
       }
 
       // Call the instruction verification function. This returns `1` iff we
@@ -738,8 +704,8 @@ llvm::Function *CircuitBuilder::BuildCircuit0(
   llvm::BranchInst::Create(exit_block, prev_block);
   (void) llvm::ReturnInst::Create(
       context,
-      llvm::CallInst::Create(xor_all_func, verified_insts,
-                             llvm::None, "", exit_block),
+      llvm::CallInst::Create(xor_all_func, verified_insts, llvm::None, "",
+                             exit_block),
       exit_block);
 
   remill::OptimizeModule(arch.get(), module.get(), {circuit0_func});
@@ -752,7 +718,9 @@ template <typename T>
 class DependencyVisitor {
  public:
   void VisitArgument(llvm::Use &, llvm::Argument *) {}
-  bool VisitInstruction(llvm::Use &, llvm::Instruction *) { return true; }
+  bool VisitInstruction(llvm::Use &, llvm::Instruction *) {
+    return true;
+  }
   void VisitConstant(llvm::Use &, llvm::Constant *) {}
   void Visit(llvm::Use &use_);
 };
@@ -779,12 +747,13 @@ void DependencyVisitor<T>::Visit(llvm::Use &use_) {
     } else if (auto inst_val = llvm::dyn_cast<llvm::Instruction>(val);
                inst_val) {
       if (self->VisitInstruction(*use, inst_val)) {
-        if (auto call_val = llvm::dyn_cast<llvm::CallInst>(inst_val); call_val) {
-          for (auto &op_use: call_val->arg_operands()) {
+        if (auto call_val = llvm::dyn_cast<llvm::CallInst>(inst_val);
+            call_val) {
+          for (auto &op_use : call_val->arg_operands()) {
             work_list.push_back(&op_use);
           }
         } else {
-          for (auto &op_use: inst_val->operands()) {
+          for (auto &op_use : inst_val->operands()) {
             work_list.push_back(&op_use);
           }
         }
@@ -798,9 +767,8 @@ void DependencyVisitor<T>::Visit(llvm::Use &use_) {
       }
 
     } else {
-      LOG(ERROR)
-          << "Unexpected value encountered during dependency analysis: "
-          << remill::LLVMThingToString(val);
+      LOG(ERROR) << "Unexpected value encountered during dependency analysis: "
+                 << remill::LLVMThingToString(val);
     }
   }
 }
@@ -837,7 +805,7 @@ class RegisterDependencyCollector
     }
   }
 
-  const remill::Arch * const arch;
+  const remill::Arch *const arch;
   std::set<llvm::Argument *> read_registers;
   std::set<llvm::Argument *> written_registers;
 };
@@ -855,7 +823,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
   // should be the results of ICmp instructions, each testing whether or not
   // the current value of a register matches the next expected value of the
   // register.
-  ForEachVerification(circuit0_func, [&] (llvm::CallInst *verify_call_inst) {
+  ForEachVerification(circuit0_func, [&](llvm::CallInst *verify_call_inst) {
     auto arg_num = 0u;
 
     for (auto &arg_use : verify_call_inst->arg_operands()) {
@@ -868,10 +836,10 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
       // Figure out the input and output registers to the circuit function.
       const auto reg_id = arg_num - num_instruction_parts;
       const auto in_reg_arg_index = num_instruction_parts + (2u * reg_id);
-      const auto in_reg_arg = remill::NthArgument(
-          circuit0_func, in_reg_arg_index);
-      const auto out_reg_arg = remill::NthArgument(
-          circuit0_func, in_reg_arg_index + 1u);
+      const auto in_reg_arg =
+          remill::NthArgument(circuit0_func, in_reg_arg_index);
+      const auto out_reg_arg =
+          remill::NthArgument(circuit0_func, in_reg_arg_index + 1u);
 
       CHECK(out_reg_arg->getName().endswith("_next"));
       CHECK(out_reg_arg->getName().startswith(in_reg_arg->getName()));
@@ -882,8 +850,8 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
 
       const auto call_inst = llvm::dyn_cast<llvm::CallInst>(arg);
       CHECK(call_inst != nullptr)
-          << "Unexpected argument value for "
-          << in_reg_name << ": " << remill::LLVMThingToString(arg);
+          << "Unexpected argument value for " << in_reg_name << ": "
+          << remill::LLVMThingToString(arg);
 
       const auto icmp_eq = call_inst->getCalledFunction();
       CHECK_NOTNULL(icmp_eq);
@@ -895,8 +863,8 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
       const auto rhs_arg = llvm::dyn_cast<llvm::Argument>(rhs);
       CHECK_EQ(rhs_arg, out_reg_arg)
           << "Expected second argument to " << icmp_eq->getName().str()
-          << " to match the output register " << out_reg_name
-          << " but got " << remill::LLVMThingToString(rhs)
+          << " to match the output register " << out_reg_name << " but got "
+          << remill::LLVMThingToString(rhs)
           << " instead: " << remill::LLVMThingToString(call_inst);
 
       // Input is compared to output, i.e. the instruction doesn't write
@@ -918,10 +886,9 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
 
       // Some unrecognized pattern.
       } else {
-        LOG(FATAL)
-            << "Neither side of integer comparison associated with "
-            << out_reg_name << " was itself an argument of circuit_0 in "
-            << remill::LLVMThingToString(call_inst);
+        LOG(FATAL) << "Neither side of integer comparison associated with "
+                   << out_reg_name << " was itself an argument of circuit_0 in "
+                   << remill::LLVMThingToString(call_inst);
       }
     }
   });
@@ -995,9 +962,9 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
       args.push_back(llvm::Constant::getNullValue(orig_reg->getType()));
     }
 
-    if (auto out_reg = remill::FindVarInFunction(
-            circuit1_func, reg->name + "_next", true);
-      out_reg) {
+    if (auto out_reg =
+            remill::FindVarInFunction(circuit1_func, reg->name + "_next", true);
+        out_reg) {
       args.push_back(out_reg);
     } else {
       args.push_back(llvm::Constant::getNullValue(orig_reg->getType()));
@@ -1039,7 +1006,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
 
   // Now go through an change the arguments to `__circuitous_verify_inst` to
   // to reflect the new register transfer comparisons.
-  ForEachVerification(circuit1_func, [&] (llvm::CallInst *call_inst) {
+  ForEachVerification(circuit1_func, [&](llvm::CallInst *call_inst) {
     args.clear();
     for (i = 0u; i < num_instruction_parts; ++i) {
       args.push_back(call_inst->getArgOperand(i));
@@ -1053,8 +1020,8 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
       }
     }
 
-    auto new_call = llvm::CallInst::Create(
-        verify_inst_func, args, "", call_inst);
+    auto new_call =
+        llvm::CallInst::Create(verify_inst_func, args, "", call_inst);
     to_replace.emplace_back(call_inst, new_call);
   });
 
@@ -1074,8 +1041,8 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
 // compared values; otherwise return two NULL pointers.
 static std::pair<llvm::Value *, llvm::Value *> GetICmpArgs(llvm::Value *val) {
   if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(val);
-      call_inst &&
-      call_inst->getCalledFunction()->getName().startswith("__circuitous_icmp_eq_")) {
+      call_inst && call_inst->getCalledFunction()->getName().startswith(
+                       "__circuitous_icmp_eq_")) {
     return {call_inst->getArgOperand(0), call_inst->getArgOperand(1)};
   } else {
     return {nullptr, nullptr};
@@ -1093,7 +1060,7 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
 
   std::unordered_map<llvm::CallInst *, RegBitSet> preserved_regs;
 
-  ForEachVerification(circuit1_func, [&] (llvm::CallInst *verify_call_inst) {
+  ForEachVerification(circuit1_func, [&](llvm::CallInst *verify_call_inst) {
     auto arg_num = 0u;
 
     auto &known_regs = preserved_regs[verify_call_inst];
@@ -1114,8 +1081,8 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
 
       const auto reg = regs[reg_id];
       const auto in_reg_arg_index = num_instruction_parts + reg_id;
-      const auto in_reg_arg = remill::NthArgument(
-          circuit1_func, in_reg_arg_index);
+      const auto in_reg_arg =
+          remill::NthArgument(circuit1_func, in_reg_arg_index);
       CHECK_EQ(in_reg_arg->getName().str(), reg->name)
           << "Could not correlate argument to __circuitous_verify_inst with "
           << "register " << reg->name << "; correlated to "
@@ -1123,8 +1090,8 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
 
       const auto call_inst = llvm::dyn_cast<llvm::CallInst>(arg);
       CHECK(call_inst != nullptr)
-          << "Unexpected argument value for transfer check of "
-          << reg->name << ": " << remill::LLVMThingToString(arg);
+          << "Unexpected argument value for transfer check of " << reg->name
+          << ": " << remill::LLVMThingToString(arg);
 
       const auto icmp_eq = call_inst->getCalledFunction();
       CHECK_NOTNULL(icmp_eq);
@@ -1137,8 +1104,8 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
       CHECK(rhs_arg->getName().startswith(reg->name) &&
             rhs_arg->getName().endswith("_next"))
           << "Expected second argument to " << icmp_eq->getName().str()
-          << " to match the output register " << reg->name
-          << "_next but got " << remill::LLVMThingToString(rhs)
+          << " to match the output register " << reg->name << "_next but got "
+          << remill::LLVMThingToString(rhs)
           << " instead: " << remill::LLVMThingToString(call_inst);
 
       // Input is compared to output, i.e. the instruction doesn't write
@@ -1149,7 +1116,8 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
     }
   });
 
-  using PairwisePreservedRegs = std::tuple<llvm::CallInst *, llvm::CallInst *, RegBitSet>;
+  using PairwisePreservedRegs =
+      std::tuple<llvm::CallInst *, llvm::CallInst *, RegBitSet>;
   std::vector<PairwisePreservedRegs> pairwise_preserved_regs;
   std::unordered_map<RegBitSet, std::set<llvm::CallInst *>> common;
   for (auto [c1, c1_bits] : preserved_regs) {
@@ -1168,7 +1136,7 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
   // instructions in common ends up at the end.
   std::sort(
       pairwise_preserved_regs.begin(), pairwise_preserved_regs.end(),
-      [&] (const PairwisePreservedRegs &a, const PairwisePreservedRegs &b) {
+      [&](const PairwisePreservedRegs &a, const PairwisePreservedRegs &b) {
         return common[std::get<2>(a)].size() < common[std::get<2>(b)].size();
       });
 
@@ -1178,7 +1146,7 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
   // related instructions.
   std::stable_sort(
       pairwise_preserved_regs.begin(), pairwise_preserved_regs.end(),
-      [=] (const PairwisePreservedRegs &a, const PairwisePreservedRegs &b) {
+      [=](const PairwisePreservedRegs &a, const PairwisePreservedRegs &b) {
         return std::get<2>(a).count() < std::get<2>(b).count();
       });
 
@@ -1228,23 +1196,25 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
     }
 
 
-    std::cerr << "Set of size " << set.size() << " with " << bits.count() << " common regs: ";
+    std::cerr << "Set of size " << set.size() << " with " << bits.count()
+              << " common regs: ";
     for (auto i = 0u; i < regs.size(); ++i) {
       std::cerr << ("01"[bits.test(i)]);
     }
     std::cerr << '\n';
   }
 
-  auto inst_selector_type = llvm::IntegerType::get(
-      context, static_cast<unsigned>(selector_size));
+  auto inst_selector_type =
+      llvm::IntegerType::get(context, static_cast<unsigned>(selector_size));
   auto hint_matcher_func = BitMatcherFunc(inst_selector_type);
-  auto inst_selector_func = llvm::Function::Create(
-      llvm::FunctionType::get(inst_selector_type, false),
-      llvm::GlobalValue::ExternalLinkage, "__circuitous_inst_select",
-      module.get());
+  auto inst_selector_func =
+      llvm::Function::Create(llvm::FunctionType::get(inst_selector_type, false),
+                             llvm::GlobalValue::ExternalLinkage,
+                             "__circuitous_inst_select", module.get());
   inst_selector_func->addFnAttr(llvm::Attribute::ReadNone);
 
-  const auto entry_inst = &*(circuit1_func->getEntryBlock().getFirstInsertionPt());
+  const auto entry_inst =
+      &*(circuit1_func->getEntryBlock().getFirstInsertionPt());
 
   // We might need to add selectors that need to select dummy values for some
   // registers. In those cases, we want to select the negation of the expected
@@ -1264,8 +1234,7 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
   }
 
   const auto decode_hint = llvm::CallInst::Create(
-      inst_selector_func, llvm::None, llvm::None, "decode_hint",
-      entry_inst);
+      inst_selector_func, llvm::None, llvm::None, "decode_hint", entry_inst);
 
   std::vector<llvm::Value *> vals_to_compare;
   std::vector<llvm::Value *> vals_to_concat;
@@ -1281,8 +1250,8 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
     merged_args.clear();
 
     for (auto i = 0u; i < max_args; ++i) {
-      const auto [first_val, expected_output] = GetICmpArgs(
-          set.front()->getArgOperand(i));
+      const auto [first_val, expected_output] =
+          GetICmpArgs(set.front()->getArgOperand(i));
       CHECK_NOTNULL(first_val);
       const auto input_arg = remill::NthArgument(circuit1_func, i);
 
@@ -1295,12 +1264,13 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
       auto selected_val = first_val;
 
       vals_to_compare.clear();
-//      vals_to_select.clear();
-//      vals_to_select.push_back(decode_hint);
+
+      //      vals_to_select.clear();
+      //      vals_to_select.push_back(decode_hint);
 
       for (llvm::CallInst *call_inst : set) {
-        const auto [arg, expected_output] = GetICmpArgs(
-            call_inst->getArgOperand(i));
+        const auto [arg, expected_output] =
+            GetICmpArgs(call_inst->getArgOperand(i));
         (void) expected_output;
         vals_to_compare.push_back(arg);
         if (arg != selected_val) {
@@ -1324,18 +1294,18 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
 
       CHECK_EQ(match_val->getType(), first_val->getType())
           << "Type of " << remill::LLVMThingToString(match_val)
-          << " doesn't match type of "
-          << remill::LLVMThingToString(first_val);
+          << " doesn't match type of " << remill::LLVMThingToString(first_val);
 
       // All calls share the same value.
       if (selected_val) {
 
-        merged_args.push_back(llvm::CallInst::Create(
-            match_func, match_args, llvm::None, "", xor_all));
+        merged_args.push_back(llvm::CallInst::Create(match_func, match_args,
+                                                     llvm::None, "", xor_all));
 
       // Not all calls share the same value; we need to make a hint-based
       // selector.
       } else {
+
         // Our selector is `selector_size` bits wide, so we always need to
         // provide as many values as there are bits. Make sure that we always
         // feed the right number of values to the selector function.
@@ -1365,10 +1335,10 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
         }
 
         auto concat_func = BitConcatFunc(inst_selector_type);
-        auto concat_val = llvm::CallInst::Create(
-            concat_func, vals_to_concat, llvm::None, "", xor_all);
-        auto masked_concat_val = llvm::BinaryOperator::CreateAnd(
-            concat_val, decode_hint, "");
+        auto concat_val = llvm::CallInst::Create(concat_func, vals_to_concat,
+                                                 llvm::None, "", xor_all);
+        auto masked_concat_val =
+            llvm::BinaryOperator::CreateAnd(concat_val, decode_hint, "");
         masked_concat_val->insertBefore(xor_all);
 
         match_args[0] = masked_concat_val;
@@ -1379,8 +1349,8 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
       }
     }
 
-    auto verify_call = llvm::CallInst::Create(
-        verify_inst_func, merged_args, llvm::None, "", xor_all);
+    auto verify_call = llvm::CallInst::Create(verify_inst_func, merged_args,
+                                              llvm::None, "", xor_all);
 
     set.front()->replaceAllUsesWith(verify_call);
     for (llvm::CallInst *call_inst : set) {
@@ -1401,8 +1371,8 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
     }
   }
 
-  xor_all->replaceAllUsesWith(llvm::CallInst::Create(
-      xor_all_func, new_xor_args, "", xor_all));
+  xor_all->replaceAllUsesWith(
+      llvm::CallInst::Create(xor_all_func, new_xor_args, "", xor_all));
   xor_all->eraseFromParent();
 
   circuit1_func->setName("circuit2_func");
@@ -1410,11 +1380,10 @@ llvm::Function *CircuitBuilder::BuildCircuit2(llvm::Function *circuit1_func) {
 }
 
 // Go find the "root" operands of each instruction.
-class OperandCollector
-    : public DependencyVisitor<OperandCollector> {
+class OperandCollector : public DependencyVisitor<OperandCollector> {
  public:
-
   bool VisitInstruction(llvm::Use &, llvm::Instruction *inst) {
+
     // If it's is passing through one register to the next, then don't consider
     // this an operand. For example:
     //
@@ -1431,53 +1400,53 @@ class OperandCollector
     return true;
   }
 
-//  void VisitConstant(llvm::Use &use, llvm::Constant *val) {
-//    if (llvm::isa<llvm::ConstantInt>(val) || llvm::isa<llvm::ConstantFP>(val)) {
-//      if (auto user_inst = llvm::dyn_cast<llvm::Instruction>(use.getUser());
-//          user_inst) {
-//
-//        // Don't turn these constants into operands. Things like ANDs and ORs
-//        // can likely be converted into truncations/extensions, shifts are in
-//        // general free, and XORs are cheap.
-//        switch (user_inst->getOpcode()) {
-//          case llvm::Instruction::And:
-//          case llvm::Instruction::Or:
-//          case llvm::Instruction::Xor:
-//          case llvm::Instruction::Shl:
-//          case llvm::Instruction::LShr:
-//          case llvm::Instruction::AShr:
-//            return;
-//          default:
-//            break;
-//        }
-//      }
-//
-//      operands.push_back(&use);
-//    } else {
-//      LOG(ERROR)
-//          << "Unexpected constant: " << remill::LLVMThingToString(val);
-//    }
-//  }
+  //  void VisitConstant(llvm::Use &use, llvm::Constant *val) {
+  //    if (llvm::isa<llvm::ConstantInt>(val) || llvm::isa<llvm::ConstantFP>(val)) {
+  //      if (auto user_inst = llvm::dyn_cast<llvm::Instruction>(use.getUser());
+  //          user_inst) {
+  //
+  //        // Don't turn these constants into operands. Things like ANDs and ORs
+  //        // can likely be converted into truncations/extensions, shifts are in
+  //        // general free, and XORs are cheap.
+  //        switch (user_inst->getOpcode()) {
+  //          case llvm::Instruction::And:
+  //          case llvm::Instruction::Or:
+  //          case llvm::Instruction::Xor:
+  //          case llvm::Instruction::Shl:
+  //          case llvm::Instruction::LShr:
+  //          case llvm::Instruction::AShr:
+  //            return;
+  //          default:
+  //            break;
+  //        }
+  //      }
+  //
+  //      operands.push_back(&use);
+  //    } else {
+  //      LOG(ERROR)
+  //          << "Unexpected constant: " << remill::LLVMThingToString(val);
+  //    }
+  //  }
 
   // Add named, non-output registers as operands.
   void VisitArgument(llvm::Use &use, llvm::Argument *arg) {
     operands.push_back(&use);
 
-//    if (arg->hasName() &&
-//        !arg->getName().empty() &&
-//        !arg->getName().endswith("_next")) {
-//      operands.push_back(&use);
-//    }
+    //    if (arg->hasName() &&
+    //        !arg->getName().empty() &&
+    //        !arg->getName().endswith("_next")) {
+    //      operands.push_back(&use);
+    //    }
   }
 
   std::vector<llvm::Use *> operands;
 };
 
-static uint64_t UserPreference(
-    std::unordered_map<llvm::Function *, uint64_t> &func_ids,
-    const llvm::DataLayout &dl, llvm::Use *use) {
+static uint64_t
+UserPreference(std::unordered_map<llvm::Function *, uint64_t> &func_ids,
+               const llvm::DataLayout &dl, llvm::Use *use) {
   uint64_t id = 0u;
-  llvm::Instruction *user_inst = \
+  llvm::Instruction *user_inst =
       llvm::dyn_cast<llvm::Instruction>(use->getUser());
   if (!user_inst) {
     return id;
@@ -1543,7 +1512,7 @@ llvm::Function *CircuitBuilder::BuildCircuit3(llvm::Function *circuit2_func) {
   std::map<uint64_t, std::vector<llvm::Use *>> use_preferences;
 
   // Find all expressions transitively used by each instruction.
-  ForEachVerification(circuit2_func, [&] (llvm::CallInst *verify_call_inst) {
+  ForEachVerification(circuit2_func, [&](llvm::CallInst *verify_call_inst) {
     OperandCollector collector;
     auto i = 0u;
     auto &params = new_params[verify_call_inst];
@@ -1563,7 +1532,7 @@ llvm::Function *CircuitBuilder::BuildCircuit3(llvm::Function *circuit2_func) {
   });
 
   std::set<llvm::CallInst *> unique_verifiers;
-  auto find_verifiers = [&] (const std::vector<llvm::Use *> *uses) {
+  auto find_verifiers = [&](const std::vector<llvm::Use *> *uses) {
     unique_verifiers.clear();
     for (auto use : *uses) {
       auto &verifiers = use_to_verifier[use];
@@ -1578,9 +1547,8 @@ llvm::Function *CircuitBuilder::BuildCircuit3(llvm::Function *circuit2_func) {
   }
 
   std::sort(preferences.begin(), preferences.end(),
-            [&] (const std::vector<llvm::Use *> *a,
-                 const std::vector<llvm::Use *> *b) {
-
+            [&](const std::vector<llvm::Use *> *a,
+                const std::vector<llvm::Use *> *b) {
               if (a->size() != b->size()) {
                 return a->size() > b->size();
               }
@@ -1603,9 +1571,10 @@ llvm::Function *CircuitBuilder::BuildCircuit3(llvm::Function *circuit2_func) {
   std::unordered_map<llvm::CallInst *, std::set<std::string>> used_ops;
   std::unordered_map<std::string, unsigned> op_count;
 
-  auto find_free_name = [&] (const std::vector<llvm::Use *> *uses) {
+  auto find_free_name = [&](const std::vector<llvm::Use *> *uses) {
     std::stringstream ss;
-    ss << "__circuitous_op_" << dl.getTypeSizeInBits(uses->at(0)->get()->getType());
+    ss << "__circuitous_op_"
+       << dl.getTypeSizeInBits(uses->at(0)->get()->getType());
 
     find_verifiers(uses);
     auto &count = op_count[ss.str()];
@@ -1686,8 +1655,8 @@ llvm::Function *CircuitBuilder::BuildCircuit3(llvm::Function *circuit2_func) {
       }
 
       llvm::Value *args[] = {val, new_val};
-      auto op_verifier = llvm::CallInst::Create(
-          BitMatcherFunc(val_type), args, "", xor_all);
+      auto op_verifier =
+          llvm::CallInst::Create(BitMatcherFunc(val_type), args, "", xor_all);
 
       for (auto verify_call : use_to_verifier[use]) {
         auto &params = new_params[verify_call];
@@ -1695,25 +1664,25 @@ llvm::Function *CircuitBuilder::BuildCircuit3(llvm::Function *circuit2_func) {
       }
     }
   }
-//
-//  // Restructure all bit matcher function calls to come before all verify calls.
-//  std::vector<llvm::CallInst *> to_move;
-//  for (auto bit_match_func : bit_match_funcs) {
-//    if (!bit_match_func) {
-//      continue;
-//    }
-//    for (auto &use : bit_match_func->uses()) {
-//      if (auto call_user = llvm::dyn_cast<llvm::CallInst>(use.getUser());
-//          call_user && call_user->getParent()->getParent() == circuit2_func) {
-//        to_move.push_back(call_user);
-//      }
-//    }
-//  }
-//
-//  for (auto call_inst : to_move) {
-//    call_inst->removeFromParent();
-//    call_inst->insertBefore(xor_all);
-//  }
+  //
+  //  // Restructure all bit matcher function calls to come before all verify calls.
+  //  std::vector<llvm::CallInst *> to_move;
+  //  for (auto bit_match_func : bit_match_funcs) {
+  //    if (!bit_match_func) {
+  //      continue;
+  //    }
+  //    for (auto &use : bit_match_func->uses()) {
+  //      if (auto call_user = llvm::dyn_cast<llvm::CallInst>(use.getUser());
+  //          call_user && call_user->getParent()->getParent() == circuit2_func) {
+  //        to_move.push_back(call_user);
+  //      }
+  //    }
+  //  }
+  //
+  //  for (auto call_inst : to_move) {
+  //    call_inst->removeFromParent();
+  //    call_inst->insertBefore(xor_all);
+  //  }
 
   // Put all verify calls before the xor all call.
   for (auto &[verify_call, params] : new_params) {
@@ -1731,7 +1700,7 @@ llvm::Function *CircuitBuilder::BuildCircuit3(llvm::Function *circuit2_func) {
 
   // Go find the non-redundant arguments to the verify functions now that we've
   // re-optimized the module.
-  ForEachVerification(circuit2_func, [&] (llvm::CallInst *verify_call_inst) {
+  ForEachVerification(circuit2_func, [&](llvm::CallInst *verify_call_inst) {
     auto &params = new_params[verify_call_inst];
     seen_args.clear();
     unsigned i = 0u;

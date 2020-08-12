@@ -18,8 +18,7 @@ namespace circuitous {
 class User {
  public:
   template <typename T>
-  explicit User(T *)
-      : user_id(typeid(T).hash_code()) {}
+  explicit User(T *) : user_id(typeid(T).hash_code()) {}
 
   virtual ~User(void);
 
@@ -93,9 +92,7 @@ class Use {
 template <typename T>
 class UseListIterator {
  public:
-
-  inline UseListIterator(const Use<T> * const *it_) noexcept
-      : it(it_) {}
+  inline UseListIterator(const Use<T> *const *it_) noexcept : it(it_) {}
 
   inline UseListIterator<T> &operator++(void) noexcept {
     ++it;
@@ -135,7 +132,7 @@ class UseListIterator {
   }
 
  private:
-  const Use<T> * const *it;
+  const Use<T> *const *it;
 };
 
 // A list of uses.
@@ -147,13 +144,9 @@ class UseList {
         uses(std::move(that.uses)),
         is_weak(that.is_weak) {}
 
-  UseList(User *owner_)
-      : owner(owner_),
-        is_weak(false) {}
+  UseList(User *owner_) : owner(owner_), is_weak(false) {}
 
-  UseList(User *owner_, bool is_weak_)
-      : owner(owner_),
-        is_weak(is_weak_) {}
+  UseList(User *owner_, bool is_weak_) : owner(owner_), is_weak(is_weak_) {}
 
   ~UseList(void) {
     Clear();
@@ -195,14 +188,12 @@ class UseList {
 
   template <typename CB>
   void RemoveIf(CB cb) noexcept {
-    std::stable_sort(uses.begin(), uses.end(),
-                     [&cb] (Use<T> *a, Use<T> *b) {
+    std::stable_sort(uses.begin(), uses.end(), [&cb](Use<T> *a, Use<T> *b) {
       const int cb_a = cb(a ? a->get() : nullptr);
       const int cb_b = cb(b ? b->get() : nullptr);
       return cb_a < cb_b;
     });
-    auto it = std::find_if(uses.begin(), uses.end(),
-                           [&cb] (Use<T> *a) {
+    auto it = std::find_if(uses.begin(), uses.end(), [&cb](Use<T> *a) {
       return cb(a ? a->get() : nullptr);
     });
 
@@ -224,9 +215,7 @@ class UseList {
   }
 
   void RemoveNull(void) noexcept {
-    RemoveIf([] (T *def) {
-      return !def;
-    });
+    RemoveIf([](T *def) { return !def; });
   }
 
   void Unique(void) noexcept {
@@ -285,7 +274,6 @@ class UseList {
   void Clear(void);
 
  private:
-
   static bool OrderUses(Use<T> *a, Use<T> *b) {
     if (a && b) {
       return a->get()->Sort() < b->get()->Sort();
@@ -323,9 +311,7 @@ class DefList;
 template <typename T>
 class DefListIterator {
  public:
-
-  inline DefListIterator(const std::unique_ptr<T> *it_) noexcept
-      : it(it_) {}
+  inline DefListIterator(const std::unique_ptr<T> *it_) noexcept : it(it_) {}
 
   inline DefListIterator<T> &operator++(void) noexcept {
     ++it;
@@ -377,8 +363,7 @@ class DefListIterator {
 template <typename T>
 class Def {
  public:
-  explicit Def(T *self_)
-      : self(self_) {}
+  explicit Def(T *self_) : self(self_) {}
 
   ~Def(void) {
     for (Use<T> *use : weak_uses) {
@@ -502,8 +487,7 @@ class Def {
     return a.get() < b.get();
   }
 
-  static bool CompareUsePointers2(const std::unique_ptr<Use<T>> &a,
-                                  Use<T> *b) {
+  static bool CompareUsePointers2(const std::unique_ptr<Use<T>> &a, Use<T> *b) {
     return a.get() < b;
   }
 
@@ -515,10 +499,9 @@ class Def {
 
     assert(to_remove->def_being_used == self);
     const auto end = uses.end();
-    auto it = std::remove_if(uses.begin(), end,
-                             [=] (const std::unique_ptr<Use<T>> &a) {
-                               return a.get() == to_remove;
-                             });
+    auto it = std::remove_if(
+        uses.begin(), end,
+        [=](const std::unique_ptr<Use<T>> &a) { return a.get() == to_remove; });
     assert(it != end);
     uses.erase(it, end);
   }
@@ -532,15 +515,13 @@ class Def {
     assert(to_remove->def_being_used == self);
     const auto end = weak_uses.end();
     auto it = std::remove_if(weak_uses.begin(), end,
-                             [=] (Use<T> *a) {
-                               return a == to_remove;
-                             });
+                             [=](Use<T> *a) { return a == to_remove; });
     assert(it != end);
     weak_uses.erase(it, end);
   }
 
   // Points to this definition, just in case of multiple inheritance.
-  T * const self;
+  T *const self;
 
   // All uses of this definition.
   std::vector<std::unique_ptr<Use<T>>> uses;
@@ -593,8 +574,7 @@ void UseList<T>::AddUse(Def<T> *def) {
 template <typename T>
 class UseRef {
  public:
-  UseRef(Use<T> *use_)
-      : use(use_) {}
+  UseRef(Use<T> *use_) : use(use_) {}
 
   void Swap(UseRef<T> &that) {
     if (use && that.use) {
@@ -697,11 +677,10 @@ class DefList {
  public:
   DefList(void) = default;
 
-  DefList(User *owner_)
-      : owner(owner_) {}
+  DefList(User *owner_) : owner(owner_) {}
 
   template <typename... Args>
-  T *Create(Args&&... args) {
+  T *Create(Args &&... args) {
     auto new_def = new T(std::forward<Args>(args)...);
     defs.emplace_back(new_def);
     return new_def;
@@ -732,7 +711,7 @@ class DefList {
     const auto old_size = defs.size();
     auto it = std::remove_if(
         defs.begin(), defs.end(),
-        [&cb] (const std::unique_ptr<T> &d) { return cb(d.get()); });
+        [&cb](const std::unique_ptr<T> &d) { return cb(d.get()); });
     defs.erase(it, defs.end());
     return defs.size() - old_size;
   }
@@ -754,20 +733,17 @@ class DefList {
 
   template <typename C>
   void Sort(C cmp) {
-    std::sort(
-        defs.begin(), defs.end(),
-        [&cmp] (const std::unique_ptr<T> &a, const std::unique_ptr<T> &b) {
-          return cmp(a.get(), b.get());
-        });
+    std::sort(defs.begin(), defs.end(),
+              [&cmp](const std::unique_ptr<T> &a, const std::unique_ptr<T> &b) {
+                return cmp(a.get(), b.get());
+              });
     if (owner) {
       owner->Update(User::gNextTimestamp++);
     }
   }
 
   size_t RemoveUnused(void) {
-    return RemoveIf([] (T *v) {
-      return !v->IsUsed();
-    });
+    return RemoveIf([](T *v) { return !v->IsUsed(); });
   }
 
   void Clear(void) {
@@ -795,8 +771,7 @@ class Node;
 template <typename T>
 class UsedNodeIterator {
  public:
-  inline UsedNodeIterator(UseListIterator<Node<T>> it_)
-      : it(it_) {}
+  inline UsedNodeIterator(UseListIterator<Node<T>> it_) : it(it_) {}
 
   inline UsedNodeIterator<T> &operator++(void) noexcept {
     ++it;
@@ -834,8 +809,7 @@ class UsedNodeIterator {
 template <typename T>
 class DefinedNodeIterator {
  public:
-  inline DefinedNodeIterator(DefListIterator<Node<T>> it_)
-      : it(it_) {}
+  inline DefinedNodeIterator(DefListIterator<Node<T>> it_) : it(it_) {}
 
   inline DefinedNodeIterator<T> &operator++(void) noexcept {
     ++it;
@@ -920,7 +894,7 @@ struct DefinedNodeRange {
   const DefinedNodeIterator<T> end_;
 };
 
-}  // namespace hyde
+}  // namespace circuitous
 namespace std {
 
 template <typename T>

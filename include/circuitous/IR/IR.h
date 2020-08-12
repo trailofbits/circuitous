@@ -4,14 +4,14 @@
 
 #pragma once
 
-#include <bitset>
-#include <memory>
-#include <ostream>
-#include <string>
-#include <vector>
-#include <unordered_set>
+#include <circuitous/Util/UseDef.h>
 
-#include "UseDef.h"
+#include <bitset>
+#include <iosfwd>
+#include <memory>
+#include <string>
+#include <unordered_set>
+#include <vector>
 
 namespace remill {
 class Arch;
@@ -34,6 +34,8 @@ class Operation : public User, public Def<Operation> {
   virtual ~Operation(void);
 
   virtual std::string Name(void) const = 0;
+
+  virtual bool Equals(const Operation *that) const;
 
   enum : unsigned {
 
@@ -192,19 +194,19 @@ class Operation : public User, public Def<Operation> {
 };
 
 #define FORWARD_CONSTRUCTOR(base_class, derived_class) \
-    inline explicit derived_class(unsigned size_) \
-        : base_class(Operation::k ## derived_class, size_) {} \
-    \
-    inline explicit derived_class(unsigned size_, Operation *eq_class_) \
-        : base_class(Operation::k ## derived_class, size_, eq_class_) {}
+  inline explicit derived_class(unsigned size_) \
+      : base_class(Operation::k##derived_class, size_) {} \
+\
+  inline explicit derived_class(unsigned size_, Operation *eq_class_) \
+      : base_class(Operation::k##derived_class, size_, eq_class_) {}
 
 
 #define CONDITION_CONSTRUCTOR(derived_class) \
-    inline explicit derived_class(void) \
-        : Condition(Operation::k ## derived_class) {} \
-    \
-    inline explicit derived_class(Operation *eq_class_) \
-        : Condition(Operation::k ## derived_class, eq_class_) {}
+  inline explicit derived_class(void) \
+      : Condition(Operation::k##derived_class) {} \
+\
+  inline explicit derived_class(Operation *eq_class_) \
+      : Condition(Operation::k##derived_class, eq_class_) {}
 
 
 // Mirrors an instruction from LLVM. `op_code` is `inst->getOpcode()`.
@@ -220,6 +222,7 @@ class LLVMOperation final : public Operation {
   virtual ~LLVMOperation(void);
 
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 
   const unsigned llvm_op_code;
   const unsigned llvm_predicate;
@@ -241,6 +244,7 @@ class Constant final : public Operation {
   virtual ~Constant(void);
 
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 
   // Value of this constant.
   const std::string bits;
@@ -250,6 +254,7 @@ class Constant final : public Operation {
 class BitOperation : public Operation {
  public:
   virtual ~BitOperation(void);
+
  protected:
   using Operation::Operation;
 };
@@ -259,20 +264,22 @@ class Extract final : public BitOperation {
  public:
   virtual ~Extract(void);
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 
   inline explicit Extract(unsigned low_bit_inc_, unsigned high_bit_exc_)
       : BitOperation(Operation::kExtract, high_bit_exc_ - low_bit_inc_),
         low_bit_inc(low_bit_inc_),
-        high_hit_exc(high_bit_exc_) {}
+        high_bit_exc(high_bit_exc_) {}
 
   inline explicit Extract(unsigned low_bit_inc_, unsigned high_bit_exc_,
                           Operation *eq_class_)
-  : BitOperation(Operation::kExtract, high_bit_exc_ - low_bit_inc_, eq_class_),
-    low_bit_inc(low_bit_inc_),
-    high_hit_exc(high_bit_exc_) {}
+      : BitOperation(Operation::kExtract, high_bit_exc_ - low_bit_inc_,
+                     eq_class_),
+        low_bit_inc(low_bit_inc_),
+        high_bit_exc(high_bit_exc_) {}
 
   const unsigned low_bit_inc;
-  const unsigned high_hit_exc;
+  const unsigned high_bit_exc;
 };
 
 // Concatenate two bitvectors.
@@ -338,8 +345,7 @@ class Condition : public Operation {
   virtual ~Condition(void);
 
  protected:
-  inline explicit Condition(unsigned op_code_)
-      : Operation(op_code_, 1u) {}
+  inline explicit Condition(unsigned op_code_) : Operation(op_code_, 1u) {}
 
   inline explicit Condition(unsigned op_code_, Operation *eq_class_)
       : Operation(op_code_, 1u, eq_class_) {}
@@ -363,6 +369,7 @@ class InputRegister : public Operation {
  public:
   virtual ~InputRegister(void);
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 
   inline explicit InputRegister(unsigned size_, std::string reg_name_)
       : Operation(Operation::kInputRegister, size_),
@@ -376,6 +383,7 @@ class OutputRegister : public Operation {
  public:
   virtual ~OutputRegister(void);
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 
   inline explicit OutputRegister(unsigned size_, std::string reg_name_)
       : Operation(Operation::kOutputRegister, size_),
@@ -388,10 +396,7 @@ class OutputRegister : public Operation {
 // output register itself.
 class RegisterCondition final : public Condition {
  public:
-  enum : unsigned {
-    kDynamicRegisterValue = 0u,
-    kOutputRegister = 1u
-  };
+  enum : unsigned { kDynamicRegisterValue = 0u, kOutputRegister = 1u };
 
   CONDITION_CONSTRUCTOR(RegisterCondition)
   virtual ~RegisterCondition(void);
@@ -401,10 +406,7 @@ class RegisterCondition final : public Condition {
 // Says that we are preserving the value of a register.
 class PreservedCondition final : public Condition {
  public:
-  enum : unsigned {
-    kInputRegister = 0u,
-    kOutputRegister = 1u
-  };
+  enum : unsigned { kInputRegister = 0u, kOutputRegister = 1u };
 
   CONDITION_CONSTRUCTOR(PreservedCondition)
   virtual ~PreservedCondition(void);
@@ -414,10 +416,7 @@ class PreservedCondition final : public Condition {
 // Says that we are moving one register to a different register.
 class CopyCondition final : public Condition {
  public:
-  enum : unsigned {
-    kOtherInputRegister = 0u,
-    kOutputRegister = 1u
-  };
+  enum : unsigned { kOtherInputRegister = 0u, kOutputRegister = 1u };
 
   CONDITION_CONSTRUCTOR(CopyCondition)
   virtual ~CopyCondition(void);
@@ -467,6 +466,7 @@ class EquivalenceClass final : public Operation {
   FORWARD_CONSTRUCTOR(Operation, EquivalenceClass)
   virtual ~EquivalenceClass(void);
   std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
 };
 
 class VerifyInstruction final : public Condition {
@@ -492,35 +492,44 @@ class Circuit : public Condition {
   virtual ~Circuit(void);
   std::string Name(void) const override;
 
-  static std::unique_ptr<Circuit> Create(const remill::Arch *arch,
-                                        llvm::Function *func);
+  static std::unique_ptr<Circuit>
+  CreateFromInstructions(const std::string &arch_name,
+                         const std::string &os_name,
+                         const std::string &file_name);
+
+  void Serialize(std::ostream &os);
+
+  static std::unique_ptr<Circuit> Deserialize(std::istream &is);
+
+  // clang-format off
 
 #define FOR_EACH_OPERATION(cb) \
-    cb(Constant, constants) \
-    cb(LLVMOperation, llvm_insts) \
-    cb(Concat, concats) \
-    cb(CountLeadingZeroes, clzs) \
-    cb(CountTrailingZeroes, ctzs) \
-    cb(Extract, extracts) \
-    cb(PopulationCount, popcounts) \
-    cb(SignExtend, sign_exts) \
-    cb(ZeroFillLeft, left_zfills) \
-    cb(ZeroFillRight, right_zfills) \
-    cb(InputRegister, input_regs) \
-    cb(OutputRegister, output_regs) \
-    cb(InputInstructionBits, inst_bits) \
-    cb(RegisterCondition, transitions) \
-    cb(PreservedCondition, preserved_regs) \
-    cb(CopyCondition, copied_regs) \
-    cb(DecodeCondition, decode_conditions) \
-    cb(VerifyInstruction, verifications) \
-    cb(ReadMemoryCondition, memory_reads) \
-    cb(OnlyOneCondition, xor_all) \
-    cb(Hint, hints) \
-    cb(EquivalenceClass, eq_classes)
+  cb(Constant, constants) \
+  cb(LLVMOperation, llvm_insts) \
+  cb(Concat, concats) \
+  cb(CountLeadingZeroes, clzs) \
+  cb(CountTrailingZeroes, ctzs) \
+  cb(Extract, extracts) \
+  cb(PopulationCount, popcounts) \
+  cb(SignExtend, sign_exts) \
+  cb(ZeroFillLeft, left_zfills) \
+  cb(ZeroFillRight, right_zfills) \
+  cb(InputRegister, input_regs) \
+  cb(OutputRegister, output_regs) \
+  cb(InputInstructionBits, inst_bits) \
+  cb(RegisterCondition, transitions) \
+  cb(PreservedCondition, preserved_regs) \
+  cb(CopyCondition, copied_regs) \
+  cb(DecodeCondition, decode_conditions) \
+  cb(VerifyInstruction, verifications) \
+  cb(ReadMemoryCondition, memory_reads) \
+  cb(OnlyOneCondition, xor_all) \
+  cb(Hint, hints) \
+  cb(EquivalenceClass, eq_classes)
 
-#define DECLARE_MEMBER(type, field) \
-    DefList<type> field;
+  // clang-format on
+
+#define DECLARE_MEMBER(type, field) DefList<type> field;
 
   FOR_EACH_OPERATION(DECLARE_MEMBER)
 #undef DECLARE_MEMBER
@@ -530,9 +539,9 @@ class Circuit : public Condition {
     std::vector<Operation *> ops;
 
 #define PUSH_OP(type, field) \
-    for (auto op : field) { \
-      ops.push_back(op); \
-    }
+  for (auto op : field) { \
+    ops.push_back(op); \
+  }
 
     FOR_EACH_OPERATION(PUSH_OP)
 #undef PUSH_OP
@@ -558,30 +567,27 @@ class Visitor {
     auto self = static_cast<Derived *>(this);
     switch (const auto op_code = op->op_code; op_code) {
 #define VISITOR_CASE(type, field) \
-      case Operation::k ## type: \
-        if (auto typed_op = dynamic_cast<type *>(op); typed_op) { \
-          self->Visit ## type (typed_op); \
-        } else { \
-          LOG(FATAL) \
-              << "Node with op_code=" << op_code << " (k" << #type \
-              << ") has incorrect dynamic type: " << typeid(*op).name(); \
-        } \
-        break;
+  case Operation::k##type: \
+    if (auto typed_op = dynamic_cast<type *>(op); typed_op) { \
+      self->Visit##type(typed_op); \
+    } else { \
+      LOG(FATAL) << "Node with op_code=" << op_code << " (k" << #type \
+                 << ") has incorrect dynamic type: " << typeid(*op).name(); \
+    } \
+    break;
 
       FOR_EACH_OPERATION(VISITOR_CASE)
       VISITOR_CASE(Circuit, ...)
 #undef VISITOR_CASE
-      default:
-        LOG(FATAL)
-            << "Unhandled operation: " << op->Name();
+      default: LOG(FATAL) << "Unhandled operation: " << op->Name();
     }
   }
 
 #define DECLARE_VISITOR(type, field) \
-    void Visit ## type(type *op) { \
-      auto self = static_cast<Derived *>(this); \
-      self->VisitOperation(op); \
-    }
+  void Visit##type(type *op) { \
+    auto self = static_cast<Derived *>(this); \
+    self->VisitOperation(op); \
+  }
 
   FOR_EACH_OPERATION(DECLARE_VISITOR)
   DECLARE_VISITOR(Circuit, ...)
@@ -601,6 +607,7 @@ class UniqueVisitor : public Visitor<Derived> {
   void Reset(void) {
     seen_ops.clear();
   }
+
  private:
   std::unordered_set<Operation *> seen_ops;
 };

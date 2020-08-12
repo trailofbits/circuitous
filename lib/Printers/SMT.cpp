@@ -2,18 +2,17 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
+#include <circuitous/Printers/SMT.h>
 #include <glog/logging.h>
-
 #include <llvm/IR/InstrTypes.h>
 
 #include <memory>
 
-#include "IRToSMTVisitor.h"
-
 namespace circuitous {
 
 IRToSMTVisitor::IRToSMTVisitor(z3::context &ctx)
-    : z3_ctx(ctx), z3_expr_vec(z3_ctx) {}
+    : z3_ctx(ctx),
+      z3_expr_vec(z3_ctx) {}
 
 void IRToSMTVisitor::InsertZ3Expr(Operation *op, z3::expr z3_expr) {
   auto iter = z3_expr_map.find(op);
@@ -76,9 +75,7 @@ void IRToSMTVisitor::VisitLLVMOperation(LLVMOperation *op) {
       InsertZ3Expr(op, lhs & rhs);
     } break;
 
-    default:
-      LOG(FATAL) << "Unsupported LLVMOperation: " << op->Name();
-      break;
+    default: LOG(FATAL) << "Unsupported LLVMOperation: " << op->Name(); break;
   }
 }
 
@@ -89,7 +86,7 @@ void IRToSMTVisitor::VisitExtract(Extract *op) {
   }
   op->Traverse(*this);
   auto val = GetZ3Expr(op->operands[0]);
-  auto hi = op->high_hit_exc - 1;
+  auto hi = op->high_bit_exc - 1;
   auto lo = op->low_bit_inc;
   InsertZ3Expr(op, val.extract(hi, lo));
 }
@@ -189,7 +186,7 @@ z3::expr OrToAnd(z3::context &ctx, z3::expr e) {
   if (is_or) {
     r = args[0];
     for (auto i = 1U; i < e.num_args(); ++i) {
-      r = r && args[(signed)i];
+      r = r && args[(signed) i];
     }
     r = !(r);
   } else {

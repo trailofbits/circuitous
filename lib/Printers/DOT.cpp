@@ -2,20 +2,20 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include "IR.h"
+#include <circuitous/IR/IR.h>
 
 #include <ostream>
 
 namespace circuitous {
 namespace {
 
-static const char * const kBeginDOTNode = "[label=<<TABLE cellpadding=\"0\" cellspacing=\"0\" border=\"1\"><TR>";
-static const char * const kEndDOTNode = "</TR></TABLE>>];\n";
+static const char *const kBeginDOTNode =
+    "[label=<<TABLE cellpadding=\"0\" cellspacing=\"0\" border=\"1\"><TR>";
+static const char *const kEndDOTNode = "</TR></TABLE>>];\n";
 
 class DOTPrinter : public UniqueVisitor<DOTPrinter> {
  public:
-  explicit DOTPrinter(std::ostream &os_)
-      : os(os_) {}
+  explicit DOTPrinter(std::ostream &os_) : os(os_) {}
 
   void PrintOperands(Operation *op) {
     if (!op->operands.Empty()) {
@@ -37,7 +37,7 @@ class DOTPrinter : public UniqueVisitor<DOTPrinter> {
     const auto id = reinterpret_cast<uintptr_t>(op);
     os << "o" << id << " " << kBeginDOTNode << "<TD port=\"id\"";
     if (!op->operands.Empty()) {
-      os << " colspan=\"" << op->operands.Size()<< "\"";
+      os << " colspan=\"" << op->operands.Size() << "\"";
     }
     os << ">" << op->Name() << "</TD>";
   }

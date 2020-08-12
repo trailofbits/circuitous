@@ -2,39 +2,24 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <glog/logging.h>
+#include <circuitous/IR/IR.h>
+#include <circuitous/Printers.h>
 #include <gflags/gflags.h>
+#include <glog/logging.h>
 
-#include <iostream>
 #include <fstream>
-
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
-#include <llvm/Support/MemoryBuffer.h>
-
-#include <remill/Arch/Arch.h>
-#include <remill/BC/Compat/Error.h>
-#include <remill/BC/Util.h>
-
-#include "CircuitBuilder.h"
+#include <iostream>
 
 DECLARE_string(arch);
 DECLARE_string(os);
-DEFINE_string(binary_in, "", "Path to a file containing only machine code instructions.");
+DEFINE_string(binary_in, "",
+              "Path to a file containing only machine code instructions.");
 DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "Path to the output Python file.");
 DEFINE_string(smt_out, "", "Path to the output SMT-LIB2 file.");
-
-namespace circuitous {
-
-void PrintDOT(std::ostream &os, Circuit *circuit);
-void PrintPython(std::ostream &os, Circuit *circuit);
-void PrintSMT(std::ostream &os, Circuit *circuit);
-// void Serialize(std::ostream &os, Circuit *circuit);
-// std::unique_ptr<Circuit> Deserialize(std::istream &is);
-}  // namespace circuitous
+DEFINE_string(json_out, "", "Path to the output JSON file.");
 
 int main(int argc, char *argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -43,26 +28,17 @@ int main(int argc, char *argv[]) {
   std::unique_ptr<circuitous::Circuit> circuit;
 
   if (!FLAGS_binary_in.empty()) {
-    auto maybe_buff = llvm::MemoryBuffer::getFile(FLAGS_binary_in, -1, false);
-    if (remill::IsError(maybe_buff)) {
-      std::cerr << remill::GetErrorString(maybe_buff) << std::endl;
-      return EXIT_FAILURE;
-    }
+    circuitous::Circuit::CreateFromInstructions(FLAGS_arch, FLAGS_os,
+                                                FLAGS_binary_in)
+        .swap(circuit);
 
-    const auto buff = remill::GetReference(maybe_buff)->getBuffer();
-
-    circuitous::CircuitBuilder builder([] (llvm::LLVMContext &context) {
-      return remill::Arch::GetTargetArch(context);
-    });
-
-    builder.Build(buff).swap(circuit);
   } else if (!FLAGS_ir_in.empty()) {
     if (FLAGS_ir_in == "-") {
       FLAGS_ir_in = "/dev/stdin";
     }
 
-    std::ifstream is(FLAGS_ir_in);
-    // circuitous::Deserialize(is).swap(circuit);
+    std::ifstream is(FLAGS_ir_in, std::ios::binary);
+    circuitous::Circuit::Deserialize(is).swap(circuit);
 
   } else {
     std::cerr << "Expected one of `--binary_in` or `--ir_in`" << std::endl;
@@ -79,8 +55,8 @@ int main(int argc, char *argv[]) {
       FLAGS_ir_out = "/dev/stdout";
     }
 
-    std::ofstream os(FLAGS_ir_out);
-    // circuitous::Serialize(os, circuit.get());
+    std::ofstream os(FLAGS_ir_out, std::ios::binary | std::ios::trunc);
+    circuit->Serialize(os);
   }
 
   if (!FLAGS_dot_out.empty()) {
@@ -110,5 +86,13 @@ int main(int argc, char *argv[]) {
     circuitous::PrintSMT(os, circuit.get());
   }
 
+  if (!FLAGS_json_out.empty()) {
+    if (FLAGS_json_out == "-") {
+      FLAGS_json_out = "/dev/stderr";
+    }
+
+    std::ofstream os(FLAGS_json_out);
+    circuitous::PrintJSON(os, circuit.get());
+  }
   return EXIT_SUCCESS;
 }
