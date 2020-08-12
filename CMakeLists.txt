@@ -21,6 +21,10 @@ if(NOT TARGET remill)
   find_package(remill REQUIRED ${REMILL_FINDPACKAGE_HINTS})
 endif()
 
+# z3
+set(LLVM_Z3_INSTALL_DIR "${Z3_INSTALL_PREFIX}")
+find_package(Z3 4.7.1 REQUIRED MODULE)
+
 #
 # tool target settings
 #
@@ -39,10 +43,12 @@ target_compile_options(circuitous-settings INTERFACE
 
 target_include_directories(circuitous-settings INTERFACE
    "${CMAKE_CURRENT_SOURCE_DIR}/include"
+   ${Z3_INCLUDE_DIR}
 )
 
 target_link_libraries(circuitous-settings INTERFACE
     remill
+    ${Z3_LIBRARIES}
 )
 
 add_library(circuitous-util STATIC
@@ -87,6 +93,7 @@ add_library(circuitous-printers STATIC
     lib/Printers/Python.cpp
     lib/Printers/Json.cpp
     lib/Printers/Topology.cpp
+    lib/Printers/SMT.cpp
 )
 
 target_link_libraries(circuitous-printers PUBLIC

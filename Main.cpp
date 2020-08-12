@@ -18,6 +18,7 @@ DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "Path to the output Python file.");
+DEFINE_string(smt_out, "", "Path to the output SMT-LIB2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
 
 int main(int argc, char *argv[]) {
@@ -74,6 +75,15 @@ int main(int argc, char *argv[]) {
 
     std::ofstream os(FLAGS_python_out);
     circuitous::PrintPython(os, circuit.get());
+  }
+
+  if (!FLAGS_smt_out.empty()) {
+    if (FLAGS_smt_out == "-") {
+      FLAGS_smt_out = "/dev/stderr";
+    }
+
+    std::ofstream os(FLAGS_smt_out);
+    circuitous::PrintSMT(os, circuit.get());
   }
 
   if (!FLAGS_json_out.empty()) {
