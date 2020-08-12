@@ -25,12 +25,13 @@ DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "Path to the output Python file.");
+DEFINE_string(smt_out, "", "Path to the output SMT-LIB2 file.");
 
 namespace circuitous {
 
 void PrintDOT(std::ostream &os, Circuit *circuit);
 void PrintPython(std::ostream &os, Circuit *circuit);
-void DoSMT(Circuit *circuit);
+void PrintSMT(std::ostream &os, Circuit *circuit);
 // void Serialize(std::ostream &os, Circuit *circuit);
 // std::unique_ptr<Circuit> Deserialize(std::istream &is);
 }  // namespace circuitous
@@ -55,7 +56,6 @@ int main(int argc, char *argv[]) {
     });
 
     builder.Build(buff).swap(circuit);
-    DoSMT(circuit.get());
   } else if (!FLAGS_ir_in.empty()) {
     if (FLAGS_ir_in == "-") {
       FLAGS_ir_in = "/dev/stdin";
@@ -99,6 +99,15 @@ int main(int argc, char *argv[]) {
 
     std::ofstream os(FLAGS_python_out);
     circuitous::PrintPython(os, circuit.get());
+  }
+
+  if (!FLAGS_smt_out.empty()) {
+    if (FLAGS_smt_out == "-") {
+      FLAGS_smt_out = "/dev/stderr";
+    }
+
+    std::ofstream os(FLAGS_smt_out);
+    circuitous::PrintSMT(os, circuit.get());
   }
 
   return EXIT_SUCCESS;
