@@ -46,6 +46,7 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       os << ')';
       break;
     case Operation::kPopulationCount:
+    case Operation::kParity:
     case Operation::kCountLeadingZeroes:
     case Operation::kCountTrailingZeroes:
       os << "(F" << op->size << ' ';

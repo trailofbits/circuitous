@@ -4,6 +4,7 @@
 
 #include <circuitous/IR/IR.h>
 #include <circuitous/Printers.h>
+#include <circuitous/Transforms.h>
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 
@@ -49,6 +50,9 @@ int main(int argc, char *argv[]) {
     std::cerr << "Failed to get circuit IR" << std::endl;
     return EXIT_FAILURE;
   }
+
+  ConvertPopCountToParity(circuit.get());
+  StrengthReducePopulationCount(circuit.get());
 
   if (!FLAGS_ir_out.empty()) {
     if (FLAGS_ir_out == "-") {

@@ -24,4 +24,12 @@ inline static uint64_t RotateRight64(uint64_t val, unsigned rot) {
 #endif
 }
 
+inline static unsigned CountLeadingZeroes64(uint64_t val) {
+  if (!val) {
+    return 64u;
+  } else {
+    return static_cast<unsigned>(__builtin_clzll(val));
+  }
+}
+
 }  // namespace circuitous

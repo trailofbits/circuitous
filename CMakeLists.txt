@@ -91,12 +91,24 @@ add_library(circuitous-printers STATIC
     
     lib/Printers/DOT.cpp
     lib/Printers/Python.cpp
-    lib/Printers/Json.cpp
+    lib/Printers/JSON.cpp
     lib/Printers/Topology.cpp
     lib/Printers/SMT.cpp
 )
 
 target_link_libraries(circuitous-printers PUBLIC
+    circuitous-ir
+    circuitous-settings
+)
+
+add_library(circuitous-transforms STATIC    
+    include/circuitous/Transforms.h
+    
+    lib/Transforms/StrengthReducePopulationCount.cpp
+    lib/Transforms/ConvertPopCountToParity.cpp
+)
+
+target_link_libraries(circuitous-transforms PUBLIC
     circuitous-ir
     circuitous-settings
 )
@@ -111,6 +123,7 @@ target_link_libraries(circuitous PUBLIC
     circuitous-printers
     circuitous-util
     circuitous-settings
+    circuitous-transforms
 )
 
 #

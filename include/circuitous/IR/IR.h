@@ -54,27 +54,17 @@ class Operation : public User, public Def<Operation> {
     // Concatenate an N and an M bit value, producing an (N+M)-bit value.
     kConcat,
 
-    // Compute the population count of
+    // Compute the population count of some bit string.
     kPopulationCount,
+
+    // Compute the parity of some bit string. This produces a single bit result.
+    kParity,
+
+    // Count the leading zeroes of a bit string.
     kCountLeadingZeroes,
+
+    // Count the trailing zeros of a bit string.
     kCountTrailingZeroes,
-
-    // Create a new value that is the concatenation of its single operand with
-    // a bunch of zero bits on the left hand side. This is equivalent to zero-
-    // extension. The slight redundancy might be used, or we'll get rid of this
-    // operation type.
-    kZeroFillLeft,
-
-    // This is equivalent in some aspects to a logical shift left, with the
-    // exception that you start with an N-bit value, and produce an (N+M)-bit
-    // value, where M zero bits are concatenated onto the right-hand side.
-    kZeroFillRight,
-
-    // Sign-extension, again, this is redundant w.r.t. the LLVM version. This
-    // is equivalent to taking an N-bit value and producing an (N+M)-bit value,
-    // where the M bits are all copies of the (N-1)th, i.e. high bit, of the
-    // origin N-bit value.
-    kSignExtend,
 
     // Memory read condition. In bitcode, we might have the following:
     //
@@ -246,7 +236,8 @@ class Constant final : public Operation {
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
-  // Value of this constant.
+  // Value of this constant. The least significant bit is stored in `bits[0]`,
+  // and the most significant bit is stored in `bits[size - 1u]`.
   const std::string bits;
 };
 
@@ -293,8 +284,6 @@ class Concat final : public BitOperation {
 
 // Population count of some bits. Needed for things like parity count
 // calculation.
-//
-// TODO(pag): Eventually implement a "known bits" pass that lets me
 class PopulationCount final : public BitOperation {
  public:
   FORWARD_CONSTRUCTOR(BitOperation, PopulationCount)
@@ -317,29 +306,6 @@ class CountTrailingZeroes final : public BitOperation {
   std::string Name(void) const override;
 };
 
-// Basically a zero-extend.
-class ZeroFillLeft final : public BitOperation {
- public:
-  FORWARD_CONSTRUCTOR(BitOperation, ZeroFillLeft)
-  virtual ~ZeroFillLeft(void);
-  std::string Name(void) const override;
-};
-
-// Basically a logical shift left by a constant amount.
-class ZeroFillRight final : public BitOperation {
- public:
-  FORWARD_CONSTRUCTOR(BitOperation, ZeroFillRight)
-  virtual ~ZeroFillRight(void);
-  std::string Name(void) const override;
-};
-
-class SignExtend final : public BitOperation {
- public:
-  FORWARD_CONSTRUCTOR(BitOperation, SignExtend)
-  virtual ~SignExtend(void);
-  std::string Name(void) const override;
-};
-
 class Condition : public Operation {
  public:
   virtual ~Condition(void);
@@ -349,6 +315,15 @@ class Condition : public Operation {
 
   inline explicit Condition(unsigned op_code_, Operation *eq_class_)
       : Operation(op_code_, 1u, eq_class_) {}
+};
+
+// Returns `0` if there are an even numbers of bits in a bit string, and `1`
+// if there are an odd number of bits in a bit string.
+class Parity final : public Condition {
+ public:
+  CONDITION_CONSTRUCTOR(Parity)
+  virtual ~Parity(void);
+  std::string Name(void) const override;
 };
 
 // Condition that verifies that some computed address matches a hint address.
@@ -511,9 +486,7 @@ class Circuit : public Condition {
   cb(CountTrailingZeroes, ctzs) \
   cb(Extract, extracts) \
   cb(PopulationCount, popcounts) \
-  cb(SignExtend, sign_exts) \
-  cb(ZeroFillLeft, left_zfills) \
-  cb(ZeroFillRight, right_zfills) \
+  cb(Parity, parities) \
   cb(InputRegister, input_regs) \
   cb(OutputRegister, output_regs) \
   cb(InputInstructionBits, inst_bits) \

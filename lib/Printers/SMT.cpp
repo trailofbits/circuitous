@@ -2,13 +2,45 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <circuitous/Printers/SMT.h>
+#include <circuitous/IR/IR.h>
 #include <glog/logging.h>
 #include <llvm/IR/InstrTypes.h>
+#include <z3++.h>
 
 #include <memory>
+#include <unordered_map>
 
 namespace circuitous {
+namespace {
+
+class IRToSMTVisitor : public UniqueVisitor<IRToSMTVisitor> {
+ private:
+  z3::context &z3_ctx;
+
+  // Expression map
+  z3::expr_vector z3_expr_vec;
+  std::unordered_map<Operation *, unsigned> z3_expr_map;
+  void InsertZ3Expr(Operation *op, z3::expr z3_expr);
+  z3::expr GetZ3Expr(Operation *op);
+
+ public:
+  IRToSMTVisitor(z3::context &ctx);
+  void VisitInputInstructionBits(InputInstructionBits *op);
+  void VisitInputRegister(InputRegister *op);
+  void VisitOutputRegister(OutputRegister *op);
+  void VisitConstant(Constant *op);
+  void VisitLLVMOperation(LLVMOperation *op);
+  void VisitExtract(Extract *op);
+  void VisitRegisterCondition(RegisterCondition *op);
+  void VisitPreservedCondition(PreservedCondition *op);
+  void VisitDecodeCondition(DecodeCondition *op);
+  void VisitOnlyOneCondition(OnlyOneCondition *op);
+  void VisitVerifyInstruction(VerifyInstruction *op);
+  void VisitCircuit(Circuit *op);
+
+  z3::expr GetOrCreateZ3Expr(Operation *op);
+};
+
 
 IRToSMTVisitor::IRToSMTVisitor(z3::context &ctx)
     : z3_ctx(ctx),
@@ -57,7 +89,7 @@ void IRToSMTVisitor::VisitConstant(Constant *op) {
   }
   std::unique_ptr<bool[]> bits(new bool[op->size]);
   for (auto i = 0U; i < op->size; ++i) {
-    bits[i] = op->bits[op->size - i - 1] == '0' ? false : true;
+    bits[i] = op->bits[i] == '0' ? false : true;
   }
   InsertZ3Expr(op, z3_ctx.bv_val(op->size, bits.get()));
 }
@@ -166,8 +198,6 @@ z3::expr IRToSMTVisitor::GetOrCreateZ3Expr(Operation *op) {
   }
   return GetZ3Expr(op);
 }
-
-namespace {
 
 z3::expr OrToAnd(z3::context &ctx, z3::expr e) {
   if (!e.is_app()) {

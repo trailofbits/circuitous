@@ -175,7 +175,15 @@ bool EquivalenceClass::Equals(const Operation *that_) const {
 }
 
 COMMON_METHODS(Constant)
-STREAM_NAME(Constant, "CONST_" << size << "_" << bits)
+
+std::string Constant::Name(void) const {
+  std::stringstream ss;
+  ss << "CONST_" << size << "_";
+  for (auto i = 0U; i < size; ++i) {
+    ss << bits[size - i - 1];
+  }
+  return ss.str();
+}
 
 bool Constant::Equals(const Operation *that_) const {
   if (auto that = dynamic_cast<const Constant *>(that_); that) {
@@ -208,20 +216,14 @@ RETURN_NAME(Concat, "CONCAT")
 COMMON_METHODS(PopulationCount)
 STREAM_NAME(PopulationCount, "POPULATION_COUNT_" << operands[0]->size)
 
+COMMON_METHODS(Parity)
+STREAM_NAME(Parity, "PARITY_" << operands[0]->size)
+
 COMMON_METHODS(CountLeadingZeroes)
 STREAM_NAME(CountLeadingZeroes, "COUNT_LEADING_ZEROES_" << operands[0]->size)
 
 COMMON_METHODS(CountTrailingZeroes)
 STREAM_NAME(CountTrailingZeroes, "COUNT_TRAILING_ZEROES_" << operands[0]->size)
-
-COMMON_METHODS(ZeroFillLeft)
-STREAM_NAME(ZeroFillLeft, "ZERO_FILL_LEFT_" << (size - operands[0]->size))
-
-COMMON_METHODS(ZeroFillRight)
-STREAM_NAME(ZeroFillRight, "ZERO_FILL_RIGHT_" << (size - operands[0]->size))
-
-COMMON_METHODS(SignExtend)
-STREAM_NAME(SignExtend, "SIGN_EXTEND_" << operands[0]->size << "_" << size)
 
 Condition::~Condition(void) {}
 

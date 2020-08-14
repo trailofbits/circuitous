@@ -392,11 +392,9 @@ class DeserializeVisitor {
 
   DECODE_GENERIC(Concat, concats)
   DECODE_GENERIC(PopulationCount, popcounts)
+  DECODE_CONDITION(Parity, parities)
   DECODE_GENERIC(CountLeadingZeroes, clzs)
   DECODE_GENERIC(CountTrailingZeroes, ctzs)
-  DECODE_GENERIC(ZeroFillLeft, left_zfills)
-  DECODE_GENERIC(ZeroFillRight, right_zfills)
-  DECODE_GENERIC(SignExtend, sign_exts)
   DECODE_CONDITION(ReadMemoryCondition, memory_reads)
   DECODE_CONDITION(RegisterCondition, transitions)
   DECODE_CONDITION(PreservedCondition, preserved_regs)

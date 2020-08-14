@@ -238,7 +238,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
   }
 
-  void VisitBinaryOperator(llvm::Function *, llvm::Use &,
+  void VisitBinaryOperator(llvm::Function *func, llvm::Use &,
                            llvm::Instruction *val) {
     auto &op = val_to_op[val];
     if (op) {
@@ -252,13 +252,12 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     CHECK_NOTNULL(lhs_op);
     CHECK_NOTNULL(rhs_op);
 
-    op = impl->llvm_insts.Create(llvm::dyn_cast<llvm::Instruction>(val));
-
+    op = impl->llvm_insts.Create(val);
     op->operands.AddUse(lhs_op);
     op->operands.AddUse(rhs_op);
   }
 
-  void VisitUnaryOperator(llvm::Function *, llvm::Use &,
+  void VisitUnaryOperator(llvm::Function *func, llvm::Use &,
                           llvm::Instruction *val) {
     auto &op = val_to_op[val];
     if (op) {
@@ -282,12 +281,14 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     const auto num_bits = dl.getTypeSizeInBits(val->getType());
 
     bits.clear();
-    ap_val.reverseBits().toStringUnsigned(bits, 2);
+    bits.reserve(num_bits);
+    ap_val.toStringUnsigned(bits, 2);
     while (bits.size() < num_bits) {
-      bits.push_back('0');
+      bits.insert(bits.begin(), '0');
     }
     std::reverse(bits.begin(), bits.end());
     auto bits_str = bits.str().str();
+
     auto &bits_op = bits_to_constants[bits_str];
     if (bits_op) {
       op = bits_op;
