@@ -110,6 +110,7 @@ add_library(circuitous-transforms STATIC
 
 target_link_libraries(circuitous-transforms PUBLIC
     circuitous-ir
+    circuitous-util
     circuitous-settings
 )
 
