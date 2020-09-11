@@ -11,19 +11,12 @@ FindAndSelectClangCompiler()
 #
 # libraries
 #
-
 # remill
-if(NOT TARGET remill)
-  if("${PLATFORM_NAME}" STREQUAL "windows")
-    set(REMILL_FINDPACKAGE_HINTS HINTS "${CMAKE_INSTALL_PREFIX}/remill/lib")
-  endif()
-
-  find_package(remill REQUIRED ${REMILL_FINDPACKAGE_HINTS})
+if("${PLATFORM_NAME}" STREQUAL "windows")
+  set(REMILL_FINDPACKAGE_HINTS HINTS "${CMAKE_INSTALL_PREFIX}/remill/lib")
 endif()
 
-# z3
-set(LLVM_Z3_INSTALL_DIR "${Z3_INSTALL_PREFIX}")
-find_package(Z3 4.7.1 REQUIRED MODULE)
+find_package(remill REQUIRED ${REMILL_FINDPACKAGE_HINTS})
 
 #
 # tool target settings
@@ -43,12 +36,10 @@ target_compile_options(circuitous-settings INTERFACE
 
 target_include_directories(circuitous-settings INTERFACE
    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-   ${Z3_INCLUDE_DIR}
 )
 
 target_link_libraries(circuitous-settings INTERFACE
     remill
-    ${Z3_LIBRARIES}
 )
 
 add_library(circuitous-util STATIC

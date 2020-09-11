@@ -174,6 +174,13 @@ bool EquivalenceClass::Equals(const Operation *that_) const {
   return false;
 }
 
+COMMON_METHODS(Undefined)
+std::string Undefined::Name(void) const {
+  std::stringstream ss;
+  ss << "UNDEF_" << size;
+  return ss.str();
+}
+
 COMMON_METHODS(Constant)
 
 std::string Constant::Name(void) const {

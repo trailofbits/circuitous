@@ -74,7 +74,6 @@ class CircuitBuilder {
         i32_type(llvm::Type::getInt32Ty(context)),
         bool_type(llvm::Type::getInt1Ty(context)),
         true_value(llvm::ConstantInt::get(bool_type, 1)),
-        false_value(llvm::ConstantInt::get(bool_type, 0)),
         xor_all_func(
             llvm::Function::Create(llvm::FunctionType::get(bool_type, true),
                                    llvm::GlobalValue::ExternalLinkage,
@@ -144,15 +143,6 @@ class CircuitBuilder {
   // argument list.
   llvm::Function *BuildCircuit1(llvm::Function *circuit0_func);
 
-  // Build the fourth level circuit. Here we merge together multiple
-  // verification calls so that we can merge decoding effort.
-  llvm::Function *BuildCircuit2(llvm::Function *circuit1_func);
-
-  // Build the third level circuit. Here we analyze how registers are used
-  // across instructions and we try to break dependencies and merge common
-  // sub-expressions.
-  llvm::Function *BuildCircuit3(llvm::Function *circuit2_func);
-
  public:
   llvm::LLVMContext context;
 
@@ -186,7 +176,6 @@ class CircuitBuilder {
   llvm::Type *const i32_type;
   llvm::Type *const bool_type;
   llvm::Value *const true_value;
-  llvm::Value *const false_value;
 
   // This function is used as a final step in the circuit. Every instruction
   // goes through two general phases: state transition verification, and

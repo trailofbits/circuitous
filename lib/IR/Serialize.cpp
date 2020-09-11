@@ -6,13 +6,14 @@
 #include <circuitous/IR/IR.h>
 #include <glog/logging.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 
-#if 1
+#if 0
 #  define DEBUG_WRITE(str) \
     do { \
       for (auto i = 0u; str[i]; ++i) { \
@@ -125,6 +126,12 @@ class SerializeVisitor : public Visitor<SerializeVisitor> {
     DEBUG_WRITE("}");
   }
 
+  void VisitUndefined(Undefined *op) {
+    DEBUG_WRITE("{UNDEF:");
+    Write(op->size);
+    DEBUG_WRITE("}");
+  }
+
   void VisitInputRegister(InputRegister *op) {
     DEBUG_WRITE("{INREG:");
     Write(op->size);
@@ -162,7 +169,6 @@ class SerializeVisitor : public Visitor<SerializeVisitor> {
   std::unordered_map<Operation *, int32_t> offset;
   HashVisitor hasher;
 };
-
 
 class DeserializeVisitor {
  public:
@@ -211,7 +217,7 @@ class DeserializeVisitor {
 
       if (!found_op) {
         hash_to_ops.emplace(hash, op);
-      } else {
+      } else if (found_op != op) {
         op->ReplaceAllUsesWith(found_op);
         op = found_op;
       }
@@ -307,6 +313,16 @@ class DeserializeVisitor {
     }
   }
 
+  InputRegister *DecodeInputRegister(void) {
+    unsigned size = 0;
+    std::string reg_name;
+    DEBUG_READ("{INREG:");
+    Read(size);
+    Read(reg_name);
+    DEBUG_READ("}");
+    return circuit->input_regs.Create(size, std::move(reg_name));
+  }
+
   Constant *DecodeConstant(void) {
     unsigned size = 0;
     std::string bits;
@@ -317,14 +333,17 @@ class DeserializeVisitor {
     return circuit->constants.Create(std::move(bits), size);
   }
 
-  InputRegister *DecodeInputRegister(void) {
+  Undefined *DecodeUndefined(void) {
     unsigned size = 0;
-    std::string reg_name;
-    DEBUG_READ("{INREG:");
+    DEBUG_READ("{UNDEF:");
     Read(size);
-    Read(reg_name);
     DEBUG_READ("}");
-    return circuit->input_regs.Create(size, std::move(reg_name));
+    undefs.resize(std::max<size_t>(undefs.size(), size + 1u));
+    auto &op = undefs[size];
+    if (!op) {
+      op = circuit->undefs.Create(size);
+    }
+    return op;
   }
 
   OutputRegister *DecodeOutputRegister(void) {
@@ -417,6 +436,7 @@ class DeserializeVisitor {
   std::unordered_multimap<uint64_t, Operation *> hash_to_ops;
   HashVisitor hasher;
   std::vector<Operation *> ops;
+  std::vector<Undefined *> undefs;
 };
 
 }  // namespace

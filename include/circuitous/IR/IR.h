@@ -42,6 +42,10 @@ class Operation : public User, public Def<Operation> {
     // Some sequence of bits.
     kConstant,
 
+    // An undefined value, either an `llvm::Undef` or a `__remill_undefined_*`
+    // value.
+    kUndefined,
+
     // Every LLVM instruction kind. Things like Add, Sub, etc.
     kLLVMOperation,
 
@@ -218,6 +222,23 @@ class LLVMOperation final : public Operation {
   const unsigned llvm_predicate;
 
   static const unsigned kInvalidLLVMPredicate;
+};
+
+// An undefined value.
+class Undefined final : public Operation {
+ public:
+  inline explicit Undefined(unsigned size_)
+      : Operation(Operation::kUndefined, size_) {}
+
+  inline explicit Undefined(unsigned size_,
+                            Operation *eq_class_)
+      : Operation(Operation::kUndefined, size_, eq_class_) {}
+
+  virtual ~Undefined(void);
+  std::string Name(void) const override;
+
+ protected:
+  using Operation::Operation;
 };
 
 class Constant final : public Operation {
@@ -480,6 +501,7 @@ class Circuit : public Condition {
 
 #define FOR_EACH_OPERATION(cb) \
   cb(Constant, constants) \
+  cb(Undefined, undefs) \
   cb(LLVMOperation, llvm_insts) \
   cb(Concat, concats) \
   cb(CountLeadingZeroes, clzs) \
