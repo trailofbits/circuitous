@@ -19,6 +19,9 @@
 #include <unordered_set>
 #include <vector>
 
+#include <llvm/ADT/PostOrderIterator.h>
+#include <llvm/IR/CFG.h>
+
 namespace circuitous {
 namespace {
 
@@ -105,6 +108,25 @@ static llvm::IntegerType *IntegralRegisterType(llvm::Module &module,
   }
 }
 
+// Looks for calls to a function like `__remill_error`, and
+// replace its state pointer with a null pointer so that the state
+// pointer never escapes.
+static void
+MuteStateEscape(llvm::Module &module, const char *func_name) {
+  auto func = module.getFunction(func_name);
+  if (!func) {
+    return;
+  }
+
+  for (auto user : func->users()) {
+    if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(user)) {
+      auto arg_op = call_inst->getArgOperand(remill::kStatePointerArgNum);
+      call_inst->setArgOperand(remill::kStatePointerArgNum,
+                               llvm::UndefValue::get(arg_op->getType()));
+    }
+  }
+}
+
 }  // namespace
 
 llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
@@ -142,6 +164,32 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
       mark_as_used) {
     mark_as_used->eraseFromParent();
   }
+
+  xor_all_func =
+      llvm::Function::Create(llvm::FunctionType::get(bool_type, true),
+                             llvm::GlobalValue::ExternalLinkage,
+                             "__circuitous_xor_all", module.get());
+
+  verify_inst_func = llvm::Function::Create(
+      llvm::FunctionType::get(bool_type, {bool_type}, true),
+      llvm::GlobalValue::ExternalLinkage, "__circuitous_verify_inst",
+      module.get());
+
+  verify_decode_func = llvm::Function::Create(
+      llvm::FunctionType::get(bool_type, {bool_type}, true),
+      llvm::GlobalValue::ExternalLinkage, "__circuitous_verify_decode",
+      module.get());
+
+  // Mark these functions as not touching memory; this will help LLVM to
+  // better optimize code that calls these functions.
+  xor_all_func->addFnAttr(llvm::Attribute::ReadNone);
+  verify_inst_func->addFnAttr(llvm::Attribute::ReadNone);
+  verify_decode_func->addFnAttr(llvm::Attribute::ReadNone);
+
+  // These improve optimizability.
+  MuteStateEscape(*module, "__remill_function_return");
+  MuteStateEscape(*module, "__remill_error");
+  MuteStateEscape(*module, "__remill_missing_block");
 
   return BuildCircuit1(BuildCircuit0(std::move(isels)));
 }
@@ -409,6 +457,182 @@ EncodedInstructionParts CircuitBuilder::CreateEncodingTable(
   return parts;
 }
 
+// Flatten all control flow into pure data-flow inside of a function.
+void CircuitBuilder::FlattenControlFlow(
+    llvm::Function *func, const remill::IntrinsicTable &intrinsics) {
+
+  const auto entry_block = &(func->getEntryBlock());
+  llvm::ReversePostOrderTraversal<llvm::BasicBlock *> it(entry_block);
+
+  std::unordered_map<llvm::BasicBlock *, llvm::Value *> reaching_cond;
+  std::unordered_map<llvm::BasicBlock *,
+                     std::unordered_map<llvm::BasicBlock *,
+                                        llvm::Value *>> pred_conds;
+
+  const auto new_block = llvm::BasicBlock::Create(context, "", func,
+                                                  entry_block);
+
+  std::vector<llvm::Instruction *> insts;
+  std::vector<llvm::Instruction *> to_remove;
+  std::vector<llvm::BasicBlock *> orig_blocks;
+  std::vector<std::pair<llvm::ReturnInst *, llvm::Value *>> ret_vals;
+
+
+  for (llvm::BasicBlock *block : it) {
+    orig_blocks.push_back(block);
+  }
+
+  for (auto block : orig_blocks) {
+
+    // The entry block is guaranteed to be reachable.
+    if (block->hasNPredecessors(0)) {
+      reaching_cond.emplace(block, true_value);
+      pred_conds[block].emplace(nullptr, true_value);
+      pred_conds[block].emplace(block, true_value);
+
+    // Figure out the reaching conditions for this block, and express them as
+    // data flow (i.e. instructions).
+    } else {
+      llvm::IRBuilder<> ir(new_block);
+      auto cond = false_value;
+
+      for (auto pred_block : llvm::predecessors(block)) {
+        const auto pred_cond = reaching_cond[pred_block];
+        LOG_IF(FATAL, !pred_cond)
+            << "Cycle in control-flow graphs are not handled";
+
+        const auto pred_br = llvm::dyn_cast<llvm::BranchInst>(
+            pred_block->getTerminator());
+
+        const auto pred_switch = llvm::dyn_cast<llvm::SwitchInst>(
+            pred_block->getTerminator());
+
+        // Figure out the reaching condition for `block` coming through
+        // `pred`.
+        llvm::Value *edge_cond = pred_cond;
+        if (pred_br && pred_br->isConditional()) {
+          const auto true_succ = pred_br->getSuccessor(0);
+          const auto false_succ = pred_br->getSuccessor(1);
+
+          if (true_succ != false_succ) {
+            edge_cond = pred_br->getCondition();
+            if (true_succ == block) {
+              edge_cond = ir.CreateAnd(pred_cond, edge_cond);
+            } else {
+              edge_cond = ir.CreateAnd(pred_cond, ir.CreateNot(edge_cond));
+            }
+          } else {
+            edge_cond = pred_cond;
+          }
+
+        } else if (pred_switch) {
+          LOG(FATAL) << "TODO: Edge condition on switch.";
+        }
+
+        pred_conds[block].emplace(pred_block, edge_cond);
+        cond = ir.CreateXor(cond, edge_cond);
+      }
+
+      reaching_cond.emplace(block, cond);
+    }
+
+    insts.clear();
+    for (llvm::Instruction &inst : *block) {
+      insts.push_back(&inst);
+    }
+
+    for (auto inst : insts) {
+      if (auto phi = llvm::dyn_cast<llvm::PHINode>(inst); phi) {
+        llvm::IRBuilder<> ir(new_block);
+
+        const auto num_preds = phi->getNumIncomingValues();
+        CHECK_LT(0, num_preds);
+
+        llvm::Value *sel_val = nullptr;
+
+        if (1 == num_preds) {
+          sel_val = phi->getIncomingValue(0);
+
+        // Turn it into a SelectInst.
+        } else if (2 == num_preds) {
+          auto pred_block = phi->getIncomingBlock(0);
+          auto val_cond = pred_conds[block][pred_block];
+          LOG_IF(FATAL, !val_cond)
+              << "Missing reaching condition for value";
+          CHECK_NE(val_cond, true_value);
+          auto true_val = phi->getIncomingValue(0);
+          auto false_val = phi->getIncomingValue(1);
+          sel_val = ir.CreateSelect(val_cond, true_val, false_val);
+
+        // Turn it into a tower of SelectInsts.
+        } else {
+          sel_val = llvm::Constant::getNullValue(phi->getType());
+          for (auto i = 0u; i < num_preds; ++i) {
+            auto pred_block = phi->getIncomingBlock(i);
+            auto pred_val = phi->getIncomingValue(i);
+            auto val_cond = pred_conds[block][pred_block];
+            LOG_IF(FATAL, !val_cond)
+                << "Missing reaching condition for value";
+            CHECK_NE(val_cond, true_value);
+            sel_val = ir.CreateSelect(val_cond, pred_val, sel_val);
+          }
+        }
+
+        phi->replaceAllUsesWith(sel_val);
+        to_remove.push_back(inst);
+
+      } else if (auto ret = llvm::dyn_cast<llvm::ReturnInst>(inst); ret) {
+        ret_vals.emplace_back(ret, reaching_cond[block]);
+
+      } else if (!inst->isTerminator()) {
+        inst->removeFromParent();
+        new_block->getInstList().insert(new_block->end(), inst);
+
+      } else {
+        to_remove.push_back(inst);
+      }
+    }
+  }
+
+  // Add a final return value to the data flow function.
+  CHECK(!ret_vals.empty());
+  if (1 == ret_vals.size()) {
+    ret_vals[0].first->removeFromParent();
+    new_block->getInstList().insert(new_block->end(), ret_vals[0].first);
+    ret_vals.clear();
+
+  // Create a tower of selects, where the default value is a call to
+  // `__remill_error`, which will signal downstream translation to
+  // the IR to produce set the error bit.
+  } else {
+    llvm::IRBuilder<> ir(new_block);
+
+    llvm::Value *args[remill::kNumBlockArgs];
+    for (auto i = 0u; i < remill::kNumBlockArgs; ++i) {
+      args[i] = llvm::UndefValue::get(
+          remill::NthArgument(func, i)->getType());
+    }
+
+    llvm::Value *sel_val = ir.CreateCall(intrinsics.error, args);
+    for (auto [ret_inst, reaching_cond] : ret_vals) {
+      CHECK_NE(reaching_cond, true_value);
+      llvm::Value *ret_val = ret_inst->getReturnValue();
+      sel_val = ir.CreateSelect(reaching_cond, ret_val, sel_val);
+      ret_inst->eraseFromParent();
+    }
+
+    ir.CreateRet(sel_val);
+  }
+
+  for (auto inst : to_remove) {
+    inst->eraseFromParent();
+  }
+
+  for (auto block : orig_blocks) {
+    block->eraseFromParent();
+  }
+}
+
 // Decode all instructions in `buff` using `arch` and fill up `inst_funcs`.
 void CircuitBuilder::LiftInstructions(
     std::vector<InstructionSelection> &isels) {
@@ -432,11 +656,12 @@ void CircuitBuilder::LiftInstructions(
           (void) llvm::ReturnInst::Create(
               context, remill::LoadMemoryPointer(block), block);
 
-          // Make this function more amenable for inlining and elimination.
-          func->setLinkage(llvm::GlobalValue::PrivateLinkage);
-          func->removeFnAttr(llvm::Attribute::NoInline);
-          func->addFnAttr(llvm::Attribute::InlineHint);
-          func->addFnAttr(llvm::Attribute::AlwaysInline);
+          // Make sure these functions stick around.
+          func->removeFnAttr(llvm::Attribute::InlineHint);
+          func->removeFnAttr(llvm::Attribute::AlwaysInline);
+          func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+          func->addFnAttr(llvm::Attribute::NoInline);
+
           inst_funcs.push_back(func);
           continue;
 
@@ -454,6 +679,31 @@ void CircuitBuilder::LiftInstructions(
     }
 
     ++g;
+  }
+
+  remill::OptimizeModule(arch.get(), module.get(), inst_funcs);
+
+  std::vector<llvm::Function *> reopt_funcs;
+  for (auto func : inst_funcs) {
+    if (func->size() == 1) {
+      continue;  // Pure data-flow; doesn't need to be re-optimized.
+    }
+
+    reopt_funcs.push_back(func);
+    FlattenControlFlow(func, intrinsics);
+  }
+
+  if (!reopt_funcs.empty()) {
+    remill::OptimizeModule(arch.get(), module.get(), reopt_funcs);
+  }
+
+  // We're done; make the instruction functions more amenable for inlining
+  // and elimination.
+  for (auto func : inst_funcs) {
+    func->setLinkage(llvm::GlobalValue::PrivateLinkage);
+    func->removeFnAttr(llvm::Attribute::NoInline);
+    func->addFnAttr(llvm::Attribute::InlineHint);
+    func->addFnAttr(llvm::Attribute::AlwaysInline);
   }
 }
 
@@ -666,7 +916,7 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
                                        eq_params, llvm::None, "", exit_block);
       }
 
-      // Final set of paramters are comparisons on whether or not the resulting
+      // Final set of parameters are comparisons on whether or not the resulting
       // register after the semantic has executed matches the next state of that
       // register.
       for (auto [reg, expected_reg_val] : output_reg_arg) {

@@ -74,26 +74,9 @@ class CircuitBuilder {
         i32_type(llvm::Type::getInt32Ty(context)),
         bool_type(llvm::Type::getInt1Ty(context)),
         true_value(llvm::ConstantInt::get(bool_type, 1)),
-        xor_all_func(
-            llvm::Function::Create(llvm::FunctionType::get(bool_type, true),
-                                   llvm::GlobalValue::ExternalLinkage,
-                                   "__circuitous_xor_all", module.get())),
-        verify_inst_func(llvm::Function::Create(
-            llvm::FunctionType::get(bool_type, {bool_type}, true),
-            llvm::GlobalValue::ExternalLinkage, "__circuitous_verify_inst",
-            module.get())),
-        verify_decode_func(llvm::Function::Create(
-            llvm::FunctionType::get(bool_type, {bool_type}, true),
-            llvm::GlobalValue::ExternalLinkage, "__circuitous_verify_decode",
-            module.get())) {
+        false_value(llvm::ConstantInt::get(bool_type, 0)) {
 
     (void) i32_type;
-
-    // Mark these functions as not touching memory; this will help LLVM to
-    // better optimize code that calls these functions.
-    xor_all_func->addFnAttr(llvm::Attribute::ReadNone);
-    verify_inst_func->addFnAttr(llvm::Attribute::ReadNone);
-    verify_decode_func->addFnAttr(llvm::Attribute::ReadNone);
 
     // The remaining parameters will be input/output registers for verification.
     arch->ForEachRegister([&](const remill::Register *reg_) {
@@ -125,6 +108,10 @@ class CircuitBuilder {
   // known bits.
   EncodedInstructionParts
   CreateEncodingTable(const std::vector<InstructionSelection> &isels);
+
+  // Flatten all control flow into pure data-flow inside of a function.
+  void FlattenControlFlow(llvm::Function *func,
+                          const remill::IntrinsicTable &intrinsics);
 
   // Decode all instructions in `buff` using `arch`.
   void LiftInstructions(std::vector<InstructionSelection> &isels);
@@ -176,6 +163,7 @@ class CircuitBuilder {
   llvm::Type *const i32_type;
   llvm::Type *const bool_type;
   llvm::Value *const true_value;
+  llvm::Value *const false_value;
 
   // This function is used as a final step in the circuit. Every instruction
   // goes through two general phases: state transition verification, and
@@ -188,17 +176,17 @@ class CircuitBuilder {
   //        fail at either the state check step, or the encoding verification
   //        step, and thus the result of XORing all the bits will be `1`, i.e.
   //        that we successfully verified.
-  llvm::Function *const xor_all_func;
+  llvm::Function *xor_all_func{nullptr};
 
   // Verify that an instruction completed a successful state transfer. This
   // has the equivalent meaning of an "all ones" function, except that the
   // first parameter is whether or not we verified the decoding for this
   // instruction's selection.
-  llvm::Function *const verify_inst_func;
+  llvm::Function *verify_inst_func{nullptr};
 
   // Verify that we decoded an instruction category/semantic. This
   // has the equivalent meaning of an "all ones" function
-  llvm::Function *const verify_decode_func;
+  llvm::Function *verify_decode_func{nullptr};
 
   // Encodes an instruction by concatenating zero bits with variable bits
   // produced by verified the register state transfer of a given instruction.

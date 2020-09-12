@@ -49,6 +49,9 @@ class Operation : public User, public Def<Operation> {
     // Every LLVM instruction kind. Things like Add, Sub, etc.
     kLLVMOperation,
 
+    // Flip all bits.
+    kNot,
+
     // Extract some selection of bits [low_inc, high_exc) from an operand.
     //
     // NOTE(pag): `low_inc` is the lowest order bit, `high_exc` is the highest
@@ -269,6 +272,15 @@ class BitOperation : public Operation {
 
  protected:
   using Operation::Operation;
+};
+
+// Flip all bits in a bitvector.
+class Not final : public BitOperation {
+ public:
+  FORWARD_CONSTRUCTOR(BitOperation, Not)
+
+  virtual ~Not(void);
+  std::string Name(void) const override;
 };
 
 // Extract bits.
@@ -503,6 +515,7 @@ class Circuit : public Condition {
   cb(Constant, constants) \
   cb(Undefined, undefs) \
   cb(LLVMOperation, llvm_insts) \
+  cb(Not, nots) \
   cb(Concat, concats) \
   cb(CountLeadingZeroes, clzs) \
   cb(CountTrailingZeroes, ctzs) \

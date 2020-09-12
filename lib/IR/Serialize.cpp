@@ -13,7 +13,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#if 0
+#if 1
 #  define DEBUG_WRITE(str) \
     do { \
       for (auto i = 0u; str[i]; ++i) { \
@@ -123,12 +123,6 @@ class SerializeVisitor : public Visitor<SerializeVisitor> {
     DEBUG_WRITE("{CONST:");
     Write(op->size);
     Write(op->bits);
-    DEBUG_WRITE("}");
-  }
-
-  void VisitUndefined(Undefined *op) {
-    DEBUG_WRITE("{UNDEF:");
-    Write(op->size);
     DEBUG_WRITE("}");
   }
 
@@ -333,19 +327,6 @@ class DeserializeVisitor {
     return circuit->constants.Create(std::move(bits), size);
   }
 
-  Undefined *DecodeUndefined(void) {
-    unsigned size = 0;
-    DEBUG_READ("{UNDEF:");
-    Read(size);
-    DEBUG_READ("}");
-    undefs.resize(std::max<size_t>(undefs.size(), size + 1u));
-    auto &op = undefs[size];
-    if (!op) {
-      op = circuit->undefs.Create(size);
-    }
-    return op;
-  }
-
   OutputRegister *DecodeOutputRegister(void) {
     unsigned size = 0;
     std::string reg_name;
@@ -409,6 +390,8 @@ class DeserializeVisitor {
     return op; \
   }
 
+  DECODE_GENERIC(Undefined, undefs)
+  DECODE_GENERIC(Not, nots)
   DECODE_GENERIC(Concat, concats)
   DECODE_GENERIC(PopulationCount, popcounts)
   DECODE_CONDITION(Parity, parities)

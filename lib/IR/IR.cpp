@@ -175,11 +175,7 @@ bool EquivalenceClass::Equals(const Operation *that_) const {
 }
 
 COMMON_METHODS(Undefined)
-std::string Undefined::Name(void) const {
-  std::stringstream ss;
-  ss << "UNDEF_" << size;
-  return ss.str();
-}
+STREAM_NAME(Undefined, "UNDEF_" << size)
 
 COMMON_METHODS(Constant)
 
@@ -201,6 +197,9 @@ bool Constant::Equals(const Operation *that_) const {
 }
 
 BitOperation::~BitOperation(void) {}
+
+COMMON_METHODS(Not)
+RETURN_NAME(Not, "NOT")
 
 COMMON_METHODS(Extract)
 STREAM_NAME(Extract, "EXTRACT_" << high_bit_exc << "_" << low_bit_inc)

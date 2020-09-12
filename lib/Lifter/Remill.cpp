@@ -36,6 +36,7 @@ class BottomUpDependencyVisitor {
   void VisitFunctionCall(llvm::Function *, llvm::Use &, llvm::CallInst *) {}
   void VisitBinaryOperator(llvm::Function *, llvm::Use &, llvm::Instruction *) {
   }
+  void VisitSelect(llvm::Function *, llvm::Use &, llvm::Instruction *);
   void VisitUnaryOperator(llvm::Function *, llvm::Use &, llvm::Instruction *) {}
   void VisitUndefined(llvm::Function *, llvm::Use &, llvm::UndefValue *) {}
   void VisitConstantInt(llvm::Function *, llvm::Use &, llvm::ConstantInt *) {}
@@ -75,6 +76,9 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
 
       } else if (llvm::isa<llvm::UnaryInstruction>(inst_val)) {
         self->VisitUnaryOperator(context, use, inst_val);
+
+      } else if (llvm::isa<llvm::SelectInst>(inst_val)) {
+        self->VisitSelect(context, use, inst_val);
 
       } else {
         LOG(FATAL) << "Unexpected value during visit: "
@@ -260,6 +264,73 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     } else {
       LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(val);
+    }
+  }
+
+  void VisitSelect(llvm::Function *func, llvm::Use &, llvm::Instruction *val) {
+    auto &op = val_to_op[val];
+    if (op) {
+      return;
+    }
+
+    const auto sel = llvm::dyn_cast<llvm::SelectInst>(val);
+    const auto cond_val = sel->getCondition();
+    const auto true_val = sel->getTrueValue();
+    const auto false_val = sel->getFalseValue();
+
+    auto cond_op = val_to_op[cond_val];
+    CHECK_NOTNULL(cond_op);
+
+    const auto num_bits = static_cast<unsigned>(
+        dl.getTypeSizeInBits(val->getType()));
+
+    // The condition is undefined, that means we aren't selecting either value,
+    // unfortunately :-(
+    if (cond_op->op_code == Operation::kUndefined) {
+      op = impl->undefs.Create(static_cast<unsigned>(num_bits));
+
+    // Condition is defined.
+    } else {
+      auto true_op = val_to_op[true_val];
+      auto false_op = val_to_op[false_val];
+      CHECK_NOTNULL(true_val);
+      CHECK_NOTNULL(false_op);
+      CHECK_EQ(num_bits, true_op->size);
+      CHECK_EQ(num_bits, false_op->size);
+
+      // Both selected values are undefined, thus the result is undefined.
+      if (true_op->op_code == Operation::kUndefined &&
+          false_op->op_code == Operation::kUndefined) {
+        op = true_op;
+        return;
+      }
+
+      op = impl->llvm_insts.Create(val);
+      op->operands.AddUse(cond_op);
+
+      // True side is undefined; convert it into a defined value that is not
+      // the same as the False side.
+      if (true_op->op_code == Operation::kUndefined) {
+        auto not_false_op = impl->nots.Create(num_bits);
+        not_false_op->operands.AddUse(false_op);
+
+        op->operands.AddUse(not_false_op);
+        op->operands.AddUse(false_op);
+
+      // False side is undefined; convert it into a defined value that is not
+      // the same as the True side.
+      } else if (false_op->op_code == Operation::kUndefined) {
+        auto not_true_op = impl->nots.Create(num_bits);
+        not_true_op->operands.AddUse(true_op);
+
+        op->operands.AddUse(true_op);
+        op->operands.AddUse(not_true_op);
+
+      // Neither is undefined, yay!
+      } else {
+        op->operands.AddUse(true_op);
+        op->operands.AddUse(false_op);
+      }
     }
   }
 
