@@ -13,7 +13,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#if 1
+#if 0
 #  define DEBUG_WRITE(str) \
     do { \
       for (auto i = 0u; str[i]; ++i) { \
