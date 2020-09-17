@@ -464,12 +464,10 @@ void PrintSMT(std::ostream &os, Circuit *circuit) {
   auto app = to_sat(goal);
   CHECK(app.size() == 1) << "Unexpected multiple goals in application!";
   expr = app[0].as_expr();
-
   // Custom optimizations
   expr = EqToXnor(ctx, expr);
-  expr = OrToAnd(ctx, expr);
   expr = ElimNot(ctx, expr);
-
+  expr = OrToAnd(ctx, expr);
   // Dump to SMT-LIBv2
   z3::solver solver(ctx);
   solver.add(expr);
