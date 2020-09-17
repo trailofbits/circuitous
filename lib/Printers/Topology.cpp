@@ -19,6 +19,7 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
   max_depth -= 1u;
   switch (op->op_code) {
     case Operation::kConstant:
+    case Operation::kUndefined:
     case Operation::kInputRegister:
     case Operation::kOutputRegister:
     case Operation::kInputInstructionBits:

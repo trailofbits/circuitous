@@ -42,8 +42,15 @@ class Operation : public User, public Def<Operation> {
     // Some sequence of bits.
     kConstant,
 
+    // An undefined value, either an `llvm::Undef` or a `__remill_undefined_*`
+    // value.
+    kUndefined,
+
     // Every LLVM instruction kind. Things like Add, Sub, etc.
     kLLVMOperation,
+
+    // Flip all bits.
+    kNot,
 
     // Extract some selection of bits [low_inc, high_exc) from an operand.
     //
@@ -220,6 +227,23 @@ class LLVMOperation final : public Operation {
   static const unsigned kInvalidLLVMPredicate;
 };
 
+// An undefined value.
+class Undefined final : public Operation {
+ public:
+  inline explicit Undefined(unsigned size_)
+      : Operation(Operation::kUndefined, size_) {}
+
+  inline explicit Undefined(unsigned size_,
+                            Operation *eq_class_)
+      : Operation(Operation::kUndefined, size_, eq_class_) {}
+
+  virtual ~Undefined(void);
+  std::string Name(void) const override;
+
+ protected:
+  using Operation::Operation;
+};
+
 class Constant final : public Operation {
  public:
   inline explicit Constant(std::string bits_, unsigned size_)
@@ -248,6 +272,15 @@ class BitOperation : public Operation {
 
  protected:
   using Operation::Operation;
+};
+
+// Flip all bits in a bitvector.
+class Not final : public BitOperation {
+ public:
+  FORWARD_CONSTRUCTOR(BitOperation, Not)
+
+  virtual ~Not(void);
+  std::string Name(void) const override;
 };
 
 // Extract bits.
@@ -480,7 +513,9 @@ class Circuit : public Condition {
 
 #define FOR_EACH_OPERATION(cb) \
   cb(Constant, constants) \
+  cb(Undefined, undefs) \
   cb(LLVMOperation, llvm_insts) \
+  cb(Not, nots) \
   cb(Concat, concats) \
   cb(CountLeadingZeroes, clzs) \
   cb(CountTrailingZeroes, ctzs) \

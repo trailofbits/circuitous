@@ -36,7 +36,9 @@ class BottomUpDependencyVisitor {
   void VisitFunctionCall(llvm::Function *, llvm::Use &, llvm::CallInst *) {}
   void VisitBinaryOperator(llvm::Function *, llvm::Use &, llvm::Instruction *) {
   }
+  void VisitSelect(llvm::Function *, llvm::Use &, llvm::Instruction *);
   void VisitUnaryOperator(llvm::Function *, llvm::Use &, llvm::Instruction *) {}
+  void VisitUndefined(llvm::Function *, llvm::Use &, llvm::UndefValue *) {}
   void VisitConstantInt(llvm::Function *, llvm::Use &, llvm::ConstantInt *) {}
   void VisitConstantFP(llvm::Function *, llvm::Use &, llvm::ConstantFP *) {}
   void Visit(llvm::Function *context, llvm::Use &use_);
@@ -75,6 +77,9 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
       } else if (llvm::isa<llvm::UnaryInstruction>(inst_val)) {
         self->VisitUnaryOperator(context, use, inst_val);
 
+      } else if (llvm::isa<llvm::SelectInst>(inst_val)) {
+        self->VisitSelect(context, use, inst_val);
+
       } else {
         LOG(FATAL) << "Unexpected value during visit: "
                    << remill::LLVMThingToString(inst_val);
@@ -83,7 +88,10 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
 
   // Bottom out at a constant, ignore for now.
   } else if (auto const_val = llvm::dyn_cast<llvm::Constant>(val); const_val) {
-    if (auto ce = llvm::dyn_cast<llvm::ConstantExpr>(const_val); ce) {
+    if (auto undef = llvm::dyn_cast<llvm::UndefValue>(const_val); undef) {
+      self->VisitUndefined(context, use, undef);
+
+    } else if (auto ce = llvm::dyn_cast<llvm::ConstantExpr>(const_val); ce) {
       auto ce_inst = ce->getAsInstruction();
       auto &entry_block = context->getEntryBlock();
       ce_inst->insertBefore(&*entry_block.getFirstInsertionPt());
@@ -169,6 +177,30 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     return value_read;
   }
 
+  static unsigned SizeFromSuffix(llvm::StringRef name) {
+    if (name.endswith("_8")) {
+      return 8u;
+    } else if (name.endswith("_16")) {
+      return 16u;
+    } else if (name.endswith("_32")) {
+      return 32u;
+    } else if (name.endswith("_64")) {
+      return 64u;
+    } else if (name.endswith("_f32")) {
+      return 32u;
+    } else if (name.endswith("_f64")) {
+      return 64u;
+    } else if (name.endswith("_f80")) {
+      return 80u;
+    } else if (name.endswith("_f128")) {
+      return 128u;
+    } else {
+      LOG(FATAL) << "Unsupported memory read intrinsic: "
+                 << name.str();
+      return 0u;
+    }
+  }
+
   void VisitFunctionCall(llvm::Function *, llvm::Use &, llvm::CallInst *val) {
     auto &op = val_to_op[val];
     if (op) {
@@ -185,18 +217,33 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     switch (func->getIntrinsicID()) {
       case llvm::Intrinsic::not_intrinsic: break;
       case llvm::Intrinsic::ctpop: {
-        op = impl->popcounts.Create(res_size);
-        op->operands.AddUse(val_to_op[val->getArgOperand(0u)]);
+        const auto op0 = val_to_op[val->getArgOperand(0u)];
+        if (op0->op_code == Operation::kUndefined) {
+          op = impl->undefs.Create(res_size);
+        } else {
+          op = impl->popcounts.Create(res_size);
+          op->operands.AddUse(op0);
+        }
         return;
       }
       case llvm::Intrinsic::ctlz: {
-        op = impl->clzs.Create(res_size);
-        op->operands.AddUse(val_to_op[val->getArgOperand(0u)]);
+        const auto op0 = val_to_op[val->getArgOperand(0u)];
+        if (op0->op_code == Operation::kUndefined) {
+          op = impl->undefs.Create(res_size);
+        } else {
+          op = impl->clzs.Create(res_size);
+          op->operands.AddUse(op0);
+        }
         return;
       }
       case llvm::Intrinsic::cttz: {
-        op = impl->ctzs.Create(res_size);
-        op->operands.AddUse(val_to_op[val->getArgOperand(0u)]);
+        const auto op0 = val_to_op[val->getArgOperand(0u)];
+        if (op0->op_code == Operation::kUndefined) {
+          op = impl->undefs.Create(res_size);
+        } else {
+          op = impl->ctzs.Create(res_size);
+          op->operands.AddUse(op0);
+        }
         return;
       }
       default:
@@ -207,34 +254,83 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     auto name = func->getName();
     if (name.startswith("__remill_read_memory_")) {
-      unsigned size = 0;
-      if (name.endswith("_8")) {
-        size = 8u;
-      } else if (name.endswith("_16")) {
-        size = 16u;
-      } else if (name.endswith("_32")) {
-        size = 32u;
-      } else if (name.endswith("_64")) {
-        size = 64u;
-      } else if (name.endswith("_f32")) {
-        size = 32u;
-      } else if (name.endswith("_f64")) {
-        size = 64u;
-      } else if (name.endswith("_f80")) {
-        size = 80u;
-      } else if (name.endswith("_f128")) {
-        size = 128u;
-      } else {
-        LOG(FATAL) << "Unsupported memory read intrinsic: "
-                   << remill::LLVMThingToString(val);
-      }
+      op = CreateMemoryRead(val, SizeFromSuffix(name));
 
-      op = CreateMemoryRead(val, size);
+    } else if (name.startswith("__remill_undefined_")) {
+      op = impl->undefs.Create(SizeFromSuffix(name));
 
     } else if (name.startswith("__remill_write_memory_")) {
       LOG(FATAL) << "Memory write intrinsics not yet supported";
+
     } else {
       LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(val);
+    }
+  }
+
+  void VisitSelect(llvm::Function *func, llvm::Use &, llvm::Instruction *val) {
+    auto &op = val_to_op[val];
+    if (op) {
+      return;
+    }
+
+    const auto sel = llvm::dyn_cast<llvm::SelectInst>(val);
+    const auto cond_val = sel->getCondition();
+    const auto true_val = sel->getTrueValue();
+    const auto false_val = sel->getFalseValue();
+
+    auto cond_op = val_to_op[cond_val];
+    CHECK_NOTNULL(cond_op);
+
+    const auto num_bits = static_cast<unsigned>(
+        dl.getTypeSizeInBits(val->getType()));
+
+    // The condition is undefined, that means we aren't selecting either value,
+    // unfortunately :-(
+    if (cond_op->op_code == Operation::kUndefined) {
+      op = impl->undefs.Create(static_cast<unsigned>(num_bits));
+
+    // Condition is defined.
+    } else {
+      auto true_op = val_to_op[true_val];
+      auto false_op = val_to_op[false_val];
+      CHECK_NOTNULL(true_val);
+      CHECK_NOTNULL(false_op);
+      CHECK_EQ(num_bits, true_op->size);
+      CHECK_EQ(num_bits, false_op->size);
+
+      // Both selected values are undefined, thus the result is undefined.
+      if (true_op->op_code == Operation::kUndefined &&
+          false_op->op_code == Operation::kUndefined) {
+        op = true_op;
+        return;
+      }
+
+      op = impl->llvm_insts.Create(val);
+      op->operands.AddUse(cond_op);
+
+      // True side is undefined; convert it into a defined value that is not
+      // the same as the False side.
+      if (true_op->op_code == Operation::kUndefined) {
+        auto not_false_op = impl->nots.Create(num_bits);
+        not_false_op->operands.AddUse(false_op);
+
+        op->operands.AddUse(not_false_op);
+        op->operands.AddUse(false_op);
+
+      // False side is undefined; convert it into a defined value that is not
+      // the same as the True side.
+      } else if (false_op->op_code == Operation::kUndefined) {
+        auto not_true_op = impl->nots.Create(num_bits);
+        not_true_op->operands.AddUse(true_op);
+
+        op->operands.AddUse(true_op);
+        op->operands.AddUse(not_true_op);
+
+      // Neither is undefined, yay!
+      } else {
+        op->operands.AddUse(true_op);
+        op->operands.AddUse(false_op);
+      }
     }
   }
 
@@ -252,9 +348,17 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     CHECK_NOTNULL(lhs_op);
     CHECK_NOTNULL(rhs_op);
 
-    op = impl->llvm_insts.Create(val);
-    op->operands.AddUse(lhs_op);
-    op->operands.AddUse(rhs_op);
+    // Fold undefined values.
+    if (lhs_op->op_code == Operation::kUndefined ||
+        rhs_op->op_code == Operation::kUndefined) {
+      const auto num_bits = dl.getTypeSizeInBits(val->getType());
+      op = impl->undefs.Create(static_cast<unsigned>(num_bits));
+
+    } else {
+      op = impl->llvm_insts.Create(val);
+      op->operands.AddUse(lhs_op);
+      op->operands.AddUse(rhs_op);
+    }
   }
 
   void VisitUnaryOperator(llvm::Function *func, llvm::Use &,
@@ -268,8 +372,13 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     auto op0 = val_to_op[op_val];
     CHECK_NOTNULL(op0);
 
-    op = impl->llvm_insts.Create(val);
-    op->operands.AddUse(op0);
+    if (op0->op_code == Operation::kUndefined) {
+      const auto num_bits = dl.getTypeSizeInBits(val->getType());
+      op = impl->undefs.Create(static_cast<unsigned>(num_bits));
+    } else {
+      op = impl->llvm_insts.Create(val);
+      op->operands.AddUse(op0);
+    }
   }
 
   void VisitAPInt(llvm::Constant *val, llvm::APInt ap_val) {
@@ -300,6 +409,16 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     bits_op = impl->constants.Create(std::move(bits_str),
                                      static_cast<unsigned>(num_bits));
     op = bits_op;
+  }
+
+  void VisitUndefined(llvm::Function *, llvm::Use &, llvm::UndefValue *val) {
+    auto &op = val_to_op[val];
+    if (op) {
+      return;
+    }
+
+    const auto num_bits = dl.getTypeSizeInBits(val->getType());
+    op = impl->undefs.Create(static_cast<unsigned>(num_bits));
   }
 
   void VisitConstantInt(llvm::Function *, llvm::Use &, llvm::ConstantInt *val) {
