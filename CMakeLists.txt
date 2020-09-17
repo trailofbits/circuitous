@@ -66,6 +66,7 @@ target_include_directories(circuitous-settings INTERFACE
 
 target_link_libraries(circuitous-settings INTERFACE
     remill
+    ${LLVM_LIBRARIES}
 )
 
 add_library(circuitous-util STATIC
@@ -142,7 +143,6 @@ target_link_libraries(circuitous PUBLIC
     circuitous-util
     circuitous-settings
     circuitous-transforms
-    ${LLVM_LIBRARIES}
 )
 
 #
