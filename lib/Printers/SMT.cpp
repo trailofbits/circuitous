@@ -31,6 +31,7 @@ class IRToSMTVisitor : public UniqueVisitor<IRToSMTVisitor> {
   void VisitInputRegister(InputRegister *op);
   void VisitOutputRegister(OutputRegister *op);
   void VisitConstant(Constant *op);
+  void VisitUndefined(Undefined *op);
   void VisitLLVMOperation(LLVMOperation *op);
   void VisitExtract(Extract *op);
   void VisitConcat(Concat *op);
@@ -112,6 +113,14 @@ void IRToSMTVisitor::VisitConstant(Constant *op) {
   InsertZ3Expr(op, z3_ctx.bv_val(op->size, bits.get()));
 }
 
+void IRToSMTVisitor::VisitUndefined(Undefined *op) {
+  DLOG(INFO) << "VisitUndefined: " << op->Name();
+  if (z3_expr_map.count(op)) {
+    return;
+  }
+  InsertZ3Expr(op, z3_ctx.bv_const("Undef", op->size));
+}
+
 void IRToSMTVisitor::VisitLLVMOperation(LLVMOperation *op) {
   DLOG(INFO) << "VisitLLVMOperation: " << op->Name();
   if (z3_expr_map.count(op)) {
@@ -129,6 +138,12 @@ void IRToSMTVisitor::VisitLLVMOperation(LLVMOperation *op) {
       auto lhs = GetZ3Expr(op->operands[0]);
       auto rhs = GetZ3Expr(op->operands[1]);
       InsertZ3Expr(op, lhs - rhs);
+    } break;
+
+    case llvm::BinaryOperator::Mul: {
+      auto lhs = GetZ3Expr(op->operands[0]);
+      auto rhs = GetZ3Expr(op->operands[1]);
+      InsertZ3Expr(op, lhs * rhs);
     } break;
 
     case llvm::BinaryOperator::And: {
@@ -183,6 +198,10 @@ void IRToSMTVisitor::VisitLLVMOperation(LLVMOperation *op) {
 
         case llvm::CmpInst::ICMP_SLT: {
           result = z3::slt(lhs, rhs);
+        } break;
+
+        case llvm::CmpInst::ICMP_UGT: {
+          result = z3::ugt(lhs, rhs);
         } break;
 
         case llvm::CmpInst::ICMP_EQ: {
