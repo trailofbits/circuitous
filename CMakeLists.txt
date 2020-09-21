@@ -5,6 +5,7 @@ cmake_minimum_required(VERSION 3.2)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/settings.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
 
 FindAndSelectClangCompiler()
 
@@ -17,6 +18,7 @@ if("${PLATFORM_NAME}" STREQUAL "windows")
 endif()
 
 find_package(remill REQUIRED ${REMILL_FINDPACKAGE_HINTS})
+
 
 #
 # tool target settings
