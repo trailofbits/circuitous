@@ -5,6 +5,7 @@ cmake_minimum_required(VERSION 3.2)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/settings.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake")
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/modules")
 
 FindAndSelectClangCompiler()
 
@@ -13,17 +14,35 @@ FindAndSelectClangCompiler()
 #
 
 # remill
-if(NOT TARGET remill)
-  if("${PLATFORM_NAME}" STREQUAL "windows")
-    set(REMILL_FINDPACKAGE_HINTS HINTS "${CMAKE_INSTALL_PREFIX}/remill/lib")
-  endif()
-
-  find_package(remill REQUIRED ${REMILL_FINDPACKAGE_HINTS})
+if("${PLATFORM_NAME}" STREQUAL "windows")
+set(REMILL_FINDPACKAGE_HINTS HINTS "${CMAKE_INSTALL_PREFIX}/remill/lib")
 endif()
+
+find_package(remill REQUIRED ${REMILL_FINDPACKAGE_HINTS})
+
+# llvm
+find_package(LLVM REQUIRED CONFIG HINTS ${FINDPACKAGE_LLVM_HINTS})
+
+string(REPLACE "." ";" LLVM_VERSION_LIST ${LLVM_PACKAGE_VERSION})
+list(GET LLVM_VERSION_LIST 0 LLVM_MAJOR_VERSION)
+list(GET LLVM_VERSION_LIST 1 LLVM_MINOR_VERSION)
+set(REMILL_LLVM_VERSION "${LLVM_MAJOR_VERSION}.${LLVM_MINOR_VERSION}")
+
+# Go find only the static libraries of LLVM, and link against those.
+foreach(LLVM_LIB IN LISTS LLVM_AVAILABLE_LIBS)
+  get_target_property(LLVM_LIB_TYPE ${LLVM_LIB} TYPE)
+  if(LLVM_LIB_TYPE STREQUAL "STATIC_LIBRARY")
+    list(APPEND LLVM_LIBRARIES "${LLVM_LIB}")
+  endif()
+endforeach()
+
+# These are out-of-order in `LLVM_AVAILABLE_LIBS` and should always be last.
+list(REMOVE_ITEM LLVM_LIBRARIES LLVMCore LLVMSupport)
+list(APPEND LLVM_LIBRARIES LLVMCore LLVMSupport)
 
 # z3
 set(LLVM_Z3_INSTALL_DIR "${Z3_INSTALL_PREFIX}")
-find_package(Z3 4.7.1 REQUIRED MODULE)
+find_package(Z3 4.7.1 MODULE)
 
 #
 # tool target settings
@@ -43,12 +62,11 @@ target_compile_options(circuitous-settings INTERFACE
 
 target_include_directories(circuitous-settings INTERFACE
    "${CMAKE_CURRENT_SOURCE_DIR}/include"
-   ${Z3_INCLUDE_DIR}
 )
 
 target_link_libraries(circuitous-settings INTERFACE
     remill
-    ${Z3_LIBRARIES}
+    ${LLVM_LIBRARIES}
 )
 
 add_library(circuitous-util STATIC

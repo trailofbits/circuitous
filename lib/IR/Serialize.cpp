@@ -6,13 +6,14 @@
 #include <circuitous/IR/IR.h>
 #include <glog/logging.h>
 
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
 
-#if 1
+#if 0
 #  define DEBUG_WRITE(str) \
     do { \
       for (auto i = 0u; str[i]; ++i) { \
@@ -163,7 +164,6 @@ class SerializeVisitor : public Visitor<SerializeVisitor> {
   HashVisitor hasher;
 };
 
-
 class DeserializeVisitor {
  public:
   explicit DeserializeVisitor(std::istream &is_, Circuit *circuit_)
@@ -211,7 +211,7 @@ class DeserializeVisitor {
 
       if (!found_op) {
         hash_to_ops.emplace(hash, op);
-      } else {
+      } else if (found_op != op) {
         op->ReplaceAllUsesWith(found_op);
         op = found_op;
       }
@@ -307,16 +307,6 @@ class DeserializeVisitor {
     }
   }
 
-  Constant *DecodeConstant(void) {
-    unsigned size = 0;
-    std::string bits;
-    DEBUG_READ("{CONST:");
-    Read(size);
-    Read(bits);
-    DEBUG_READ("}");
-    return circuit->constants.Create(std::move(bits), size);
-  }
-
   InputRegister *DecodeInputRegister(void) {
     unsigned size = 0;
     std::string reg_name;
@@ -325,6 +315,16 @@ class DeserializeVisitor {
     Read(reg_name);
     DEBUG_READ("}");
     return circuit->input_regs.Create(size, std::move(reg_name));
+  }
+
+  Constant *DecodeConstant(void) {
+    unsigned size = 0;
+    std::string bits;
+    DEBUG_READ("{CONST:");
+    Read(size);
+    Read(bits);
+    DEBUG_READ("}");
+    return circuit->constants.Create(std::move(bits), size);
   }
 
   OutputRegister *DecodeOutputRegister(void) {
@@ -390,6 +390,8 @@ class DeserializeVisitor {
     return op; \
   }
 
+  DECODE_GENERIC(Undefined, undefs)
+  DECODE_GENERIC(Not, nots)
   DECODE_GENERIC(Concat, concats)
   DECODE_GENERIC(PopulationCount, popcounts)
   DECODE_CONDITION(Parity, parities)
@@ -417,6 +419,7 @@ class DeserializeVisitor {
   std::unordered_multimap<uint64_t, Operation *> hash_to_ops;
   HashVisitor hasher;
   std::vector<Operation *> ops;
+  std::vector<Undefined *> undefs;
 };
 
 }  // namespace
