@@ -10,6 +10,7 @@
 
 #include <fstream>
 #include <iostream>
+#include <unordered_map>
 
 DECLARE_string(arch);
 DECLARE_string(os);
@@ -21,6 +22,40 @@ DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "Path to the output Python file.");
 DEFINE_string(smt_out, "", "Path to the output SMT-LIB2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
+DEFINE_bool(append, false, "Append to output IR files, rather than overwriting.");
+
+namespace {
+
+static const std::hash<std::string> kStringHasher;
+
+void TopologySpecificIRPrinter(circuitous::Circuit *circuit) {
+  std::unordered_map<uint64_t, std::ofstream> streams;
+  circuit->Serialize([&] (const std::string &topology) -> std::ostream & {
+    const auto hash = kStringHasher(topology);
+    auto it = streams.find(hash);
+    if (it == streams.end()) {
+      std::stringstream ss;
+      for (auto c : FLAGS_ir_out) {
+        if (c == '%') {
+          ss << std::hex << hash << std::dec;
+        } else {
+          ss << c;
+        }
+      }
+
+      std::ofstream os(
+          ss.str(),
+          std::ios::binary | (FLAGS_append ? std::ios::app : std::ios::trunc));
+      auto added = false;
+      std::tie(it, added) = streams.emplace(hash, std::move(os));
+      CHECK(added);
+    }
+
+    return it->second;
+  });
+}
+
+}  // namespace
 
 int main(int argc, char *argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
@@ -59,8 +94,18 @@ int main(int argc, char *argv[]) {
       FLAGS_ir_out = "/dev/stdout";
     }
 
-    std::ofstream os(FLAGS_ir_out, std::ios::binary | std::ios::trunc);
-    circuit->Serialize(os);
+    // If the output IR file name has a `%` in it, then we'll use that as a
+    // signal that we want to group the output files by topology, so that
+    // later we can optimize within a cohort, then merge, then optimize.
+    if (FLAGS_ir_out.find("%") != std::string::npos) {
+      TopologySpecificIRPrinter(circuit.get());
+
+    } else {
+      std::ofstream os(
+          FLAGS_ir_out,
+          std::ios::binary | (FLAGS_append ? std::ios::app : std::ios::trunc));
+      circuit->Serialize(os);
+    }
   }
 
   if (!FLAGS_dot_out.empty()) {

@@ -4,6 +4,8 @@
 
 #include <circuitous/IR/Hash.h>
 #include <circuitous/IR/IR.h>
+#include <circuitous/Printers.h>
+
 #include <glog/logging.h>
 
 #include <algorithm>
@@ -39,6 +41,10 @@ namespace {
 
 class SerializeVisitor : public Visitor<SerializeVisitor> {
  public:
+  ~SerializeVisitor(void) {
+    os.flush();
+  }
+
   explicit SerializeVisitor(std::ostream &os_) : os(os_), hasher() {}
 
   void Write(Operation *op) {
@@ -202,10 +208,12 @@ class DeserializeVisitor {
 
       auto range = hash_to_ops.equal_range(hash);
       Operation *found_op = nullptr;
-      for (auto it = range.first; it != range.second; ++it) {
-        if (op->Equals(it->second)) {
-          found_op = it->second;
-          break;
+      if (!dynamic_cast<Hint *>(op)) {
+        for (auto it = range.first; it != range.second; ++it) {
+          if (op->Equals(it->second)) {
+            found_op = it->second;
+            break;
+          }
         }
       }
 
@@ -432,6 +440,30 @@ void Circuit::Serialize(std::ostream &os) {
     }
   }
   os.flush();
+}
+
+void Circuit::Serialize(
+    std::function<std::ostream &(const std::string &)> os_opener) {
+
+  std::unordered_map<std::string, SerializeVisitor> visitors;
+
+  std::string topology;
+  for (auto xor_all_op : xor_all) {
+    for (auto op : xor_all_op->operands) {
+      std::stringstream ss;
+      PrintTopology(ss, op, ~0u, +[] (Operation *) { return true; });
+      ss.str().swap(topology);
+
+      auto it = visitors.find(topology);
+      if (it == visitors.end()) {
+        bool added = false;
+        std::tie(it, added) = visitors.emplace(topology, os_opener(topology));
+        CHECK(added);
+      }
+
+      it->second.Write(op);
+    }
+  }
 }
 
 std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {

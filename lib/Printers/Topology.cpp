@@ -65,14 +65,24 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       }
       os << ')';
       break;
-    case Operation::kVerifyInstruction:
+    case Operation::kVerifyInstruction: {
       os << "(&";
+      std::vector<std::string> topos;
+      topos.reserve(op->operands.Size());
       for (auto sub_op : op->operands) {
-        os << ' ';
-        PrintTopology(os, sub_op, max_depth, accept);
+        std::stringstream ss;
+        PrintTopology(ss, sub_op, max_depth, accept);
+        topos.emplace_back(ss.str());
+      }
+
+      std::sort(topos.begin(), topos.end());
+
+      for (const auto &topo : topos) {
+        os << ' ' << topo;
       }
       os << ')';
       break;
+    }
     case Operation::kOnlyOneCondition:
       os << "(^";
       for (auto sub_op : op->operands) {

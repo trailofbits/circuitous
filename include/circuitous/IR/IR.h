@@ -507,6 +507,8 @@ class Circuit : public Condition {
 
   void Serialize(std::ostream &os);
 
+  void Serialize(std::function<std::ostream &(const std::string &)> os_opener);
+
   static std::unique_ptr<Circuit> Deserialize(std::istream &is);
 
   // clang-format off

@@ -15,6 +15,7 @@
 
 namespace circuitous {
 
+
 class User {
  public:
   template <typename T>
@@ -54,6 +55,14 @@ class UseListIterator;
 template <typename T>
 class Use {
  public:
+#ifndef NDEBUG
+  inline ~Use(void) {
+    def_being_used = nullptr;
+    user = nullptr;
+    index = 0u;
+  }
+#endif
+
   T *get(void) const noexcept {
     return def_being_used;
   }
@@ -84,6 +93,7 @@ class Use {
 
   User *user{nullptr};
   T *def_being_used{nullptr};
+  unsigned index{0u};
 };
 
 // An iterator over a use list.
@@ -182,34 +192,25 @@ class UseList {
 
   void Sort(void) noexcept {
     std::sort(uses.begin(), uses.end(), OrderUses);
+    Reindex();
   }
 
   template <typename CB>
   void RemoveIf(CB cb) noexcept {
-    std::stable_sort(uses.begin(), uses.end(), [&cb](Use<T> *a, Use<T> *b) {
-      const int cb_a = cb(a ? a->get() : nullptr);
-      const int cb_b = cb(b ? b->get() : nullptr);
-      return cb_a < cb_b;
-    });
-    auto it = std::find_if(uses.begin(), uses.end(), [&cb](Use<T> *a) {
-      return cb(a ? a->get() : nullptr);
-    });
-
-    if (it != uses.end()) {
-      if (is_weak) {
-        for (auto curr = it; curr != uses.end(); ++curr) {
-          if (auto &use = *curr; use) {
-            if (auto def = use->get(); def) {
-              def->EraseWeakUse(use);
-            }
-            delete use;
-            use = nullptr;
-          }
+    for (auto &use : uses) {
+      if (use) {
+        auto def = use->get();
+        if (cb(def)) {
+          DeleteUse(use);
+          use = nullptr;
         }
       }
-
-      uses.erase(it, uses.end());
     }
+
+    auto it = std::remove_if(uses.begin(), uses.end(),
+                             [](Use<T> *use) { return !use; });
+
+    uses.erase(it, uses.end());
   }
 
   void RemoveNull(void) noexcept {
@@ -217,20 +218,23 @@ class UseList {
   }
 
   void Unique(void) noexcept {
-    const auto end = uses.end();
-    std::sort(uses.begin(), end, OrderUses);
-    auto it = std::unique(uses.begin(), end, UsesEqual);
+    RemoveNull();
+    std::sort(uses.begin(), uses.end(), OrderUses);
 
-    if (is_weak) {
-      for (auto del_it = it; del_it != end; ++del_it) {
-        if (auto &use = *del_it; use) {
-          delete use;
-          use = nullptr;
-        }
+    for (size_t i = 1u, j = 0u, max_i = uses.size(); i < max_i; ++i) {
+      auto &use = uses[i];
+      if (UsesEqual(uses[j], use)) {
+        DeleteUse(use);
+        use = nullptr;
+      } else {
+        j = i;
       }
     }
 
-    uses.erase(it, end);
+    RemoveNull();
+    std::sort(uses.begin(), uses.end(),
+              [](Use<T> *a, Use<T> *b) { return a->index < b->index; });
+    Reindex();
   }
 
   void ClearWithoutErasure(void) {
@@ -272,15 +276,47 @@ class UseList {
   void Clear(void);
 
  private:
+  void DeleteUse(Use<T> *use) {
+    const auto def = use->def_being_used;
+    if (def) {
+      if (is_weak) {
+        def->EraseWeakUse(use);
+        delete use;
+      } else {
+        def->EraseUse(use);
+      }
+
+    } else if (is_weak) {
+      delete use;
+
+    // The def was deleted before all of its uses were deleted.
+    } else {
+      assert(use->index == ~0u);
+      delete use;
+    }
+  }
+
+  void Reindex(void) noexcept {
+    auto i = 0u;
+    for (auto use : uses) {
+      if (use) {
+        use->index = i;
+      }
+      ++i;
+    }
+  }
+
   static bool OrderUses(Use<T> *a, Use<T> *b) {
     if (a && b) {
-      return a->get()->Sort() < b->get()->Sort();
-    } else if (!a && !b) {
-      return false;
-    } else if (!a) {
-      return false;
+      const auto a_def = a->get();
+      const auto b_def = b->get();
+      if (a_def == b_def) {
+        return false;
+      } else {
+        return a_def->Sort() < b_def->Sort();
+      }
     } else {
-      return true;
+      return a < b;
     }
   }
 
@@ -300,6 +336,23 @@ class UseList {
   // NOTE(pag): If this is a weak use list, then the list itself owns the memory
   //            of the uses, not the user.
   const bool is_weak;
+};
+
+template <typename T>
+class WeakUseList : public UseList<T> {
+ public:
+  WeakUseList(WeakUseList<T> &&that) noexcept : UseList<T>(that) {}
+
+  WeakUseList(User *owner_) : UseList<T>(owner_, true /* is_weak */) {}
+
+  void Swap(WeakUseList<T> &that) {
+    this->UseList<T>::Swap(that);
+  }
+
+ private:
+  void Swap(UseList<T> &) {
+    __builtin_unreachable();
+  }
 };
 
 template <typename T>
@@ -371,12 +424,17 @@ class Def {
     }
     weak_uses.clear();
 
+    // If we delete a def and it still has uses, then we don't delete
+    // the uses, and instead let the use lists delete them when they go out
+    // of scope.
     std::vector<std::unique_ptr<Use<T>>> our_uses;
     our_uses.swap(uses);
     for (auto &use : our_uses) {
       assert(use->def_being_used == self);
       use->user = nullptr;
       use->def_being_used = nullptr;
+      use->index = ~0u;
+      use.release();
     }
   }
 
@@ -458,6 +516,7 @@ class Def {
   inline void ForEachUse(CB cb) const {
     for (const auto &use : uses) {
       if (use) {
+        assert(self == use->def_being_used);
         if (auto user = dynamic_cast<U *>(use->user); user) {
           cb(user);
         }
@@ -512,11 +571,10 @@ class Def {
     }
 
     assert(to_remove->def_being_used == self);
-    const auto end = weak_uses.end();
-    auto it = std::remove_if(weak_uses.begin(), end,
+    auto it = std::remove_if(weak_uses.begin(), weak_uses.end(),
                              [=](Use<T> *a) { return a == to_remove; });
-    assert(it != end);
-    weak_uses.erase(it, end);
+    assert(it != weak_uses.end());
+    weak_uses.erase(it, weak_uses.end());
   }
 
   // Points to this definition, just in case of multiple inheritance.
@@ -536,44 +594,29 @@ void UseList<T>::Clear(void) {
   std::vector<Use<T> *> old_uses;
   uses.swap(old_uses);
 
-  if (is_weak) {
-    for (auto use : old_uses) {
-      if (use) {
-        if (use->def_being_used) {
-          assert(use->user == owner);
-          use->def_being_used->EraseWeakUse(use);
-        }
-        use->user = nullptr;
-        use->def_being_used = nullptr;
-        delete use;
-      }
-    }
-  } else {
-    for (auto use : old_uses) {
-      if (use) {
-        assert(use->user == owner);
-        assert(use->def_being_used != nullptr);
-        use->def_being_used->EraseUse(use);
-      }
-    }
+  for (auto use : old_uses) {
+    DeleteUse(use);
   }
 }
 
 template <typename T>
 void UseList<T>::AddUse(Def<T> *def) {
   if (def) {
+    Use<T> *new_use = nullptr;
     if (is_weak) {
-      uses.push_back(def->CreateWeakUse(owner));
+      new_use = def->CreateWeakUse(owner);
     } else {
-      uses.push_back(def->CreateUse(owner));
+      new_use = def->CreateUse(owner);
     }
+    new_use->index = static_cast<unsigned>(uses.size());
+    uses.push_back(new_use);
   }
 }
 
 template <typename T>
 class UseRef {
  public:
-  UseRef(Use<T> *use_) : use(use_) {}
+  UseRef(User *user, Def<T> *def) : use(def ? def->CreateUse(user) : nullptr) {}
 
   void Swap(UseRef<T> &that) {
     if (use && that.use) {
@@ -631,19 +674,24 @@ class WeakUseRef {
     std::swap(use, that.use);
   }
 
+  void Clear(void) {
+    if (const auto use_copy = use; use_copy) {
+      use = nullptr;
+      if (auto def = use_copy->def_being_used; def) {
+        def->EraseWeakUse(use_copy);
+      }
+      delete use;
+    }
+  }
+
+  void ClearWithoutErasure(void) {
+    Clear();
+  }
+
   WeakUseRef(void) = default;
 
   ~WeakUseRef(void) {
-    if (use) {
-      const auto use_copy = use;
-      use = nullptr;
-      if (use_copy->def_being_used) {
-        use_copy->def_being_used->EraseWeakUse(use_copy);
-      }
-      use_copy->user = nullptr;
-      use_copy->def_being_used = nullptr;
-      delete use_copy;
-    }
+    Clear();
   }
 
   T *operator->(void) const noexcept {
@@ -674,6 +722,17 @@ class WeakUseRef {
 template <typename T>
 class DefList {
  public:
+  DefList(DefList<T> &&that) noexcept
+      : owner(that.owner),
+        defs(std::move(that.defs)) {}
+
+  DefList<T> &operator=(DefList<T> &&that) noexcept {
+    Clear();
+    owner = that.owner;
+    defs = std::move(that.defs);
+    return *this;
+  }
+
   DefList(void) = default;
 
   DefList(User *owner_) : owner(owner_) {}
@@ -686,7 +745,7 @@ class DefList {
   }
 
   template <typename D, typename... Args>
-  T *CreateDerived(Args &&... args) {
+  D *CreateDerived(Args &&... args) {
     auto new_def = new D(std::forward<Args>(args)...);
     defs.emplace_back(new_def);
     return new_def;

@@ -29,7 +29,7 @@ Operation::Operation(unsigned op_code_, unsigned size_, Operation *eq_class_)
       op_code(op_code_),
       size(size_),
       operands(this),
-      eq_class(eq_class_->CreateWeakUse(this)) {}
+      eq_class(this, eq_class_) {}
 
 bool Operation::Equals(const Operation *that) const {
   if (this == that || (eq_class && eq_class.get() == that->eq_class.get())) {
@@ -143,7 +143,7 @@ bool LLVMOperation::Equals(const Operation *that_) const {
       }
 
     } else if (1u == num_ops) {
-      return operands[0]->Equals(that->operands[1]);
+      return operands[0]->Equals(that->operands[0]);
     }
   }
   return this->Operation::Equals(that_);
