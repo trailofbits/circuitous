@@ -28,12 +28,15 @@ class EquivalenceClass;
 template <typename Derived>
 class Visitor;
 
+class Circuit;
+
 // A general instruction.
 class Operation : public User, public Def<Operation> {
  public:
   virtual ~Operation(void);
 
   virtual std::string Name(void) const = 0;
+  virtual Operation *CloneWithoutOperands(Circuit *) const = 0;
 
   virtual bool Equals(const Operation *that) const;
 
@@ -101,6 +104,9 @@ class Operation : public User, public Def<Operation> {
 
     // Input to the circuit representing the bits of the instruction.
     kInputInstructionBits,
+
+    // A condition generated as part of optimizations, where a hint is generated.
+    kHintCondition,
 
     // Checks that a computed register's value matches some output value, e.g.:
     //
@@ -218,6 +224,7 @@ class LLVMOperation final : public Operation {
   explicit LLVMOperation(llvm::Instruction *inst_, Operation *eq_class_);
   virtual ~LLVMOperation(void);
 
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
@@ -238,6 +245,8 @@ class Undefined final : public Operation {
       : Operation(Operation::kUndefined, size_, eq_class_) {}
 
   virtual ~Undefined(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 
  protected:
@@ -257,6 +266,7 @@ class Constant final : public Operation {
 
   virtual ~Constant(void);
 
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
@@ -280,6 +290,8 @@ class Not final : public BitOperation {
   FORWARD_CONSTRUCTOR(BitOperation, Not)
 
   virtual ~Not(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -287,6 +299,8 @@ class Not final : public BitOperation {
 class Extract final : public BitOperation {
  public:
   virtual ~Extract(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
@@ -312,6 +326,8 @@ class Concat final : public BitOperation {
   FORWARD_CONSTRUCTOR(BitOperation, Concat)
 
   virtual ~Concat(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -321,6 +337,8 @@ class PopulationCount final : public BitOperation {
  public:
   FORWARD_CONSTRUCTOR(BitOperation, PopulationCount)
   virtual ~PopulationCount(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -329,6 +347,8 @@ class CountLeadingZeroes final : public BitOperation {
  public:
   FORWARD_CONSTRUCTOR(BitOperation, CountLeadingZeroes)
   virtual ~CountLeadingZeroes(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -336,6 +356,8 @@ class CountTrailingZeroes final : public BitOperation {
  public:
   FORWARD_CONSTRUCTOR(BitOperation, CountTrailingZeroes)
   virtual ~CountTrailingZeroes(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -356,6 +378,8 @@ class Parity final : public Condition {
  public:
   CONDITION_CONSTRUCTOR(Parity)
   virtual ~Parity(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -369,6 +393,7 @@ class ReadMemoryCondition final : public Condition {
   };
   CONDITION_CONSTRUCTOR(ReadMemoryCondition)
   virtual ~ReadMemoryCondition(void);
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -376,6 +401,8 @@ class ReadMemoryCondition final : public Condition {
 class InputRegister : public Operation {
  public:
   virtual ~InputRegister(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
@@ -390,6 +417,8 @@ class InputRegister : public Operation {
 class OutputRegister : public Operation {
  public:
   virtual ~OutputRegister(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
@@ -408,6 +437,21 @@ class RegisterCondition final : public Condition {
 
   CONDITION_CONSTRUCTOR(RegisterCondition)
   virtual ~RegisterCondition(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+  std::string Name(void) const override;
+};
+
+// A comparison between the proposed output value of a register, and the
+// output register itself.
+class HintCondition final : public Condition {
+ public:
+  enum : unsigned { kDynamicValue = 0u, kHint = 1u };
+
+  CONDITION_CONSTRUCTOR(HintCondition)
+  virtual ~HintCondition(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -418,6 +462,8 @@ class PreservedCondition final : public Condition {
 
   CONDITION_CONSTRUCTOR(PreservedCondition)
   virtual ~PreservedCondition(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -428,6 +474,8 @@ class CopyCondition final : public Condition {
 
   CONDITION_CONSTRUCTOR(CopyCondition)
   virtual ~CopyCondition(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -436,6 +484,8 @@ class InputInstructionBits : public Operation {
  public:
   FORWARD_CONSTRUCTOR(Operation, InputInstructionBits)
   virtual ~InputInstructionBits(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -445,6 +495,8 @@ class DecodeCondition final : public Condition {
  public:
   CONDITION_CONSTRUCTOR(DecodeCondition)
   virtual ~DecodeCondition(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -453,7 +505,6 @@ class DecodeCondition final : public Condition {
 class Hint final : public Operation {
  public:
   virtual ~Hint(void);
-  std::string Name(void) const override;
 
   inline explicit Hint(unsigned size_)
       : Operation(Operation::kHint, size_),
@@ -462,6 +513,9 @@ class Hint final : public Operation {
   inline explicit Hint(unsigned size_, Operation *eq_class_)
       : Operation(Operation::kHint, size_, eq_class_),
         weak_conditions(this, true) {}
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+  std::string Name(void) const override;
 
   // Weak list of conditions that compare this hint value against what it is
   // hinting.
@@ -474,6 +528,8 @@ class EquivalenceClass final : public Operation {
   FORWARD_CONSTRUCTOR(Operation, EquivalenceClass)
   virtual ~EquivalenceClass(void);
   std::string Name(void) const override;
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   bool Equals(const Operation *that) const override;
 };
 
@@ -481,6 +537,8 @@ class VerifyInstruction final : public Condition {
  public:
   CONDITION_CONSTRUCTOR(VerifyInstruction)
   virtual ~VerifyInstruction(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -488,6 +546,8 @@ class OnlyOneCondition final : public Condition {
  public:
   CONDITION_CONSTRUCTOR(OnlyOneCondition)
   virtual ~OnlyOneCondition(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -498,6 +558,8 @@ class OnlyOneCondition final : public Condition {
 class Circuit : public Condition {
  public:
   virtual ~Circuit(void);
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 
   static std::unique_ptr<Circuit>
@@ -510,6 +572,8 @@ class Circuit : public Condition {
   void Serialize(std::function<std::ostream &(const std::string &)> os_opener);
 
   static std::unique_ptr<Circuit> Deserialize(std::istream &is);
+
+  void RemoveUnused(void);
 
   // clang-format off
 
@@ -535,6 +599,7 @@ class Circuit : public Condition {
   cb(ReadMemoryCondition, memory_reads) \
   cb(OnlyOneCondition, xor_all) \
   cb(Hint, hints) \
+  cb(HintCondition, hint_conds) \
   cb(EquivalenceClass, eq_classes)
 
   // clang-format on

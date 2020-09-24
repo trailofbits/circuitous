@@ -406,6 +406,7 @@ class DeserializeVisitor {
   DECODE_GENERIC(CountLeadingZeroes, clzs)
   DECODE_GENERIC(CountTrailingZeroes, ctzs)
   DECODE_CONDITION(ReadMemoryCondition, memory_reads)
+  DECODE_CONDITION(HintCondition, hint_conds)
   DECODE_CONDITION(RegisterCondition, transitions)
   DECODE_CONDITION(PreservedCondition, preserved_regs)
   DECODE_CONDITION(CopyCondition, copied_regs)
@@ -449,6 +450,8 @@ void Circuit::Serialize(
 
   std::string topology;
   for (auto xor_all_op : xor_all) {
+
+    // Each of `op` should be a single `VerifyInstruction` operation.
     for (auto op : xor_all_op->operands) {
       std::stringstream ss;
       PrintTopology(ss, op, ~0u, +[] (Operation *) { return true; });
@@ -565,12 +568,18 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
     }
   }
 
-#define CLEAR_UNUSED(cls, field) circuit->field.RemoveUnused();
-
-  FOR_EACH_OPERATION(CLEAR_UNUSED)
-#undef CLEAR_UNUSED
+  circuit->RemoveUnused();
 
   return circuit;
+}
+
+void Circuit::RemoveUnused(void) {
+#define CLEAR_UNUSED(cls, field) num_removed += field.RemoveUnused();
+  for (auto num_removed = 1ull; num_removed ; ) {
+    num_removed = 0;
+    FOR_EACH_OPERATION(CLEAR_UNUSED)
+  }
+#undef CLEAR_UNUSED
 }
 
 }  // namespace circuitous

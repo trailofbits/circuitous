@@ -46,6 +46,7 @@ bool ConvertPopCountToParity(Circuit *circuit) {
 
   // Go find uses of the popcount IR node, and then find uses that mask the
   // result with an `AND`.
+  circuit->popcounts.RemoveUnused();
   for (auto i = 0u; i < num_pop_counts; ++i) {
     const auto inst = circuit->popcounts[i];
     inst->ForEachUse<LLVMOperation>([=](LLVMOperation *user) {

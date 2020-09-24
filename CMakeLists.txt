@@ -98,6 +98,7 @@ add_library(circuitous-transforms STATIC
     
     lib/Transforms/StrengthReducePopulationCount.cpp
     lib/Transforms/ConvertPopCountToParity.cpp
+    lib/Transforms/ExtractCommonTopologies.cpp
 )
 
 target_link_libraries(circuitous-transforms PUBLIC

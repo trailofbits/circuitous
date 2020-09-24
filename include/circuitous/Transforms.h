@@ -17,4 +17,8 @@ bool StrengthReducePopulationCount(Circuit *circuit);
 // with a parity node.
 bool ConvertPopCountToParity(Circuit *circuit);
 
+// Look for common topological structures and extract them so that they are
+// shared by multiple different expressions.
+bool ExtractCommonTopologies(Circuit *circuit);
+
 }  // namespace circuitous

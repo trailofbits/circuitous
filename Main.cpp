@@ -22,6 +22,7 @@ DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "Path to the output Python file.");
 DEFINE_string(smt_out, "", "Path to the output SMT-LIB2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
+DEFINE_string(optimizations, "popcount2parity,reducepopcount", "Comma-separated list of optimizations to run");
 DEFINE_bool(append, false, "Append to output IR files, rather than overwriting.");
 
 namespace {
@@ -86,8 +87,22 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
-  ConvertPopCountToParity(circuit.get());
-  StrengthReducePopulationCount(circuit.get());
+  // Optimize the circuit.
+  std::stringstream ss;
+  ss << FLAGS_optimizations;
+  for (std::string opt_name; std::getline(ss, opt_name, ','); ) {
+    if (opt_name == "popcount2parity") {
+      ConvertPopCountToParity(circuit.get());
+
+    } else if (opt_name == "reducepopcount") {
+      StrengthReducePopulationCount(circuit.get());
+
+    } else if (opt_name == "extractcommon") {
+      ExtractCommonTopologies(circuit.get());
+    }
+  }
+
+  circuit->RemoveUnused();
 
   if (!FLAGS_ir_out.empty()) {
     if (FLAGS_ir_out == "-") {
