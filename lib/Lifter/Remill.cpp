@@ -513,7 +513,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
         static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
     Operation *op = nullptr;
     if (arg.hasName() && !arg.getName().empty()) {
-      CHECK(num_inst_parts);
+      // CHECK(num_inst_parts);
 
       // Expected output register.
       if (arg.getName().endswith("_next")) {
@@ -542,7 +542,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
     importer.val_to_op.emplace(&arg, op);
   }
 
-  CHECK_LT(0u, num_inst_parts);
+  // CHECK_LT(0u, num_inst_parts);
   CHECK_LT(0u, num_input_regs);
   CHECK_EQ(num_input_regs, num_output_regs);
 

@@ -52,7 +52,7 @@ struct EncodedInstructionPart {
 
   // Which instruction semantics know the values of these bits. Maps the
   // function name to the value of the bits.
-  std::map<std::string, uint64_t> known_by;
+  std::map<std::string, std::bitset<64>> known_by;
 
   // Which instruction semantics don't know the values of these bits.
   std::set<std::string> unknown_by;
@@ -106,8 +106,8 @@ class CircuitBuilder {
 
   // Breaks apart the instruction encoding into runs of always-known or maybe-
   // known bits.
-  EncodedInstructionParts
-  CreateEncodingTable(const std::vector<InstructionSelection> &isels);
+  // EncodedInstructionParts
+  // CreateEncodingTable(const std::vector<InstructionSelection> &isels);
 
   // Flatten all control flow into pure data-flow inside of a function.
   void FlattenControlFlow(llvm::Function *func,
@@ -158,7 +158,7 @@ class CircuitBuilder {
   unsigned encoded_inst_size{0};
 
   // The number of distinct "parts" to instructions.
-  unsigned num_instruction_parts{0};
+  // unsigned num_instruction_parts{0};
 
   llvm::Type *const i32_type;
   llvm::Type *const bool_type;
