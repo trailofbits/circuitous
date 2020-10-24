@@ -31,15 +31,21 @@ class IRToSMTVisitor : public UniqueVisitor<IRToSMTVisitor> {
   void VisitInputRegister(InputRegister *op);
   void VisitOutputRegister(OutputRegister *op);
   void VisitConstant(Constant *op);
+  void VisitHint(Hint *op);
   void VisitUndefined(Undefined *op);
   void VisitLLVMOperation(LLVMOperation *op);
+  void VisitNot(Not *op);
   void VisitExtract(Extract *op);
   void VisitConcat(Concat *op);
   void VisitParity(Parity *op);
+  void VisitPopulationCount(PopulationCount *op);
+  void VisitCountLeadingZeroes(CountLeadingZeroes *op);
+  void VisitCountTrailingZeroes(CountTrailingZeroes *op);
   void VisitRegisterCondition(RegisterCondition *op);
   void VisitPreservedCondition(PreservedCondition *op);
   void VisitCopyCondition(CopyCondition *op);
   void VisitDecodeCondition(DecodeCondition *op);
+  void VisitHintCondition(HintCondition *op);
   void VisitOnlyOneCondition(OnlyOneCondition *op);
   void VisitVerifyInstruction(VerifyInstruction *op);
   void VisitCircuit(Circuit *op);
@@ -111,6 +117,15 @@ void IRToSMTVisitor::VisitConstant(Constant *op) {
     bits[i] = op->bits[i] == '0' ? false : true;
   }
   InsertZ3Expr(op, z3_ctx.bv_val(op->size, bits.get()));
+}
+
+void IRToSMTVisitor::VisitHint(Hint *op) {
+  DLOG(INFO) << "VisitHint: " << op->Name();
+  if (z3_expr_map.count(op)) {
+    return;
+  }
+  auto name = "Hint" + std::to_string(reinterpret_cast<uint64_t>(op));
+  InsertZ3Expr(op, z3_ctx.bv_const(name.c_str(), op->size));
 }
 
 void IRToSMTVisitor::VisitUndefined(Undefined *op) {
@@ -223,19 +238,12 @@ void IRToSMTVisitor::VisitLLVMOperation(LLVMOperation *op) {
   }
 }
 
-void IRToSMTVisitor::VisitParity(Parity *op) {
-  DLOG(INFO) << "VisitParity: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
-  auto operand = GetZ3Expr(op->operands[0]);
-  auto operand_size = operand.get_sort().bv_size();
-  auto sum = operand.extract(0, 0);
-  for (auto i = 1U; i < operand_size; ++i) {
-    sum = sum ^ operand.extract(i, i);
-  }
-  InsertZ3Expr(op, sum);
+void IRToSMTVisitor::VisitNot(Not *op) {
+  LOG(FATAL) << "VisitNot: " << op->Name();
+  // if (z3_expr_map.count(op)) {
+  //   return;
+  // }
+  // op->Traverse(*this);
 }
 
 void IRToSMTVisitor::VisitExtract(Extract *op) {
@@ -252,7 +260,6 @@ void IRToSMTVisitor::VisitExtract(Extract *op) {
 
 void IRToSMTVisitor::VisitConcat(Concat *op) {
   LOG(FATAL) << "VisitConcat: " << op->Name();
-
   // if (z3_expr_map.count(op)) {
   //   return;
   // }
@@ -261,6 +268,33 @@ void IRToSMTVisitor::VisitConcat(Concat *op) {
   // auto hi = op->high_bit_exc - 1;
   // auto lo = op->low_bit_inc;
   // InsertZ3Expr(op, val.extract(hi, lo));
+}
+
+void IRToSMTVisitor::VisitParity(Parity *op) {
+  DLOG(INFO) << "VisitParity: " << op->Name();
+  if (z3_expr_map.count(op)) {
+    return;
+  }
+  op->Traverse(*this);
+  auto operand = GetZ3Expr(op->operands[0]);
+  auto operand_size = operand.get_sort().bv_size();
+  auto sum = operand.extract(0, 0);
+  for (auto i = 1U; i < operand_size; ++i) {
+    sum = sum ^ operand.extract(i, i);
+  }
+  InsertZ3Expr(op, sum);
+}
+
+void IRToSMTVisitor::VisitPopulationCount(PopulationCount *op) {
+  LOG(FATAL) << "VisitPopulationCount: " << op->Name();
+}
+
+void IRToSMTVisitor::VisitCountLeadingZeroes(CountLeadingZeroes *op) {
+  LOG(FATAL) << "VisitCountLeadingZeroes: " << op->Name();
+}
+
+void IRToSMTVisitor::VisitCountTrailingZeroes(CountTrailingZeroes *op) {
+  LOG(FATAL) << "VisitCountTrailingZeroes: " << op->Name();
 }
 
 void IRToSMTVisitor::VisitRegisterCondition(RegisterCondition *op) {
@@ -318,6 +352,17 @@ void IRToSMTVisitor::VisitOnlyOneCondition(OnlyOneCondition *op) {
     result = result ^ GetZ3Expr(op->operands[i]);
   }
   InsertZ3Expr(op, result);
+}
+
+void IRToSMTVisitor::VisitHintCondition(HintCondition *op) {
+  DLOG(INFO) << "VisitHintCondition: " << op->Name();
+  if (z3_expr_map.count(op)) {
+    return;
+  }
+  op->Traverse(*this);
+  auto real = GetZ3Expr(op->operands[0]);
+  auto hint = GetZ3Expr(op->operands[1]);
+  InsertZ3Expr(op, Z3BVCast(real == hint));
 }
 
 void IRToSMTVisitor::VisitVerifyInstruction(VerifyInstruction *op) {
@@ -466,17 +511,23 @@ z3::expr ElimNot(z3::context &ctx, const z3::expr &e) {
 
 }  // namespace
 
-void PrintSMT(std::ostream &os, Circuit *circuit) {
+void PrintSMT(std::ostream &os, Circuit *circuit, bool bit_blast) {
   z3::context ctx;
   circuitous::IRToSMTVisitor smt(ctx);
+  z3::solver solver(ctx);
+  // Convert `circuit` to a z3::expr
   auto expr = smt.GetOrCreateZ3Expr(circuit);
-
+  // Dump to SMT-LIBv2 as is
+  if (!bit_blast) {
+    solver.add(expr);
+    os << solver.to_smt2();
+    return;
+  }
   // Declare tactical
   z3::tactic to_sat(z3::tactic(ctx, "ctx-simplify") &
                     z3::tactic(ctx, "propagate-bv-bounds") &
                     z3::tactic(ctx, "solve-eqs") & z3::tactic(ctx, "simplify") &
                     z3::tactic(ctx, "bit-blast"));
-
   // Apply tactics
   z3::goal goal(ctx);
   goal.add(expr);
@@ -487,8 +538,7 @@ void PrintSMT(std::ostream &os, Circuit *circuit) {
   expr = EqToXnor(ctx, expr);
   expr = ElimNot(ctx, expr);
   expr = OrToAnd(ctx, expr);
-  // Dump to SMT-LIBv2
-  z3::solver solver(ctx);
+  // Dump to SMT-LIBv2 as a SAT problem
   solver.add(expr);
   os << solver.to_smt2();
 }

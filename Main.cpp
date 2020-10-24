@@ -86,6 +86,7 @@ int main(int argc, char *argv[]) {
     std::cerr << "Failed to get circuit IR" << std::endl;
     return EXIT_FAILURE;
   }
+  
 
   // Optimize the circuit.
   std::stringstream ss;
@@ -147,7 +148,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::ofstream os(FLAGS_smt_out);
-    circuitous::PrintSMT(os, circuit.get());
+    circuitous::PrintSMT(os, circuit.get(), false);
   }
 
   if (!FLAGS_json_out.empty()) {
