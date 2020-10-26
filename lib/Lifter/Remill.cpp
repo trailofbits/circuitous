@@ -572,8 +572,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
             continue;
           }
 
-          const auto arg_cmp = llvm::dyn_cast<llvm::CallInst>(arg_use.get());
-          CHECK_NOTNULL(arg_cmp);
+          const auto arg_cmp = llvm::cast<llvm::CallInst>(arg_use.get());
           CHECK(arg_cmp->getCalledFunction()->getName().startswith(
               "__circuitous_icmp_eq_"));
 
