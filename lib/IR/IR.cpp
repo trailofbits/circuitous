@@ -338,7 +338,7 @@ Operation *HintCondition::CloneWithoutOperands(Circuit *circuit) const {
 
 COMMON_METHODS(PreservedCondition)
 STREAM_NAME(PreservedCondition,
-            "PRESERED_REGISTER_CHECK_"
+            "PRESERVED_REGISTER_CHECK_"
                 << dynamic_cast<OutputRegister *>(operands[kOutputRegister])->reg_name << "_"
                 << operands[kOutputRegister]->size)
 
