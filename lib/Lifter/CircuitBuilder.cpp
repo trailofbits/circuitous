@@ -28,7 +28,7 @@ static void ForEachInstructionInBuffer(const remill::Arch::ArchPtr &arch,
 
   remill::Instruction inst;
   for (size_t i = 0u, max_i = buff.size(); i < max_i; inst.Reset()) {
-    auto next_i = std::min(max_i, i + max_inst_size);
+    auto next_i = std::min<size_t>(max_i, i + max_inst_size);
     std::string_view bytes(&(buff.data()[i]), next_i - i);
 
     if (!arch->DecodeInstruction(0, bytes, inst) || !inst.IsValid()) {
@@ -365,74 +365,8 @@ CircuitBuilder::DecodeInstructions(llvm::StringRef buff) {
     }
   });
 
-  // for (auto &group : grouped_insts) {
-
-  //   // Compute known bits.
-  //   const auto encoding_size = group.instructions.back().bytes.size() * 8u;
-  //   for (auto i = 0u; i < encoding_size; ++i) {
-  //     bool all_same = true;
-  //     for (auto j = 1u; j < group.encodings.size(); ++j) {
-  //       const auto &prev_encoding = group.encodings[j - 1u];
-  //       const auto &curr_encoding = group.encodings[j];
-  //       if (prev_encoding.test(i) != curr_encoding.test(i)) {
-  //         all_same = false;
-  //         break;
-  //       }
-  //     }
-  //     group.known_bits.set(i, all_same);
-  //   }
-  // }
-
   return grouped_insts;
 }
-
-// Breaks apart the instruction encoding into runs of always-known or maybe-
-// known bits.
-// EncodedInstructionParts CircuitBuilder::CreateEncodingTable(
-//     const std::vector<InstructionSelection> &isels) {
-
-//   EncodedInstructionParts parts;
-//   std::map<std::string, std::bitset<64>> known_by;
-//   std::set<std::string> unknown_by;
-
-//   for (auto i = 0u; i < encoded_inst_size; ++i) {
-//     known_by.clear();
-//     unknown_by.clear();
-
-//     for (const auto &group : isels) {
-//       const auto isel = IselName(group.instructions.back());
-//       if (group.known_bits.test(i)) {
-//         known_by[isel] = group.encodings.back().test(i);
-//       } else {
-//         unknown_by.insert(isel);
-//       }
-//     }
-
-//     // Extend the prior encoded part, which has the same known-by subset.
-//     if (!parts.empty() && parts.back().num_bits < 64 &&
-//         parts.back().unknown_by == unknown_by) {
-//       auto &prev_part = parts.back();
-//       prev_part.num_bits += 1u;
-
-//       for (auto [func, val] : known_by) {
-//         auto &prev_val = prev_part.known_by[func];
-//         prev_val[i % 64] = val != 0;
-//       }
-
-//     } else {
-//       parts.emplace_back();
-//       auto &part = parts.back();
-//       part.known_by.swap(known_by);
-//       part.unknown_by.swap(unknown_by);
-//       part.offset = i;
-//       part.num_bits = 1u;
-//     }
-//   }
-
-//   std::reverse(parts.begin(), parts.end());
-
-//   return parts;
-// }
 
 // Flatten all control flow into pure data-flow inside of a function.
 void CircuitBuilder::FlattenControlFlow(
@@ -709,14 +643,6 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
 
   std::vector<llvm::Type *> param_types;
 
-  // const auto encoded_parts = CreateEncodingTable(isels);
-  // num_instruction_parts = static_cast<unsigned>(encoded_parts.size());
-
-  // The first several parameters will be encoded instruction parts.
-  // for (const auto &part : encoded_parts) {
-  //   param_types.push_back(llvm::Type::getIntNTy(context, part.num_bits));
-  // }
-
   // First parameter is the bit enconding of the instruction being verified
   param_types.push_back(ir.getIntNTy(kMaxNumInstBits));
 
@@ -786,8 +712,6 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
   // instructions given a verified instruction.
   std::vector<llvm::Value *> params;
 
-  // std::vector<llvm::Value *> eq_params;
-
   // Vector of return values, one for each result of doing a
   // `__circuitous_verify_decode`.
   std::vector<llvm::Value *> verified_insts;
@@ -798,31 +722,6 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
     const auto inst_name = IselName(isel.instructions.back());
 
     params.clear();
-
-    // Do a decode check of the known bits for this ISEL.
-    // auto num_known_parts = 0u;
-    // for (auto &encoded_part : encoded_parts) {
-    //   const auto actual_bits = remill::NthArgument(circuit0_func, i++);
-    //   const auto encoded_part_type = actual_bits->getType();
-    //   const auto encoded_part_bits_it = encoded_part.known_by.find(inst_name);
-    //   if (encoded_part_bits_it != encoded_part.known_by.end()) {
-    //     eq_params.clear();
-    //     eq_params.push_back(llvm::ConstantInt::get(
-    //         encoded_part_type, encoded_part_bits_it->second.to_ullong(), false));
-    //     eq_params.push_back(actual_bits);
-    //     params.push_back(
-    //         llvm::CallInst::Create(BitMatcherFunc(encoded_part_type), eq_params,
-    //                                llvm::None, "", exit_block));
-    //     ++num_known_parts;
-    //   } else {
-    //     params.push_back(nullptr);
-    //   }
-    // }
-
-    // CHECK_EQ(params.size(), num_instruction_parts);
-    // LOG_IF(FATAL, !num_known_parts)
-    //     << "The encoding of the instruction " << inst_name
-    //     << " is not distinguishable by any specific bits";
 
     // Add one basic block per lifted instruction. Each block allocates a
     // separate state structure.
@@ -867,38 +766,6 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
       // and are common across all instructions sharing the same ISEL.
       // params.resize(num_instruction_parts);
       params.clear();
-
-      // Next few arguments are the "unknown" parts, i.e. specific to this
-      // encoding of this ISEL.
-      // const auto &inst_encoding = isel.encodings[i];
-      // auto p = 0u;
-      // for (auto &encoded_part : encoded_parts) {
-      //   const auto actual_bits = remill::NthArgument(circuit0_func, p);
-      //   auto &param = params[p++];
-      //   if (!encoded_part.unknown_by.count(inst_name)) {
-      //     CHECK_NOTNULL(param);
-      //     continue;
-      //   }
-
-      //   CHECK_LE(encoded_part.num_bits, 64);
-
-      //   uint64_t expected_val = {};
-      //   for (auto b = 0u; b < encoded_part.num_bits; ++b) {
-      //     expected_val <<= 1ull;
-      //     if (inst_encoding.test(encoded_part.offset + b)) {
-      //       expected_val |= 1ull;
-      //     }
-      //   }
-
-      //   const auto encoded_part_type = actual_bits->getType();
-
-      //   eq_params.clear();
-      //   eq_params.push_back(
-      //       llvm::ConstantInt::get(encoded_part_type, expected_val));
-      //   eq_params.push_back(actual_bits);
-      //   param = llvm::CallInst::Create(BitMatcherFunc(encoded_part_type),
-      //                                  eq_params, llvm::None, "", exit_block);
-      // }
 
       // Add instruction encoding check
       {
@@ -1185,11 +1052,6 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
 
   std::vector<llvm::Value *> args;
 
-  // Encoding of instruction to be verified.
-  // for (i = 0u; i < num_instruction_parts; ++i) {
-  //   args.push_back(remill::NthArgument(circuit1_func, i));
-  // }
-
   args.push_back(remill::NthArgument(circuit1_func, 0));
 
   // Build up an argument list to call circuit0_func from circuit1_func. We
@@ -1256,10 +1118,6 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
   // to reflect the new register transfer comparisons.
   ForEachVerification(circuit1_func, [&](llvm::CallInst *call_inst) {
     args.clear();
-
-    // for (i = 0u; i < num_instruction_parts; ++i) {
-    //   args.push_back(call_inst->getArgOperand(i));
-    // }
     args.push_back(call_inst->getArgOperand(0));
     for (i = 0u; i < regs.size(); ++i) {
       const auto reg = regs[i];
