@@ -18,16 +18,16 @@ using OpUseList = std::vector<std::pair<Operation *, const VerifyList *>>;
 
 static void SortOpUseList(OpUseList &op_uses) {
   std::sort(op_uses.begin(), op_uses.end(),
-            [] (std::pair<Operation *, const VerifyList *> a,
-                std::pair<Operation *, const VerifyList *> b) {
+            [](std::pair<Operation *, const VerifyList *> a,
+               std::pair<Operation *, const VerifyList *> b) {
               return a.first < b.first;
             });
 }
 
 // Merge leaf nodes (input registers, constants, or hints).
-static Operation *MergeLeaves(
-    Circuit *circuit, const OpUseList &op_uses,
-    std::unordered_map<Operation *, Operation *> &seen) {
+static Operation *
+MergeLeaves(Circuit *circuit, const OpUseList &op_uses,
+            std::unordered_map<Operation *, Operation *> &seen) {
 
   const auto first_op = op_uses[0].first;
   auto found_unequal = false;
@@ -82,9 +82,9 @@ static Operation *MergeLeaves(
 //
 // The degenerate case is that some of these values are registers and some are
 // consts, in which case we can handle all of them with hints.
-static Operation *MergeWithALU(
-    Circuit *circuit, const OpUseList &op_uses,
-    std::unordered_map<Operation *, Operation *> &seen) {
+static Operation *
+MergeWithALU(Circuit *circuit, const OpUseList &op_uses,
+             std::unordered_map<Operation *, Operation *> &seen) {
 
   // If all of the the operations in `op_uses` are leaf nodes then we can treat
   // them uniformly with `MergeLeaves`.
@@ -94,11 +94,8 @@ static Operation *MergeWithALU(
     switch (op->op_code) {
       case Operation::kInputRegister:
       case Operation::kHint:
-      case Operation::kConstant:
-        break;
-      default:
-        all_leaves = false;
-        break;
+      case Operation::kConstant: break;
+      default: all_leaves = false; break;
     }
   }
 
@@ -109,9 +106,8 @@ static Operation *MergeWithALU(
   return nullptr;
 }
 
-static Operation *Merge(
-    Circuit *circuit, const OpUseList &op_uses,
-    std::unordered_map<Operation *, Operation *> &seen) {
+static Operation *Merge(Circuit *circuit, const OpUseList &op_uses,
+                        std::unordered_map<Operation *, Operation *> &seen) {
 
   // Figure out if we need to generate an ALU, or if we're going to hit some
   // cases that we definitely can't merge.
@@ -149,8 +145,7 @@ static Operation *Merge(
 
   // All of the operations are uniform. If we're dealing with a leaf node
   // then we'll go and merge them using a different approach.
-  if (op_code == Operation::kInputRegister ||
-      op_code == Operation::kHint ||
+  if (op_code == Operation::kInputRegister || op_code == Operation::kHint ||
       op_code == Operation::kConstant) {
     return MergeLeaves(circuit, op_uses, seen);
   }
@@ -161,15 +156,14 @@ static Operation *Merge(
 
   switch (op_code) {
 #define CASE(cls, field) \
-    case Operation::k ## cls: \
-      merged_op = first_op->CloneWithoutOperands(circuit); \
-      break;
+  case Operation::k##cls: \
+    merged_op = first_op->CloneWithoutOperands(circuit); \
+    break;
 
     FOR_EACH_OPERATION(CASE)
 #undef CASE
 
-    default:
-      return nullptr;
+    default: return nullptr;
   }
 
   // Go cache that we've processed these nodes before we go and actually
@@ -201,9 +195,9 @@ static Operation *Merge(
 // the operations may differ, thus requiring the invention of an ALU node, or
 // where a leaf (e.g. a register uses) is different, thus requiring the
 // invention of a HINT value.
-static bool ExtractCommonTopologies(
-    Circuit *circuit, const OpUseList &op_uses,
-    std::unordered_map<Operation *, Operation *> &seen) {
+static bool
+ExtractCommonTopologies(Circuit *circuit, const OpUseList &op_uses,
+                        std::unordered_map<Operation *, Operation *> &seen) {
 
   if (op_uses.size() <= 1u) {
     return false;
@@ -238,15 +232,14 @@ bool ExtractCommonTopologies(Circuit *circuit) {
     for (auto op : verification->operands) {
       if (dynamic_cast<RegisterCondition *>(op) ||
           dynamic_cast<HintCondition *>(op)) {
-        const auto value = \
+        const auto value =
             op->operands[RegisterCondition::kDynamicRegisterValue];
 
         // NOTE(pag): Here we exclude "trivial" transitions, i.e. where the
         //            transition value is a single thing and not actually
         //            and expression. These should be handled by another
         //            transformer somewhere.
-        if (!dynamic_cast<Hint *>(value) &&
-            !dynamic_cast<Undefined *>(value) &&
+        if (!dynamic_cast<Hint *>(value) && !dynamic_cast<Undefined *>(value) &&
             !dynamic_cast<InputRegister *>(value) &&
             !dynamic_cast<Constant *>(value)) {
           values_by_inst[value].push_back(verification);
@@ -267,7 +260,8 @@ bool ExtractCommonTopologies(Circuit *circuit) {
   std::unordered_map<std::string, OpUseList> val_buckets;
   for (const auto &[val, verifications] : values_by_inst) {
     std::stringstream ss;
-    PrintTopology(ss, val, ~0u, +[] (Operation *op) { return true; });
+    PrintTopology(
+        ss, val, ~0u, +[](Operation *op) { return true; });
     val_buckets[ss.str()].emplace_back(val, &verifications);
   }
 

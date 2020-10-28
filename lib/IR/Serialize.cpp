@@ -5,7 +5,6 @@
 #include <circuitous/IR/Hash.h>
 #include <circuitous/IR/IR.h>
 #include <circuitous/Printers.h>
-
 #include <glog/logging.h>
 
 #include <algorithm>
@@ -454,7 +453,8 @@ void Circuit::Serialize(
     // Each of `op` should be a single `VerifyInstruction` operation.
     for (auto op : xor_all_op->operands) {
       std::stringstream ss;
-      PrintTopology(ss, op, ~0u, +[] (Operation *) { return true; });
+      PrintTopology(
+          ss, op, ~0u, +[](Operation *) { return true; });
       ss.str().swap(topology);
 
       auto it = visitors.find(topology);
@@ -575,7 +575,7 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
 
 void Circuit::RemoveUnused(void) {
 #define CLEAR_UNUSED(cls, field) num_removed += field.RemoveUnused();
-  for (auto num_removed = 1ull; num_removed ; ) {
+  for (auto num_removed = 1ull; num_removed;) {
     num_removed = 0;
     FOR_EACH_OPERATION(CLEAR_UNUSED)
   }

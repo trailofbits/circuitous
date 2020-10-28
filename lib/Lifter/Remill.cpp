@@ -195,8 +195,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     } else if (name.endswith("_f128")) {
       return 128u;
     } else {
-      LOG(FATAL) << "Unsupported memory read intrinsic: "
-                 << name.str();
+      LOG(FATAL) << "Unsupported memory read intrinsic: " << name.str();
       return 0u;
     }
   }
@@ -281,8 +280,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     auto cond_op = val_to_op[cond_val];
     CHECK_NOTNULL(cond_op);
 
-    const auto num_bits = static_cast<unsigned>(
-        dl.getTypeSizeInBits(val->getType()));
+    const auto num_bits =
+        static_cast<unsigned>(dl.getTypeSizeInBits(val->getType()));
 
     // The condition is undefined, that means we aren't selecting either value,
     // unfortunately :-(
@@ -513,6 +512,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
         static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
     Operation *op = nullptr;
     if (arg.hasName() && !arg.getName().empty()) {
+
       // CHECK(num_inst_parts);
 
       // Expected output register.

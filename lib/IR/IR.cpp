@@ -319,38 +319,40 @@ Operation *OutputRegister::CloneWithoutOperands(Circuit *) const {
 }
 
 COMMON_METHODS(RegisterCondition)
-STREAM_NAME(RegisterCondition,
-            "OUTPUT_REGISTER_CHECK_"
-                << dynamic_cast<OutputRegister *>(operands[kOutputRegister])->reg_name << "_"
-                << operands[kOutputRegister]->size)
+STREAM_NAME(
+    RegisterCondition,
+    "OUTPUT_REGISTER_CHECK_"
+        << dynamic_cast<OutputRegister *>(operands[kOutputRegister])->reg_name
+        << "_" << operands[kOutputRegister]->size)
 
 Operation *RegisterCondition::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->transitions.Create();
 }
 
 COMMON_METHODS(HintCondition)
-STREAM_NAME(HintCondition,
-            "HINT_CHECK_" << operands[kHint]->size)
+STREAM_NAME(HintCondition, "HINT_CHECK_" << operands[kHint]->size)
 
 Operation *HintCondition::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->hint_conds.Create();
 }
 
 COMMON_METHODS(PreservedCondition)
-STREAM_NAME(PreservedCondition,
-            "PRESERVED_REGISTER_CHECK_"
-                << dynamic_cast<OutputRegister *>(operands[kOutputRegister])->reg_name << "_"
-                << operands[kOutputRegister]->size)
+STREAM_NAME(
+    PreservedCondition,
+    "PRESERVED_REGISTER_CHECK_"
+        << dynamic_cast<OutputRegister *>(operands[kOutputRegister])->reg_name
+        << "_" << operands[kOutputRegister]->size)
 
 Operation *PreservedCondition::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->transitions.Create();
 }
 
 COMMON_METHODS(CopyCondition)
-STREAM_NAME(CopyCondition,
-            "COPIED_REGISTER_CHECK_"
-                << dynamic_cast<OutputRegister *>(operands[kOutputRegister])->reg_name << "_"
-                << operands[kOutputRegister]->size)
+STREAM_NAME(
+    CopyCondition,
+    "COPIED_REGISTER_CHECK_"
+        << dynamic_cast<OutputRegister *>(operands[kOutputRegister])->reg_name
+        << "_" << operands[kOutputRegister]->size)
 
 Operation *CopyCondition::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->transitions.Create();
@@ -405,8 +407,7 @@ Circuit::~Circuit(void) {
 RETURN_NAME(Circuit, "RESULT")
 
 Operation *Circuit::CloneWithoutOperands(Circuit *) const {
-  LOG(FATAL)
-      << "Not allowed to clone the circuit";
+  LOG(FATAL) << "Not allowed to clone the circuit";
   return nullptr;
 }
 

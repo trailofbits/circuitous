@@ -22,8 +22,10 @@ DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "Path to the output Python file.");
 DEFINE_string(smt_out, "", "Path to the output SMT-LIB2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
-DEFINE_string(optimizations, "popcount2parity,reducepopcount", "Comma-separated list of optimizations to run");
-DEFINE_bool(append, false, "Append to output IR files, rather than overwriting.");
+DEFINE_string(optimizations, "popcount2parity,reducepopcount",
+              "Comma-separated list of optimizations to run");
+DEFINE_bool(append, false,
+            "Append to output IR files, rather than overwriting.");
 
 namespace {
 
@@ -31,7 +33,7 @@ static const std::hash<std::string> kStringHasher;
 
 void TopologySpecificIRPrinter(circuitous::Circuit *circuit) {
   std::unordered_map<uint64_t, std::ofstream> streams;
-  circuit->Serialize([&] (const std::string &topology) -> std::ostream & {
+  circuit->Serialize([&](const std::string &topology) -> std::ostream & {
     const auto hash = kStringHasher(topology);
     auto it = streams.find(hash);
     if (it == streams.end()) {
@@ -86,12 +88,12 @@ int main(int argc, char *argv[]) {
     std::cerr << "Failed to get circuit IR" << std::endl;
     return EXIT_FAILURE;
   }
-  
+
 
   // Optimize the circuit.
   std::stringstream ss;
   ss << FLAGS_optimizations;
-  for (std::string opt_name; std::getline(ss, opt_name, ','); ) {
+  for (std::string opt_name; std::getline(ss, opt_name, ',');) {
     if (opt_name == "popcount2parity") {
       ConvertPopCountToParity(circuit.get());
 
