@@ -240,8 +240,7 @@ class Undefined final : public Operation {
   inline explicit Undefined(unsigned size_)
       : Operation(Operation::kUndefined, size_) {}
 
-  inline explicit Undefined(unsigned size_,
-                            Operation *eq_class_)
+  inline explicit Undefined(unsigned size_, Operation *eq_class_)
       : Operation(Operation::kUndefined, size_, eq_class_) {}
 
   virtual ~Undefined(void);

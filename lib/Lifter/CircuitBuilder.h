@@ -5,20 +5,11 @@
 #pragma once
 
 #include <circuitous/IR/IR.h>
-#include <llvm/IR/Instruction.h>
-#include <llvm/IR/Instructions.h>
-#include <llvm/IR/LLVMContext.h>
-#include <llvm/IR/Module.h>
-#include <llvm/Support/MemoryBuffer.h>
 #include <remill/Arch/Arch.h>
-#include <remill/BC/Compat/Error.h>
 #include <remill/BC/IntrinsicTable.h>
 #include <remill/BC/Lifter.h>
 #include <remill/BC/Optimizer.h>
 #include <remill/BC/Util.h>
-
-#include <bitset>
-#include <vector>
 
 namespace circuitous {
 
@@ -39,27 +30,27 @@ struct InstructionSelection {
 
   // Each `1` bit in this bitset represents a bit that is always zero or always
   // one at the same position across all of the encodings in `encodings`.
-  InstructionEncoding known_bits;
+  // InstructionEncoding known_bits;
 };
 
-struct EncodedInstructionPart {
+// struct EncodedInstructionPart {
 
-  // A bit offset in an `InstructionEncoding`.
-  unsigned offset{0};
+//   // A bit offset in an `InstructionEncoding`.
+//   unsigned offset{0};
 
-  // The number of bits spanned by this part in an `InstructionEncoding`.
-  unsigned num_bits{0};
+//   // The number of bits spanned by this part in an `InstructionEncoding`.
+//   unsigned num_bits{0};
 
-  // Which instruction semantics know the values of these bits. Maps the
-  // function name to the value of the bits.
-  std::map<std::string, uint64_t> known_by;
+//   // Which instruction semantics know the values of these bits. Maps the
+//   // function name to the value of the bits.
+//   std::map<std::string, std::bitset<64>> known_by;
 
-  // Which instruction semantics don't know the values of these bits.
-  std::set<std::string> unknown_by;
-};
+//   // Which instruction semantics don't know the values of these bits.
+//   std::set<std::string> unknown_by;
+// };
 
 // Represents the components of an instruction decoding.
-using EncodedInstructionParts = std::vector<EncodedInstructionPart>;
+// using EncodedInstructionParts = std::vector<EncodedInstructionPart>;
 
 enum : unsigned { kMaxNumBytesRead = 16u };
 
@@ -106,8 +97,8 @@ class CircuitBuilder {
 
   // Breaks apart the instruction encoding into runs of always-known or maybe-
   // known bits.
-  EncodedInstructionParts
-  CreateEncodingTable(const std::vector<InstructionSelection> &isels);
+  // EncodedInstructionParts
+  // CreateEncodingTable(const std::vector<InstructionSelection> &isels);
 
   // Flatten all control flow into pure data-flow inside of a function.
   void FlattenControlFlow(llvm::Function *func,
@@ -141,7 +132,7 @@ class CircuitBuilder {
   const std::unique_ptr<llvm::Module> module;
 
  private:
-  llvm::CallInst *FinalXor(llvm::Function *in_func) const;
+  // llvm::CallInst *FinalXor(llvm::Function *in_func) const;
 
   // Update any references we might have held to functions that could be
   // optimized away.
@@ -158,7 +149,7 @@ class CircuitBuilder {
   unsigned encoded_inst_size{0};
 
   // The number of distinct "parts" to instructions.
-  unsigned num_instruction_parts{0};
+  // unsigned num_instruction_parts{0};
 
   llvm::Type *const i32_type;
   llvm::Type *const bool_type;
@@ -176,17 +167,21 @@ class CircuitBuilder {
   //        fail at either the state check step, or the encoding verification
   //        step, and thus the result of XORing all the bits will be `1`, i.e.
   //        that we successfully verified.
-  llvm::Function *xor_all_func{nullptr};
+  //
+  //        NOTE(surovic): This assumption does not hold for certain combinations
+  //        of instruction encodings, input register states and output register
+  //        states. For example, subtraction and addition of 0 will both transfer
+  //        any input register state to and equivalent output register state.
+  //        In this case more than one instruction will be verified and thus
+  //        XORing all inputs will produce `0` or `1` depending on the number of
+  //        successful verifications.
+  llvm::Function *one_of_func{nullptr};
 
   // Verify that an instruction completed a successful state transfer. This
   // has the equivalent meaning of an "all ones" function, except that the
   // first parameter is whether or not we verified the decoding for this
   // instruction's selection.
   llvm::Function *verify_inst_func{nullptr};
-
-  // Verify that we decoded an instruction category/semantic. This
-  // has the equivalent meaning of an "all ones" function
-  llvm::Function *verify_decode_func{nullptr};
 
   // Encodes an instruction by concatenating zero bits with variable bits
   // produced by verified the register state transfer of a given instruction.

@@ -240,6 +240,7 @@ void IRToSMTVisitor::VisitLLVMOperation(LLVMOperation *op) {
 
 void IRToSMTVisitor::VisitNot(Not *op) {
   LOG(FATAL) << "VisitNot: " << op->Name();
+
   // if (z3_expr_map.count(op)) {
   //   return;
   // }
@@ -260,6 +261,7 @@ void IRToSMTVisitor::VisitExtract(Extract *op) {
 
 void IRToSMTVisitor::VisitConcat(Concat *op) {
   LOG(FATAL) << "VisitConcat: " << op->Name();
+
   // if (z3_expr_map.count(op)) {
   //   return;
   // }
@@ -348,9 +350,15 @@ void IRToSMTVisitor::VisitOnlyOneCondition(OnlyOneCondition *op) {
   }
   op->Traverse(*this);
   auto result = GetZ3Expr(op->operands[0]);
+
+  // for (auto i = 1U; i < op->operands.Size(); ++i) {
+  //   result = result ^ GetZ3Expr(op->operands[i]);
+  // }
   for (auto i = 1U; i < op->operands.Size(); ++i) {
-    result = result ^ GetZ3Expr(op->operands[i]);
+    result = z3::shl(result, 1);
+    result = result | GetZ3Expr(op->operands[i]);
   }
+  LOG(FATAL) << "SATAN: " << (((result - 1) & result) == 0).simplify();
   InsertZ3Expr(op, result);
 }
 
@@ -515,11 +523,13 @@ void PrintSMT(std::ostream &os, Circuit *circuit, bool bit_blast) {
   z3::context ctx;
   circuitous::IRToSMTVisitor smt(ctx);
   z3::solver solver(ctx);
+
   // Convert `circuit` to a z3::expr
   auto expr = smt.GetOrCreateZ3Expr(circuit);
+
   // Dump to SMT-LIBv2 as is
   if (!bit_blast) {
-    solver.add(expr);
+    solver.add(expr.simplify());
     os << solver.to_smt2();
     return;
   }
@@ -528,16 +538,19 @@ void PrintSMT(std::ostream &os, Circuit *circuit, bool bit_blast) {
                     z3::tactic(ctx, "propagate-bv-bounds") &
                     z3::tactic(ctx, "solve-eqs") & z3::tactic(ctx, "simplify") &
                     z3::tactic(ctx, "bit-blast"));
+
   // Apply tactics
   z3::goal goal(ctx);
   goal.add(expr);
   auto app = to_sat(goal);
   CHECK(app.size() == 1) << "Unexpected multiple goals in application!";
   expr = app[0].as_expr();
+
   // Custom optimizations
   expr = EqToXnor(ctx, expr);
   expr = ElimNot(ctx, expr);
   expr = OrToAnd(ctx, expr);
+
   // Dump to SMT-LIBv2 as a SAT problem
   solver.add(expr);
   os << solver.to_smt2();

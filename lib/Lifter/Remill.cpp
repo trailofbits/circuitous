@@ -195,8 +195,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     } else if (name.endswith("_f128")) {
       return 128u;
     } else {
-      LOG(FATAL) << "Unsupported memory read intrinsic: "
-                 << name.str();
+      LOG(FATAL) << "Unsupported memory read intrinsic: " << name.str();
       return 0u;
     }
   }
@@ -281,8 +280,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     auto cond_op = val_to_op[cond_val];
     CHECK_NOTNULL(cond_op);
 
-    const auto num_bits = static_cast<unsigned>(
-        dl.getTypeSizeInBits(val->getType()));
+    const auto num_bits =
+        static_cast<unsigned>(dl.getTypeSizeInBits(val->getType()));
 
     // The condition is undefined, that means we aren't selecting either value,
     // unfortunately :-(
@@ -513,7 +512,8 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
         static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
     Operation *op = nullptr;
     if (arg.hasName() && !arg.getName().empty()) {
-      CHECK(num_inst_parts);
+
+      // CHECK(num_inst_parts);
 
       // Expected output register.
       if (arg.getName().endswith("_next")) {
@@ -542,7 +542,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
     importer.val_to_op.emplace(&arg, op);
   }
 
-  CHECK_LT(0u, num_inst_parts);
+  // CHECK_LT(0u, num_inst_parts);
   CHECK_LT(0u, num_input_regs);
   CHECK_EQ(num_input_regs, num_output_regs);
 
@@ -572,8 +572,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
             continue;
           }
 
-          const auto arg_cmp = llvm::dyn_cast<llvm::CallInst>(arg_use.get());
-          CHECK_NOTNULL(arg_cmp);
+          const auto arg_cmp = llvm::cast<llvm::CallInst>(arg_use.get());
           CHECK(arg_cmp->getCalledFunction()->getName().startswith(
               "__circuitous_icmp_eq_"));
 
