@@ -5,8 +5,11 @@
 #include <circuitous/IR/Hash.h>
 #include <circuitous/IR/IR.h>
 #include <circuitous/Util/BitManipulation.h>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wconversion"
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
+#pragma clang diagnostic pop
 
 #include <string>
 #include <unordered_map>

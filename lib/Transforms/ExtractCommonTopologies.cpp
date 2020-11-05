@@ -5,7 +5,10 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/Printers.h>
 #include <circuitous/Transforms.h>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wconversion"
 #include <llvm/IR/Instruction.h>
+#pragma clang diagnostic pop
 
 #include <sstream>
 #include <unordered_map>
