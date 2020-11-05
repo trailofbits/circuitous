@@ -60,8 +60,8 @@ class CircuitBuilder {
   explicit CircuitBuilder(T initialize_arch)
       : arch(initialize_arch(context)),
         module(remill::LoadArchSemantics(arch)),
-        state_ptr_type(remill::StatePointerType(module.get())),
-        mem_ptr_type(remill::MemoryPointerType(module.get())),
+        state_ptr_type(arch->StatePointerType()),
+        mem_ptr_type(arch->MemoryPointerType()),
         i32_type(llvm::Type::getInt32Ty(context)),
         bool_type(llvm::Type::getInt1Ty(context)),
         true_value(llvm::ConstantInt::get(bool_type, 1)),

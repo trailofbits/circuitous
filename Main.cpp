@@ -5,8 +5,12 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/Printers.h>
 #include <circuitous/Transforms.h>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wconversion"
 #include <gflags/gflags.h>
 #include <glog/logging.h>
+#pragma clang diagnostic pop
 
 #include <fstream>
 #include <iostream>

@@ -3,6 +3,9 @@
  */
 
 #include <circuitous/IR/IR.h>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wconversion"
 #include <glog/logging.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/IR/BasicBlock.h>
@@ -17,6 +20,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
+#pragma clang diagnostic pop
 #include <remill/Arch/Arch.h>
 #include <remill/Arch/Name.h>
 #include <remill/BC/Compat/Error.h>

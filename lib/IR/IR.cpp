@@ -3,11 +3,15 @@
  */
 
 #include <circuitous/IR/IR.h>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wconversion"
 #include <glog/logging.h>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
+#pragma clang diagnostic pop
 
 #include <sstream>
 #include <unordered_map>

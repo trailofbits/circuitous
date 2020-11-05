@@ -1,10 +1,12 @@
 /*
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
-
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wconversion"
 #include <glog/logging.h>
 #include <llvm/IR/InstrTypes.h>
 #include <z3++.h>
+#pragma clang diagnostic pop
 
 #include <memory>
 #include <unordered_map>

@@ -4,7 +4,11 @@
 
 #pragma once
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-compare"
+#pragma clang diagnostic ignored "-Wconversion"
 #include <glog/logging.h>
+#pragma clang diagnostic pop
 
 #include <algorithm>
 #include <cassert>

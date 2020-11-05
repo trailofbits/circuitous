@@ -4,10 +4,14 @@
 
 #include "CircuitBuilder.h"
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wconversion"
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>
+#pragma clang diagnostic pop
 
 namespace circuitous {
 namespace {
