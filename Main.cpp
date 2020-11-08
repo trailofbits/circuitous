@@ -93,19 +93,22 @@ int main(int argc, char *argv[]) {
     return EXIT_FAILURE;
   }
 
+  std::unordered_map<std::string, bool (*)(circuitous::Circuit *)> optimizers;
+  optimizers.emplace("popcount2parity", circuitous::ConvertPopCountToParity);
+  optimizers.emplace("reducepopcount", circuitous::StrengthReducePopulationCount);
+  optimizers.emplace("extractcommon", circuitous::ExtractCommonTopologies);
+  optimizers.emplace("mergehints", circuitous::MergeHints);
 
   // Optimize the circuit.
   std::stringstream ss;
   ss << FLAGS_optimizations;
+  const auto opt_end = optimizers.end();
   for (std::string opt_name; std::getline(ss, opt_name, ',');) {
-    if (opt_name == "popcount2parity") {
-      ConvertPopCountToParity(circuit.get());
-
-    } else if (opt_name == "reducepopcount") {
-      StrengthReducePopulationCount(circuit.get());
-
-    } else if (opt_name == "extractcommon") {
-      ExtractCommonTopologies(circuit.get());
+    auto opt_it = optimizers.find(opt_name);
+    if (opt_it != opt_end) {
+      if (opt_it->second(circuit.get())) {
+        circuit->RemoveUnused();
+      }
     }
   }
 

@@ -96,9 +96,10 @@ target_link_libraries(circuitous-printers PUBLIC
 add_library(circuitous-transforms STATIC    
     include/circuitous/Transforms.h
     
-    lib/Transforms/StrengthReducePopulationCount.cpp
     lib/Transforms/ConvertPopCountToParity.cpp
     lib/Transforms/ExtractCommonTopologies.cpp
+    lib/Transforms/MergeHints.cpp
+    lib/Transforms/StrengthReducePopulationCount.cpp
 )
 
 target_link_libraries(circuitous-transforms PUBLIC

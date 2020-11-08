@@ -21,4 +21,9 @@ bool ConvertPopCountToParity(Circuit *circuit);
 // shared by multiple different expressions.
 bool ExtractCommonTopologies(Circuit *circuit);
 
+// Merge all of the hint inputs into a single "wide" input hint that is of
+// sufficient size to support all verifiers. In place of the individual hints,
+// the verifiers pull out slices of wide hint value with an EXTRACT.
+bool MergeHints(Circuit *circuit);
+
 }  // namespace circuitous
