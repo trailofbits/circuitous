@@ -417,7 +417,6 @@ class DeserializeVisitor {
   DECODE_GENERIC(InputInstructionBits, inst_bits)
   DECODE_CONDITION(DecodeCondition, decode_conditions)
   DECODE_GENERIC(Hint, hints)
-  DECODE_GENERIC(EquivalenceClass, eq_classes)
   DECODE_CONDITION(VerifyInstruction, verifications)
 
   Operation *DecodeOnlyOneCondition(void) {

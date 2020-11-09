@@ -31,7 +31,6 @@ class HashVisitor::Impl : public Visitor<HashVisitor::Impl> {
   void VisitInputRegister(InputRegister *op);
   void VisitOutputRegister(OutputRegister *op);
   void VisitExtract(Extract *op);
-  void VisitEquivalenceClass(EquivalenceClass *op);
 
   std::unordered_map<Operation *, uint64_t> op_hash;
 };
@@ -90,14 +89,6 @@ void HashVisitor::Impl::VisitOutputRegister(OutputRegister *op) {
 void HashVisitor::Impl::VisitExtract(Extract *op) {
   auto hash = kStringHasher(op->Name());
   hash ^= RotateRight64(hash, 33u) * Lookup(op->operands[0]);
-  op_hash.emplace(op, hash);
-}
-
-void HashVisitor::Impl::VisitEquivalenceClass(EquivalenceClass *op) {
-  uint64_t hash = 0u;
-  for (auto sub_op : op->operands) {
-    hash ^= Lookup(sub_op);
-  }
   op_hash.emplace(op, hash);
 }
 

@@ -27,16 +27,8 @@ Operation::Operation(unsigned op_code_, unsigned size_)
       size(size_),
       operands(this) {}
 
-Operation::Operation(unsigned op_code_, unsigned size_, Operation *eq_class_)
-    : User(this),
-      Def<Operation>(this),
-      op_code(op_code_),
-      size(size_),
-      operands(this),
-      eq_class(this, eq_class_) {}
-
 bool Operation::Equals(const Operation *that) const {
-  if (this == that || (eq_class && eq_class.get() == that->eq_class.get())) {
+  if (this == that) {
     return true;
   }
 
@@ -82,18 +74,8 @@ LLVMOperation::LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
       llvm_op_code(llvm_opcode_),
       llvm_predicate(llvm_predicate_) {}
 
-LLVMOperation::LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
-                             unsigned size_, Operation *eq_class_)
-    : Operation(Operation::kLLVMOperation, size_, eq_class_),
-      llvm_op_code(llvm_opcode_),
-      llvm_predicate(llvm_predicate_) {}
-
 LLVMOperation::LLVMOperation(llvm::Instruction *inst)
     : LLVMOperation(inst->getOpcode(), Predicate(inst), SizeOfValue(inst)) {}
-
-LLVMOperation::LLVMOperation(llvm::Instruction *inst, Operation *eq_class_)
-    : LLVMOperation(inst->getOpcode(), Predicate(inst), SizeOfValue(inst),
-                    eq_class_) {}
 
 #define COMMON_METHODS(cls) \
   cls::~cls(void) {}
@@ -156,35 +138,6 @@ bool LLVMOperation::Equals(const Operation *that_) const {
     }
   }
   return this->Operation::Equals(that_);
-}
-
-COMMON_METHODS(EquivalenceClass)
-STREAM_NAME(EquivalenceClass, "EQ_CLASS_" << size);
-
-bool EquivalenceClass::Equals(const Operation *that_) const {
-  if (that_ == this || that_->eq_class.get() == this ||
-      eq_class.get() == that_) {
-    return true;
-  }
-
-  if (auto that = dynamic_cast<const EquivalenceClass *>(that_); that) {
-    for (auto sub_op : operands) {
-      if (that->Equals(sub_op)) {
-        return true;
-      }
-    }
-  } else {
-    for (auto sub_op : operands) {
-      if (sub_op->Equals(that_)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-Operation *EquivalenceClass::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->eq_classes.Create(size);
 }
 
 COMMON_METHODS(Undefined)

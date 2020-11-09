@@ -23,8 +23,6 @@ class Instruction;
 }  // namespace llvm
 namespace circuitous {
 
-class EquivalenceClass;
-
 template <typename Derived>
 class Visitor;
 
@@ -152,10 +150,6 @@ class Operation : public User, public Def<Operation> {
     // An input hint value of some size.
     kHint,
 
-    // A node whose operands are all equivalent. The idea is to choose the
-    // minimum cost operand, and ignore the rest.
-    kEquivalenceClass,
-
     // A XOR of N bits, i.e. `b1 ^ ... ^ bN`. We construct the circuit such
     // that we know that only one of the bits will ever be `1`, and all others
     // will be zero.
@@ -179,11 +173,6 @@ class Operation : public User, public Def<Operation> {
   // instructions: `add a, b` and `add b, a`.
   UseList<Operation> operands;
 
-  // The equivalence class to which this operation belongs.
-  //
-  // NOTE(pag): This is a weak use.
-  UseRef<Operation> eq_class;
-
   template <typename Vis>
   void Traverse(Vis &vis) {
     for (auto op : operands) {
@@ -193,23 +182,16 @@ class Operation : public User, public Def<Operation> {
 
  protected:
   explicit Operation(unsigned op_code_, unsigned size_);
-  explicit Operation(unsigned op_code_, unsigned size_, Operation *eq_class_);
 };
 
 #define FORWARD_CONSTRUCTOR(base_class, derived_class) \
   inline explicit derived_class(unsigned size_) \
-      : base_class(Operation::k##derived_class, size_) {} \
-\
-  inline explicit derived_class(unsigned size_, Operation *eq_class_) \
-      : base_class(Operation::k##derived_class, size_, eq_class_) {}
+      : base_class(Operation::k##derived_class, size_) {}
 
 
 #define CONDITION_CONSTRUCTOR(derived_class) \
   inline explicit derived_class(void) \
-      : Condition(Operation::k##derived_class) {} \
-\
-  inline explicit derived_class(Operation *eq_class_) \
-      : Condition(Operation::k##derived_class, eq_class_) {}
+      : Condition(Operation::k##derived_class) {}
 
 
 // Mirrors an instruction from LLVM. `op_code` is `inst->getOpcode()`.
@@ -217,11 +199,8 @@ class LLVMOperation final : public Operation {
  public:
   explicit LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
                          unsigned size_);
-  explicit LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
-                         unsigned size_, Operation *eq_class_);
 
   explicit LLVMOperation(llvm::Instruction *inst_);
-  explicit LLVMOperation(llvm::Instruction *inst_, Operation *eq_class_);
   virtual ~LLVMOperation(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -240,9 +219,6 @@ class Undefined final : public Operation {
   inline explicit Undefined(unsigned size_)
       : Operation(Operation::kUndefined, size_) {}
 
-  inline explicit Undefined(unsigned size_, Operation *eq_class_)
-      : Operation(Operation::kUndefined, size_, eq_class_) {}
-
   virtual ~Undefined(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -256,11 +232,6 @@ class Constant final : public Operation {
  public:
   inline explicit Constant(std::string bits_, unsigned size_)
       : Operation(Operation::kConstant, size_),
-        bits(bits_) {}
-
-  inline explicit Constant(std::string bits_, unsigned size_,
-                           Operation *eq_class_)
-      : Operation(Operation::kConstant, size_, eq_class_),
         bits(bits_) {}
 
   virtual ~Constant(void);
@@ -305,13 +276,6 @@ class Extract final : public BitOperation {
 
   inline explicit Extract(unsigned low_bit_inc_, unsigned high_bit_exc_)
       : BitOperation(Operation::kExtract, high_bit_exc_ - low_bit_inc_),
-        low_bit_inc(low_bit_inc_),
-        high_bit_exc(high_bit_exc_) {}
-
-  inline explicit Extract(unsigned low_bit_inc_, unsigned high_bit_exc_,
-                          Operation *eq_class_)
-      : BitOperation(Operation::kExtract, high_bit_exc_ - low_bit_inc_,
-                     eq_class_),
         low_bit_inc(low_bit_inc_),
         high_bit_exc(high_bit_exc_) {}
 
@@ -366,9 +330,6 @@ class Condition : public Operation {
 
  protected:
   inline explicit Condition(unsigned op_code_) : Operation(op_code_, 1u) {}
-
-  inline explicit Condition(unsigned op_code_, Operation *eq_class_)
-      : Operation(op_code_, 1u, eq_class_) {}
 };
 
 // Returns `0` if there are an even numbers of bits in a bit string, and `1`
@@ -509,27 +470,12 @@ class Hint final : public Operation {
       : Operation(Operation::kHint, size_),
         weak_conditions(this, true) {}
 
-  inline explicit Hint(unsigned size_, Operation *eq_class_)
-      : Operation(Operation::kHint, size_, eq_class_),
-        weak_conditions(this, true) {}
-
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 
   // Weak list of conditions that compare this hint value against what it is
   // hinting.
   UseList<Operation> weak_conditions;
-};
-
-// An equivalence class on tree instructions. This is itself its own.
-class EquivalenceClass final : public Operation {
- public:
-  FORWARD_CONSTRUCTOR(Operation, EquivalenceClass)
-  virtual ~EquivalenceClass(void);
-  std::string Name(void) const override;
-
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  bool Equals(const Operation *that) const override;
 };
 
 class VerifyInstruction final : public Condition {
@@ -598,8 +544,7 @@ class Circuit : public Condition {
   cb(ReadMemoryCondition, memory_reads) \
   cb(OnlyOneCondition, xor_all) \
   cb(Hint, hints) \
-  cb(HintCondition, hint_conds) \
-  cb(EquivalenceClass, eq_classes)
+  cb(HintCondition, hint_conds)
 
   // clang-format on
 
