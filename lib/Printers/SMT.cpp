@@ -183,7 +183,7 @@ void IRToSMTVisitor::VisitLLVMOperation(LLVMOperation *op) {
 
     case llvm::BinaryOperator::Trunc: {
       auto expr = GetZ3Expr(op->operands[0]);
-      InsertZ3Expr(op, expr.extract(op->size, 1));
+      InsertZ3Expr(op, expr.extract(op->size - 1, 0));
     } break;
 
     case llvm::BinaryOperator::Shl: {
@@ -352,15 +352,9 @@ void IRToSMTVisitor::VisitOnlyOneCondition(OnlyOneCondition *op) {
   }
   op->Traverse(*this);
   auto result = GetZ3Expr(op->operands[0]);
-
-  // for (auto i = 1U; i < op->operands.Size(); ++i) {
-  //   result = result ^ GetZ3Expr(op->operands[i]);
-  // }
   for (auto i = 1U; i < op->operands.Size(); ++i) {
-    result = z3::shl(result, 1);
-    result = result | GetZ3Expr(op->operands[i]);
+    result = result ^ GetZ3Expr(op->operands[i]);
   }
-  LOG(FATAL) << "SATAN: " << (((result - 1) & result) == 0).simplify();
   InsertZ3Expr(op, result);
 }
 
@@ -531,7 +525,7 @@ void PrintSMT(std::ostream &os, Circuit *circuit, bool bit_blast) {
 
   // Dump to SMT-LIBv2 as is
   if (!bit_blast) {
-    solver.add(expr.simplify());
+    solver.add(expr);
     os << solver.to_smt2();
     return;
   }
