@@ -1,7 +1,12 @@
 # Copyright (c) 2020 Trail of Bits, Inc.
+find_package(remill COMPONENTS VCPKG_DEPS QUIET)
+
+include(cmake/vcpkg_helper.cmake)
 
 project(circuitous)
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.14)
+include(GNUInstallDirs)
+enable_language(C CXX ASM)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/settings.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake")
@@ -11,115 +16,95 @@ FindAndSelectClangCompiler()
 #
 # libraries
 #
-# remill
-if("${PLATFORM_NAME}" STREQUAL "windows")
-  set(REMILL_FINDPACKAGE_HINTS HINTS "${CMAKE_INSTALL_PREFIX}/remill/lib")
-endif()
-
-find_package(remill REQUIRED ${REMILL_FINDPACKAGE_HINTS})
-
+find_package(remill CONFIG REQUIRED)
 
 #
-# tool target settings
+# target settings
 #
 
-add_library(circuitous-settings INTERFACE)
-
-target_compile_definitions(circuitous-settings INTERFACE
-    ${PROJECT_DEFINITIONS}
-)
-
-target_compile_options(circuitous-settings INTERFACE
-    ${GLOBAL_CXXFLAGS}
-    -Werror -Wconversion -pedantic 
-    -Wno-unreachable-code-return
-)
-
-target_include_directories(circuitous-settings INTERFACE
-   "${CMAKE_CURRENT_SOURCE_DIR}/include"
-)
-
-target_link_libraries(circuitous-settings INTERFACE
-    remill
-)
+set(CIRCUITOUS circuitous-${REMILL_LLVM_VERSION})
 
 add_library(circuitous-util STATIC
-    include/circuitous/Util/UseDef.h
-    include/circuitous/Util/BitManipulation.h
-    lib/Util/UseDef.cpp
+  lib/Util/UseDef.cpp
 )
 
-target_link_libraries(circuitous-util PUBLIC
-    circuitous-settings
+target_link_libraries(circuitous-util PUBLIC remill_settings remill)
+target_include_directories(circuitous-util PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
 )
 
 add_library(circuitous-ir STATIC
-    include/circuitous/IR/IR.h
-    include/circuitous/IR/Hash.h
-    
-    lib/IR/Hash.cpp
-    lib/IR/IR.cpp
-    lib/IR/Serialize.cpp
+  lib/IR/Hash.cpp
+  lib/IR/IR.cpp
+  lib/IR/Serialize.cpp
 )
 
-target_link_libraries(circuitous-ir PUBLIC
-    circuitous-util
-    circuitous-settings
+target_link_libraries(circuitous-ir PUBLIC remill_settings remill)
+target_include_directories(circuitous-ir PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
 )
 
-add_library(circuitous-lifter STATIC    
-    lib/Lifter/CircuitBuilder.h
-    lib/Lifter/CircuitBuilder.cpp
-    lib/Lifter/Remill.cpp
+
+add_library(circuitous-lifter STATIC
+  lib/Lifter/CircuitBuilder.cpp
+  lib/Lifter/Remill.cpp
 )
 
-target_link_libraries(circuitous-lifter PUBLIC
-    circuitous-ir
-    circuitous-settings
+target_link_libraries(circuitous-lifter PUBLIC remill_settings remill)
+target_include_directories(circuitous-lifter PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
 )
 
-add_library(circuitous-printers STATIC    
-    include/circuitous/Printers.h
-    
-    lib/Printers/DOT.cpp
-    lib/Printers/Python.cpp
-    lib/Printers/JSON.cpp
-    lib/Printers/Topology.cpp
-    lib/Printers/SMT.cpp
+add_library(circuitous-printers STATIC 
+  lib/Printers/DOT.cpp
+  lib/Printers/Python.cpp
+  lib/Printers/JSON.cpp
+  lib/Printers/Topology.cpp
+  lib/Printers/SMT.cpp
 )
 
-target_link_libraries(circuitous-printers PUBLIC
-    circuitous-ir
-    circuitous-settings
+target_link_libraries(circuitous-printers PUBLIC remill_settings remill)
+target_include_directories(circuitous-printers PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
 )
 
-add_library(circuitous-transforms STATIC    
-    include/circuitous/Transforms.h
-    
-    lib/Transforms/ConvertPopCountToParity.cpp
-    lib/Transforms/ExtractCommonTopologies.cpp
-    lib/Transforms/MergeHints.cpp
-    lib/Transforms/StrengthReducePopulationCount.cpp
+add_library(circuitous-transforms STATIC
+  lib/Transforms/ConvertPopCountToParity.cpp
+  lib/Transforms/ExtractCommonTopologies.cpp
+  lib/Transforms/MergeHints.cpp
+  lib/Transforms/StrengthReducePopulationCount.cpp
 )
 
-target_link_libraries(circuitous-transforms PUBLIC
-    circuitous-ir
-    circuitous-util
-    circuitous-settings
+target_link_libraries(circuitous-transforms PUBLIC remill_settings remill)
+target_include_directories(circuitous-transforms PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
 )
 
-add_executable(circuitous
-    Main.cpp
+add_executable(circuitous-lift
+  bin/lift/Main.cpp
 )
 
-target_link_libraries(circuitous PUBLIC
-    circuitous-lifter
-    circuitous-ir
-    circuitous-printers
-    circuitous-util
-    circuitous-settings
-    circuitous-transforms
+add_executable(circuitous-run
+  bin/run/Main.cpp
 )
+
+target_link_libraries(circuitous-lift PUBLIC
+  circuitous-lifter
+  circuitous-ir
+  circuitous-printers
+  circuitous-util
+  circuitous-settings
+  circuitous-transforms
+)
+
+# target_link_libraries(circuitous-run PUBLIC
+#     circuitous-ir
+# )
 
 #
 # install settings
@@ -132,5 +117,12 @@ else()
 endif()
 
 install(
-    TARGETS circuitous
-    RUNTIME DESTINATION "${install_folder}/bin")
+  TARGETS circuitous-lift circuitous-run
+  RUNTIME DESTINATION "${install_folder}/bin"
+)
+
+configure_file(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/circuitousConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/circuitousConfig.cmake"
+  @ONLY
+)
