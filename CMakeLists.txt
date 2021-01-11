@@ -17,6 +17,7 @@ FindAndSelectClangCompiler()
 # libraries
 #
 find_package(remill CONFIG REQUIRED)
+find_package(gflags CONFIG REQUIRED)
 
 #
 # target settings
@@ -52,7 +53,7 @@ add_library(circuitous-lifter STATIC
   lib/Lifter/Remill.cpp
 )
 
-target_link_libraries(circuitous-lifter PUBLIC remill_settings remill)
+target_link_libraries(circuitous-lifter PUBLIC remill_settings remill gflags)
 target_include_directories(circuitous-lifter PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
@@ -94,17 +95,20 @@ add_executable(circuitous-run
 )
 
 target_link_libraries(circuitous-lift PUBLIC
+  gflags
   circuitous-lifter
   circuitous-ir
   circuitous-printers
   circuitous-util
-  circuitous-settings
   circuitous-transforms
 )
 
-# target_link_libraries(circuitous-run PUBLIC
-#     circuitous-ir
-# )
+target_link_libraries(circuitous-run PUBLIC
+  gflags
+  circuitous-ir
+  circuitous-util
+  circuitous-printers
+)
 
 #
 # install settings
