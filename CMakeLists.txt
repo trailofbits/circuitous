@@ -23,43 +23,57 @@ find_package(gflags CONFIG REQUIRED)
 # target settings
 #
 
-set(CIRCUITOUS circuitous-${REMILL_LLVM_VERSION})
+# set(CIRCUITOUS circuitous_${REMILL_LLVM_VERSION})
 
-add_library(circuitous-util STATIC
-  lib/Util/UseDef.cpp
+add_library(circuitous_settings INTERFACE)
+target_link_libraries(circuitous_settings INTERFACE
+  remill_settings
+  remill
+  gflags
 )
 
-target_link_libraries(circuitous-util PUBLIC remill_settings remill)
-target_include_directories(circuitous-util PUBLIC
+target_include_directories(circuitous_settings INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
-add_library(circuitous-ir STATIC
+target_compile_options(circuitous_settings INTERFACE
+  -Werror
+  -Wconversion
+  -pedantic 	
+  -Wno-unreachable-code-return
+)
+
+#
+# library targets
+#
+
+add_library(circuitous_util STATIC
+  lib/Util/UseDef.cpp
+)
+
+target_include_directories(circuitous_util PUBLIC circuitous_settings)
+target_link_libraries(circuitous_util PUBLIC circuitous_settings)
+
+add_library(circuitous_ir STATIC
   lib/IR/Hash.cpp
   lib/IR/IR.cpp
   lib/IR/Serialize.cpp
 )
 
-target_link_libraries(circuitous-ir PUBLIC remill_settings remill)
-target_include_directories(circuitous-ir PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
+target_include_directories(circuitous_ir PUBLIC circuitous_settings)
+target_link_libraries(circuitous_ir PUBLIC circuitous_settings)
 
 
-add_library(circuitous-lifter STATIC
+add_library(circuitous_lifter STATIC
   lib/Lifter/CircuitBuilder.cpp
   lib/Lifter/Remill.cpp
 )
 
-target_link_libraries(circuitous-lifter PUBLIC remill_settings remill gflags)
-target_include_directories(circuitous-lifter PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
+target_include_directories(circuitous_lifter PUBLIC circuitous_settings)
+target_link_libraries(circuitous_lifter PUBLIC circuitous_settings)
 
-add_library(circuitous-printers STATIC 
+add_library(circuitous_printers STATIC 
   lib/Printers/DOT.cpp
   lib/Printers/Python.cpp
   lib/Printers/JSON.cpp
@@ -67,48 +81,50 @@ add_library(circuitous-printers STATIC
   lib/Printers/SMT.cpp
 )
 
-target_link_libraries(circuitous-printers PUBLIC remill_settings remill)
-target_include_directories(circuitous-printers PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
+target_include_directories(circuitous_printers PUBLIC circuitous_settings)
+target_link_libraries(circuitous_printers PUBLIC circuitous_settings)
 
-add_library(circuitous-transforms STATIC
+add_library(circuitous_transforms STATIC
   lib/Transforms/ConvertPopCountToParity.cpp
   lib/Transforms/ExtractCommonTopologies.cpp
   lib/Transforms/MergeHints.cpp
   lib/Transforms/StrengthReducePopulationCount.cpp
 )
 
-target_link_libraries(circuitous-transforms PUBLIC remill_settings remill)
-target_include_directories(circuitous-transforms PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
-)
+target_include_directories(circuitous_transforms PUBLIC circuitous_settings)
+target_link_libraries(circuitous_transforms PUBLIC circuitous_settings)
+
+#
+# executable targets
+#
 
 add_executable(circuitous-lift
   bin/lift/Main.cpp
 )
 
+target_link_libraries(circuitous-lift PUBLIC
+  gflags
+  circuitous_lifter
+  circuitous_ir
+  circuitous_printers
+  circuitous_util
+  circuitous_transforms
+)
+
+target_include_directories(circuitous-lift PUBLIC circuitous_settings)
+
 add_executable(circuitous-run
   bin/run/Main.cpp
 )
 
-target_link_libraries(circuitous-lift PUBLIC
-  gflags
-  circuitous-lifter
-  circuitous-ir
-  circuitous-printers
-  circuitous-util
-  circuitous-transforms
-)
-
 target_link_libraries(circuitous-run PUBLIC
   gflags
-  circuitous-ir
-  circuitous-util
-  circuitous-printers
+  circuitous_ir
+  circuitous_util
+  circuitous_printers
 )
+
+target_include_directories(circuitous-run PUBLIC circuitous_settings)
 
 #
 # install settings
@@ -123,10 +139,4 @@ endif()
 install(
   TARGETS circuitous-lift circuitous-run
   RUNTIME DESTINATION "${install_folder}/bin"
-)
-
-configure_file(
-  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/circuitousConfig.cmake.in"
-  "${CMAKE_CURRENT_BINARY_DIR}/circuitousConfig.cmake"
-  @ONLY
 )
