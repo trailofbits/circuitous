@@ -114,6 +114,7 @@ target_link_libraries(circuitous-lift PUBLIC
 target_include_directories(circuitous-lift PUBLIC circuitous_settings)
 
 add_executable(circuitous-run
+  bin/run/Interpreter.cpp
   bin/run/Run.cpp
 )
 
