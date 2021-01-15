@@ -6,7 +6,7 @@
 #include <llvm/ADT/APInt.h>
 
 namespace circuitous {
-class Interpreter : public UniqueVisitor<Interpreter> {
+class Interpreter : public Visitor<Interpreter> {
  private:
   
   inline llvm::APInt TrueVal() {
@@ -26,8 +26,9 @@ class Interpreter : public UniqueVisitor<Interpreter> {
 
  public:
   Interpreter(Circuit *circuit);
-  void SetInstructionBitsValue(uint64_t bits);
-  void SetInputRegisterValue(std::string name, uint64_t bits);
+  void SetInstructionBitsValue(const uint64_t bits);
+  void SetInputRegisterValue(const std::string &name, uint64_t bits);
+  uint64_t GetOutputRegisterValue(const std::string &name);
   void Visit(Operation *op);
   // Default
   void VisitOperation(Operation *op);
@@ -44,7 +45,10 @@ class Interpreter : public UniqueVisitor<Interpreter> {
   void VisitRegisterCondition(RegisterCondition *op);
   void VisitPreservedCondition(PreservedCondition *op);
   void VisitVerifyInstruction(VerifyInstruction *op);
+  void VisitOnlyOneCondition(OnlyOneCondition *op);
   // Circuit
   void VisitCircuit(Circuit *op);
+  // Runner
+  void Run();
 };
 }  // namespace circuitous

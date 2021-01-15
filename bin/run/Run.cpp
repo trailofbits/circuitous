@@ -53,11 +53,19 @@ int main(int argc, char *argv[]) {
 
   circuitous::Interpreter run(circuit.get());
 
-  run.SetInstructionBitsValue(35296ULL);
-  run.SetInputRegisterValue("RSP", 666ULL);
-  run.SetInputRegisterValue("RBX", 111ULL);
+  run.SetInstructionBitsValue(0x89d8ULL);
+  run.SetInputRegisterValue("RAX", 0ULL);
+  run.SetInputRegisterValue("RBX", 1ULL);
+  run.SetInputRegisterValue("RCX", 2ULL);
+  run.SetInputRegisterValue("RDX", 3ULL);
+  run.SetInputRegisterValue("RSI", 4ULL);
+  run.SetInputRegisterValue("RDI", 5ULL);
+  run.SetInputRegisterValue("RSP", 6ULL);
+  run.SetInputRegisterValue("RBP", 7ULL);
   
-  run.Visit(circuit.get());
+  run.Run();
+
+  DLOG(INFO) << "OUTPUT_RAX: " << run.GetOutputRegisterValue("RAX");
 
   return EXIT_SUCCESS;
 }
