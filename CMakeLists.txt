@@ -1,7 +1,12 @@
 # Copyright (c) 2020 Trail of Bits, Inc.
+find_package(remill COMPONENTS VCPKG_DEPS QUIET)
+
+include(cmake/vcpkg_helper.cmake)
 
 project(circuitous)
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.14)
+include(GNUInstallDirs)
+enable_language(C CXX ASM)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/settings.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake")
@@ -11,115 +16,115 @@ FindAndSelectClangCompiler()
 #
 # libraries
 #
-# remill
-if("${PLATFORM_NAME}" STREQUAL "windows")
-  set(REMILL_FINDPACKAGE_HINTS HINTS "${CMAKE_INSTALL_PREFIX}/remill/lib")
-endif()
-
-find_package(remill REQUIRED ${REMILL_FINDPACKAGE_HINTS})
-
+find_package(remill CONFIG REQUIRED)
+find_package(gflags CONFIG REQUIRED)
 
 #
-# tool target settings
+# target settings
 #
 
-add_library(circuitous-settings INTERFACE)
+# set(CIRCUITOUS circuitous_${REMILL_LLVM_VERSION})
 
-target_compile_definitions(circuitous-settings INTERFACE
-    ${PROJECT_DEFINITIONS}
+add_library(circuitous_settings INTERFACE)
+target_link_libraries(circuitous_settings INTERFACE
+  remill_settings
+  remill
+  gflags
 )
 
-target_compile_options(circuitous-settings INTERFACE
-    ${GLOBAL_CXXFLAGS}
-    -Werror -Wconversion -pedantic 
-    -Wno-unreachable-code-return
+target_include_directories(circuitous_settings INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
 )
 
-target_include_directories(circuitous-settings INTERFACE
-   "${CMAKE_CURRENT_SOURCE_DIR}/include"
+target_compile_options(circuitous_settings INTERFACE
+  -Werror
+  -Wconversion
+  -pedantic 	
+  -Wno-unreachable-code-return
 )
 
-target_link_libraries(circuitous-settings INTERFACE
-    remill
+#
+# library targets
+#
+
+add_library(circuitous_util STATIC
+  lib/Util/UseDef.cpp
 )
 
-add_library(circuitous-util STATIC
-    include/circuitous/Util/UseDef.h
-    include/circuitous/Util/BitManipulation.h
-    lib/Util/UseDef.cpp
+target_include_directories(circuitous_util PUBLIC circuitous_settings)
+target_link_libraries(circuitous_util PUBLIC circuitous_settings)
+
+add_library(circuitous_ir STATIC
+  lib/IR/Hash.cpp
+  lib/IR/IR.cpp
+  lib/IR/Serialize.cpp
 )
 
-target_link_libraries(circuitous-util PUBLIC
-    circuitous-settings
+target_include_directories(circuitous_ir PUBLIC circuitous_settings)
+target_link_libraries(circuitous_ir PUBLIC circuitous_settings)
+
+
+add_library(circuitous_lifter STATIC
+  lib/Lifter/CircuitBuilder.cpp
+  lib/Lifter/Remill.cpp
 )
 
-add_library(circuitous-ir STATIC
-    include/circuitous/IR/IR.h
-    include/circuitous/IR/Hash.h
-    
-    lib/IR/Hash.cpp
-    lib/IR/IR.cpp
-    lib/IR/Serialize.cpp
+target_include_directories(circuitous_lifter PUBLIC circuitous_settings)
+target_link_libraries(circuitous_lifter PUBLIC circuitous_settings)
+
+add_library(circuitous_printers STATIC 
+  lib/Printers/DOT.cpp
+  lib/Printers/Python.cpp
+  lib/Printers/JSON.cpp
+  lib/Printers/Topology.cpp
+  lib/Printers/SMT.cpp
 )
 
-target_link_libraries(circuitous-ir PUBLIC
-    circuitous-util
-    circuitous-settings
+target_include_directories(circuitous_printers PUBLIC circuitous_settings)
+target_link_libraries(circuitous_printers PUBLIC circuitous_settings)
+
+add_library(circuitous_transforms STATIC
+  lib/Transforms/ConvertPopCountToParity.cpp
+  lib/Transforms/ExtractCommonTopologies.cpp
+  lib/Transforms/MergeHints.cpp
+  lib/Transforms/StrengthReducePopulationCount.cpp
 )
 
-add_library(circuitous-lifter STATIC    
-    lib/Lifter/CircuitBuilder.h
-    lib/Lifter/CircuitBuilder.cpp
-    lib/Lifter/Remill.cpp
+target_include_directories(circuitous_transforms PUBLIC circuitous_settings)
+target_link_libraries(circuitous_transforms PUBLIC circuitous_settings)
+
+#
+# executable targets
+#
+
+add_executable(circuitous-lift
+  bin/lift/Main.cpp
 )
 
-target_link_libraries(circuitous-lifter PUBLIC
-    circuitous-ir
-    circuitous-settings
+target_link_libraries(circuitous-lift PUBLIC
+  gflags
+  circuitous_lifter
+  circuitous_ir
+  circuitous_printers
+  circuitous_util
+  circuitous_transforms
 )
 
-add_library(circuitous-printers STATIC    
-    include/circuitous/Printers.h
-    
-    lib/Printers/DOT.cpp
-    lib/Printers/Python.cpp
-    lib/Printers/JSON.cpp
-    lib/Printers/Topology.cpp
-    lib/Printers/SMT.cpp
+target_include_directories(circuitous-lift PUBLIC circuitous_settings)
+
+add_executable(circuitous-run
+  bin/run/Main.cpp
 )
 
-target_link_libraries(circuitous-printers PUBLIC
-    circuitous-ir
-    circuitous-settings
+target_link_libraries(circuitous-run PUBLIC
+  gflags
+  circuitous_ir
+  circuitous_util
+  circuitous_printers
 )
 
-add_library(circuitous-transforms STATIC    
-    include/circuitous/Transforms.h
-    
-    lib/Transforms/ConvertPopCountToParity.cpp
-    lib/Transforms/ExtractCommonTopologies.cpp
-    lib/Transforms/MergeHints.cpp
-    lib/Transforms/StrengthReducePopulationCount.cpp
-)
-
-target_link_libraries(circuitous-transforms PUBLIC
-    circuitous-ir
-    circuitous-util
-    circuitous-settings
-)
-
-add_executable(circuitous
-    Main.cpp
-)
-
-target_link_libraries(circuitous PUBLIC
-    circuitous-lifter
-    circuitous-ir
-    circuitous-printers
-    circuitous-util
-    circuitous-settings
-    circuitous-transforms
-)
+target_include_directories(circuitous-run PUBLIC circuitous_settings)
 
 #
 # install settings
@@ -132,5 +137,6 @@ else()
 endif()
 
 install(
-    TARGETS circuitous
-    RUNTIME DESTINATION "${install_folder}/bin")
+  TARGETS circuitous-lift circuitous-run
+  RUNTIME DESTINATION "${install_folder}/bin"
+)
