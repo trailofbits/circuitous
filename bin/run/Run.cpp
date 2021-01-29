@@ -53,7 +53,7 @@ int main(int argc, char *argv[]) {
 
   circuitous::Interpreter run(circuit.get());
 
-  run.SetInstructionBitsValue(0x89d8ULL);
+  run.SetInstructionBitsValue(0x01feULL);
   run.SetInputRegisterValue("RAX", 0ULL);
   run.SetInputRegisterValue("RBX", 1ULL);
   run.SetInputRegisterValue("RCX", 2ULL);
@@ -63,9 +63,13 @@ int main(int argc, char *argv[]) {
   run.SetInputRegisterValue("RSP", 6ULL);
   run.SetInputRegisterValue("RBP", 7ULL);
   
-  run.Run();
-
-  DLOG(INFO) << "OUTPUT_RAX: " << run.GetOutputRegisterValue("RAX");
+  if(run.Run()) {
+    DLOG(INFO) << "Success!";
+    DLOG(INFO) << "OUTPUT_RSI: " << run.GetOutputRegisterValue("RSI");
+    DLOG(INFO) << "OUTPUT_RDI: " << run.GetOutputRegisterValue("RDI");
+  } else {
+    DLOG(INFO) << "Fail!";
+  }
 
   return EXIT_SUCCESS;
 }

@@ -19,6 +19,8 @@ class Interpreter : public Visitor<Interpreter> {
 
   Circuit *circuit;
 
+  bool changed{false};
+
   std::unordered_map<Operation *, llvm::APInt> node_values;
 
   void SetNodeVal(Operation *op, const llvm::APInt &val);
@@ -37,18 +39,21 @@ class Interpreter : public Visitor<Interpreter> {
   void VisitInputRegister(InputRegister *op);
   void VisitOutputRegister(OutputRegister *op);
   void VisitInputInstructionBits(InputInstructionBits *op);
+  void VisitHint(Hint *op);
   // Operations
   void VisitExtract(Extract *op);
   void VisitLLVMOperation(LLVMOperation *op);
+  void VisitParity(Parity *op);
   // Conditions
   void VisitDecodeCondition(DecodeCondition *op);
   void VisitRegisterCondition(RegisterCondition *op);
   void VisitPreservedCondition(PreservedCondition *op);
+  void VisitHintCondition(HintCondition *op);
   void VisitVerifyInstruction(VerifyInstruction *op);
   void VisitOnlyOneCondition(OnlyOneCondition *op);
   // Circuit
   void VisitCircuit(Circuit *op);
   // Runner
-  void Run();
+  bool Run();
 };
 }  // namespace circuitous

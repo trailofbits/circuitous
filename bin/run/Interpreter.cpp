@@ -11,6 +11,7 @@
 #include "Interpreter.h"
 
 namespace circuitous {
+
 Interpreter::Interpreter(Circuit *c) : circuit(c) {}
 
 void Interpreter::SetNodeVal(Operation *op, const llvm::APInt &val) {
@@ -54,11 +55,19 @@ uint64_t Interpreter::GetOutputRegisterValue(const std::string &name) {
 }
 
 void Interpreter::Visit(Operation *op) {
-  // if (node_values.count(op)) {
-  //   return;
-  // }
   op->Traverse(*this);
-  Visitor::Visit(op);
+  if (node_values.count(op)) {
+    // Remember previous node value
+    auto prev_val{GetNodeVal(op)};
+    // Compute new node value
+    Visitor::Visit(op);
+    // Was there a change?
+    changed |= prev_val != GetNodeVal(op);
+  } else {
+    // We have no value. Just do it!
+    Visitor::Visit(op);
+    changed = true;
+  }
 }
 
 void Interpreter::VisitOperation(Operation *op) {
@@ -68,7 +77,7 @@ void Interpreter::VisitOperation(Operation *op) {
 void Interpreter::VisitConstant(Constant *op) {
   DLOG(INFO) << "VisitConstant: " << op->Name();
   std::string bits{op->bits.rbegin(), op->bits.rend()};
-  node_values[op] = llvm::APInt(op->size, bits, 2U);
+  node_values[op] = llvm::APInt(op->size, bits, /*radix=*/2U);
 }
 
 void Interpreter::VisitInputRegister(InputRegister *op) {
@@ -79,12 +88,25 @@ void Interpreter::VisitInputRegister(InputRegister *op) {
 
 void Interpreter::VisitOutputRegister(OutputRegister *op) {
   DLOG(INFO) << "VisitOutputRegister: " << op->Name();
-  // CHECK(!node_values.count(op));
+  // TODO(surovic): figure out a better way to represent an
+  // undefined initial value;
+  if (!node_values.count(op)) {
+    SetNodeVal(op, llvm::APInt(op->size, 0ULL));
+  }
 }
 
 void Interpreter::VisitInputInstructionBits(InputInstructionBits *op) {
   DLOG(INFO) << "VisitInputInstructionBits: " << op->Name();
   CHECK(node_values.count(op)) << "Input instruction bits not set.";
+}
+
+void Interpreter::VisitHint(Hint *op) {
+  DLOG(INFO) << "VisitHint: " << op->Name();
+  // TODO(surovic): figure out a better way to represent an
+  // undefined initial value;
+  if (!node_values.count(op)) {
+    SetNodeVal(op, llvm::APInt(op->size, 0ULL));
+  }
 }
 
 void Interpreter::VisitExtract(Extract *op) {
@@ -98,12 +120,90 @@ void Interpreter::VisitExtract(Extract *op) {
 void Interpreter::VisitLLVMOperation(LLVMOperation *op) {
   DLOG(INFO) << "VisitLLVMOperation: " << op->Name();
   switch (op->llvm_op_code) {
-    case llvm::BinaryOperator::And:
+    case llvm::BinaryOperator::Add: {
+      auto lhs{GetNodeVal(op->operands[0])};
+      auto rhs{GetNodeVal(op->operands[1])};
+      SetNodeVal(op, lhs + rhs);
+    } break;
+
+    case llvm::BinaryOperator::And: {
       auto lhs{GetNodeVal(op->operands[0])};
       auto rhs{GetNodeVal(op->operands[1])};
       SetNodeVal(op, lhs & rhs);
-      break;
+    } break;
+
+    case llvm::BinaryOperator::Or: {
+      auto lhs{GetNodeVal(op->operands[0])};
+      auto rhs{GetNodeVal(op->operands[1])};
+      SetNodeVal(op, lhs | rhs);
+    } break;
+
+    case llvm::BinaryOperator::Xor: {
+      auto lhs{GetNodeVal(op->operands[0])};
+      auto rhs{GetNodeVal(op->operands[1])};
+      SetNodeVal(op, lhs ^ rhs);
+    } break;
+
+    case llvm::BinaryOperator::Shl: {
+      auto lhs{GetNodeVal(op->operands[0])};
+      auto rhs{GetNodeVal(op->operands[1])};
+      SetNodeVal(op, lhs << rhs);
+    } break;
+
+    case llvm::BinaryOperator::LShr: {
+      auto lhs{GetNodeVal(op->operands[0])};
+      auto rhs{GetNodeVal(op->operands[1])};
+      SetNodeVal(op, lhs.lshr(rhs));
+    } break;
+
+    case llvm::BinaryOperator::Trunc: {
+      auto operand{GetNodeVal(op->operands[0])};
+      SetNodeVal(op, operand.trunc(op->size));
+    } break;
+
+    case llvm::BinaryOperator::ZExt: {
+      auto operand{GetNodeVal(op->operands[0])};
+      SetNodeVal(op, operand.zext(op->size));
+    } break;
+
+    case llvm::BinaryOperator::ICmp: {
+      auto lhs{GetNodeVal(op->operands[0])};
+      auto rhs{GetNodeVal(op->operands[1])};
+      auto result{false};
+      switch (op->llvm_predicate) {
+        case llvm::CmpInst::ICMP_ULT: {
+          result = lhs.ult(rhs);
+        } break;
+
+        case llvm::CmpInst::ICMP_SLT: {
+          result = lhs.slt(rhs);
+        } break;
+
+        case llvm::CmpInst::ICMP_UGT: {
+          result = lhs.ugt(rhs);
+        } break;
+
+        case llvm::CmpInst::ICMP_EQ: {
+          result = lhs == rhs;
+        } break;
+
+        case llvm::CmpInst::ICMP_NE: {
+          result = lhs != rhs;
+        } break;
+
+        default: LOG(FATAL) << "Unknown LLVM operation: " << op->Name(); break;
+      }
+      SetNodeVal(op, result ? TrueVal() : FalseVal());
+    } break;
+
+    default: LOG(FATAL) << "Unknown LLVM operation: " << op->Name(); break;
   }
+}
+
+void Interpreter::VisitParity(Parity *op) {
+  DLOG(INFO) << "VisitParity: " << op->Name();
+  auto val{GetNodeVal(op->operands[0])};
+  SetNodeVal(op, llvm::APInt(1, val.countPopulation() % 2));
 }
 
 void Interpreter::VisitDecodeCondition(DecodeCondition *op) {
@@ -147,6 +247,14 @@ void Interpreter::VisitPreservedCondition(PreservedCondition *op) {
   // }
 }
 
+void Interpreter::VisitHintCondition(HintCondition *op) {
+  DLOG(INFO) << "VisitHintCondition: " << op->Name();
+  auto real{op->operands[0]};
+  auto hint{op->operands[1]};
+  SetNodeVal(hint, GetNodeVal(real));
+  SetNodeVal(op, TrueVal());
+}
+
 void Interpreter::VisitVerifyInstruction(VerifyInstruction *op) {
   DLOG(INFO) << "VisitVerifyInstruction: " << op->Name();
   auto result{GetNodeVal(op->operands[0])};
@@ -158,16 +266,8 @@ void Interpreter::VisitVerifyInstruction(VerifyInstruction *op) {
 
 void Interpreter::VisitOnlyOneCondition(OnlyOneCondition *op) {
   DLOG(INFO) << "VisitOnlyOneCondition: " << op->Name();
-  auto sum{0U};
-  for (auto operand : op->operands) {
-    sum += GetNodeVal(operand).getLimitedValue();
-  }
-  SetNodeVal(op, sum == 1U ? TrueVal() : FalseVal());
-  // auto result{GetNodeVal(op->operands[0])};
-  // for (auto i = 1U; i < op->operands.Size(); ++i) {
-  //   result = result ^ GetNodeVal(op->operands[i]);
-  // }
-  // SetNodeVal(op, result);
+  auto val{GetNodeVal(op)};
+  SetNodeVal(op, val.countPopulation() == 1U ? TrueVal() : FalseVal());
 }
 
 void Interpreter::VisitCircuit(Circuit *op) {
@@ -175,12 +275,21 @@ void Interpreter::VisitCircuit(Circuit *op) {
   SetNodeVal(op, GetNodeVal(op->operands[0]));
 }
 
-void Interpreter::Run() {
+bool Interpreter::Run() {
+  // Run verification nodes until one succeeds
   for (auto op : circuit->verifications) {
-    Visit(op);
+    changed = true;
+    // Evaluate verification node until fixpoint
+    while (changed) {
+      changed = false;
+      Visit(op);
+    }
+    // Verification successful
     if (GetNodeVal(op).getBoolValue()) {
-      return;
+      return true;
     }
   }
+  // All verifications failed
+  return false;
 }
 }  // namespace circuitous
