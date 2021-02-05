@@ -474,7 +474,6 @@ std::unique_ptr<Circuit>
 Circuit::CreateFromInstructions(const std::string &arch_name,
                                 const std::string &os_name,
                                 const std::string &file_name) {
-
   auto maybe_buff = llvm::MemoryBuffer::getFile(file_name, -1, false);
   if (remill::IsError(maybe_buff)) {
     LOG(ERROR) << remill::GetErrorString(maybe_buff) << std::endl;
@@ -482,6 +481,20 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
   }
 
   const auto buff = remill::GetReference(maybe_buff)->getBuffer();
+  return CreateFromInstructions(arch_name, os_name, buff);
+}
+
+std::unique_ptr<Circuit>
+Circuit::CreateFromInstructions(const std::string &arch_name,
+                                const std::string &os_name,
+                                std::string_view bytes) {
+  return CreateFromInstructions(arch_name, os_name, llvm::StringRef{bytes.data(), bytes.size()});
+}
+
+std::unique_ptr<Circuit>
+Circuit::CreateFromInstructions(const std::string &arch_name,
+                                const std::string &os_name,
+                                const llvm::StringRef &buff) {
 
   circuitous::CircuitBuilder builder([&](llvm::LLVMContext &context) {
     return remill::Arch::Build(&context, remill::GetOSName(os_name),

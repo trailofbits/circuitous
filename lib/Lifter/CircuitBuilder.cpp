@@ -587,6 +587,8 @@ void CircuitBuilder::LiftInstructions(
           LOG(ERROR) << "Invalid instruction: " << inst.Serialize();
           func->eraseFromParent();
           continue;
+        default:
+          break;
       }
     }
 
