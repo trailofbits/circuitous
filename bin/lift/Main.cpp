@@ -31,6 +31,8 @@ DEFINE_string(optimizations, "popcount2parity,reducepopcount",
 DEFINE_bool(append, false,
             "Append to output IR files, rather than overwriting.");
 
+DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
+
 namespace {
 
 static const std::hash<std::string> kStringHasher;
@@ -76,6 +78,18 @@ int main(int argc, char *argv[]) {
     if (!FLAGS_binary_in.empty()) {
       return make_circuit(FLAGS_binary_in);
     }
+
+    if (!FLAGS_bytes_in.empty()) {
+      std::vector<uint8_t> buf;
+      for (auto i = 0U; i < FLAGS_bytes_in.size(); i += 2) {
+        std::string aux = {FLAGS_bytes_in[i], FLAGS_bytes_in[i + 1]};
+        auto casted = static_cast<uint8_t>(std::strtoul(aux.data(), nullptr, 16));
+        buf.push_back(casted);
+      }
+      auto as_sv = std::string_view( reinterpret_cast<char *>(buf.data()), buf.size());
+      return make_circuit(as_sv);
+    }
+
     if (!FLAGS_ir_in.empty()) {
       if (FLAGS_ir_in == "-") {
         FLAGS_ir_in = "/dev/stdin";
