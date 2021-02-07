@@ -554,11 +554,12 @@ void CircuitBuilder::LiftInstructions(
 
   unsigned g = 0u;
   for (auto &group : isels) {
+      CHECK(group.instructions.size() == group.encodings.size());
 
-    unsigned i = 0u;
-    for (auto &inst : group.instructions) {
+    for (auto i = 0U; i < group.instructions.size(); ++i) {
+      auto &inst = group.instructions[i];
       std::stringstream ss;
-      ss << "inst_" << g << '_' << (i++);
+      ss << "inst_" << g << '_' << i;
 
       auto func = remill::DeclareLiftedFunction(module.get(), ss.str());
       remill::CloneBlockFunctionInto(func);
@@ -590,6 +591,7 @@ void CircuitBuilder::LiftInstructions(
         default:
           break;
       }
+
     }
 
     ++g;
