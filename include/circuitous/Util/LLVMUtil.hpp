@@ -3,12 +3,24 @@
  */
 
 #pragma once
+
+// TODO(lukas): Fill llvm headers
+#include <string>
+
 /* Idea is that we provide some basic wrappers that bind llvm::Module and
  * llvm::LLVMContext so we do not need to specify them everywhere (mostly
  * when creating types or values).
  */
 
 namespace circuitous {
+  std::string LLVMName(llvm::Value *val,
+                       const std::string &def = "(name not set)") {
+    if (!val->hasName()) {
+      return def;
+    }
+    return val->getName().str();
+  }
+
   template<typename Self_t, template<typename ...> class Derived>
   struct Crtp {
     Self_t &Self() { return static_cast<Self_t &>(*this); }
