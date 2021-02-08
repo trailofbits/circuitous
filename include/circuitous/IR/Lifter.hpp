@@ -117,7 +117,24 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
                                     llvm::Argument *arg,
                                     remill::Operand &arch_op) override {
     // We run this to run some extra checks, but we do not care about result.
-    return this->parent::LiftImmediateOperand(inst, bb, arg, arch_op);
+    auto module = bb->getModule();
+    auto imm_getters = ImmGetters(module, &inst, &arch_op);
+    CHECK(imm_getters.size() == 1);
+    LOG(INFO) << "Would call: " << LLVMName(*imm_getters.begin());
+    auto constant_imm = this->parent::LiftImmediateOperand(inst, bb, arg, arch_op);
+
+    auto inst_fn = *(imm_getters.begin());
+    llvm::IRBuilder<> ir(bb);
+    auto hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
+    if (hidden_imm->getType() != constant_imm->getType())
+    {
+      LOG(INFO) << remill::LLVMThingToString(hidden_imm->getType())
+                << " is not what a constant type would be: "
+                << remill::LLVMThingToString(constant_imm->getType())
+                << ". Coercion inserted";
+      return ir.CreateSExtOrTrunc(hidden_imm, constant_imm->getType());
+    }
+    return hidden_imm;
   }
 };
 
