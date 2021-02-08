@@ -3,6 +3,8 @@
  */
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/IR/Lifter.hpp>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
@@ -204,6 +206,17 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
   }
 
+  auto VisitImmIntrinsic(llvm::Function *fn) {
+    LOG(INFO) << "Handling imm intrinsic: " << LLVMName(fn);
+    const auto &[from, size] = ImmAsIntrinsics::ParseArgs(fn);
+    auto casted_from = static_cast<unsigned>(from);
+    auto casted_end = static_cast<unsigned>(from + size);
+    auto op = impl->extracts.Create(casted_from, casted_end);
+    CHECK(impl->inst_bits.Size() == 1);
+    op->operands.AddUse(*impl->inst_bits.begin());
+    return op;
+  }
+
   void VisitFunctionCall(llvm::Function *, llvm::Use &, llvm::CallInst *val) {
     auto &op = val_to_op[val];
     if (op) {
@@ -264,7 +277,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     } else if (name.startswith("__remill_write_memory_")) {
       LOG(FATAL) << "Memory write intrinsics not yet supported";
-
+    } else if (ImmAsIntrinsics::IsIntrinsic(func)) {
+      op = VisitImmIntrinsic(func);
     } else {
       LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(val);
     }
