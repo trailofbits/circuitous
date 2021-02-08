@@ -15,11 +15,45 @@
 
 namespace circuitous {
 
-struct HideImms {
+struct ImmAsIntrinsics {
   // [from, size], regions cannot overlap!
   using imm_regions_t = std::map<uint64_t, uint64_t>;
   using op_imm_regions_t = std::map<remill::Operand *, imm_regions_t>;
   std::unordered_map<remill::Instruction *, op_imm_regions_t> regions = {};
+
+  static constexpr const char *fn_prefix = "__circuitous.get_imm.";
+  static constexpr char separator = '.';
+
+  static std::string GetterName(uint64_t from, uint64_t size) {
+    std::stringstream ss;
+    ss << fn_prefix << from << separator << size;
+    return ss.str();
+  }
+
+  static bool IsIntrinsic(llvm::Function *fn) {
+    if (!fn->hasName() || !fn->isDeclaration()) {
+      return false;
+    }
+    return fn->getName().startswith(fn_prefix);
+  }
+
+  using intrinsic_args_t = std::tuple<uint64_t, uint64_t>;
+  static intrinsic_args_t ParseArgs(llvm::Function *fn) {
+    CHECK(IsIntrinsic(fn))
+      << "Cannot parse arguments of function: "
+      << LLVMName(fn)
+      << "that is not immediate intrinsic";
+    llvm::StringRef name = fn->getName();
+    name.consume_front(fn_prefix);
+    const auto &[from, size] = name.split(separator);
+
+    auto as_uint64_t = [](auto &str_ref) {
+      uint64_t out;
+      str_ref.getAsInteger(10, out);
+      return out;
+    };
+    return {as_uint64_t(from), as_uint64_t(size)};
+  }
 
   void AddImmRegions(remill::Instruction *ptr, op_imm_regions_t value) {
     // TODO(lukas): Not sure how we want to deal with this yet.
@@ -27,12 +61,6 @@ struct HideImms {
       LOG(FATAL) << "Inserting new imm region map for present instruction";
     }
     regions[ptr] = std::move(value);
-  }
-
-  static std::string GetterName(uint64_t from, uint64_t size) {
-    std::stringstream ss;
-    ss << "__circuitous.get_imm." << from << "." << size;
-    return ss.str();
   }
 
   using functions_t = std::vector<llvm::Function *>;
@@ -65,7 +93,7 @@ struct HideImms {
   }
 };
 
-struct InstructionLifter : remill::InstructionLifter, HideImms {
+struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
   using parent = remill::InstructionLifter;
   using parent::parent;
 
