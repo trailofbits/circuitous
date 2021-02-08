@@ -3,6 +3,7 @@
  */
 
 #include "CircuitBuilder.h"
+#include "circuitous/IR/Lifter.hpp"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
@@ -141,6 +142,7 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
   //            convert the AND into a function call.
 
   auto isels = DecodeInstructions(buff);
+  IdentifyImms(isels);
   LiftInstructions(isels);
 
   // Delete the `__remill_intrinsics` so that we can get rid of more
@@ -653,7 +655,7 @@ void CircuitBuilder::FlattenControlFlow(
 void CircuitBuilder::LiftInstructions(
     std::vector<InstructionSelection> &isels) {
   remill::IntrinsicTable intrinsics(module);
-  remill::InstructionLifter lifter(arch, intrinsics);
+  InstructionLifter lifter(arch, intrinsics);
   std::vector<llvm::Function *> inst_funcs;
 
   unsigned g = 0u;
@@ -668,7 +670,8 @@ void CircuitBuilder::LiftInstructions(
       auto func = remill::DeclareLiftedFunction(module.get(), ss.str());
       remill::CloneBlockFunctionInto(func);
       auto block = &func->getEntryBlock();
-      switch (lifter.LiftIntoBlock(inst, block, false)) {
+
+      switch (lifter.LiftIntoBlock(inst, block, false, group.imms[i])) {
         case remill::LiftStatus::kLiftedInstruction:
           (void) llvm::ReturnInst::Create(
               context, remill::LoadMemoryPointer(block), block);
