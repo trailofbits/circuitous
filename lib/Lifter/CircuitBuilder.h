@@ -28,6 +28,12 @@ struct InstructionSelection {
   // `instructions`.
   std::vector<InstructionEncoding> encodings;
 
+  // We try to guess which bytes in the encoding of an instruction are actually
+  // immediates.
+  using imm_meta_t = std::map<uint64_t, uint64_t>;
+  using imm_meta_list_t = std::map<remill::Operand *, imm_meta_t>;
+  std::vector<imm_meta_list_t> imms;
+
   // Each `1` bit in this bitset represents a bit that is always zero or always
   // one at the same position across all of the encodings in `encodings`.
   // InstructionEncoding known_bits;
@@ -56,6 +62,8 @@ enum : unsigned { kMaxNumBytesRead = 16u };
 
 class CircuitBuilder {
  public:
+  using InstSelections = std::vector<InstructionSelection>;
+
   template <typename T>
   explicit CircuitBuilder(T initialize_arch)
       : arch(initialize_arch(context)),
@@ -80,6 +88,12 @@ class CircuitBuilder {
   llvm::Function *Build(llvm::StringRef buff);
 
  protected:
+
+
+  void IdentifyImms(InstSelections &insts);
+  void IdentifyImms(remill::Instruction &rinst, InstructionEncoding &enc,
+                    InstructionSelection::imm_meta_list_t &imms);
+
   // Return a function that does a bitwise comparison of two values of
   // type `type`.
   llvm::Function *BitMatcherFunc(llvm::Type *type);
