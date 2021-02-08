@@ -14,6 +14,8 @@
 #include <llvm/IR/CFG.h>
 #pragma clang diagnostic pop
 
+#include <sstream>
+
 namespace circuitous {
 namespace {
 
