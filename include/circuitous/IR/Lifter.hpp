@@ -5,8 +5,15 @@
  #pragma once
 
 #include <remill/BC/Lifter.h>
+#include <remill/BC/Util.h>
 
 #include <circuitous/Util/LLVMUtil.hpp>
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wconversion"
+#include <llvm/IR/IRBuilder.h>
+#pragma clang diagnostic pop
+
 
 #include <cstdint>
 #include <map>
@@ -77,8 +84,9 @@ struct ImmAsIntrinsics {
   }
 
   llvm::Function *CreateGetter(llvm::Module *module, uint64_t from, uint64_t size) {
-    LLVMTypes tys(module);
-    auto fn_t = tys.FnTy(tys.Void(), {});
+    llvm::IRBuilder<> ir(module->getContext());
+    auto r_ty = ir.getIntNTy(static_cast<unsigned>(size));
+    auto fn_t = llvm::FunctionType::get(r_ty, {}, false);
     auto callee = module->getOrInsertFunction(GetterName(from, size), fn_t);
     return llvm::cast<llvm::Function>(callee.getCallee());
   }
