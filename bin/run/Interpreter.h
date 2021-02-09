@@ -40,14 +40,17 @@ class Interpreter : public Visitor<Interpreter> {
   void VisitOutputRegister(OutputRegister *op);
   void VisitInputInstructionBits(InputInstructionBits *op);
   void VisitHint(Hint *op);
+  void VisitUndefined(Undefined *op);
   // Operations
   void VisitExtract(Extract *op);
   void VisitLLVMOperation(LLVMOperation *op);
   void VisitParity(Parity *op);
+  void VisitPopulationCount(PopulationCount *op);
   // Conditions
   void VisitDecodeCondition(DecodeCondition *op);
   void VisitRegisterCondition(RegisterCondition *op);
   void VisitPreservedCondition(PreservedCondition *op);
+  void VisitCopyCondition(CopyCondition *op);
   void VisitHintCondition(HintCondition *op);
   void VisitVerifyInstruction(VerifyInstruction *op);
   void VisitOnlyOneCondition(OnlyOneCondition *op);

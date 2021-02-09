@@ -77,7 +77,7 @@ void Interpreter::VisitOperation(Operation *op) {
 void Interpreter::VisitConstant(Constant *op) {
   DLOG(INFO) << "VisitConstant: " << op->Name();
   std::string bits{op->bits.rbegin(), op->bits.rend()};
-  node_values[op] = llvm::APInt(op->size, bits, /*radix=*/2U);
+  SetNodeVal(op, llvm::APInt(op->size, bits, /*radix=*/2U));
 }
 
 void Interpreter::VisitInputRegister(InputRegister *op) {
@@ -102,8 +102,15 @@ void Interpreter::VisitInputInstructionBits(InputInstructionBits *op) {
 
 void Interpreter::VisitHint(Hint *op) {
   DLOG(INFO) << "VisitHint: " << op->Name();
-  // TODO(surovic): figure out a better way to represent an
-  // undefined initial value;
+  // TODO(surovic): See VisitOutputRegister()
+  if (!node_values.count(op)) {
+    SetNodeVal(op, llvm::APInt(op->size, 0ULL));
+  }
+}
+
+void Interpreter::VisitUndefined(Undefined *op) {
+  DLOG(INFO) << "VisitUndefined: " << op->Name();
+  // TODO(surovic): See VisitOutputRegister()
   if (!node_values.count(op)) {
     SetNodeVal(op, llvm::APInt(op->size, 0ULL));
   }
@@ -119,76 +126,78 @@ void Interpreter::VisitExtract(Extract *op) {
 
 void Interpreter::VisitLLVMOperation(LLVMOperation *op) {
   DLOG(INFO) << "VisitLLVMOperation: " << op->Name();
+  auto lhs{[this, op] { return GetNodeVal(op->operands[0]); }};
+  auto rhs{[this, op] { return GetNodeVal(op->operands[1]); }};
   switch (op->llvm_op_code) {
     case llvm::BinaryOperator::Add: {
-      auto lhs{GetNodeVal(op->operands[0])};
-      auto rhs{GetNodeVal(op->operands[1])};
-      SetNodeVal(op, lhs + rhs);
+      SetNodeVal(op, lhs() + rhs());
+    } break;
+
+    case llvm::BinaryOperator::Sub: {
+      SetNodeVal(op, lhs() - rhs());
+    } break;
+
+    case llvm::BinaryOperator::Mul: {
+      SetNodeVal(op, lhs() * rhs());
     } break;
 
     case llvm::BinaryOperator::And: {
-      auto lhs{GetNodeVal(op->operands[0])};
-      auto rhs{GetNodeVal(op->operands[1])};
-      SetNodeVal(op, lhs & rhs);
+      SetNodeVal(op, lhs() & rhs());
     } break;
 
     case llvm::BinaryOperator::Or: {
-      auto lhs{GetNodeVal(op->operands[0])};
-      auto rhs{GetNodeVal(op->operands[1])};
-      SetNodeVal(op, lhs | rhs);
+      SetNodeVal(op, lhs() | rhs());
     } break;
 
     case llvm::BinaryOperator::Xor: {
-      auto lhs{GetNodeVal(op->operands[0])};
-      auto rhs{GetNodeVal(op->operands[1])};
-      SetNodeVal(op, lhs ^ rhs);
+      SetNodeVal(op, lhs() ^ rhs());
     } break;
 
     case llvm::BinaryOperator::Shl: {
-      auto lhs{GetNodeVal(op->operands[0])};
-      auto rhs{GetNodeVal(op->operands[1])};
-      SetNodeVal(op, lhs << rhs);
+      SetNodeVal(op, lhs() << rhs());
     } break;
 
     case llvm::BinaryOperator::LShr: {
-      auto lhs{GetNodeVal(op->operands[0])};
-      auto rhs{GetNodeVal(op->operands[1])};
-      SetNodeVal(op, lhs.lshr(rhs));
+      SetNodeVal(op, lhs().lshr(rhs()));
+    } break;
+
+    case llvm::BinaryOperator::AShr: {
+      SetNodeVal(op, lhs().ashr(rhs()));
     } break;
 
     case llvm::BinaryOperator::Trunc: {
-      auto operand{GetNodeVal(op->operands[0])};
-      SetNodeVal(op, operand.trunc(op->size));
+      SetNodeVal(op, lhs().trunc(op->size));
     } break;
 
     case llvm::BinaryOperator::ZExt: {
-      auto operand{GetNodeVal(op->operands[0])};
-      SetNodeVal(op, operand.zext(op->size));
+      SetNodeVal(op, lhs().zext(op->size));
+    } break;
+
+    case llvm::BinaryOperator::SExt: {
+      SetNodeVal(op, lhs().sext(op->size));
     } break;
 
     case llvm::BinaryOperator::ICmp: {
-      auto lhs{GetNodeVal(op->operands[0])};
-      auto rhs{GetNodeVal(op->operands[1])};
       auto result{false};
       switch (op->llvm_predicate) {
         case llvm::CmpInst::ICMP_ULT: {
-          result = lhs.ult(rhs);
+          result = lhs().ult(rhs());
         } break;
 
         case llvm::CmpInst::ICMP_SLT: {
-          result = lhs.slt(rhs);
+          result = lhs().slt(rhs());
         } break;
 
         case llvm::CmpInst::ICMP_UGT: {
-          result = lhs.ugt(rhs);
+          result = lhs().ugt(rhs());
         } break;
 
         case llvm::CmpInst::ICMP_EQ: {
-          result = lhs == rhs;
+          result = lhs() == rhs();
         } break;
 
         case llvm::CmpInst::ICMP_NE: {
-          result = lhs != rhs;
+          result = lhs() != rhs();
         } break;
 
         default: LOG(FATAL) << "Unknown LLVM operation: " << op->Name(); break;
@@ -204,6 +213,12 @@ void Interpreter::VisitParity(Parity *op) {
   DLOG(INFO) << "VisitParity: " << op->Name();
   auto val{GetNodeVal(op->operands[0])};
   SetNodeVal(op, llvm::APInt(1, val.countPopulation() % 2));
+}
+
+void Interpreter::VisitPopulationCount(PopulationCount *op) {
+  DLOG(INFO) << "VisitPopulationCount: " << op->Name();
+  auto val{GetNodeVal(op->operands[0])};
+  SetNodeVal(op, llvm::APInt(op->size, val.countPopulation()));
 }
 
 void Interpreter::VisitDecodeCondition(DecodeCondition *op) {
@@ -238,6 +253,23 @@ void Interpreter::VisitPreservedCondition(PreservedCondition *op) {
   auto oreg{op->operands[1]};
   SetNodeVal(oreg, GetNodeVal(ireg));
   SetNodeVal(op, TrueVal());
+  // NOTE(msurovic): See VisitRegisterCondition()
+  // if (node_values.count(oreg)) {
+  //   SetNodeVal(op,
+  //              GetNodeVal(oreg) == GetNodeVal(ireg) ? TrueVal() : FalseVal());
+  // } else {
+  //   SetNodeVal(oreg, GetNodeVal(ireg));
+  //   SetNodeVal(op, TrueVal());
+  // }
+}
+
+void Interpreter::VisitCopyCondition(CopyCondition *op) {
+  DLOG(INFO) << "VisitCopyCondition: " << op->Name();
+  auto ireg{op->operands[0]};
+  auto oreg{op->operands[1]};
+  SetNodeVal(oreg, GetNodeVal(ireg));
+  SetNodeVal(op, TrueVal());
+  // NOTE(msurovic): See VisitRegisterCondition()
   // if (node_values.count(oreg)) {
   //   SetNodeVal(op,
   //              GetNodeVal(oreg) == GetNodeVal(ireg) ? TrueVal() : FalseVal());
