@@ -29,6 +29,8 @@ class IRToSMTVisitor : public UniqueVisitor<IRToSMTVisitor> {
 
  public:
   IRToSMTVisitor(z3::context &ctx);
+  void Visit(Operation *op);
+  void VisitOperation(Operation *op);
   void VisitInputInstructionBits(InputInstructionBits *op);
   void VisitInputRegister(InputRegister *op);
   void VisitOutputRegister(OutputRegister *op);
@@ -86,6 +88,17 @@ z3::expr IRToSMTVisitor::Z3BVCast(z3::expr expr) {
   return result;
 }
 
+void IRToSMTVisitor::Visit(Operation *op) {
+  if (z3_expr_map.count(op)) {
+    return;
+  }
+  op->Traverse(*this);
+}
+
+void IRToSMTVisitor::VisitOperation(Operation *op) {
+  LOG(FATAL) << "Unhandled operation: " << op->Name();
+}
+
 void IRToSMTVisitor::VisitInputInstructionBits(InputInstructionBits *op) {
   DLOG(INFO) << "VisitInputInstructionBits: " << op->Name();
   InsertZ3Expr(op, z3_ctx.bv_const("InputInst", op->size));
@@ -93,27 +106,18 @@ void IRToSMTVisitor::VisitInputInstructionBits(InputInstructionBits *op) {
 
 void IRToSMTVisitor::VisitInputRegister(InputRegister *op) {
   DLOG(INFO) << "VisitInputRegister: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
   auto name = "Input" + op->reg_name;
   InsertZ3Expr(op, z3_ctx.bv_const(name.c_str(), op->size));
 }
 
 void IRToSMTVisitor::VisitOutputRegister(OutputRegister *op) {
   DLOG(INFO) << "VisitOutputRegister: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
   auto name = "Output" + op->reg_name;
   InsertZ3Expr(op, z3_ctx.bv_const(name.c_str(), op->size));
 }
 
 void IRToSMTVisitor::VisitConstant(Constant *op) {
   DLOG(INFO) << "VisitConstant: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
   std::unique_ptr<bool[]> bits(new bool[op->size]);
   for (auto i = 0U; i < op->size; ++i) {
     bits[i] = op->bits[i] == '0' ? false : true;
@@ -123,110 +127,82 @@ void IRToSMTVisitor::VisitConstant(Constant *op) {
 
 void IRToSMTVisitor::VisitHint(Hint *op) {
   DLOG(INFO) << "VisitHint: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
   auto name = "Hint" + std::to_string(reinterpret_cast<uint64_t>(op));
   InsertZ3Expr(op, z3_ctx.bv_const(name.c_str(), op->size));
 }
 
 void IRToSMTVisitor::VisitUndefined(Undefined *op) {
   DLOG(INFO) << "VisitUndefined: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
   InsertZ3Expr(op, z3_ctx.bv_const("Undef", op->size));
 }
 
 void IRToSMTVisitor::VisitLLVMOperation(LLVMOperation *op) {
   DLOG(INFO) << "VisitLLVMOperation: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
+  auto lhs{[this, op] { return GetZ3Expr(op->operands[0]); }};
+  auto rhs{[this, op] { return GetZ3Expr(op->operands[1]); }};
   switch (op->llvm_op_code) {
     case llvm::BinaryOperator::Add: {
-      auto lhs = GetZ3Expr(op->operands[0]);
-      auto rhs = GetZ3Expr(op->operands[1]);
-      InsertZ3Expr(op, lhs + rhs);
+      InsertZ3Expr(op, lhs() + rhs());
     } break;
 
     case llvm::BinaryOperator::Sub: {
-      auto lhs = GetZ3Expr(op->operands[0]);
-      auto rhs = GetZ3Expr(op->operands[1]);
-      InsertZ3Expr(op, lhs - rhs);
+      InsertZ3Expr(op, lhs() - rhs());
     } break;
 
     case llvm::BinaryOperator::Mul: {
-      auto lhs = GetZ3Expr(op->operands[0]);
-      auto rhs = GetZ3Expr(op->operands[1]);
-      InsertZ3Expr(op, lhs * rhs);
+      InsertZ3Expr(op, lhs() * rhs());
     } break;
 
     case llvm::BinaryOperator::And: {
-      auto lhs = GetZ3Expr(op->operands[0]);
-      auto rhs = GetZ3Expr(op->operands[1]);
-      InsertZ3Expr(op, lhs & rhs);
+      InsertZ3Expr(op, lhs() & rhs());
     } break;
 
     case llvm::BinaryOperator::Or: {
-      auto lhs = GetZ3Expr(op->operands[0]);
-      auto rhs = GetZ3Expr(op->operands[1]);
-      InsertZ3Expr(op, lhs | rhs);
+      InsertZ3Expr(op, lhs() | rhs());
     } break;
 
     case llvm::BinaryOperator::Xor: {
-      auto lhs = GetZ3Expr(op->operands[0]);
-      auto rhs = GetZ3Expr(op->operands[1]);
-      InsertZ3Expr(op, lhs ^ rhs);
+      InsertZ3Expr(op, lhs() ^ rhs());
     } break;
 
     case llvm::BinaryOperator::Trunc: {
-      auto expr = GetZ3Expr(op->operands[0]);
-      InsertZ3Expr(op, expr.extract(op->size - 1, 0));
+      InsertZ3Expr(op, lhs().extract(op->size - 1, 0));
     } break;
 
     case llvm::BinaryOperator::Shl: {
-      auto lhs = GetZ3Expr(op->operands[0]);
-      auto rhs = GetZ3Expr(op->operands[1]);
-      InsertZ3Expr(op, z3::shl(lhs, rhs));
+      InsertZ3Expr(op, z3::shl(lhs(), rhs()));
     } break;
 
     case llvm::BinaryOperator::LShr: {
-      auto lhs = GetZ3Expr(op->operands[0]);
-      auto rhs = GetZ3Expr(op->operands[1]);
-      InsertZ3Expr(op, z3::lshr(lhs, rhs));
+      InsertZ3Expr(op, z3::lshr(lhs(), rhs()));
     } break;
 
     case llvm::BinaryOperator::ZExt: {
-      auto operand = GetZ3Expr(op->operands[0]);
       auto diff = op->size - op->operands[0]->size;
-      InsertZ3Expr(op, z3::zext(operand, diff));
+      InsertZ3Expr(op, z3::zext(lhs(), diff));
     } break;
 
     case llvm::BinaryOperator::ICmp: {
-      auto lhs = GetZ3Expr(op->operands[0]);
-      auto rhs = GetZ3Expr(op->operands[1]);
       z3::expr result(z3_ctx);
       switch (op->llvm_predicate) {
         case llvm::CmpInst::ICMP_ULT: {
-          result = z3::ult(lhs, rhs);
+          result = z3::ult(lhs(), rhs());
         } break;
 
         case llvm::CmpInst::ICMP_SLT: {
-          result = z3::slt(lhs, rhs);
+          result = z3::slt(lhs(), rhs());
         } break;
 
         case llvm::CmpInst::ICMP_UGT: {
-          result = z3::ugt(lhs, rhs);
+          result = z3::ugt(lhs(), rhs());
         } break;
 
         case llvm::CmpInst::ICMP_EQ: {
-          result = lhs == rhs;
+          result = lhs() == rhs();
         } break;
 
         case llvm::CmpInst::ICMP_NE: {
-          result = lhs != rhs;
+          result = lhs() != rhs();
         } break;
 
         default:
@@ -242,19 +218,10 @@ void IRToSMTVisitor::VisitLLVMOperation(LLVMOperation *op) {
 
 void IRToSMTVisitor::VisitNot(Not *op) {
   LOG(FATAL) << "VisitNot: " << op->Name();
-
-  // if (z3_expr_map.count(op)) {
-  //   return;
-  // }
-  // op->Traverse(*this);
 }
 
 void IRToSMTVisitor::VisitExtract(Extract *op) {
   DLOG(INFO) << "VisitExtract: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
   auto val = GetZ3Expr(op->operands[0]);
   auto hi = op->high_bit_exc - 1;
   auto lo = op->low_bit_inc;
@@ -263,11 +230,6 @@ void IRToSMTVisitor::VisitExtract(Extract *op) {
 
 void IRToSMTVisitor::VisitConcat(Concat *op) {
   LOG(FATAL) << "VisitConcat: " << op->Name();
-
-  // if (z3_expr_map.count(op)) {
-  //   return;
-  // }
-  // op->Traverse(*this);
   // auto val = GetZ3Expr(op->operands[0]);
   // auto hi = op->high_bit_exc - 1;
   // auto lo = op->low_bit_inc;
@@ -276,10 +238,6 @@ void IRToSMTVisitor::VisitConcat(Concat *op) {
 
 void IRToSMTVisitor::VisitParity(Parity *op) {
   DLOG(INFO) << "VisitParity: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
   auto operand = GetZ3Expr(op->operands[0]);
   auto operand_size = operand.get_sort().bv_size();
   auto sum = operand.extract(0, 0);
@@ -303,10 +261,6 @@ void IRToSMTVisitor::VisitCountTrailingZeroes(CountTrailingZeroes *op) {
 
 void IRToSMTVisitor::VisitRegisterCondition(RegisterCondition *op) {
   DLOG(INFO) << "VisitRegisterCondition: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
   auto val = GetZ3Expr(op->operands[0]);
   auto reg = GetZ3Expr(op->operands[1]);
   InsertZ3Expr(op, Z3BVCast(val == reg));
@@ -314,10 +268,6 @@ void IRToSMTVisitor::VisitRegisterCondition(RegisterCondition *op) {
 
 void IRToSMTVisitor::VisitPreservedCondition(PreservedCondition *op) {
   DLOG(INFO) << "VisitPreservedCondition: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
   auto ireg = GetZ3Expr(op->operands[0]);
   auto oreg = GetZ3Expr(op->operands[1]);
   InsertZ3Expr(op, Z3BVCast(ireg == oreg));
@@ -325,10 +275,6 @@ void IRToSMTVisitor::VisitPreservedCondition(PreservedCondition *op) {
 
 void IRToSMTVisitor::VisitCopyCondition(CopyCondition *op) {
   DLOG(INFO) << "VisitCopyCondition: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
   auto ireg = GetZ3Expr(op->operands[0]);
   auto oreg = GetZ3Expr(op->operands[1]);
   InsertZ3Expr(op, Z3BVCast(ireg == oreg));
@@ -336,10 +282,6 @@ void IRToSMTVisitor::VisitCopyCondition(CopyCondition *op) {
 
 void IRToSMTVisitor::VisitDecodeCondition(DecodeCondition *op) {
   DLOG(INFO) << "VisitDecodeCondition: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
   auto inst = GetZ3Expr(op->operands[0]);
   auto bits = GetZ3Expr(op->operands[1]);
   InsertZ3Expr(op, Z3BVCast(inst == bits));
@@ -347,10 +289,6 @@ void IRToSMTVisitor::VisitDecodeCondition(DecodeCondition *op) {
 
 void IRToSMTVisitor::VisitOnlyOneCondition(OnlyOneCondition *op) {
   DLOG(INFO) << "VisitOnlyOneCondition: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
   auto result = GetZ3Expr(op->operands[0]);
   for (auto i = 1U; i < op->operands.Size(); ++i) {
     result = result ^ GetZ3Expr(op->operands[i]);
@@ -360,10 +298,6 @@ void IRToSMTVisitor::VisitOnlyOneCondition(OnlyOneCondition *op) {
 
 void IRToSMTVisitor::VisitHintCondition(HintCondition *op) {
   DLOG(INFO) << "VisitHintCondition: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
   auto real = GetZ3Expr(op->operands[0]);
   auto hint = GetZ3Expr(op->operands[1]);
   InsertZ3Expr(op, Z3BVCast(real == hint));
@@ -371,10 +305,6 @@ void IRToSMTVisitor::VisitHintCondition(HintCondition *op) {
 
 void IRToSMTVisitor::VisitVerifyInstruction(VerifyInstruction *op) {
   DLOG(INFO) << "VisitVerifyInstruction: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
   auto result = GetZ3Expr(op->operands[0]);
   for (auto i = 1U; i < op->operands.Size(); ++i) {
     result = result & GetZ3Expr(op->operands[i]);
@@ -384,10 +314,6 @@ void IRToSMTVisitor::VisitVerifyInstruction(VerifyInstruction *op) {
 
 void IRToSMTVisitor::VisitCircuit(Circuit *op) {
   DLOG(INFO) << "VisitCircuit: " << op->Name();
-  if (z3_expr_map.count(op)) {
-    return;
-  }
-  op->Traverse(*this);
   auto expr = GetZ3Expr(op->operands[0]);
   InsertZ3Expr(op, expr != z3_ctx.num_val(0, expr.get_sort()));
 }
