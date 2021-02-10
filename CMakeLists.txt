@@ -99,7 +99,11 @@ target_link_libraries(circuitous_transforms PUBLIC circuitous_settings)
 #
 
 add_executable(circuitous-lift
+<<<<<<< HEAD
   bin/lift/Lift.cpp
+=======
+  bin/lift/Main.cpp
+>>>>>>> master
 )
 
 target_link_libraries(circuitous-lift PUBLIC
@@ -114,8 +118,12 @@ target_link_libraries(circuitous-lift PUBLIC
 target_include_directories(circuitous-lift PUBLIC circuitous_settings)
 
 add_executable(circuitous-run
+<<<<<<< HEAD
   bin/run/Interpreter.cpp
   bin/run/Run.cpp
+=======
+  bin/run/Main.cpp
+>>>>>>> master
 )
 
 target_link_libraries(circuitous-run PUBLIC
