@@ -141,6 +141,14 @@ void Interpreter::VisitLLVMOperation(LLVMOperation *op) {
       SetNodeVal(op, lhs() * rhs());
     } break;
 
+    case llvm::BinaryOperator::UDiv: {
+      SetNodeVal(op, lhs().udiv(rhs()));
+    } break;
+
+    case llvm::BinaryOperator::SDiv: {
+      SetNodeVal(op, lhs().sdiv(rhs()));
+    } break;
+
     case llvm::BinaryOperator::And: {
       SetNodeVal(op, lhs() & rhs());
     } break;
