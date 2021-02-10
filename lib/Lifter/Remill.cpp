@@ -206,9 +206,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
   }
 
-  auto VisitImmIntrinsic(llvm::Function *fn) {
-    LOG(INFO) << "Handling imm intrinsic: " << LLVMName(fn);
-    const auto &[from, size] = ImmAsIntrinsics::ParseArgs(fn);
+  auto VisitExtractIntrinsic(llvm::Function *fn) {
+    LOG(INFO) << "Handling extract intrinsic: " << LLVMName(fn);
+    const auto &[from, size] = intrinsics::Extract::ParseArgs(fn);
     auto casted_from = static_cast<unsigned>(from);
     auto casted_end = static_cast<unsigned>(from + size);
     auto op = impl->extracts.Create(casted_from, casted_end);
@@ -277,8 +277,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     } else if (name.startswith("__remill_write_memory_")) {
       LOG(FATAL) << "Memory write intrinsics not yet supported";
-    } else if (ImmAsIntrinsics::IsIntrinsic(func)) {
-      op = VisitImmIntrinsic(func);
+    } else if (intrinsics::Extract::IsIntrinsic(func)) {
+      op = VisitExtractIntrinsic(func);
     } else {
       LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(val);
     }
