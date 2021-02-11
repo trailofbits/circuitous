@@ -52,15 +52,6 @@ struct IntervalIntrinsic_impl : Intrinsic_impl<Data> {
     return llvm::cast<llvm::Function>(callee.getCallee());
   }
 
-  static llvm::Function *Fn(llvm::Module *module, uint64_t from, uint64_t size) {
-    auto name = Name(from, size);
-    // Function is already present, therefore just return it;
-    if (auto fn = module->getFunction(name)) {
-      return fn;
-    }
-    return CreateFn(module, from, size);
-  }
-
   using intrinsic_args_t = std::tuple<uint64_t, uint64_t>;
   static intrinsic_args_t ParseArgs(llvm::Function *fn) {
     CHECK(parent::IsIntrinsic(fn))
@@ -82,7 +73,7 @@ struct IntervalIntrinsic_impl : Intrinsic_impl<Data> {
 
 template<typename Data>
 struct BitCompare_impl : Intrinsic_impl<Data> {
-  using parent = IntervalIntrinsic_impl<Data>;
+  using parent = Intrinsic_impl<Data>;
 
   static std::string Name(uint64_t size) {
     std::stringstream ss;
@@ -97,15 +88,6 @@ struct BitCompare_impl : Intrinsic_impl<Data> {
     auto fn_t = llvm::FunctionType::get(r_ty, {arg_ty, arg_ty}, false);
     auto callee = module->getOrInsertFunction(Name(size), fn_t);
     return llvm::cast<llvm::Function>(callee.getCallee());
-  }
-
-  static llvm::Function *Fn(llvm::Module *module, uint64_t size) {
-    auto name = Name(size);
-    // Function is already present, therefore just return it;
-    if (auto fn = module->getFunction(name)) {
-      return fn;
-    }
-    return CreateFn(module, size);
   }
 
   using intrinsic_args_t = uint64_t;
@@ -162,7 +144,7 @@ struct ImmAsIntrinsics : public intrinsics::Extract {
                             remill::Operand *op) {
     functions_t out;
     for (auto &[from, to] : regions[inst][op]) {
-      out.push_back(Fn(module, from, to));
+      out.push_back(CreateFn(module, from, to));
     }
     return out;
   }
