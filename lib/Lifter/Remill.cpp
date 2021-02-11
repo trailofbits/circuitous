@@ -206,15 +206,41 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
   }
 
-  auto VisitExtractIntrinsic(llvm::Function *fn) {
+  Operation *VisitExtractIntrinsic(llvm::Function *fn) {
     LOG(INFO) << "Handling extract intrinsic: " << LLVMName(fn);
     const auto &[from, size] = intrinsics::Extract::ParseArgs(fn);
-    auto casted_from = static_cast<unsigned>(from);
-    auto casted_end = static_cast<unsigned>(from + size);
-    auto op = impl->extracts.Create(casted_from, casted_end);
+
+    // TODO(lukas): For now we can only lower some specialized cases
     CHECK(impl->inst_bits.Size() == 1);
-    op->operands.AddUse(*impl->inst_bits.begin());
-    return op;
+    CHECK(from % 8 == 0 && size % 8 == 0);
+
+    const auto &inst_bytes = *impl->inst_bits.begin();
+
+    // We split extract to sepratate bytes. This is so we can reorder them,
+    // which can be handy if the extracted data are in a different order
+    // (endiannity for example).
+    const unsigned step = 8;
+    std::deque<Operation *> partials;
+    for (unsigned i = static_cast<unsigned>(from); i < from + size; i += step) {
+      auto op = impl->extracts.Create(i, i + step);
+      op->operands.AddUse(inst_bytes);
+      partials.push_front(op);
+    }
+
+    if (partials.size() == 1) {
+      return partials.front();
+    }
+
+    // x86 immediates are encoded using little-endian however instruction bytes
+    // will be encoded differently:
+    // ba 12 00 00 00 - mov 12, %rdx
+    // If we do extract(32, 0) we end up with `12000000` as number, but we would
+    // expect `00000012` therefore we must reorder them and then concat.
+    auto result = impl->concats.Create(static_cast<unsigned>(size));
+    for (auto x : partials) {
+      result->operands.AddUse(x);
+    }
+    return result;
   }
 
   void VisitFunctionCall(llvm::Function *, llvm::Use &, llvm::CallInst *val) {
