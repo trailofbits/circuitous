@@ -91,7 +91,7 @@ class CircuitBuilder {
 
 
   void IdentifyImms(InstSelections &insts);
-  void IdentifyImms(remill::Instruction &rinst, InstructionEncoding &enc,
+  void IdentifyImms(remill::Instruction &rinst, const InstructionEncoding &enc,
                     InstructionSelection::imm_meta_list_t &imms);
 
   // Return a function that does a bitwise comparison of two values of
