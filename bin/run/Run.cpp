@@ -17,9 +17,9 @@
 
 #include "Interpreter.h"
 
-DEFINE_string(ir, "", "Path to a serialized circuitous IR file.");
-DEFINE_string(input, "", "Path to a input state JSON file.");
-DEFINE_string(output, "", "Path to a output state JSON file.");
+DEFINE_string(ir_in, "", "Path to a serialized circuitous IR file.");
+DEFINE_string(json_in, "", "Path to a input state JSON file.");
+DEFINE_string(json_out, "", "Path to a output state JSON file.");
 
 namespace {
 
@@ -50,9 +50,9 @@ int main(int argc, char *argv[]) {
   usage << std::endl
         << std::endl
         << "  " << argv[0] << " \\" << std::endl
-        << "    --ir INPUT_IR_FILE \\" << std::endl
-        << "    --input INPUT_JSON_FILE \\" << std::endl
-        << "    --output OUTPUT_JSON_FILE \\" << std::endl
+        << "    --ir_in INPUT_IR_FILE \\" << std::endl
+        << "    --json_in INPUT_JSON_FILE \\" << std::endl
+        << "    --json_out OUTPUT_JSON_FILE \\" << std::endl
         << std::endl
 
         // Print the version and exit.
@@ -64,21 +64,21 @@ int main(int argc, char *argv[]) {
   google::SetUsageMessage(usage.str());
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  LOG_IF(ERROR, FLAGS_ir.empty())
+  LOG_IF(ERROR, FLAGS_ir_in.empty())
       << "Must specify path to an input serialized circuitous IR file.";
 
-  if (FLAGS_ir.empty() || FLAGS_input.empty()) {
+  if (FLAGS_ir_in.empty() || FLAGS_json_in.empty()) {
     std::cerr << google::ProgramUsage();
     return EXIT_FAILURE;
   }
   // Read input circuit file
-  std::ifstream ir(FLAGS_ir, std::ios::binary);
+  std::ifstream ir(FLAGS_ir_in, std::ios::binary);
   if (!ir) {
     LOG(ERROR) << "Error while opening input IR file: " << std::strerror(errno);
     return EXIT_FAILURE;
   }
   // Read input state JSON file
-  auto maybe_buff{llvm::MemoryBuffer::getFile(FLAGS_input)};
+  auto maybe_buff{llvm::MemoryBuffer::getFile(FLAGS_json_in)};
   if (!maybe_buff) {
     LOG(ERROR) << "Error while opening input state JSON file: "
                << GetErrorString(maybe_buff);
@@ -119,10 +119,10 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "Fail!";
   }
   // Print JSON output 
-  if (!FLAGS_output.empty()) {
+  if (!FLAGS_json_out.empty()) {
     // Open output file
     std::error_code ec;
-    llvm::raw_fd_ostream output(FLAGS_output, ec, llvm::sys::fs::F_Text);
+    llvm::raw_fd_ostream output(FLAGS_json_out, ec, llvm::sys::fs::F_Text);
     CHECK(!ec) << "Error while opening output state JSON file: "
                << ec.message();
     // Dump output register values to JSON
