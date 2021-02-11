@@ -81,6 +81,10 @@ int main(int argc, char *argv[]) {
     }
 
     std::ifstream is(FLAGS_ir_in, std::ios::binary);
+    if (!is.good()) {
+      LOG(ERROR) << "Error while opening input IR file.";
+      return EXIT_FAILURE;
+    }
     circuitous::Circuit::Deserialize(is).swap(circuit);
 
   } else {
@@ -95,7 +99,8 @@ int main(int argc, char *argv[]) {
 
   std::unordered_map<std::string, bool (*)(circuitous::Circuit *)> optimizers;
   optimizers.emplace("popcount2parity", circuitous::ConvertPopCountToParity);
-  optimizers.emplace("reducepopcount", circuitous::StrengthReducePopulationCount);
+  optimizers.emplace("reducepopcount",
+                     circuitous::StrengthReducePopulationCount);
   optimizers.emplace("extractcommon", circuitous::ExtractCommonTopologies);
   optimizers.emplace("mergehints", circuitous::MergeHints);
 
