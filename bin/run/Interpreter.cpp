@@ -316,8 +316,13 @@ void Interpreter::VisitCircuit(Circuit *op) {
 }
 
 bool Interpreter::Run() {
+  // Save initial node values
+  auto node_values_init{node_values};
   // Run verification nodes until one succeeds
   for (auto op : circuit->verifications) {
+    // Re-initialize node values
+    node_values.swap(node_values_init);
+    // Reset
     changed = true;
     // Evaluate verification node until fixpoint
     while (changed) {
