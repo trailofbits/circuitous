@@ -883,14 +883,54 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
 
       // Add instruction encoding check
       {
+        LOG(INFO) << "Creating relevant sections of: " << isel.encodings[i].to_string();
+        auto rinst_size = isel.instructions[i].bytes.size() * 8;
         const auto &encoding = isel.encodings[i];
-        const auto size = static_cast<unsigned>(encoding.size());
-        const auto lhs =
-            ir.getInt(llvm::APInt(size, encoding.to_string(), /*radix=*/2));
-        const auto rhs = remill::NthArgument(circuit0_func, 0);
-        const std::array<llvm::Value *, 2> eq_params{lhs, rhs};
-        params.push_back(
-            ir.CreateCall(BitMatcherFunc(ir.getIntNTy(size)), eq_params));
+
+        auto create_bit_check = [&](auto from, auto to) {
+          LOG(INFO) << "Creating bitcheck: " << from << " " << to;
+
+          auto fn = intrinsics::Extract::CreateFn(module.get(), from, to - from );
+
+          std::string full_inst;
+          // Encoding check needed since `x` is unsigned.
+          for (auto x = rinst_size - 1; x >= 0 && x < encoding.size(); --x) {
+            full_inst += (encoding[x]) ? '1' : '0';
+          }
+          // TODO(lukas): Sorry, most likely there is a more sane way to do this
+          //              but since it may change in rather near future I am keeping
+          //              it this way.
+          std::reverse(full_inst.begin(), full_inst.end());
+          std::string expected = full_inst.substr(from, to - from);
+          std::reverse(expected.begin(), expected.end());
+          auto size = static_cast<uint32_t>(expected.size());
+          CHECK(size == to - from) << size << " != " << to - from;
+
+          auto expected_v = ir.getInt(llvm::APInt(size, expected, 2));
+          const auto rhs = remill::NthArgument(circuit0_func, 0);
+          auto x = ir.CreateCall(fn, {rhs});
+          auto y = ir.CreateCall(
+            intrinsics::BitCompare::CreateFn(module.get(), size), {expected_v, x});
+          return y;
+        };
+
+        std::map<uint64_t, uint64_t> flattened_imm_regions;
+        for (auto &[_, data] : isel.imms[i]) {
+          for(auto &[from, size] : data) {
+            flattened_imm_regions.emplace(from, from + size);
+          }
+        }
+        uint64_t current = 0;
+        for (auto &[from, to] : flattened_imm_regions) {
+          if (current != from) {
+            params.push_back(create_bit_check(current, from));
+          }
+          current = to;
+        }
+        if (current != isel.instructions[i].bytes.size() * 8) {
+          params.push_back(
+            create_bit_check(current, isel.instructions[i].bytes.size() * 8));
+        }
       }
 
       // Final set of parameters are comparisons on whether or not the resulting
