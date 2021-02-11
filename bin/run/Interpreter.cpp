@@ -25,9 +25,9 @@ llvm::APInt &Interpreter::GetNodeVal(Operation *op) {
   return iter->second;
 }
 
-void Interpreter::SetInstructionBitsValue(const uint64_t bits) {
+void Interpreter::SetInstructionBitsValue(const std::string &bits) {
   auto inst{circuit->inst_bits[0]};
-  SetNodeVal(inst, llvm::APInt(inst->size, bits));
+  SetNodeVal(inst, llvm::APInt(inst->size, bits, /*radix=*/16U));
 }
 
 void Interpreter::SetInputRegisterValue(const std::string &name,

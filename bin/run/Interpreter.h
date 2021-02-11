@@ -28,7 +28,7 @@ class Interpreter : public Visitor<Interpreter> {
 
  public:
   Interpreter(Circuit *circuit);
-  void SetInstructionBitsValue(const uint64_t bits);
+  void SetInstructionBitsValue(const std::string &bits);
   void SetInputRegisterValue(const std::string &name, uint64_t bits);
   uint64_t GetOutputRegisterValue(const std::string &name);
   void Visit(Operation *op);

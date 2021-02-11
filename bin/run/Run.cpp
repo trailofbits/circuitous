@@ -95,7 +95,7 @@ int main(int argc, char *argv[]) {
   auto input_obj{maybe_json.get().getAsObject()};
   CHECK(input_obj) << "Invalid input state JSON object";
   // Get input instruction bits from JSON value
-  auto inst{input_obj->getInteger("instruction_bits")};
+  auto inst{input_obj->getString("instruction_bits")};
   CHECK(inst) << "Invalid instruction bits JSON value";
   // Get input register values from JSON values
   auto input_regs_obj{input_obj->getObject("input_regs")};
@@ -104,7 +104,7 @@ int main(int argc, char *argv[]) {
   auto circuit{circuitous::Circuit::Deserialize(ir)};
   circuitous::Interpreter run(circuit.get());
   // Initialize instruction bits
-  run.SetInstructionBitsValue(uint64_t(*inst));
+  run.SetInstructionBitsValue(*inst);
   // Initialize input register state
   for (auto [obj_key, obj_val] : *input_regs_obj) {
     auto reg_name{obj_key.str()};
