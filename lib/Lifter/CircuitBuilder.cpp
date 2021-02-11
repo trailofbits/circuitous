@@ -299,7 +299,7 @@ bool semantic_compare(const remill::Operand &lhs, const remill::Operand &rhs) {
 }
 
 void CircuitBuilder::IdentifyImms(remill::Instruction &rinst,
-                                  InstructionEncoding &enc,
+                                  const InstructionEncoding &enc,
                                   InstructionSelection::imm_meta_list_t &imms) {
   auto has_some_imm = [](auto &i) {
     for (auto &op : i.operands) {
@@ -353,24 +353,21 @@ void CircuitBuilder::IdentifyImms(remill::Instruction &rinst,
       }
     }
 
-    // TODO(lukas): Remove as it serves only for debug purposes.
-    std::string out;
-    for (auto i = 0U; i < bits.size(); ++i) {
-      out += std::to_string(bits[i]);
-    }
-    LOG(INFO) << out;
-
     const auto &[regions, _] = imms.insert({&op, {}});
     for (auto i = 0U; i < bits.size(); ++i) {
       if (!bits[i]) {
         continue;
       }
       uint64_t offset = i;
-      uint8_t count = 0;
+      uint32_t count = 0;
       for(; i < bits.size() && bits[i]; ++i) {
         ++count;
       }
-      regions->second.emplace(offset, count);
+      // NOTE(lukas): We need to flip this a bit since the ordering of instruction
+      //              in the circuit itself will be reversed of that in
+      //              `remill::Instruction::bytes`.
+      auto adjusted = rinst.bytes.size() * 8 - offset - count;
+      regions->second.emplace(adjusted, count);
     }
   };
 
