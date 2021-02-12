@@ -4,6 +4,7 @@
 
 #include "CircuitBuilder.h"
 #include "circuitous/IR/Lifter.hpp"
+#include "InstructionFuzzer.hpp"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
@@ -288,100 +289,9 @@ llvm::Function *CircuitBuilder::SelectorFunc(llvm::Type *selector_type,
 void CircuitBuilder::IdentifyImms(CircuitBuilder::InstSelections &insts) {
   for (auto &inst : insts) {
     for (auto i = 0U; i < inst.instructions.size(); ++i) {
-      inst.imms.emplace_back();
-      IdentifyImms(inst.instructions[i], inst.encodings[i], inst.imms.back());
-    }
-  }
-}
-
-bool semantic_compare(const remill::Operand &lhs, const remill::Operand &rhs) {
-  return lhs.Serialize() == rhs.Serialize();
-}
-
-void CircuitBuilder::IdentifyImms(remill::Instruction &rinst,
-                                  const InstructionEncoding &enc,
-                                  InstructionSelection::imm_meta_list_t &imms) {
-  auto has_some_imm = [](auto &i) {
-    for (auto &op : i.operands) {
-      if (op.type == remill::Operand::kTypeImmediate) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  // It has no immediates, therefore we won't bother ourselves.
-  // TODO(lukas): This will work for now.
-  if (!has_some_imm(rinst)) {
-    return;
-  }
-
-  auto compare_ops = [](auto &original, auto &flipped, auto &skip) {
-    if (original.operands.size() != flipped.operands.size()) {
-      return false;
-    }
-
-    for (auto i = 0U; i < flipped.operands.size(); ++i) {
-      if (&original.operands[i] == &skip) {
-        if (flipped.operands[i].type != remill::Operand::kTypeImmediate) {
-          return false;
-        }
-        continue;
-      }
-
-      if (!semantic_compare(original.operands[i], flipped.operands[i])) {
-        return false;
-      }
-    }
-    return true;
-  };
-
-  auto inspect = [&](auto &op) {
-    InstructionEncoding bits;
-    for (auto i = 0U; i < rinst.bytes.size(); ++i) {
-      for (auto j = 0U; j < 8; ++j) {
-        remill::Instruction tmp;
-        std::string flipped_bit = rinst.bytes;
-        auto byte = static_cast<uint8_t>(flipped_bit[ i ]);
-        uint8_t mask = 1;
-        flipped_bit[i] = static_cast< char >(byte ^ (mask << j));
-        if (!arch->DecodeInstruction(0, flipped_bit, tmp)) {
-          bits[i * 8 + j] = 0;
-          continue;
-        }
-        bits[i * 8 + j] = compare_ops(rinst, tmp, op);
-      }
-    }
-
-    const auto &[regions, _] = imms.insert({&op, {}});
-    for (auto i = 0U; i < bits.size(); ++i) {
-      if (!bits[i]) {
-        continue;
-      }
-      uint64_t offset = i;
-      uint32_t count = 0;
-      for(; i < bits.size() && bits[i]; ++i) {
-        ++count;
-      }
-      // NOTE(lukas): We need to flip this a bit since the ordering of instruction
-      //              in the circuit itself will be reversed of that in
-      //              `remill::Instruction::bytes`.
-      auto adjusted = rinst.bytes.size() * 8 - offset - count;
-      regions->second.emplace(adjusted, count);
-    }
-  };
-
-  for (auto &op : rinst.operands) {
-    if (op.type == remill::Operand::kTypeImmediate) {
-      inspect(op);
-    }
-  }
-
-  // TODO(lukas): Remove as it serves only for debug purposes.
-  for (auto &[op, regions] : imms) {
-    LOG(INFO) << &op << " -> " << op->Serialize();
-    for (auto &[from, size] : regions ) {
-      LOG(INFO) << "\t[ " << from << ", " << from + size << " ] " << size;
+      LOG(INFO) << "Searching for immediate operands regions in:";
+      LOG(INFO) << inst.instructions[i].Serialize();
+      inst.imms.push_back(InstructionFuzzer{arch}.FuzzOps(inst.instructions[i]));
     }
   }
 }
