@@ -160,14 +160,9 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
     mark_as_used->eraseFromParent();
   }
 
-  one_of_func = llvm::Function::Create(llvm::FunctionType::get(bool_type, true),
-                                       llvm::GlobalValue::ExternalLinkage,
-                                       "__circuitous_one_of", module.get());
-
-  verify_inst_func = llvm::Function::Create(
-      llvm::FunctionType::get(bool_type, {bool_type}, true),
-      llvm::GlobalValue::ExternalLinkage, "__circuitous_verify_inst",
-      module.get());
+  // TODO(lukas): Move to ctor
+  one_of_func = intrinsics::OneOf::CreateFn(module.get());
+  verify_inst_func = intrinsics::VerifyInst::CreateFn(module.get());
 
   // Mark these functions as not touching memory; this will help LLVM to
   // better optimize code that calls these functions.
