@@ -4,17 +4,19 @@
 
  #pragma once
 
+#include <circuitous/Util/LLVMUtil.hpp>
+#include <circuitous/IR/Intrinsics.hpp>
+
 #include <remill/Arch/Instruction.h>
 #include <remill/BC/Lifter.h>
 #include <remill/BC/Util.h>
 
-#include <circuitous/Util/LLVMUtil.hpp>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
 #include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/Function.h>
 #pragma clang diagnostic pop
-
 
 #include <cstdint>
 #include <map>
@@ -22,105 +24,6 @@
 #include <vector>
 
 namespace circuitous {
-namespace intrinsics {
-
-template<typename Data>
-struct Intrinsic_impl : Data {
-  static bool IsIntrinsic(llvm::Function *fn) {
-    if (!fn->hasName() || !fn->isDeclaration()) {
-      return false;
-    }
-    return fn->getName().startswith(Data::fn_prefix);
-  }
-};
-
-template<typename Data>
-struct IntervalIntrinsic_impl : Intrinsic_impl<Data> {
-  using parent = IntervalIntrinsic_impl<Data>;
-
-  static std::string Name(uint64_t from, uint64_t size) {
-    std::stringstream ss;
-    ss << Data::fn_prefix << from << Data::separator << size;
-    return ss.str();
-  }
-
-  static llvm::Function *CreateFn(llvm::Module *module, uint64_t from, uint64_t size) {
-    llvm::IRBuilder<> ir(module->getContext());
-    auto r_ty = ir.getIntNTy(static_cast<uint32_t>(size));
-    auto fn_t = llvm::FunctionType::get(r_ty, {}, true);
-    auto callee = module->getOrInsertFunction(Name(from, size), fn_t);
-    return llvm::cast<llvm::Function>(callee.getCallee());
-  }
-
-  using intrinsic_args_t = std::tuple<uint64_t, uint64_t>;
-  static intrinsic_args_t ParseArgs(llvm::Function *fn) {
-    CHECK(parent::IsIntrinsic(fn))
-      << "Cannot parse arguments of function: "
-      << LLVMName(fn)
-      << "that is not our intrinsic.";
-    llvm::StringRef name = fn->getName();
-    name.consume_front(Data::fn_prefix);
-    const auto &[from, size] = name.split(Data::separator);
-
-    auto as_uint64_t = [](auto &str_ref) {
-      uint64_t out;
-      str_ref.getAsInteger(10, out);
-      return out;
-    };
-    return {as_uint64_t(from), as_uint64_t(size)};
-  }
-};
-
-template<typename Data>
-struct BitCompare_impl : Intrinsic_impl<Data> {
-  using parent = Intrinsic_impl<Data>;
-
-  static std::string Name(uint64_t size) {
-    std::stringstream ss;
-    ss << Data::fn_prefix << Data::separator << size;
-    return ss.str();
-  }
-
-  static llvm::Function *CreateFn(llvm::Module *module, uint64_t size) {
-    llvm::IRBuilder<> ir(module->getContext());
-    auto r_ty = ir.getInt1Ty();
-    auto arg_ty = ir.getIntNTy(static_cast<uint32_t>(size));
-    auto fn_t = llvm::FunctionType::get(r_ty, {arg_ty, arg_ty}, false);
-    auto callee = module->getOrInsertFunction(Name(size), fn_t);
-    return llvm::cast<llvm::Function>(callee.getCallee());
-  }
-
-  using intrinsic_args_t = uint64_t;
-  static intrinsic_args_t ParseArgs(llvm::Function *fn) {
-    CHECK(parent::IsIntrinsic(fn))
-      << "Cannot parse arguments of function: "
-      << LLVMName(fn)
-      << "that is not our intrinsic.";
-
-    llvm::StringRef name = fn->getName();
-    name.consume_front(Data::fn_prefix);
-    name.consume_front(Data::separator);
-
-    uint64_t out;
-    name.getAsInteger(10, out);
-    return out;
-  }
-};
-
-struct ExtractData {
-  static constexpr const char *fn_prefix = "__circuitous.extract";
-  static constexpr const char separator = '.';
-};
-
-struct BitCompareData {
-  static constexpr const char *fn_prefix = "__circuitous.bitcompare";
-  static constexpr const char separator = '.';
-};
-
-using Extract = IntervalIntrinsic_impl<ExtractData>;
-using BitCompare = BitCompare_impl<BitCompareData>;
-
-} // namespace intrinsics
 
 struct ImmAsIntrinsics : public intrinsics::Extract {
   // [from, size], regions cannot overlap!
