@@ -631,7 +631,8 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
 
           const auto arg_cmp = llvm::cast<llvm::CallInst>(arg_use.get());
           CHECK(arg_cmp->getCalledFunction()->getName().startswith(
-              "__circuitous_icmp_eq_"));
+              "__circuitous_icmp_eq_") ||
+                intrinsics::BitCompare::IsIntrinsic(arg_cmp->getCalledFunction()));
 
           const auto proposed_val = arg_cmp->getArgOperand(0u);
           const auto expected_val = arg_cmp->getArgOperand(1u);
