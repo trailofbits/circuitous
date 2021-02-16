@@ -77,8 +77,10 @@ namespace impl {
         << "Cannot parse arguments of function: "
         << LLVMName(fn)
         << "that is not our intrinsic.";
+
       llvm::StringRef name = fn->getName();
-      name.consume_front(Self_t::fn_prefix + Self_t::separator);
+      name.consume_front(Self_t::fn_prefix);
+      name.consume_front(Self_t::separator);
       const auto &[from, size] = name.split(Self_t::separator);
 
       auto as_uint64_t = [](auto &str_ref) {
@@ -149,17 +151,17 @@ namespace impl {
 namespace data {
   struct Extract {
     static constexpr const char *fn_prefix = "__circuitous.extract";
-    static constexpr const char separator = '.';
+    static constexpr const char *separator = ".";
   };
 
   struct BitCompare {
     static constexpr const char *fn_prefix = "__circuitous.bitcompare";
-    static constexpr const char separator = '.';
+    static constexpr const char *separator = ".";
   };
 
   struct ByteSwap {
     static constexpr const char *fn_prefix = "__circuitous.byteswap";
-    static constexpr const char separator = '.';
+    static constexpr const char *separator = ".";
   };
 
   struct OneOf {
@@ -181,7 +183,7 @@ struct VerifyInst : data::VerifyInst, impl::Predicate<VerifyInst> {};
 
 struct ExtractRaw : impl::Interval<ExtractRaw> {
   static constexpr const char *fn_prefix = "__circuitous.raw_extract";
-  static constexpr const char separator = '.';
+  static constexpr const char *separator = ".";
 };
 
 } // namespace circuitous::intrinsics
