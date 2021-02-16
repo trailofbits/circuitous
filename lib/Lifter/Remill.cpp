@@ -243,6 +243,21 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     return result;
   }
 
+  Operation *VisitExtractRawIntrinsic(llvm::Function *fn) {
+    LOG(INFO) << "Handling extract raw intrinsic: " << LLVMName(fn);
+
+    CHECK(impl->inst_bits.Size() == 1);
+    const auto &inst_bytes = *impl->inst_bits.begin();
+
+    const auto &[from, size] = intrinsics::ExtractRaw::ParseArgs(fn);
+    auto op = impl->extracts.Create(
+      static_cast<unsigned>(from),
+      static_cast<unsigned>(from + size));
+    LOG(INFO) << from << ", " << size;
+    op->operands.AddUse(inst_bytes);
+    return op;
+  }
+
   void VisitFunctionCall(llvm::Function *, llvm::Use &, llvm::CallInst *val) {
     auto &op = val_to_op[val];
     if (op) {
@@ -305,6 +320,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       LOG(FATAL) << "Memory write intrinsics not yet supported";
     } else if (intrinsics::Extract::IsIntrinsic(func)) {
       op = VisitExtractIntrinsic(func);
+    } else if (intrinsics::ExtractRaw::IsIntrinsic(func)) {
+      op = VisitExtractRawIntrinsic(func);
     } else {
       LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(val);
     }
