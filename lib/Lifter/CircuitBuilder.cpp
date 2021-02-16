@@ -284,9 +284,13 @@ llvm::Function *CircuitBuilder::SelectorFunc(llvm::Type *selector_type,
 void CircuitBuilder::IdentifyImms(CircuitBuilder::InstSelections &insts) {
   for (auto &inst : insts) {
     for (auto i = 0U; i < inst.instructions.size(); ++i) {
-      LOG(INFO) << "Searching for immediate operands regions in:";
-      LOG(INFO) << inst.instructions[i].Serialize();
-      inst.imms.push_back(InstructionFuzzer{arch}.FuzzOps(inst.instructions[i]));
+      if (reduce_imms) {
+        LOG(INFO) << "Searching for immediate operands regions in:";
+        LOG(INFO) << inst.instructions[i].Serialize();
+        inst.imms.push_back(InstructionFuzzer{arch}.FuzzOps(inst.instructions[i]));
+      } else {
+        inst.imms.emplace_back();
+      }
     }
   }
 }

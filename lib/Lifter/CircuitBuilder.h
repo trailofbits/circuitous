@@ -213,6 +213,10 @@ class CircuitBuilder {
 
   // Top-level registers.
   std::vector<const remill::Register *> regs;
+
+  // TODO(lukas): Currently turned off, later we want to hide this behind some
+  //              cmd flag. I do not want to spaghet it in at this point.
+  bool reduce_imms = false;
 };
 
 }  // namespace circuitous
