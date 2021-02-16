@@ -654,10 +654,8 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
           const auto proposed_val = arg_cmp->getArgOperand(0u);
           const auto expected_val = arg_cmp->getArgOperand(1u);
 
-          // Usually this means expected val is some instruction bits.
-          if (llvm::isa<llvm::Constant>(expected_val)) {
-            importer.Visit(circuit_func, arg_cmp->getArgOperandUse(1u));
-          }
+          importer.Visit(circuit_func, arg_cmp->getArgOperandUse(0u));
+          importer.Visit(circuit_func, arg_cmp->getArgOperandUse(1u));
 
           auto &lhs_op = importer.val_to_op[proposed_val];
           const auto rhs_op = importer.val_to_op[expected_val];
