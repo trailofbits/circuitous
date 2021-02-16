@@ -69,14 +69,21 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
                                     llvm::Argument *arg,
                                     remill::Operand &arch_op) override {
     // We run this to run some extra checks, but we do not care about result.
+    llvm::IRBuilder<> ir(bb);
     auto module = bb->getModule();
+
+    auto constant_imm = this->parent::LiftImmediateOperand(inst, bb, arg, arch_op);
     auto imm_getters = GetImmediates(module, &inst, &arch_op);
+
+    if (imm_getters.size() == 0) {
+      return constant_imm;
+    }
     CHECK(imm_getters.size() == 1);
     LOG(INFO) << "Would call: " << LLVMName(*imm_getters.begin());
-    auto constant_imm = this->parent::LiftImmediateOperand(inst, bb, arg, arch_op);
+
 
     auto inst_fn = *(imm_getters.begin());
-    llvm::IRBuilder<> ir(bb);
+
     auto hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
     if (hidden_imm->getType() != constant_imm->getType())
     {
