@@ -58,7 +58,8 @@ namespace impl {
 
     static std::string Name(uint64_t from, uint64_t size) {
       std::stringstream ss;
-      ss << Self_t::fn_prefix << from << Self_t::separator << size;
+      ss << Self_t::fn_prefix << Self_t::separator
+         << from << Self_t::separator << size;
       return ss.str();
     }
 
@@ -77,7 +78,7 @@ namespace impl {
         << LLVMName(fn)
         << "that is not our intrinsic.";
       llvm::StringRef name = fn->getName();
-      name.consume_front(Self_t::fn_prefix);
+      name.consume_front(Self_t::fn_prefix + Self_t::separator);
       const auto &[from, size] = name.split(Self_t::separator);
 
       auto as_uint64_t = [](auto &str_ref) {
