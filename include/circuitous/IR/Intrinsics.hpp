@@ -144,6 +144,8 @@ namespace impl {
   };
 } // namesapce impl
 
+// TODO(lukas): We want to check that `fn_prefix` is never prefix of some
+//              other `fn_prefix`.
 namespace data {
   struct Extract {
     static constexpr const char *fn_prefix = "__circuitous.extract";
@@ -176,5 +178,10 @@ struct BitCompare : data::BitCompare, impl::BitCompare<BitCompare> {};
 struct Extract : data::Extract, impl::Interval<Extract> {};
 struct OneOf : data::OneOf, impl::Predicate<OneOf> {};
 struct VerifyInst : data::VerifyInst, impl::Predicate<VerifyInst> {};
+
+struct ExtractRaw : impl::Interval<ExtractRaw> {
+  static constexpr const char *fn_prefix = "__circuitous.raw_extract";
+  static constexpr const char separator = '.';
+};
 
 } // namespace circuitous::intrinsics
