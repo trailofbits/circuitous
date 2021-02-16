@@ -98,7 +98,7 @@ int main(int argc, char *argv[]) {
       std::ifstream is(FLAGS_ir_in, std::ios::binary);
       if (!is.good()) {
         LOG(ERROR) << "Error while opening input IR file.";
-        return EXIT_FAILURE;
+        return {};
       }
       return circuitous::Circuit::Deserialize(is);
 
