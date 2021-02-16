@@ -788,6 +788,22 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
 
       // Add instruction encoding check
       {
+        // Reorders bytes so that they can be matched to extract from instruction
+        // bytes without extra concats.
+        auto generate_raw_bytes = [](auto full, uint64_t from, uint64_t to) {
+          std::string out;
+          while(true) {
+            uint64_t y = std::min(from + (8 - from % 8), to);
+            std::string partial = full.substr(from, 8);
+            std::reverse(partial.begin(), partial.end());
+            out = partial + out;
+            if (y == to) {
+              return out;
+            }
+            from = y;
+          }
+        };
+
         LOG(INFO) << "Creating relevant sections of: " << isel.encodings[i].to_string();
         auto rinst_size = isel.instructions[i].bytes.size() * 8;
         const auto &encoding = isel.encodings[i];
@@ -795,7 +811,7 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
         auto create_bit_check = [&](auto from, auto to) {
           LOG(INFO) << "Creating bitcheck: " << from << " " << to;
 
-          auto fn = intrinsics::Extract::CreateFn(module.get(), from, to - from );
+          auto fn = intrinsics::ExtractRaw::CreateFn(module.get(), from, to - from );
 
           std::string full_inst;
           // Encoding check needed since `x` is unsigned.
@@ -806,8 +822,8 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
           //              but since it may change in rather near future I am keeping
           //              it this way.
           std::reverse(full_inst.begin(), full_inst.end());
-          std::string expected = full_inst.substr(from, to - from);
-          std::reverse(expected.begin(), expected.end());
+          std::string expected = generate_raw_bytes(full_inst, from, to);
+
           auto size = static_cast<uint32_t>(expected.size());
           CHECK(size == to - from) << size << " != " << to - from;
 
