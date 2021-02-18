@@ -3,21 +3,23 @@
 import json
 
 class State:
+  __slots__ = ('registers', 'bytes', 'result')
+
   def __init__(self):
     self.registers = {}
-    self.bits = None
+    self.bytes = None
     self.result = None
 
   def set_reg(self, reg, value):
     self.registers[reg] = value
     return self
 
-  def set_bits(self, bits):
-    self.bits = bits
+  def set_bytes(self, bytes_):
+    self.bytes = bytes_
     return self
 
   def get(self):
-    return {"instruction_bits" : self.bits,
+    return {"instruction_bits" : self.bytes,
             "input_regs" : self.registers }
 
   def as_json_file(self):
@@ -34,8 +36,11 @@ for reg in _regs:
   setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))
 
 class TestCase:
-  def __init__(self, input_, expected_, name_):
+  __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated')
+
+  def __init__(self, name_=None, bytes_=None, input_=None, expected_=None):
     self.name = name_
+    self.bytes = bytes_
     self.input = input_
     self.expected = expected_
     self.simulated = State()
@@ -43,8 +48,6 @@ class TestCase:
 class Test:
   def __init__(self, name_=""):
     self.name = name_
-    #self.state = State()
-    #self.out_state = State()
     self.cases = []
     self.dir = None
     self.metafiles = {}
@@ -56,19 +59,22 @@ class Test:
     self._bytes = bytes_
     return self
 
-  def add(self, input, expected, verdict):
+  def case(self, **kwargs):
+    case = TestCase()
     self._names += 1
-    case = TestCase(input, expected, str(self._names))
-    case.expected.result = verdict
-    if (input.bits is None):
-      input.bits = self._bytes
+    case.name = kwargs.get('name', str(self._names))
+    case.bytes = kwargs.get('lift_bytes', self._bytes)
+    case.input = kwargs.get('I', State())
+    case.input.bytes = kwargs.get('run_bytes', self._bytes)
+    case.expected = kwargs.get('E', State())
+    case.expected.result = kwargs.get('R', None)
+    assert case.expected.result is not None
     self.cases.append(case)
     return self
 
   def tags(self, tags_):
     self._tags += tags_
     return self
-
 
 class NotImplemented(Exception):
   pass
@@ -101,6 +107,40 @@ class Hardcoded(TC):
 
 x = Test("mov imm rdx") \
 .bytes("ba12000000") \
-.tags("imm_reduce") \
-.add(State(), State().RDX(0x12), True) \
-.add(State(), State().RDX(0x12000000), True)
+.tags("imm reduce") \
+.case(
+  E = State().RDX(0x12),
+  R = True,
+).case(
+  E = State().RDX(0x12000000),
+  R = False
+).case(
+  E = State().RDX(0x13),
+  run_bytes = "ba13000000",
+  R = False
+).case(
+  E = State().RDX(0x13),
+  run_bytes = "ff13000000",
+  R = False
+)
+
+#x = Test("mov imm rdx") \
+#.bytes("ba12000000") \
+#.tags("imm_reduce") \
+#.add(State(), State().RDX(0x12)).R(True)
+#.add(State(), State().RDX(0x12000000)).R(False)
+#.add(State(), State().RDX(0x12)).R(False)
+#.add().E(State().RDX(12))
+#      .I()
+#      .run_bytes().lift_bytes()
+#      .R()
+
+#x = Test("mov imm rdx") \
+#.bytes("ba12000000") \
+#.tags("imm reduce") \
+#.case() \
+#  .I( State() ).E( State().RDX(0x12) ).R(True) \
+#.case() \
+#  .I( State() ).E( State().RDX(0x12000000) ).R(False) \
+#.case() \
+#  .I( State() ).E( State().RDX(0x13) ).run_bytes("ba13000000").R(False)

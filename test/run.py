@@ -47,15 +47,16 @@ class Lifter:
 
   def lift_test(self, tc):
     for case in tc.cases:
-      bytes = case.input.bits
-      print(type(bytes))
+      bytes = case.bytes
       circuit = self.circuit_name(bytes)
+      log_info("Lifting: " + '.' * 16 + case.name)
       if not circuit in tc.metafiles:
-        circuit = self.lift(case.input.bits)
+        tc.metafiles[circuit] = self.lift(case.bytes)
+      else:
+        log_info("\tSkipped")
       tc.metafiles[case.name + ".circuit"] = circuit
 
   def circuit_name(self, bytes):
-    print(type(bytes))
     return bytes + ".circuit.ir"
 
   def lift(self, bytes):
@@ -82,6 +83,7 @@ class Interpret:
             "--json_in", case.input.as_json_file(),
             "--json_out", case.name + ".result.json",
             "--ir_in", ir]
+    log_info("Run: " + '.' * 16 + " " + case.name)
     pipes = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     check_retcode(pipes, self.component)
 
@@ -108,11 +110,6 @@ class Comparator:
     return out
 
   def compare_case(self, after, expected):
-    if expected.result != after.result:
-      return False, \
-             "Verdict is incorrect, expected: " + str(expected.result) + \
-              " got " + str(after.result)
-
     accept = True
     message = ""
     for reg, val in after.registers.items():
@@ -120,24 +117,33 @@ class Comparator:
         accept = False
         message += "Register " + reg + " (expected != actual): " + \
                    str(expected.registers[reg]) + " != " + str(val) + "\n"
-    return accept, message
+
+    if expected.result:
+      if after.result == False or accept == False:
+        if after.result == False:
+          message += "Should accept, did not.\n"
+        return False, message
+    if not expected.result:
+      if accept and after.result:
+        return False, "Should reject, did not.\n"
+    return True, ""
 
 class Results:
   def __init__(self):
     self.results = {"pass" : 0, "fail" : 0, "error" : 0}
 
-  def process(self, result):
+  def process(self, result, name):
+    log_info("Test: " + name)
     for name, (verdict, message) in result.items():
-      log_info("TC: " + name)
       if not verdict:
-        self.failed(message)
+        self.failed(name, message)
         self.results["fail"] += 1
       else:
         self.ok()
         self.results["pass"] += 1
 
-  def failed(self, message):
-    print("\t[ - ]", message)
+  def failed(self, name, message):
+    print("\t[", name, "]", message)
 
   def ok(self):
     pass
@@ -165,7 +171,7 @@ def main():
   Interpret().run(TC.x)
 
   rs = Results()
-  rs.process(Comparator().compare(TC.x))
+  rs.process(Comparator().compare(TC.x), TC.x.name)
   rs.report()
 
 if __name__ == "__main__":
