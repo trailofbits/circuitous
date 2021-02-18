@@ -10,6 +10,8 @@ import tempfile
 from tc import State, Test
 import tc as TC
 
+import simple
+
 circuitous_prefix="../../build"
 circuitous_run=os.path.join(circuitous_prefix, "circuitous-run")
 circuitous_lift=os.path.join(circuitous_prefix, "circuitous-lift")
@@ -106,14 +108,15 @@ class Comparator:
   def compare(self, tc):
     out = {}
     for case in tc.cases:
-      out[case.name] = self.compare_case(case.simulated, case.expected)
+      out[case.name] = self.compare_case(case.input, case.simulated, case.expected)
     return out
 
-  def compare_case(self, after, expected):
+  def compare_case(self, input, after, expected):
     accept = True
     message = ""
     for reg, val in after.registers.items():
-      if expected.registers[reg] != int(val):
+      e_val = expected.registers.get(reg, input.registers.get(reg))
+      if e_val != int(val):
         accept = False
         message += "Register " + reg + " (expected != actual): " + \
                    str(expected.registers[reg]) + " != " + str(val) + "\n"
