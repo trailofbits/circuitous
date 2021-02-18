@@ -59,9 +59,10 @@ class Test:
     self._bytes = bytes_
     return self
 
-  def case(self, **kwargs):
+  def case(self, name_=None, **kwargs):
     case = TestCase()
     self._names += 1
+    case.name = name_
     case.name = kwargs.get('name', str(self._names))
     case.bytes = kwargs.get('lift_bytes', self._bytes)
     case.input = kwargs.get('I', State())
@@ -76,30 +77,5 @@ class Test:
     self._tags += tags_
     return self
 
-class NotImplemented(Exception):
-  pass
-
-class CompareType:
-  IGNORE_REST = 0
-
-class TC:
-  def __init__(self):
+  def generate():
     pass
-
-  def bytes(self):
-    if self.bytes is None:
-      self.bytes = self.generate_bytes()
-    return self.bytes
-
-  # TODO(lukas): Idea here is that we can provide assembly string
-  #              and let the script generate bytes.
-  def generate_bytes(self):
-    raise NotImplemented("TC::generate_bytes is not implemented yet")
-
-
-class Hardcoded(TC):
-  tag = "hc"
-
-  def __init__(self, tags_=set()):
-    self.tags = tags_ + { self.tag }
-    self.invocations = []
