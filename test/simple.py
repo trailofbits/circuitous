@@ -22,27 +22,27 @@ mov = [
   Test("mov imm eax/ebx/ecx/edx") \
   .bytes("b812000000bb12000000b912000000ba12000000")
   .tags("imm_reduce")
-  .case(
+  .case("mov rax",
     I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
     E = State().RAX(0x12),
     run_bytes = "b812000000",
     R = True
-  ).case(
+  ).case("mov rbx",
     I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
     E = State().RBX(0x12),
     run_bytes = "bb12000000",
     R = True
-  ).case(
+  ).case("mov rcx",
     I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
     E = State().RCX(0x12),
     run_bytes = "b912000000",
     R = True
-  ).case(
+  ).case("mov rdx",
     I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
     E = State().RDX(0x12),
     run_bytes = "ba12000000",
     R = True
-  ).case(
+  ).case("mov rbx, modify rax",
     I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
     E = State().RBX(0x12).RAX(0x12),
     run_bytes = "bb12000000",
