@@ -183,7 +183,7 @@ def main():
   arg_parser.add_argument("--persist",
                           help="Runtime helper directories will not be cleaned.",
                           action='store_true',
-                          default=True
+                          default=False
                           )
   arg_parser.add_argument("--tags",
                           help="TODO: Specify which tags you want to run.",
