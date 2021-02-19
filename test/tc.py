@@ -71,7 +71,8 @@ class Test:
     case = TestCase()
     self._names += 1
     case.name = name_
-    case.name = kwargs.get('name', str(self._names))
+    case.name = kwargs.get('name',
+                           case.name if case.name is not None else str(self._names))
     case.bytes = kwargs.get('lift_bytes', self._bytes)
     case.input = kwargs.get('I', State())
     case.input.bytes = kwargs.get('run_bytes', self._bytes)
