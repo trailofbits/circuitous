@@ -20,7 +20,7 @@ def att(instructions):
 # * Objdump the `.o`
 # * Parse out the bytes
 def get_instructions(instructions, syntax="intel"):
-  with tempfile.TemporaryDirectory() as tmpdir:
+  with tempfile.TemporaryDirectory(os.getcwd()) as tmpdir:
     saved = os.path.abspath(os.getcwd())
     os.chdir(tmpdir)
     with open("insts.S", 'w') as out:
