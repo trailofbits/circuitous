@@ -17,6 +17,28 @@ circuitous_run=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-run")
 circuitous_lift=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-lift"))
 top_level_dir=None
 
+class Colors:
+  GREEN = '\033[92m'
+  RED = '\033[91m'
+  YELLOW = '\033[93m'
+  RESET = '\033[0m'
+
+def end_color():
+    return Colors.RESET
+
+def colorize(color, what):
+    return color + what + end_color()
+
+def green(what):
+    return colorize(Colors.GREEN, what)
+
+def red(what):
+    return colorize(Colors.RED, what)
+
+def yellow(what):
+    return colorize(Colors.YELLOW, what)
+
+
 def update_relative_paths():
   pass
 
