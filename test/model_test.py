@@ -48,6 +48,5 @@ class MicroxGen:
 
     out = State()
     for reg in _regs:
-      print(reg, t.read_register(reg, t.REG_HINT_NONE) )
       out.set_reg(reg, t.read_register(reg, t.REG_HINT_NONE))
     return out
