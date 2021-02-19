@@ -157,26 +157,58 @@ class Results:
     for x in ["pass", "fail", "error"]:
       print("\t", x, " : ", self.results[x])
 
-def main():
-  arg_parser = argparse.ArgumentParser(
-    formatter_class = argparse.RawDescriptionHelpFormatter)
-  arg_parser.add_argument("--bytes", help="Something Something", required=True)
-  args, command_args = arg_parser.parse_known_args()
 
-  print("Supplied bytes:", args.bytes)
-  test_dir = tempfile.mkdtemp(dir=os.getcwd())
+def execute_tests(tests, test_dir):
   log_info("Test dir is: " + test_dir)
   os.chdir(test_dir)
   log_info("Entering: " + test_dir)
   global top_level_dir
-  top_level_dir = test_dir
+  top_level_dir = os.path.abspath(test_dir)
 
-  Lifter().lift_test(TC.x)
-  Interpret().run(TC.x)
+  for _ in range(1):
+    x = mp.ModelTest("mov imm rdx").bytes("ba12000000").case(I = State(), R = True )
+    x.generate()
+  #for x in simple.mov:
+    print(os.getcwd())
+    Lifter().lift_test(x)
+    Interpret().run(x)
+    rs = Results()
+    rs.process(Comparator().compare(x), x.name)
+    rs.report()
 
-  rs = Results()
-  rs.process(Comparator().compare(TC.x), TC.x.name)
-  rs.report()
+
+def main():
+  arg_parser = argparse.ArgumentParser(
+    formatter_class = argparse.RawDescriptionHelpFormatter)
+  arg_parser.add_argument("--persist",
+                          help="Runtime helper directories will not be cleaned.",
+                          action='store_true',
+                          default=True
+                          )
+  arg_parser.add_argument("--tags",
+                          help="TODO: Specify which tags you want to run.",
+                          action='extend',
+                          nargs='+'
+                          )
+  arg_parser.add_argument("--sets",
+                           help="TODO: Choose which test sets to consider.",
+                           action='extend',
+                           nargs='+')
+  arg_parser.add_argument("--dbg",
+                           help="TODO: Run in dbg mode, which means be verbose.",
+                           action='store_true',
+                           default=True)
+
+  args, command_args = arg_parser.parse_known_args()
+  if args.tags is None:
+    args.tags = ['all']
+
+  if args.persist:
+    test_dir = tempfile.mkdtemp(dir=os.getcwd())
+    execute_tests([], test_dir)
+  else:
+    with tempfile.TemporaryDirectory() as tmpdir:
+      execute_tests([], tmpdir)
 
 if __name__ == "__main__":
   main()
