@@ -51,9 +51,9 @@ class Lifter:
     for case in tc.cases:
       bytes = case.bytes
       circuit = self.circuit_name(bytes)
-      log_info("Lifting: " + '.' * 16 + case.name)
+      log_info("Lifting: " + '.' * 16 + " " + case.name)
       if not circuit in tc.metafiles:
-        tc.metafiles[circuit] = self.lift(case.bytes)
+        tc.metafiles[circuit] = self.lift(case.bytes, tc._lift_opts)
       else:
         log_info("\tSkipped")
       tc.metafiles[case.name + ".circuit"] = circuit
@@ -61,10 +61,11 @@ class Lifter:
   def circuit_name(self, bytes):
     return bytes + ".circuit.ir"
 
-  def lift(self, bytes):
+  def lift(self, bytes, extra_args):
     args = [self.binary,
             "--bytes_in", bytes,
             "--json_out", "out.json", "--ir_out", self.circuit_name(bytes)]
+    args += extra_args
     pipes = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     check_retcode(pipes, self.component)
 
