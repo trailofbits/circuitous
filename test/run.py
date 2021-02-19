@@ -157,27 +157,38 @@ class Comparator:
 class Results:
   def __init__(self):
     self.results = {"pass" : 0, "fail" : 0, "error" : 0}
+    self.fails = []
 
-  def process(self, result, name):
-    log_info("Test: " + name)
+  def process(self, result, test_name):
     for name, (verdict, message) in result.items():
+      full_name = test_name + " -> " + name
       if not verdict:
-        self.failed(name, message)
+        self.failed(full_name, message)
         self.results["fail"] += 1
       else:
         self.ok()
         self.results["pass"] += 1
 
   def failed(self, name, message):
-    print("\t[", name, "]", message)
+    print("\t", red("[" + name + "]"), message)
+    self.fails.append(name)
 
   def ok(self):
     pass
 
   def report(self):
     log_info("Results:")
+    for x in self.fails:
+      log_info("F: " + x)
+    # TODO(lukas): Bleh, rework when we are certain the
+    #              categories won't change much.
     for x in ["pass", "fail", "error"]:
-      print("\t", x, " : ", self.results[x])
+      message = "\t" + x + " : " + str(self.results[x])
+      if x == "fail" and self.results[x] != 0:
+        message = red(message)
+      if x == "pass" and self.results[x] == sum(self.results.values()):
+        message = green(message)
+      print(message)
 
 
 def execute_tests(tests, top_dir):
@@ -186,6 +197,7 @@ def execute_tests(tests, top_dir):
   global top_level_dir
   top_level_dir = os.path.abspath(top_dir)
 
+  rs = Results()
   for x in tests:
     test_dir = tempfile.mkdtemp(dir=os.getcwd(),
                                 prefix=x.name.replace(' ', '.').replace('/', '.') + '_')
@@ -194,10 +206,11 @@ def execute_tests(tests, top_dir):
 
     Lifter().lift_test(x)
     Interpret().run(x)
-    rs = Results()
+
     rs.process(Comparator().compare(x), x.name)
-    rs.report()
     os.chdir(top_level_dir)
+
+  rs.report()
 
 
 # TODO(lukas): Mocking this one for now
