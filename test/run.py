@@ -166,6 +166,9 @@ def execute_tests(tests, test_dir):
 
   for _ in range(1):
     x = mp.ModelTest("mov imm rdx").bytes("ba12000000").case(I = State(), R = True )
+    test_dir = tempfile.mkdtemp(dir=os.getcwd(),
+                                prefix=x.name.replace(' ', '.') + '_')
+    os.chdir(test_dir)
     x.generate()
   #for x in simple.mov:
     print(os.getcwd())
@@ -174,6 +177,7 @@ def execute_tests(tests, test_dir):
     rs = Results()
     rs.process(Comparator().compare(x), x.name)
     rs.report()
+    os.chdir(top_level_dir)
 
 
 def main():
@@ -203,10 +207,12 @@ def main():
     args.tags = ['all']
 
   if args.persist:
+    log_info("Creating persistent directory")
     test_dir = tempfile.mkdtemp(dir=os.getcwd())
     execute_tests([], test_dir)
   else:
-    with tempfile.TemporaryDirectory() as tmpdir:
+    log_info("Creating temporary directory")
+    with tempfile.TemporaryDirectory(dir=os.getcwd()) as tmpdir:
       execute_tests([], tmpdir)
 
 if __name__ == "__main__":
