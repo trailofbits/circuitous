@@ -46,6 +46,9 @@ class TestCase:
     self.simulated = State()
 
 class Test:
+  __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
+               '_tags', '_names', '_lift_opts')
+
   def __init__(self, name_=""):
     self.name = name_
     self.cases = []
@@ -54,9 +57,14 @@ class Test:
     self._bytes = None
     self._tags = []
     self._names = 0
+    self._lift_opts = []
 
   def bytes(self, bytes_):
     self._bytes = bytes_
+    return self
+
+  def lift_opts(self, args):
+    self._lift_opts += args
     return self
 
   def case(self, name_=None, **kwargs):
@@ -77,5 +85,5 @@ class Test:
     self._tags += tags_
     return self
 
-  def generate():
+  def generate(self):
     pass
