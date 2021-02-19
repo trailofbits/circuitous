@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import microx
 import os
 import subprocess
 import tempfile
@@ -12,9 +11,9 @@ import tc as TC
 
 import simple
 
-circuitous_prefix="../../build"
-circuitous_run=os.path.join(circuitous_prefix, "circuitous-run")
-circuitous_lift=os.path.join(circuitous_prefix, "circuitous-lift")
+circuitous_prefix="../build"
+circuitous_run=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-run"))
+circuitous_lift=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-lift"))
 top_level_dir=None
 
 def update_relative_paths():
