@@ -55,7 +55,7 @@ class Test:
     self.dir = None
     self.metafiles = {}
     self._bytes = None
-    self._tags = []
+    self._tags = set()
     self._names = 0
     self._lift_opts = []
 
@@ -82,7 +82,7 @@ class Test:
     return self
 
   def tags(self, tags_):
-    self._tags += tags_
+    self._tags.update(set(tags_))
     return self
 
   def generate(self):
