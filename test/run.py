@@ -73,7 +73,7 @@ class Lifter:
     for case in tc.cases:
       bytes = case.bytes
       circuit = self.circuit_name(bytes)
-      log_info("Lifting: " + '.' * 16 + " " + case.name)
+      log_info("Lifting: " + '.' * 16 + " " + tc.name + " -> " + case.name)
       if not circuit in tc.metafiles:
         tc.metafiles[circuit] = self.lift(case.bytes, tc._lift_opts)
       else:
@@ -101,14 +101,14 @@ class Interpret:
 
   def run(self, tc):
     for case in tc.cases:
-      self.run_case(case, tc.metafiles[case.name + ".circuit"])
+      self.run_case(case, tc.metafiles[case.name + ".circuit"], tc)
 
-  def run_case(self, case, ir):
+  def run_case(self, case, ir, parent):
     args = [self.binary,
             "--json_in", case.input.as_json_file(),
             "--json_out", case.name + ".result.json",
             "--ir_in", ir]
-    log_info("Run: " + '.' * 16 + " " + case.name)
+    log_info("Running: " + '.' * 16 + " " + parent.name + " -> " + case.name)
     pipes = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     check_retcode(pipes, self.component)
 
