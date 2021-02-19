@@ -10,6 +10,7 @@ from tc import State, Test
 import tc as TC
 
 import simple
+import model_test as mp
 
 circuitous_prefix="../build"
 circuitous_run=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-run"))
@@ -157,21 +158,18 @@ class Results:
       print("\t", x, " : ", self.results[x])
 
 
-def execute_tests(tests, test_dir):
-  log_info("Test dir is: " + test_dir)
-  os.chdir(test_dir)
-  log_info("Entering: " + test_dir)
+def execute_tests(tests, top_dir):
+  log_info("Test dir is: " + top_dir)
+  os.chdir(top_dir)
   global top_level_dir
-  top_level_dir = os.path.abspath(test_dir)
+  top_level_dir = os.path.abspath(top_dir)
 
-  for _ in range(1):
-    x = mp.ModelTest("mov imm rdx").bytes("ba12000000").case(I = State(), R = True )
+  for x in tests:
     test_dir = tempfile.mkdtemp(dir=os.getcwd(),
-                                prefix=x.name.replace(' ', '.') + '_')
+                                prefix=x.name.replace(' ', '.').replace('/', '.') + '_')
     os.chdir(test_dir)
     x.generate()
-  #for x in simple.mov:
-    print(os.getcwd())
+
     Lifter().lift_test(x)
     Interpret().run(x)
     rs = Results()
@@ -179,6 +177,26 @@ def execute_tests(tests, test_dir):
     rs.report()
     os.chdir(top_level_dir)
 
+
+# TODO(lukas): Mocking this one for now
+def fetch_test(sets):
+  result = set()
+  x = mp.ModelTest("mov imm rdx").bytes("ba12000000").case(I = State(), R = True )
+  result.add(x)
+  result.update(set(simple.mov))
+  return result
+
+
+def filter_by_tag(sets, tags):
+  log_info("Filtering " + str(len(sets)) + " tests by " + str(tags))
+  if 'all' in tags:
+    return sets
+
+  result = set()
+  for test in tests:
+    if test._tags.intersect(tags):
+      result.add(test)
+  return result
 
 def main():
   arg_parser = argparse.ArgumentParser(
@@ -189,7 +207,7 @@ def main():
                           default=False
                           )
   arg_parser.add_argument("--tags",
-                          help="TODO: Specify which tags you want to run.",
+                          help="Specify which tags you want to run.",
                           action='extend',
                           nargs='+'
                           )
@@ -206,14 +224,15 @@ def main():
   if args.tags is None:
     args.tags = ['all']
 
+  tests = filter_by_tag(fetch_test(args.sets), args.tags)
   if args.persist:
     log_info("Creating persistent directory")
     test_dir = tempfile.mkdtemp(dir=os.getcwd())
-    execute_tests([], test_dir)
+    execute_tests(tests, test_dir)
   else:
     log_info("Creating temporary directory")
     with tempfile.TemporaryDirectory(dir=os.getcwd()) as tmpdir:
-      execute_tests([], tmpdir)
+      execute_tests(tests, tmpdir)
 
 if __name__ == "__main__":
   main()
