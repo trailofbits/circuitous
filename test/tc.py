@@ -47,7 +47,8 @@ class TestCase:
 
 class Test:
   __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
-               '_tags', '_names', '_lift_opts', '_inst_arr')
+               '_tags', '_names', '_lift_opts', '_inst_arr',
+               'default_istate')
 
   def __init__(self, name_=""):
     self.name = name_
@@ -59,6 +60,7 @@ class Test:
     self._names = 0
     self._lift_opts = []
     self._inst_arr = []
+    self.default_istate = State()
 
   def bytes(self, bytes_):
     if isinstance(bytes_, list):
@@ -66,6 +68,10 @@ class Test:
       self._bytes = "".join(bytes_)
     else:
       self._bytes = bytes_
+    return self
+
+  def DI(self, state):
+    self.default_istate = state
     return self
 
   def lift_opts(self, args):
