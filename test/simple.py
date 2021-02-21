@@ -2,8 +2,9 @@
 
 from tc import State, Test
 from byte_generator import intel
+from model_test import ModelTest
 
-mov = [
+test_mov = {
   Test("mov imm rdx") .bytes("ba12000000").tags("imm_reduce")
   .case(
     E = State().RDX(0x12),
@@ -90,4 +91,34 @@ mov = [
     run_bytes = 2,
     R = False
   )
-]
+}
+
+test_lea = {
+  ModelTest("T:lea ").bytes(intel(["lea rdi, [rsi - 0x15]"])).tags("min").
+  case("rsi:=0x15",
+    I = State().RSI(0x15),
+    R = True
+  ).case("rsi:=0x0",
+    I = State().RSI(0x0),
+    R = True
+  ).case("rsi:=0xffffffffffffff",
+    I = State().RSI(0xffffffffffffff),
+    R = True
+  )
+}
+
+test_idiv = {
+  ModelTest("T:idiv").bytes(intel(["idiv rsi"])).tags({"min", "idiv"}).
+  case(
+    I = State().RDX(0x0).RAX(0x66).RSI(0x22).RIP(0x1000).aflags(0),
+    R = True
+  ).case(
+    I = State().RDX(0x0).RAX(0x66).RSI(0x1).RIP(0x1000).aflags(0),
+    R = True
+  ).case(
+    I = State().RDX(0x0).RAX(0x66).RSI(0x66).RIP(0x1000).aflags(0),
+    R = True
+  )
+}
+
+circuitous_tests = [test_mov, test_lea, test_idiv]
