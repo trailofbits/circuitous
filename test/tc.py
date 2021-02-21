@@ -41,7 +41,8 @@ class State:
 
 
 # Add methods same as register names to the State to make configuration easier
-_regs = ["RAX", "RBX", "RCX", "RDX", "RSI", "RDI",
+_regs = [ "RIP",
+          "RAX", "RBX", "RCX", "RDX", "RSI", "RDI",
           "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
 _aflags = ["AF", "CF", "OF", "ZF", "PF", "SF"]
 
