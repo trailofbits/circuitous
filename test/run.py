@@ -233,8 +233,8 @@ def filter_by_tag(sets, tags):
     return sets
 
   result = set()
-  for test in tests:
-    if test._tags.intersect(tags):
+  for test in sets:
+    if test._tags.intersection(tags):
       result.add(test)
   return result
 
