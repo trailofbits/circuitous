@@ -222,7 +222,8 @@ def fetch_test(sets):
   result = set()
   x = mp.ModelTest("mov imm rdx").bytes("ba12000000").case(I = State(), R = True )
   result.add(x)
-  result.update(set(simple.mov))
+  for x in simple.circuitous_tests:
+    result.update(x)
   return result
 
 
