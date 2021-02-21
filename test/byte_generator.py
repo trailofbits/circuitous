@@ -4,13 +4,49 @@ import os
 import subprocess
 import tempfile
 
+class Cache:
+  __slots__ = ('cache')
+
+  def __init__(self):
+    self.cache = {}
+
+  def compile(self, instructions):
+    if not all(i in self.cache for i in instructions):
+      self.update_cache(instructions)
+    else:
+      print("[ > ] No need to compile, already cached")
+    return self.from_cache(instructions)
+
+  def from_cache(self, instructions):
+    result = []
+    for i in instructions:
+      result.append(self.cache[i])
+    return result
+
+  def update_cache(self, instructions):
+    raw_insts = self._compile(instructions)
+    for i in range(len(instructions)):
+      self.cache[instructions[i]] = raw_insts[i]
+
+class IntelCache(Cache):
+  def _compile(self, instructions):
+    return get_instructions(instructions, "intel")
+
+class AttCache(Cache):
+  def _compile(self, instructions):
+    return get_instructions(instructions, "att")
+
+_intel_cache = IntelCache()
+_att_cache = AttCache()
+
+
 # TODO(lukas): Cache this, and possibly rework using some faster way
 #               -- maybe some external library can do this for us.
 def intel(instructions):
-  return get_instructions(instructions, "intel")
+  return _intel_cache.compile(instructions)
 
 def att(instructions):
-  return get_instructions(instructions, "att")
+  return _att_cache.compile(instructions)
 
 # What happens here:
 # * Create tmp dir
