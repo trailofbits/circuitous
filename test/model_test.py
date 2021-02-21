@@ -28,20 +28,22 @@ class MicroxGen:
 
   def get(self, input):
     # So far we don't care about memory ops anyway
-    assert "RIP" not in input.registers
     assert "RSP" not in input.registers
 
+    rip = input.registers.get("RIP", 0x1000)
+    size = 0x1000
+
     o = microx.Operations()
-    code = microx.ArrayMemoryMap(o, 0x1000, 0x2000, can_write=False, can_execute=True)
+    code = microx.ArrayMemoryMap(o, rip, rip + size, can_write=False, can_execute=True)
     bytes = []
     for i in range(0, len(input.bytes), 2):
       bytes.append(int(input.bytes[i] + input.bytes[i + 1], 16))
     code.store_bytes(0x1000, bytes)
 
     t = microx.EmptyThread(o)
-    for reg, val in input.registers:
+    for reg, val in input.registers.items():
       t.write_register(reg, val)
-    t.write_register("RIP", 0x1000)
+    t.write_register("RIP", rip)
 
     m = microx.Memory(o, 64)
     m.add_map(code)
