@@ -11,6 +11,11 @@ class State:
     self.bytes = None
     self.result = None
 
+  def aflags(self, val):
+    for flag in _aflags:
+      self.registers[flag] = val
+    return self
+
   def mutate(self, other):
     mutated = copy.deepcopy(self)
     for reg, val in other.registers.items():
@@ -38,8 +43,9 @@ class State:
 # Add methods same as register names to the State to make configuration easier
 _regs = ["RAX", "RBX", "RCX", "RDX", "RSI", "RDI",
           "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
+_aflags = ["AF", "CF", "OF", "ZF", "PF", "SF"]
 
-for reg in _regs:
+for reg in _regs + _aflags:
   setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))
 
 class TestCase:
