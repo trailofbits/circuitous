@@ -1,5 +1,6 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 
+import copy
 import json
 
 class State:
@@ -9,6 +10,12 @@ class State:
     self.registers = {}
     self.bytes = None
     self.result = None
+
+  def mutate(self, other):
+    mutated = copy.deepcopy(self)
+    for reg, val in other.registers.items():
+      mutated[reg] = val
+    return mutated
 
   def set_reg(self, reg, value):
     self.registers[reg] = value
@@ -78,6 +85,30 @@ class Test:
     self._lift_opts += args
     return self
 
+  def _input_state(self, **kwargs):
+    assert not(bool('I' in kwargs) and bool('DI' in kwargs))
+    istate = kwargs.get('I', None)
+    if istate is not None:
+      return istate
+
+    # We know it is present due to lead assert
+    distate = kwargs.get('DI', None)
+    if distate is not None:
+      return self.default_istate.mutate(distate)
+    return copy.deepcopy(self.default_istate)
+
+  def _expected_state(self, **kwargs):
+    assert not(bool('E' in kwargs) and bool('DE' in kwargs))
+    estate = kwargs.get('E', None)
+    if estate is not None:
+      return estate
+
+    # We know it is present due to lead assert
+    distate = kwargs.get('DE', None)
+    if distate is not None:
+      return self.default_istate.mutate(distate)
+    return State()
+
   def case(self, name_=None, **kwargs):
     case = TestCase()
     self._names += 1
@@ -85,14 +116,17 @@ class Test:
     case.name = kwargs.get('name',
                            case.name if case.name is not None else str(self._names))
     case.bytes = kwargs.get('lift_bytes', self._bytes)
-    case.input = kwargs.get('I', State())
+
+    case.expected = self._expected_state(**kwargs)
+    case.input = self._input_state(**kwargs)
+
     inst_chooser = kwargs.get('run_bytes', self._bytes)
     # TODO(lukas): A bit bleh.
     if isinstance(inst_chooser, int):
       case.input.bytes = self._inst_arr[inst_chooser]
     else:
       case.input.bytes = inst_chooser
-    case.expected = kwargs.get('E', State())
+
     case.expected.result = kwargs.get('R', None)
     assert case.expected.result is not None
     self.cases.append(case)
