@@ -88,7 +88,9 @@ class Lifter:
             "--bytes_in", bytes,
             "--json_out", "out.json", "--ir_out", self.circuit_name(bytes)]
     args += extra_args
-    pipes = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    pipes = subprocess.Popen(args,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             text=True)
     check_retcode(pipes, self.component)
 
     return self.circuit_name(bytes)
@@ -109,7 +111,9 @@ class Interpret:
             "--json_out", case.name + ".result.json",
             "--ir_in", ir]
     log_info("Running: " + '.' * 16 + " " + parent.name + " -> " + case.name)
-    pipes = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    pipes = subprocess.Popen(args,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             text=True)
     check_retcode(pipes, self.component)
 
     self.update_state(case, case.name + ".result.json")
