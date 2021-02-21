@@ -12,6 +12,9 @@ class ModelTest(Test):
     self.expected = None
     return self
 
+  def _expected_state(self, **kwargs):
+    return State()
+
   def generate(self):
     for case in self.cases:
       assert self.expected is None
