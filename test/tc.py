@@ -47,7 +47,7 @@ class TestCase:
 
 class Test:
   __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
-               '_tags', '_names', '_lift_opts')
+               '_tags', '_names', '_lift_opts', '_inst_arr')
 
   def __init__(self, name_=""):
     self.name = name_
@@ -58,9 +58,14 @@ class Test:
     self._tags = set()
     self._names = 0
     self._lift_opts = []
+    self._inst_arr = []
 
   def bytes(self, bytes_):
-    self._bytes = bytes_
+    if isinstance(bytes_, list):
+      self._inst_arr = bytes_
+      self._bytes = "".join(bytes_)
+    else:
+      self._bytes = bytes_
     return self
 
   def lift_opts(self, args):
@@ -75,7 +80,12 @@ class Test:
                            case.name if case.name is not None else str(self._names))
     case.bytes = kwargs.get('lift_bytes', self._bytes)
     case.input = kwargs.get('I', State())
-    case.input.bytes = kwargs.get('run_bytes', self._bytes)
+    inst_chooser = kwargs.get('run_bytes', self._bytes)
+    # TODO(lukas): A bit bleh.
+    if isinstance(inst_chooser, int):
+      case.input.bytes = self._inst_arr[inst_chooser]
+    else:
+      case.input.bytes = inst_chooser
     case.expected = kwargs.get('E', State())
     case.expected.result = kwargs.get('R', None)
     assert case.expected.result is not None
