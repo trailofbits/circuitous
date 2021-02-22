@@ -44,6 +44,7 @@ class Interpreter : public Visitor<Interpreter> {
   void VisitHint(Hint *op);
   void VisitUndefined(Undefined *op);
   // Operations
+  void VisitConcat(Concat *op);
   void VisitExtract(Extract *op);
   void VisitLLVMOperation(LLVMOperation *op);
   void VisitParity(Parity *op);
