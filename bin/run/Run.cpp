@@ -136,6 +136,8 @@ int main(int argc, char *argv[]) {
     // Serialize
     llvm::json::Object output_obj;
     output_obj["output_regs"] = std::move(output_regs_obj);
+    output_obj["result"] = result;
+    output_obj["inst_bytes"] = *inst;
     output << llvm::json::Value(std::move(output_obj));
   }
 
