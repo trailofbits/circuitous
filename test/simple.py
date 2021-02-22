@@ -90,19 +90,32 @@ test_mov = {
     E = State().RBX(0x22),
     run_bytes = 2,
     R = False
+  ),
+  ModelTest("T: mov 0xffffffffffffffff rdx")\
+  .bytes(intel(["mov rdx, 0xffffffffffffffff"]))
+  .tags({"min", "mov"})
+  .case(
+    R = True
+  ),
+  ModelTest("T: mov 0x7fffffffffffffff rdx")\
+  .bytes(intel(["mov rdx, 0x7fffffffffffffff"]))
+  .tags({"min", "mov"})
+  .case(
+    R = True
   )
 }
 
 test_lea = {
-  ModelTest("T:lea ").bytes(intel(["lea rdi, [rsi - 0x15]"])).tags("min").
+  ModelTest("T:lea ").bytes(intel(["lea rdi, [rsi - 0x15]"])).tags({"min", "lea"}).
   case("rsi:=0x15",
     I = State().RSI(0x15),
     R = True
   ).case("rsi:=0x0",
     I = State().RSI(0x0),
     R = True
-  ).case("rsi:=0xffffffffffffff",
-    I = State().RSI(0xffffffffffffff),
+  ).
+  case("rsi:=0xffffffffffffff",
+    I = State().RSI(0xffffffffffffffff),
     R = True
   )
 }
