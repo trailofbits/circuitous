@@ -43,11 +43,16 @@ class State:
     return "input_x"
 
 
+def S():
+  return State()
+
 # Add methods same as register names to the State to make configuration easier
 _regs = [ "RIP",
           "RAX", "RBX", "RCX", "RDX", "RSI", "RDI",
           "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
 _aflags = ["AF", "CF", "OF", "ZF", "PF", "SF"]
+_all_regs = _regs + _aflags
+
 
 for reg in _regs + _aflags:
   setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))
