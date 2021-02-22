@@ -122,7 +122,7 @@ class Interpret:
     with open(result) as f:
       result = json.load(f)
       for reg, val in result["output_regs"].items():
-        case.simulated.set_reg(reg, val)
+        case.simulated.set_reg(reg, int(val, 10))
       case.simulated.result = result["result"]
 
 class Model:

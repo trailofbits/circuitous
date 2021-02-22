@@ -31,8 +31,11 @@ class State:
     return self
 
   def get(self):
-    return {"instruction_bits" : self.bytes,
-            "input_regs" : self.registers }
+    out = {"instruction_bits" : self.bytes,
+           "input_regs" : {}}
+    for reg, val in self.registers.items():
+      out["input_regs"][reg] = str(val)
+    return out
 
   def as_json_file(self):
     with open("input_x", 'w') as out:
