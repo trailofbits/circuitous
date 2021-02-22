@@ -30,6 +30,8 @@ DEFINE_string(optimizations, "popcount2parity,reducepopcount",
               "Comma-separated list of optimizations to run");
 DEFINE_bool(append, false,
             "Append to output IR files, rather than overwriting.");
+DEFINE_bool(reduce_imms, false,
+            "Experimental: Try optimizations that extract immediates from inst_bytes");
 
 DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 
