@@ -103,7 +103,7 @@ def parse(filename):
     # remove address in form `xxx:``
     line = line.split(': ')[1]
     # remove trailing assembly text
-    line = line.split('  ')[0]
+    line = line.split('\t')[0]
     # remove ' ' between bytes
     line = line.replace(' ', '')
     bytes.append(line)
