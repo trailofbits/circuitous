@@ -72,8 +72,15 @@ int main(int argc, char *argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
 
+  auto choose_optimizations = [&](){
+    circuitous::Optimizations out;
+    out.reduce_imms = FLAGS_reduce_imms;
+    return out;
+  };
+
   auto make_circuit = [&](auto buf) {
-    return circuitous::Circuit::CreateFromInstructions(FLAGS_arch, FLAGS_os, buf);
+    return circuitous::Circuit::CreateFromInstructions(
+      FLAGS_arch, FLAGS_os, buf, choose_optimizations());
   };
 
   auto circuit = [&]() -> std::unique_ptr<circuitous::Circuit> {
