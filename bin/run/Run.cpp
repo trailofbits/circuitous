@@ -108,17 +108,19 @@ int main(int argc, char *argv[]) {
   // Initialize input register state
   for (auto [obj_key, obj_val] : *input_regs_obj) {
     auto reg_name{obj_key.str()};
-    auto reg_val{obj_val.getAsInteger()};
-    CHECK(reg_val) << "Invalid JSON value for register " << reg_name;
-    run.SetInputRegisterValue(reg_name, uint64_t(*reg_val));
+    auto raw_reg_val{obj_val.getAsString()};
+    CHECK(raw_reg_val) << "Invalid JSON value for register " << reg_name;
+    uint64_t reg_val = std::strtoull(raw_reg_val->data(), nullptr, 10);
+    run.SetInputRegisterValue(reg_name, reg_val);
   }
   // Run circuit
-  if (run.Run()) {
+  auto result = run.Run();
+  if (result) {
     LOG(INFO) << "Success!";
   } else {
     LOG(INFO) << "Fail!";
   }
-  // Print JSON output 
+  // Print JSON output
   if (!FLAGS_json_out.empty()) {
     // Open output file
     std::error_code ec;
@@ -129,7 +131,7 @@ int main(int argc, char *argv[]) {
     llvm::json::Object output_regs_obj;
     for (auto reg : circuit->output_regs) {
       auto key{reg->reg_name};
-      output_regs_obj[key] = run.GetOutputRegisterValue(key);
+      output_regs_obj[key] = std::to_string(run.GetOutputRegisterValue(key));
     }
     // Serialize
     llvm::json::Object output_obj;
