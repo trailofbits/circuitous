@@ -38,8 +38,7 @@ void Interpreter::SetInputRegisterValue(const std::string &name,
       return;
     }
   }
-
-  LOG(FATAL) << "Input register " << name << " not present in circuit.";
+  LOG(WARNING) << "Input register " << name << " not present in circuit.";
 }
 
 uint64_t Interpreter::GetOutputRegisterValue(const std::string &name) {
