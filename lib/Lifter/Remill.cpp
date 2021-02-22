@@ -530,7 +530,8 @@ static void ForEachCallTo(llvm::Function *caller, llvm::Function *callee,
 std::unique_ptr<Circuit>
 Circuit::CreateFromInstructions(const std::string &arch_name,
                                 const std::string &os_name,
-                                const std::string &file_name) {
+                                const std::string &file_name,
+                                const Optimizations &opts) {
   auto maybe_buff = llvm::MemoryBuffer::getFile(file_name, -1, false);
   if (remill::IsError(maybe_buff)) {
     LOG(ERROR) << remill::GetErrorString(maybe_buff) << std::endl;
@@ -538,25 +539,31 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
   }
 
   const auto buff = remill::GetReference(maybe_buff)->getBuffer();
-  return CreateFromInstructions(arch_name, os_name, buff);
+  return CreateFromInstructions(arch_name, os_name, buff, opts);
 }
 
 std::unique_ptr<Circuit>
 Circuit::CreateFromInstructions(const std::string &arch_name,
                                 const std::string &os_name,
-                                std::string_view bytes) {
-  return CreateFromInstructions(arch_name, os_name, llvm::StringRef{bytes.data(), bytes.size()});
+                                std::string_view bytes,
+                                const Optimizations &opts) {
+  return CreateFromInstructions(arch_name, os_name,
+                                llvm::StringRef{bytes.data(),
+                                                bytes.size()},
+                                opts);
 }
 
 std::unique_ptr<Circuit>
 Circuit::CreateFromInstructions(const std::string &arch_name,
                                 const std::string &os_name,
-                                const llvm::StringRef &buff) {
+                                const llvm::StringRef &buff,
+                                const Optimizations &opts) {
 
   circuitous::CircuitBuilder builder([&](llvm::LLVMContext &context) {
     return remill::Arch::Build(&context, remill::GetOSName(os_name),
                                remill::GetArchName(arch_name));
   });
+  builder.reduce_imms = opts.reduce_imms;
 
   const auto arch = builder.arch.get();
   const auto circuit_func = builder.Build(buff);

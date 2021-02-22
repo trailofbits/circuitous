@@ -143,6 +143,10 @@ class CircuitBuilder {
   // semantics.
   const std::unique_ptr<llvm::Module> module;
 
+  // TODO(lukas): Currently turned off, later we want to hide this behind some
+  //              cmd flag. I do not want to spaghet it in at this point.
+  bool reduce_imms = false;
+
  private:
   // llvm::CallInst *FinalXor(llvm::Function *in_func) const;
 
@@ -213,10 +217,6 @@ class CircuitBuilder {
 
   // Top-level registers.
   std::vector<const remill::Register *> regs;
-
-  // TODO(lukas): Currently turned off, later we want to hide this behind some
-  //              cmd flag. I do not want to spaghet it in at this point.
-  bool reduce_imms = false;
 };
 
 }  // namespace circuitous
