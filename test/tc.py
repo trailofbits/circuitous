@@ -148,7 +148,10 @@ class Test:
     return self
 
   def tags(self, tags_):
-    self._tags.update(set(tags_))
+    if isinstance(tags_, str):
+      self._tags.add(tags_)
+    else:
+      self._tags.update(tags_)
     return self
 
   def generate(self):

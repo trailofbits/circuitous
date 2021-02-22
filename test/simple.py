@@ -5,7 +5,7 @@ from byte_generator import intel
 from model_test import ModelTest
 
 test_mov = {
-  Test("mov imm rdx") .bytes("ba12000000").tags("imm_reduce")
+  Test("mov imm rdx") .bytes("ba12000000").tags("min")
   .case(
     E = State().RDX(0x12),
     R = True,
@@ -23,7 +23,7 @@ test_mov = {
   ),
   Test("mov imm eax/ebx/ecx/edx") \
   .bytes("b812000000bb12000000b912000000ba12000000")
-  .tags("imm_reduce")
+  .tags("min")
   .case("mov rax",
     I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
     E = State().RAX(0x12),
@@ -134,4 +134,17 @@ test_idiv = {
   )
 }
 
-circuitous_tests = [test_mov, test_lea, test_idiv]
+test_add = {
+  ModelTest("T:add rax imm") \
+  .bytes(intel(["add rax, 8"])).tags({'min', "add","imm_reduce"})
+  .case("rax+=8",
+    I = State().RAX(0x5).aflags(0),
+    R = True
+  ).case("rax+=16",
+    I = State().RAX(0x5).aflags(0),
+    run_bytes = intel(["add rax, 16"])[0],
+    R = True
+  )
+}
+
+circuitous_tests = [test_mov, test_lea, test_idiv, test_add]

@@ -265,6 +265,7 @@ def main():
     args.tags = ['all']
 
   tests = filter_by_tag(fetch_test(args.sets), args.tags)
+  log_info("Filtered " + str(len(tests)) + " tests.")
   if args.persist:
     log_info("Creating persistent directory")
     test_dir = tempfile.mkdtemp(dir=os.getcwd())
