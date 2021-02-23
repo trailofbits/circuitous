@@ -110,13 +110,18 @@ namespace impl {
   };
 
   template<typename Self_t>
-  struct BitCompare : Base<Self_t> {
+  struct BinaryPredicate : Base<Self_t> {
     using Parent = Base<Self_t>;
 
     static std::string Name(uint64_t size) {
       std::stringstream ss;
       ss << Self_t::fn_prefix << Self_t::separator << size;
       return ss.str();
+    }
+
+    static llvm::Function *CreateFn(llvm::Module *module, llvm::Type *type) {
+      auto size = llvm::cast<llvm::IntegerType>(type)->getScalarSizeInBits();
+      return CreateFn(module, size);
     }
 
     static llvm::Function *CreateFn(llvm::Module *module, uint64_t size) {
@@ -176,7 +181,7 @@ namespace data {
 // TODO(lukas): I guess the `data::` is actually not needed + the `impl::`
 //              can be generalized a bit more. If you want to add a new one
 //              check if some already existing one cannot be generalized.
-struct BitCompare : data::BitCompare, impl::BitCompare<BitCompare> {};
+struct BitCompare : data::BitCompare, impl::BinaryPredicate<BitCompare> {};
 struct Extract : data::Extract, impl::Interval<Extract> {};
 struct OneOf : data::OneOf, impl::Predicate<OneOf> {};
 struct VerifyInst : data::VerifyInst, impl::Predicate<VerifyInst> {};
