@@ -807,7 +807,8 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
           std::string out;
           while(true) {
             uint64_t y = std::min(from + (8 - from % 8), to);
-            std::string partial = full.substr(from, 8);
+            uint64_t size = std::min(to - from, 8ull);
+            std::string partial = full.substr(from, size);
             std::reverse(partial.begin(), partial.end());
             out = partial + out;
             if (y == to) {
