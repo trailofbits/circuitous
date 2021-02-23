@@ -11,6 +11,9 @@
 #include <remill/BC/Optimizer.h>
 #include <remill/BC/Util.h>
 
+#include <unordered_map>
+#include <vector>
+
 namespace circuitous {
 
 enum : size_t { kMaxNumInstBits = 15 * 8 };
@@ -189,6 +192,29 @@ class CircuitBuilder {
 
   // Top-level registers.
   std::vector<const remill::Register *> regs;
+
+  struct Circuit0Fn {
+
+    static constexpr const char *name = "circuit_0";
+
+    Circuit0Fn(CircuitBuilder &parent_) : parent(parent_) {}
+
+    llvm::FunctionType *FnT();
+
+    llvm::Function *GetFn();
+    llvm::Function *Create();
+
+    CircuitBuilder &parent;
+
+    using remill_reg = const remill::Register *;
+    // register - input - output
+    using Arg = std::tuple<remill_reg, llvm::Argument *, llvm::Argument *>;
+
+    // TODO(lukas): For compatibility with history, this must be
+    //              ordered hence vector and not map.
+    std::vector<Arg> reg_to_args;
+    std::vector<llvm::Argument *> inst_bytes;
+  };
 };
 
 }  // namespace circuitous

@@ -569,63 +569,22 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
 
   const auto &dl = module->getDataLayout();
 
-  std::vector<llvm::Type *> param_types;
-
-  // First parameter is the bit enconding of the instruction being verified
-  param_types.push_back(ir.getIntNTy(kMaxNumInstBits));
-
-  // The remaining parameters will be input/output registers for verification.
-  for (auto reg : regs) {
-    const auto reg_type = IntegralRegisterType(*module, reg);
-    param_types.push_back(reg_type);
-    param_types.push_back(reg_type);
-  }
-
-  // The `circuit_0` function will be our first attempt at a circuit. It's
-  // not meant to be particularly smart. It will use all the registers available,
-  // even if the set of input registers doesn't use all those registers. It
-  // exists to get us to a point where we can analyze `circuit_0` and learn
-  // about the dependencies of the instructions.
-  auto circuit0_type = llvm::FunctionType::get(bool_type, param_types, false);
-  auto circuit0_func =
-      llvm::Function::Create(circuit0_type, llvm::GlobalValue::ExternalLinkage,
-                             "circuit_0", module.get());
-  circuit0_func->addFnAttr(llvm::Attribute::ReadNone);
+  auto circuit0 = Circuit0Fn(*this);
+  auto circuit0_func = circuit0.Create();
 
   auto entry_block = llvm::BasicBlock::Create(context, "", circuit0_func);
   auto exit_block = llvm::BasicBlock::Create(context, "", circuit0_func);
   auto prev_block = entry_block;
 
-  llvm::Value *pc = nullptr;
-
-  // Build up a mapping between Remill registers and and the input/output
-  // register values.
-  //
-  // NOTE(pag): The first argument is the encoded instruction.
-  std::vector<std::pair<const remill::Register *, llvm::Argument *>>
-      input_reg_arg;
-  std::vector<std::pair<const remill::Register *, llvm::Argument *>>
-      output_reg_arg;
-
-  // CHECK_LT(0, num_instruction_parts);
-
-  for (auto reg : regs) {
-
-    // const auto arg_num =
-    //     (input_reg_arg.size() * 2u) + num_instruction_parts;
-    const auto arg_num = (input_reg_arg.size() * 2u) + 1u;
-    const auto input_arg = remill::NthArgument(circuit0_func, arg_num);
-    const auto output_arg = remill::NthArgument(circuit0_func, arg_num + 1u);
-
-    input_arg->setName(reg->name);
-    output_arg->setName(reg->name + "_next");
-
-    input_reg_arg.emplace_back(reg, input_arg);
-    output_reg_arg.emplace_back(reg, output_arg);
-    if (reg->name == arch->ProgramCounterRegisterName()) {
-      pc = input_arg;
+  // TODO(lukas): Maybe do this when budiling the fn.
+  auto pc = [&]() -> llvm::Value *{
+    for (auto &[reg, in, _] : circuit0.reg_to_args) {
+      if (reg->name == arch->ProgramCounterRegisterName()) {
+        return in;
+      }
     }
-  }
+    return nullptr;
+  }();
 
   CHECK(pc != nullptr) << "Couldn't find program counter register "
                        << arch->ProgramCounterRegisterName();
@@ -666,8 +625,7 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
       ir.SetInsertPoint(inst_block);
       const auto state_ptr = ir.CreateAlloca(state_ptr_type->getElementType());
 
-      for (auto [reg, arg] : input_reg_arg) {
-
+      for (auto [reg, arg, _] : circuit0.reg_to_args) {
         // TODO(surovic): The code from here down to and including
         // the bitcast is copy-pasted further down. Rewrite this.
         const auto reg_type = IntegralRegisterType(*module, reg);
@@ -767,8 +725,7 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
       // Final set of parameters are comparisons on whether or not the resulting
       // register after the semantic has executed matches the next state of that
       // register.
-      for (auto [reg, expected_reg_val] : output_reg_arg) {
-
+      for (auto [reg, _, expected_reg_val] : circuit0.reg_to_args) {
         // TODO(surovic): See above TODO tag about duplication.
         const auto reg_type = IntegralRegisterType(*module, reg);
         const auto reg_store_type = ir.getIntNTy(
@@ -1129,6 +1086,60 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
   regs.swap(new_regs);
 
   return circuit1_func;
+}
+
+llvm::FunctionType *CircuitBuilder::Circuit0Fn::FnT() {
+  llvm::IRBuilder<> ir(parent.context);
+  std::vector<llvm::Type *> param_types;
+
+  // First parameter is the bit enconding of the instruction being verified
+  param_types.push_back(ir.getIntNTy(kMaxNumInstBits));
+
+    // The remaining parameters will be input/output registers for verification.
+  for (auto reg : parent.regs) {
+    const auto reg_type = IntegralRegisterType(*parent.module, reg);
+    param_types.push_back(reg_type);
+    param_types.push_back(reg_type);
+  }
+
+  return llvm::FunctionType::get(ir.getInt1Ty(), param_types, false);
+}
+
+llvm::Function *CircuitBuilder::Circuit0Fn::GetFn() {
+  return parent.module->getFunction(name);
+}
+
+llvm::Function *CircuitBuilder::Circuit0Fn::Create() {
+  llvm::IRBuilder<> ir(parent.context);
+
+  if (auto fn = GetFn()) {
+    LOG(FATAL) << "The module already has " << name << " function.";
+    return fn;
+  }
+
+  auto fn = llvm::Function::Create(FnT(), llvm::GlobalValue::ExternalLinkage,
+                                   name, parent.module.get());
+  fn->addFnAttr(llvm::Attribute::ReadNone);
+
+  CHECK(fn->arg_size() > 0);
+  inst_bytes.push_back(&*fn->arg_begin());
+  // The rest of arguments should be the registers in/out pairs
+  CHECK((fn->arg_size() - inst_bytes.size()) % 2 == 0);
+  for (auto i = inst_bytes.size(); i < fn->arg_size(); i += 2) {
+    // This "order" can be flexible, but better let it go in order
+    // of regs.
+    auto reg = parent.regs[(i - inst_bytes.size()) / 2];
+
+    auto input_reg = remill::NthArgument(fn, i);
+    auto output_reg = remill::NthArgument(fn, i + 1);
+
+    input_reg->setName(reg->name);
+    output_reg->setName(reg->name + "_next");
+
+    reg_to_args.emplace_back(reg, input_reg, output_reg);
+  }
+
+  return fn;
 }
 
 }  // namespace circuitous
