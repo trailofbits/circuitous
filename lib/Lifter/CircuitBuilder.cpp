@@ -121,6 +121,15 @@ static void MuteStateEscape(llvm::Module &module, const char *func_name) {
   }
 }
 
+
+void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
+                      const std::vector<llvm::Function *> &fns) {
+  auto saved_threshold = module->getContext().getDiagnosticsHotnessThreshold();
+  module->getContext().setDiagnosticsHotnessThreshold(1);
+  remill::OptimizeModule(arch, module, fns);
+  module->getContext().setDiagnosticsHotnessThreshold(saved_threshold);
+}
+
 }  // namespace
 
 llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
@@ -612,7 +621,7 @@ void CircuitBuilder::LiftInstructions(
     ++g;
   }
 
-  remill::OptimizeModule(arch.get(), module.get(), inst_funcs);
+  OptimizeSilently(arch.get(), module.get(), inst_funcs);
 
   std::vector<llvm::Function *> reopt_funcs;
   for (auto func : inst_funcs) {
@@ -625,7 +634,7 @@ void CircuitBuilder::LiftInstructions(
   }
 
   if (!reopt_funcs.empty()) {
-    remill::OptimizeModule(arch.get(), module.get(), reopt_funcs);
+    OptimizeSilently(arch.get(), module.get(), reopt_funcs);
   }
 
   // We're done; make the instruction functions more amenable for inlining
@@ -896,7 +905,7 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
   ir.SetInsertPoint(exit_block);
   ir.CreateRet(ir.CreateCall(one_of_func, verified_insts));
 
-  remill::OptimizeModule(arch.get(), module.get(), {circuit0_func});
+  OptimizeSilently(arch.get(), module.get(), {circuit0_func});
 
   return circuit0_func;
 }
@@ -1167,7 +1176,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
   // Optimizing the module again will inline circuit0_func into circuit1_func
   // and propagate the null (i.e. zero) values for all unused registers down
   // through the inlined body of circuit0_func.
-  remill::OptimizeModule(arch.get(), module.get(), {circuit1_func});
+  OptimizeSilently(arch.get(), module.get(), {circuit1_func});
   Refresh();
 
   // "Constant fold" the uses of `__circuitous_icmp_eq_8`.
