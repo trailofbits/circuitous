@@ -186,38 +186,6 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
   return BuildCircuit1(BuildCircuit0(std::move(isels)));
 }
 
-// Update any references we might have held to functions that could be
-// optimized away.
-void CircuitBuilder::Refresh(void) {
-  auto i = 0u;
-  for (auto &func : bit_match_funcs) {
-    if (func) {
-      std::stringstream ss;
-      ss << "__circuitous_icmp_eq_" << i;
-      func = module->getFunction(ss.str());
-    }
-    ++i;
-  }
-
-  for (auto &func : select_funcs) {
-    if (func) {
-      std::stringstream ss;
-      ss << "__circuitous_select_" << i;
-      func = module->getFunction(ss.str());
-    }
-    ++i;
-  }
-
-  for (auto &func : concat_funcs) {
-    if (func) {
-      std::stringstream ss;
-      ss << "__circuitous_concat_" << i;
-      func = module->getFunction(ss.str());
-    }
-    ++i;
-  }
-}
-
 void CircuitBuilder::IdentifyImms(CircuitBuilder::InstSelections &insts) {
   for (auto &inst : insts) {
     for (auto i = 0U; i < inst.instructions.size(); ++i) {
@@ -1106,12 +1074,11 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
   // and propagate the null (i.e. zero) values for all unused registers down
   // through the inlined body of circuit0_func.
   OptimizeSilently(arch.get(), module.get(), {circuit1_func});
-  Refresh();
 
   // "Constant fold" the uses of `__circuitous_icmp_eq_8`.
   std::vector<llvm::CallInst *> to_fold;
 
-  for (auto matcher : bit_match_funcs) {
+  for (auto matcher : intrinsics::Eq::All(module.get())) {
     if (!matcher) {
       continue;
     }

@@ -187,22 +187,6 @@ class CircuitBuilder {
   // instruction's selection.
   llvm::Function *verify_inst_func{nullptr};
 
-  // Encodes an instruction by concatenating zero bits with variable bits
-  // produced by verified the register state transfer of a given instruction.
-  std::vector<llvm::Function *> concat_funcs;
-
-  // Functions representing equality comparisons of integer values of specific
-  // bit widths.
-  //
-  // Technically you can use `llvm::CmpInst` with `ICMP_EQ`, but LLVM's
-  // will sometimes do annoying XOR tricks, especially on single bit compares,
-  // so it's nice to get the predictability of a single opaque function with a
-  // well-defined semantic.
-  std::vector<llvm::Function *> bit_match_funcs;
-
-  // Functions that select a value.
-  std::vector<llvm::Function *> select_funcs;
-
   // Top-level registers.
   std::vector<const remill::Register *> regs;
 };
