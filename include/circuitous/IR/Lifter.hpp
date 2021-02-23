@@ -65,6 +65,27 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
       return this->parent::LiftIntoBlock(inst, block, is_delayed);
   }
 
+  llvm::Function *ChooseImm(remill::Operand &arch_op, const functions_t &funcs) {
+    CHECK(funcs.size());
+    if (funcs.size() == 1) {
+      return funcs[0];
+    }
+    llvm::Function *canditate = nullptr;
+    // TODO(lukas): This may need something smarter
+    auto set_candidate = [&](auto fn) {
+      CHECK(!canditate);
+      canditate = fn;
+    };
+
+    for (auto fn : funcs) {
+      const auto &[from, size] = this->ParseArgs(fn);
+      if (size == arch_op.size || (arch_op.size % size == 0 && size % 8 == 0 ) ) {
+        set_candidate(fn);
+      }
+    }
+    return canditate;
+  }
+
   llvm::Value *LiftImmediateOperand(remill::Instruction &inst, llvm::BasicBlock *bb,
                                     llvm::Argument *arg,
                                     remill::Operand &arch_op) override {
@@ -78,13 +99,10 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
     if (imm_getters.size() == 0) {
       return constant_imm;
     }
-    CHECK(imm_getters.size() == 1);
-    LOG(INFO) << "Would call: " << LLVMName(*imm_getters.begin());
 
-
-    auto inst_fn = *(imm_getters.begin());
-
+    auto inst_fn = ChooseImm(arch_op, imm_getters);
     auto hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
+
     if (hidden_imm->getType() != constant_imm->getType())
     {
       LOG(INFO) << remill::LLVMThingToString(hidden_imm->getType())
