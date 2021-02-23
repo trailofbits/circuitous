@@ -218,78 +218,6 @@ void CircuitBuilder::Refresh(void) {
   }
 }
 
-// Return a function that does a bitwise comparison of two values of
-// type `type`.
-llvm::Function *CircuitBuilder::BitMatcherFunc(llvm::Type *type_) {
-  const auto type = llvm::cast<llvm::IntegerType>(type_);
-  const auto num_bits = type->getScalarSizeInBits();
-  if (num_bits >= bit_match_funcs.size()) {
-    bit_match_funcs.resize(num_bits + 1);
-  }
-
-  auto &func = bit_match_funcs[num_bits];
-  if (!func) {
-    std::stringstream ss;
-    ss << "__circuitous_icmp_eq_" << num_bits;
-    llvm::Type *param_types[] = {type, type};
-    func = llvm::Function::Create(
-        llvm::FunctionType::get(bool_type, param_types, false),
-        llvm::GlobalValue::ExternalLinkage, ss.str(), module.get());
-    func->addFnAttr(llvm::Attribute::ReadNone);
-  }
-
-  return func;
-}
-
-// Return a function that encodes input bit argument values into an integer
-// type.
-llvm::Function *CircuitBuilder::BitConcatFunc(llvm::Type *type_) {
-  const auto type = llvm::dyn_cast<llvm::IntegerType>(type_);
-  CHECK_NOTNULL(type);
-  const auto num_bits = type->getScalarSizeInBits();
-  if (num_bits >= concat_funcs.size()) {
-    concat_funcs.resize(num_bits + 1);
-  }
-
-  auto &func = concat_funcs[num_bits];
-  if (!func) {
-    std::stringstream ss;
-    ss << "__circuitous_concat_" << num_bits;
-    func = llvm::Function::Create(llvm::FunctionType::get(type, true),
-                                  llvm::GlobalValue::ExternalLinkage, ss.str(),
-                                  module.get());
-    func->addFnAttr(llvm::Attribute::ReadNone);
-  }
-
-  return func;
-}
-
-// Return a function that selects from one or more values.
-llvm::Function *CircuitBuilder::SelectorFunc(llvm::Type *selector_type,
-                                             llvm::Type *type_) {
-  const auto type = llvm::dyn_cast<llvm::IntegerType>(type_);
-  CHECK_NOTNULL(type);
-  const auto num_bits = type->getScalarSizeInBits();
-  if (num_bits >= select_funcs.size()) {
-    select_funcs.resize(num_bits + 1);
-  }
-
-  auto &func = select_funcs[num_bits];
-  if (!func) {
-    const auto num_inputs = selector_type->getScalarSizeInBits();
-    std::stringstream ss;
-    ss << "__circuitous_select_" << num_bits;
-    std::vector<llvm::Type *> param_types(num_inputs + 1, type);
-    param_types[0] = selector_type;
-    func = llvm::Function::Create(
-        llvm::FunctionType::get(type, param_types, false),
-        llvm::GlobalValue::ExternalLinkage, ss.str(), module.get());
-    func->addFnAttr(llvm::Attribute::ReadNone);
-  }
-
-  return func;
-}
-
 void CircuitBuilder::IdentifyImms(CircuitBuilder::InstSelections &insts) {
   for (auto &inst : insts) {
     for (auto i = 0U; i < inst.instructions.size(); ++i) {
@@ -888,7 +816,7 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
           reg_val = ir.CreateTrunc(reg_val, reg_type);
         }
 
-        const auto eq_func = BitMatcherFunc(reg_type);
+        auto eq_func = intrinsics::Eq::CreateFn(module.get(), reg_type);
         llvm::Value *eq_args[] = {reg_val, expected_reg_val};
         params.push_back(ir.CreateCall(eq_func, eq_args));
       }

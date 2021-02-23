@@ -89,19 +89,7 @@ class CircuitBuilder {
 
  protected:
 
-
   void IdentifyImms(InstSelections &insts);
-
-  // Return a function that does a bitwise comparison of two values of
-  // type `type`.
-  llvm::Function *BitMatcherFunc(llvm::Type *type);
-
-  // Return a function that encodes input bit argument values into an integer
-  // type.
-  llvm::Function *BitConcatFunc(llvm::Type *type_);
-
-  // Return a function that selects from one or more values.
-  llvm::Function *SelectorFunc(llvm::Type *selector_type, llvm::Type *type_);
 
   // Decode all instructions in `buff` using `arch`. Group the instructions in
   // terms of a general semantic category/class.
