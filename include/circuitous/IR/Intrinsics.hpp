@@ -50,6 +50,16 @@ namespace impl {
       fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
       return fn;
     }
+
+    static std::vector<llvm::Function *> All(llvm::Module *module) {
+      std::vector<llvm::Function *> out;
+      for (auto &fn : *module) {
+        if (IsIntrinsic(&fn)) {
+          out.push_back(&fn);
+        }
+      }
+      return out;
+    }
   };
 
   template<typename Self_t>
