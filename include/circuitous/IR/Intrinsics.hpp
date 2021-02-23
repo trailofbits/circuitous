@@ -191,4 +191,10 @@ struct ExtractRaw : impl::Interval<ExtractRaw> {
   static constexpr const char *separator = ".";
 };
 
+struct Eq : impl::BinaryPredicate<Eq> {
+  // TODO(lukas): Replace with .
+  static constexpr const char *fn_prefix = "__circuitous_icmp_eq_";
+  static constexpr const char *separator = ".";
+};
+
 } // namespace circuitous::intrinsics
