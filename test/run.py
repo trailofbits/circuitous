@@ -73,13 +73,13 @@ class Lifter:
   def __init__(self, binary=circuitous_lift):
     self.binary = binary
 
-  def lift_test(self, tc):
+  def lift_test(self, tc, extra_args):
     for case in tc.cases:
       bytes = case.bytes
       circuit = self.circuit_name(bytes)
       log_info("Lifting: " + '.' * 16 + " " + tc.name + " -> " + case.name)
       if not circuit in tc.metafiles:
-        tc.metafiles[circuit] = self.lift(case.bytes, tc._lift_opts)
+        tc.metafiles[circuit] = self.lift(case.bytes, tc._lift_opts + extra_args)
       else:
         log_info("\tSkipped")
       tc.metafiles[case.name + ".circuit"] = circuit
@@ -150,7 +150,7 @@ class Comparator:
       if e_val != int(val):
         accept = False
         message += "Register " + reg + " (expected != actual): " + \
-                   str(expected.registers[reg]) + " != " + str(val) + "\n"
+                   str(e_val) + " != " + str(val) + "\n"
 
     if expected.result:
       if after.result == False or accept == False:
