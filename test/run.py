@@ -140,6 +140,11 @@ class Comparator:
     out = {}
     for case in tc.cases:
       out[case.name] = self.compare_case(case.input, case.simulated, case.expected)
+      if not out[case.name][0]:
+        msg = out[case.name][1]
+        msg += "\n\tLift bytes: " + tc._bytes
+        msg += "\n\tRun bytes: " + case.input.bytes
+        out[case.name] = (out[case.name][0], msg)
     return out
 
   def compare_case(self, input, after, expected):
@@ -181,7 +186,7 @@ class Results:
         self.results["pass"] += 1
 
   def failed(self, name, message):
-    print("\t", red("[" + name + "]"), message)
+    print(red("[" + name + "]"), "\n", message)
     self.fails.append(name)
 
   def ok(self):
