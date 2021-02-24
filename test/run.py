@@ -111,7 +111,7 @@ class Interpret:
 
   def run_case(self, case, ir, parent):
     args = [self.binary,
-            "--json_in", case.input.as_json_file(),
+            "--json_in", case.input.as_json_file(case.name),
             "--json_out", case.name + ".result.json",
             "--ir_in", ir]
     log_info("Running: " + '.' * 16 + " " + parent.name + " -> " + case.name)

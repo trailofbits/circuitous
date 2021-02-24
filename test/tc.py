@@ -37,10 +37,10 @@ class State:
       out["input_regs"][reg] = str(val)
     return out
 
-  def as_json_file(self):
-    with open("input_x", 'w') as out:
+  def as_json_file(self, prefix="def."):
+    with open(prefix + "input.json", 'w') as out:
       json.dump(self.get(), out)
-    return "input_x"
+    return prefix + "input.json"
 
 
 def S():
