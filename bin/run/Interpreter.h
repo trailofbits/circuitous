@@ -2,6 +2,8 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
+#include <unordered_map>
+
 #include <circuitous/IR/IR.h>
 #include <llvm/ADT/APInt.h>
 

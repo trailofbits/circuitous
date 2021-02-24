@@ -1,6 +1,14 @@
+#
+# Copyright (c) 2021-present, Trail of Bits, Inc.
+# All rights reserved.
+#
+# This source code is licensed in accordance with the terms specified in
+# the LICENSE file found in the root directory of this source tree.
+#
+
 # This is only executed once; use a macro (and not a function) so that
 # everything defined here does not end up in a separate namespace
-macro(settings_main)
+macro(main)
   # default build type
   if(WIN32)
     set(CMAKE_BUILD_TYPE Release)
@@ -50,5 +58,5 @@ macro(settings_main)
 endmacro()
 
 if(NOT DEFINED SETTINGS_CMAKE_)
-  settings_main()
+  main()
 endif()

@@ -3,6 +3,8 @@
  */
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/IR/Lifter.hpp>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
@@ -28,6 +30,8 @@
 #include <remill/OS/OS.h>
 
 #include "CircuitBuilder.h"
+
+#include <deque>
 
 namespace circuitous {
 namespace {
@@ -204,6 +208,58 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
   }
 
+  Operation *VisitExtractIntrinsic(llvm::Function *fn) {
+    LOG(INFO) << "Handling extract intrinsic: " << LLVMName(fn);
+    const auto &[from, size] = intrinsics::Extract::ParseArgs(fn);
+
+    // TODO(lukas): For now we can only lower some specialized cases
+    CHECK(impl->inst_bits.Size() == 1);
+    CHECK(from % 8 == 0 && size % 8 == 0);
+
+    const auto &inst_bytes = *impl->inst_bits.begin();
+
+    // We split extract to sepratate bytes. This is so we can reorder them,
+    // which can be handy if the extracted data are in a different order
+    // (endiannity for example).
+    const unsigned step = 8;
+    std::deque<Operation *> partials;
+    for (unsigned i = static_cast<unsigned>(from); i < from + size; i += step) {
+      auto op = impl->extracts.Create(i, i + step);
+      op->operands.AddUse(inst_bytes);
+      partials.push_front(op);
+    }
+
+    if (partials.size() == 1) {
+      return partials.front();
+    }
+
+    // x86 immediates are encoded using little-endian however instruction bytes
+    // will be encoded differently:
+    // ba 12 00 00 00 - mov 12, %rdx
+    // If we do extract(32, 0) we end up with `12000000` as number, but we would
+    // expect `00000012` therefore we must reorder them and then concat.
+    auto result = impl->concats.Create(static_cast<unsigned>(size));
+    for (auto x : partials) {
+      result->operands.AddUse(x);
+    }
+    return result;
+  }
+
+  Operation *VisitExtractRawIntrinsic(llvm::Function *fn) {
+    LOG(INFO) << "Handling extract raw intrinsic: " << LLVMName(fn);
+
+    CHECK(impl->inst_bits.Size() == 1);
+    const auto &inst_bytes = *impl->inst_bits.begin();
+
+    const auto &[from, size] = intrinsics::ExtractRaw::ParseArgs(fn);
+    auto op = impl->extracts.Create(
+      static_cast<unsigned>(from),
+      static_cast<unsigned>(from + size));
+    LOG(INFO) << from << ", " << size;
+    op->operands.AddUse(inst_bytes);
+    return op;
+  }
+
   void VisitFunctionCall(llvm::Function *, llvm::Use &, llvm::CallInst *val) {
     auto &op = val_to_op[val];
     if (op) {
@@ -264,7 +320,10 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     } else if (name.startswith("__remill_write_memory_")) {
       LOG(FATAL) << "Memory write intrinsics not yet supported";
-
+    } else if (intrinsics::Extract::IsIntrinsic(func)) {
+      op = VisitExtractIntrinsic(func);
+    } else if (intrinsics::ExtractRaw::IsIntrinsic(func)) {
+      op = VisitExtractRawIntrinsic(func);
     } else {
       LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(val);
     }
@@ -474,7 +533,6 @@ std::unique_ptr<Circuit>
 Circuit::CreateFromInstructions(const std::string &arch_name,
                                 const std::string &os_name,
                                 const std::string &file_name) {
-
   auto maybe_buff = llvm::MemoryBuffer::getFile(file_name, -1, false);
   if (remill::IsError(maybe_buff)) {
     LOG(ERROR) << remill::GetErrorString(maybe_buff) << std::endl;
@@ -482,6 +540,20 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
   }
 
   const auto buff = remill::GetReference(maybe_buff)->getBuffer();
+  return CreateFromInstructions(arch_name, os_name, buff);
+}
+
+std::unique_ptr<Circuit>
+Circuit::CreateFromInstructions(const std::string &arch_name,
+                                const std::string &os_name,
+                                std::string_view bytes) {
+  return CreateFromInstructions(arch_name, os_name, llvm::StringRef{bytes.data(), bytes.size()});
+}
+
+std::unique_ptr<Circuit>
+Circuit::CreateFromInstructions(const std::string &arch_name,
+                                const std::string &os_name,
+                                const llvm::StringRef &buff) {
 
   circuitous::CircuitBuilder builder([&](llvm::LLVMContext &context) {
     return remill::Arch::Build(&context, remill::GetOSName(os_name),
@@ -578,7 +650,8 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
 
           const auto arg_cmp = llvm::cast<llvm::CallInst>(arg_use.get());
           CHECK(arg_cmp->getCalledFunction()->getName().startswith(
-              "__circuitous_icmp_eq_"));
+              "__circuitous_icmp_eq_") ||
+                intrinsics::BitCompare::IsIntrinsic(arg_cmp->getCalledFunction()));
 
           const auto proposed_val = arg_cmp->getArgOperand(0u);
           const auto expected_val = arg_cmp->getArgOperand(1u);

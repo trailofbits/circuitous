@@ -3,6 +3,8 @@
  */
 
 #include "CircuitBuilder.h"
+#include "circuitous/IR/Lifter.hpp"
+#include "InstructionFuzzer.hpp"
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
@@ -12,6 +14,8 @@
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>
 #pragma clang diagnostic pop
+
+#include <sstream>
 
 namespace circuitous {
 namespace {
@@ -141,6 +145,7 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
   //            convert the AND into a function call.
 
   auto isels = DecodeInstructions(buff);
+  IdentifyImms(isels);
   LiftInstructions(isels);
 
   // Delete the `__remill_intrinsics` so that we can get rid of more
@@ -155,14 +160,9 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
     mark_as_used->eraseFromParent();
   }
 
-  one_of_func = llvm::Function::Create(llvm::FunctionType::get(bool_type, true),
-                                       llvm::GlobalValue::ExternalLinkage,
-                                       "__circuitous_one_of", module.get());
-
-  verify_inst_func = llvm::Function::Create(
-      llvm::FunctionType::get(bool_type, {bool_type}, true),
-      llvm::GlobalValue::ExternalLinkage, "__circuitous_verify_inst",
-      module.get());
+  // TODO(lukas): Move to ctor
+  one_of_func = intrinsics::OneOf::CreateFn(module.get());
+  verify_inst_func = intrinsics::VerifyInst::CreateFn(module.get());
 
   // Mark these functions as not touching memory; this will help LLVM to
   // better optimize code that calls these functions.
@@ -279,6 +279,20 @@ llvm::Function *CircuitBuilder::SelectorFunc(llvm::Type *selector_type,
   }
 
   return func;
+}
+
+void CircuitBuilder::IdentifyImms(CircuitBuilder::InstSelections &insts) {
+  for (auto &inst : insts) {
+    for (auto i = 0U; i < inst.instructions.size(); ++i) {
+      if (reduce_imms) {
+        LOG(INFO) << "Searching for immediate operands regions in:";
+        LOG(INFO) << inst.instructions[i].Serialize();
+        inst.imms.push_back(InstructionFuzzer{arch}.FuzzOps(inst.instructions[i]));
+      } else {
+        inst.imms.emplace_back();
+      }
+    }
+  }
 }
 
 // llvm::CallInst *CircuitBuilder::FinalXor(llvm::Function *in_func) const {
@@ -549,21 +563,23 @@ void CircuitBuilder::FlattenControlFlow(
 void CircuitBuilder::LiftInstructions(
     std::vector<InstructionSelection> &isels) {
   remill::IntrinsicTable intrinsics(module);
-  remill::InstructionLifter lifter(arch, intrinsics);
+  InstructionLifter lifter(arch, intrinsics);
   std::vector<llvm::Function *> inst_funcs;
 
   unsigned g = 0u;
   for (auto &group : isels) {
+      CHECK(group.instructions.size() == group.encodings.size());
 
-    unsigned i = 0u;
-    for (auto &inst : group.instructions) {
+    for (auto i = 0U; i < group.instructions.size(); ++i) {
+      auto &inst = group.instructions[i];
       std::stringstream ss;
-      ss << "inst_" << g << '_' << (i++);
+      ss << "inst_" << g << '_' << i;
 
       auto func = remill::DeclareLiftedFunction(module.get(), ss.str());
       remill::CloneBlockFunctionInto(func);
       auto block = &func->getEntryBlock();
-      switch (lifter.LiftIntoBlock(inst, block, false)) {
+
+      switch (lifter.LiftIntoBlock(inst, block, false, group.imms[i])) {
         case remill::LiftStatus::kLiftedInstruction:
           (void) llvm::ReturnInst::Create(
               context, remill::LoadMemoryPointer(block), block);
@@ -587,7 +603,10 @@ void CircuitBuilder::LiftInstructions(
           LOG(ERROR) << "Invalid instruction: " << inst.Serialize();
           func->eraseFromParent();
           continue;
+        default:
+          break;
       }
+
     }
 
     ++g;
@@ -773,14 +792,70 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
 
       // Add instruction encoding check
       {
+        // Reorders bytes so that they can be matched to extract from instruction
+        // bytes without extra concats.
+        auto generate_raw_bytes = [](auto full, uint64_t from, uint64_t to) {
+          std::string out;
+          while(true) {
+            uint64_t y = std::min(from + (8 - from % 8), to);
+            std::string partial = full.substr(from, 8);
+            std::reverse(partial.begin(), partial.end());
+            out = partial + out;
+            if (y == to) {
+              return out;
+            }
+            from = y;
+          }
+        };
+
+        LOG(INFO) << "Creating relevant sections of: " << isel.encodings[i].to_string();
+        auto rinst_size = isel.instructions[i].bytes.size() * 8;
         const auto &encoding = isel.encodings[i];
-        const auto size = static_cast<unsigned>(encoding.size());
-        const auto lhs =
-            ir.getInt(llvm::APInt(size, encoding.to_string(), /*radix=*/2));
-        const auto rhs = remill::NthArgument(circuit0_func, 0);
-        const std::array<llvm::Value *, 2> eq_params{lhs, rhs};
-        params.push_back(
-            ir.CreateCall(BitMatcherFunc(ir.getIntNTy(size)), eq_params));
+
+        auto create_bit_check = [&](auto from, auto to) {
+          LOG(INFO) << "Creating bitcheck: " << from << " " << to;
+
+          auto fn = intrinsics::ExtractRaw::CreateFn(module.get(), from, to - from );
+
+          std::string full_inst;
+          // Encoding check needed since `x` is unsigned.
+          for (auto x = rinst_size - 1; x >= 0 && x < encoding.size(); --x) {
+            full_inst += (encoding[x]) ? '1' : '0';
+          }
+          // TODO(lukas): Sorry, most likely there is a more sane way to do this
+          //              but since it may change in rather near future I am keeping
+          //              it this way.
+          std::reverse(full_inst.begin(), full_inst.end());
+          std::string expected = generate_raw_bytes(full_inst, from, to);
+
+          auto size = static_cast<uint32_t>(expected.size());
+          CHECK(size == to - from) << size << " != " << to - from;
+
+          auto expected_v = ir.getInt(llvm::APInt(size, expected, 2));
+          const auto rhs = remill::NthArgument(circuit0_func, 0);
+          auto x = ir.CreateCall(fn, {rhs});
+          auto y = ir.CreateCall(
+            intrinsics::BitCompare::CreateFn(module.get(), size), {expected_v, x});
+          return y;
+        };
+
+        std::map<uint64_t, uint64_t> flattened_imm_regions;
+        for (auto &[_, data] : isel.imms[i]) {
+          for(auto &[from, size] : data) {
+            flattened_imm_regions.emplace(from, from + size);
+          }
+        }
+        uint64_t current = 0;
+        for (auto &[from, to] : flattened_imm_regions) {
+          if (current != from) {
+            params.push_back(create_bit_check(current, from));
+          }
+          current = to;
+        }
+        if (current != isel.instructions[i].bytes.size() * 8) {
+          params.push_back(
+            create_bit_check(current, isel.instructions[i].bytes.size() * 8));
+        }
       }
 
       // Final set of parameters are comparisons on whether or not the resulting

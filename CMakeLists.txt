@@ -1,17 +1,37 @@
-# Copyright (c) 2020 Trail of Bits, Inc.
-find_package(remill COMPONENTS VCPKG_DEPS QUIET)
+#
+# Copyright (c) 2021-present, Trail of Bits, Inc.
+# All rights reserved.
+#
+# This source code is licensed in accordance with the terms specified in
+# the LICENSE file found in the root directory of this source tree.
+#
 
+# Find remill first because its config has useful dependency-finding info that
+# needs to be found before the CMake `project` declaration
+find_package(remill COMPONENTS VCPKG_DEPS QUIET)
 include(cmake/vcpkg_helper.cmake)
 
-project(circuitous)
+project(circuitous LANGUAGES C CXX ASM)
 cmake_minimum_required(VERSION 3.14)
-include(GNUInstallDirs)
-enable_language(C CXX ASM)
 
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/settings.cmake")
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake")
+include("cmake/options.cmake")
+include("cmake/settings.cmake")
+include("cmake/utils.cmake")
+
+include(GNUInstallDirs)
 
 FindAndSelectClangCompiler()
+
+find_program(ccache_path ccache)
+if("${ccache_path}" STREQUAL "ccache_path-NOTFOUND")
+  message(STATUS "anvill: ccache was not found")
+
+else()
+  message(STATUS "anvill: Enabling ccache support with ${ccache_path}")
+
+  set(CMAKE_CXX_COMPILER_LAUNCHER "${ccache_path}" CACHE FILEPATH "")
+  set(CMAKE_C_COMPILER_LAUNCHER "${ccache_path}" CACHE FILEPATH "")
+endif()
 
 #
 # libraries
@@ -22,8 +42,6 @@ find_package(gflags CONFIG REQUIRED)
 #
 # target settings
 #
-
-# set(CIRCUITOUS circuitous_${REMILL_LLVM_VERSION})
 
 add_library(circuitous_settings INTERFACE)
 target_link_libraries(circuitous_settings INTERFACE
@@ -99,7 +117,7 @@ target_link_libraries(circuitous_transforms PUBLIC circuitous_settings)
 #
 
 add_executable(circuitous-lift
-  bin/lift/Lift.cpp
+  bin/lift/Main.cpp
 )
 
 target_link_libraries(circuitous-lift PUBLIC
@@ -115,7 +133,7 @@ target_include_directories(circuitous-lift PUBLIC circuitous_settings)
 
 add_executable(circuitous-run
   bin/run/Interpreter.cpp
-  bin/run/Run.cpp
+  bin/run/Main.cpp
 )
 
 target_link_libraries(circuitous-run PUBLIC
