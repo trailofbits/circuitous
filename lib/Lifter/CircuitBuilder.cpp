@@ -186,6 +186,14 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
   return BuildCircuit1(BuildCircuit0(std::move(isels)));
 }
 
+template<typename T = uint64_t>
+T CircuitBuilder::inst_fragments_count(llvm::CallInst *inst) const {
+  auto maybe_count = GetMetadata(inst, bytes_fragments_count_kind);
+  CHECK(maybe_count) << "Byte fragments size not set for"
+                     << remill::LLVMThingToString(inst);
+  return static_cast<T>(*maybe_count);
+}
+
 void CircuitBuilder::IdentifyImms(CircuitBuilder::InstSelections &insts) {
   for (auto &inst : insts) {
     for (auto i = 0U; i < inst.instructions.size(); ++i) {
@@ -199,19 +207,6 @@ void CircuitBuilder::IdentifyImms(CircuitBuilder::InstSelections &insts) {
     }
   }
 }
-
-// llvm::CallInst *CircuitBuilder::FinalXor(llvm::Function *in_func) const {
-//   for (auto &use : one_of_func->uses()) {
-//     if (auto call_user = llvm::dyn_cast<llvm::CallInst>(use.getUser());
-//         call_user && call_user->getParent()->getParent() == in_func) {
-//       return call_user;
-//     }
-//   }
-
-//   LOG(FATAL) << "Could not find call to function __circuitous_one_of in "
-//              << in_func->getName().str();
-//   return nullptr;
-// }
 
 // Decode all instructions in `buff` using `arch`. Group the instructions in
 // terms of a general semantic category/class.
@@ -661,8 +656,7 @@ auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels)
           std::string out;
           while(true) {
             uint64_t y = std::min(from + (8 - from % 8), to);
-            uint64_t size = std::min(to - from, 8ull);
-            std::string partial = full.substr(from, size);
+            std::string partial = full.substr(from, y - from);
             std::reverse(partial.begin(), partial.end());
             out = partial + out;
             if (y == to) {
@@ -709,6 +703,7 @@ auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels)
             flattened_imm_regions.emplace(from, from + size);
           }
         }
+
         uint64_t current = 0;
         for (auto &[from, to] : flattened_imm_regions) {
           if (current != from) {
@@ -721,6 +716,8 @@ auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels)
             create_bit_check(current, isel.instructions[i].bytes.size() * 8));
         }
       }
+      // TODO(lukas): There can be something else present
+      auto fragments_size = params.size();
 
       // Final set of parameters are comparisons on whether or not the resulting
       // register after the semantic has executed matches the next state of that
@@ -750,7 +747,9 @@ auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels)
       // verified the isel decoding (first argument) and if all other arguments
       // (register comparisons) are true.
       ir.SetInsertPoint(exit_block);
-      verified_insts.push_back(ir.CreateCall(verify_inst_func, params));
+      auto call = ir.CreateCall(verify_inst_func, params);
+      AddMetadata(call, bytes_fragments_count_kind, fragments_size);
+      verified_insts.push_back(call);
     }
     ++g;
   }
@@ -876,9 +875,12 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   // register.
   ForEachVerification(circuit0_func, [&](llvm::CallInst *verify_call_inst) {
     auto arg_num = 0u;
+    auto reg_idx = 0u;
+    auto inst_fragments_prefix = inst_fragments_count(verify_call_inst);
     for (auto &arg_use : verify_call_inst->arg_operands()) {
       llvm::Value *arg = arg_use.get();
-      if (arg_num < 1) {
+      CHECK(inst_fragments_prefix > 0);
+      if (arg_num < inst_fragments_prefix) {
         ++arg_num;
         continue;
       }
@@ -886,7 +888,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
       // Figure out the input and output registers to the circuit function.
       // const auto reg_id = arg_num - num_instruction_parts;
       // const auto in_reg_arg_index = num_instruction_parts + (2u * reg_id);
-      const auto in_reg_arg_index = (2u * arg_num) - 1u;
+      const auto in_reg_arg_index = circuit0.inst_bytes.size() + (2u * reg_idx);
       const auto in_reg_arg =
           remill::NthArgument(circuit0_func, in_reg_arg_index);
       const auto out_reg_arg =
@@ -898,7 +900,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
 
       const auto in_reg_name = in_reg_arg->getName().str();
       const auto out_reg_name = out_reg_arg->getName().str();
-      ++arg_num;
+      ++arg_num; ++reg_idx;
 
       const auto call_inst = llvm::dyn_cast<llvm::CallInst>(arg);
       CHECK(call_inst != nullptr)
@@ -907,7 +909,8 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
 
       const auto icmp_eq = call_inst->getCalledFunction();
       CHECK_NOTNULL(icmp_eq);
-      CHECK(icmp_eq->getName().startswith("__circuitous_icmp_eq_"));
+      CHECK(icmp_eq->getName().startswith("__circuitous_icmp_eq_"))
+        << LLVMName(icmp_eq);
 
       const auto lhs = call_inst->getArgOperand(0);
       const auto rhs = call_inst->getArgOperand(1);
@@ -1060,14 +1063,17 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   // to reflect the new register transfer comparisons.
   ForEachVerification(circuit1_func, [&](llvm::CallInst *call_inst) {
     args.clear();
-    args.push_back(call_inst->getArgOperand(0));
+    auto inst_fragments_prefix = inst_fragments_count<uint32_t>(call_inst);
+    for (auto j = 0u; j < inst_fragments_prefix; ++j) {
+      args.push_back(call_inst->getArgOperand(j));
+    }
     for (i = 0u; i < regs.size(); ++i) {
       const auto reg = regs[i];
 
       // const auto arg = call_inst->getArgOperand(i + num_instruction_parts);
-      const auto arg = call_inst->getArgOperand(i + 1);
+      const auto arg = call_inst->getArgOperand(i + inst_fragments_prefix);
       if (std::find(new_regs.begin(), new_regs.end(), reg) != new_regs.end()) {
-        CHECK(!llvm::isa<llvm::Constant>(arg));
+        CHECK(!llvm::isa<llvm::Constant>(arg)) << remill::LLVMThingToString(arg);
         args.push_back(arg);
       }
     }

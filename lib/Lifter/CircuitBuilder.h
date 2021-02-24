@@ -115,6 +115,7 @@ class CircuitBuilder {
  protected:
 
   void IdentifyImms(InstSelections &insts);
+  template<typename T> T inst_fragments_count(llvm::CallInst *call) const;
 
   // Decode all instructions in `buff` using `arch`. Group the instructions in
   // terms of a general semantic category/class.
