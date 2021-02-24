@@ -48,7 +48,7 @@ struct InstructionFuzzer {
     }
   }
 
-  bool CompareOps(const remill::Operand &lhs, const remill::Operand &rhs) {
+  static bool CompareOps(const remill::Operand &lhs, const remill::Operand &rhs) {
     return lhs.Serialize() == rhs.Serialize();
   }
 
@@ -137,8 +137,10 @@ struct InstructionFuzzer {
     if (op.type != OpType::kTypeImmediate) {
       return {};
     }
-    auto compare_self = [](auto &, auto &flipped) {
-      return flipped.type == remill::Operand::kTypeImmediate;
+    auto compare_self = [](auto &self, auto &flipped) {
+      return flipped.type == remill::Operand::kTypeImmediate &&
+             !(self.imm.val == flipped.imm.val &&
+               self.imm.is_signed != flipped.imm.is_signed);
     };
     return ProcessResult(rinst, op, Permutate(rinst, op, compare_self));
   }
