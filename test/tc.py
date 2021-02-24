@@ -139,6 +139,10 @@ class Test:
     # TODO(lukas): A bit bleh.
     if isinstance(inst_chooser, int):
       case.input.bytes = self._inst_arr[inst_chooser]
+    elif isinstance(inst_chooser, list):
+      assert len(inst_chooser) == 1, "Cannot run more than one inst"
+      case.input.bytes = "".join(inst_chooser[0])
+      print(case.input.bytes)
     else:
       case.input.bytes = inst_chooser
 
