@@ -561,15 +561,15 @@ void CircuitBuilder::ForEachVerification(llvm::Function *circuit_func, T cb) {
 
 // Build the first level circuit. We will analyze this function later to
 // get an accurate picture of instruction dependencies.
-llvm::Function *
-CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
+auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels)
+-> Circuit0 {
 
   // We'll be using this one a lot
   llvm::IRBuilder<> ir(context);
 
   const auto &dl = module->getDataLayout();
 
-  auto circuit0 = Circuit0Fn(*this);
+  auto circuit0 = Circuit0(*this);
   auto circuit0_func = circuit0.Create();
 
   auto entry_block = llvm::BasicBlock::Create(context, "", circuit0_func);
@@ -761,7 +761,7 @@ CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) {
 
   OptimizeSilently(arch.get(), module.get(), {circuit0_func});
 
-  return circuit0_func;
+  return circuit0;
 }
 
 // Keeps track of instruction dependencies.
@@ -864,7 +864,8 @@ class RegisterDependencyCollector
 // Build the second level circuit. Here we analyze how the instruction checkers
 // use registers and try to eliminate unneeded registers from the function's
 // argument list.
-llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
+llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
+  auto circuit0_func = circuit0.GetFn();
   RegisterDependencyCollector deps(arch.get());
 
   // Look at all calls to instruction verifiers. These function calls take as
@@ -1088,7 +1089,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(llvm::Function *circuit0_func) {
   return circuit1_func;
 }
 
-llvm::FunctionType *CircuitBuilder::Circuit0Fn::FnT() {
+llvm::FunctionType *CircuitBuilder::Circuit0::FnT() {
   llvm::IRBuilder<> ir(parent.context);
   std::vector<llvm::Type *> param_types;
 
@@ -1105,11 +1106,11 @@ llvm::FunctionType *CircuitBuilder::Circuit0Fn::FnT() {
   return llvm::FunctionType::get(ir.getInt1Ty(), param_types, false);
 }
 
-llvm::Function *CircuitBuilder::Circuit0Fn::GetFn() {
+llvm::Function *CircuitBuilder::Circuit0::GetFn() {
   return parent.module->getFunction(name);
 }
 
-llvm::Function *CircuitBuilder::Circuit0Fn::Create() {
+llvm::Function *CircuitBuilder::Circuit0::Create() {
   llvm::IRBuilder<> ir(parent.context);
 
   if (auto fn = GetFn()) {

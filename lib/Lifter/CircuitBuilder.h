@@ -66,6 +66,28 @@ enum : unsigned { kMaxNumBytesRead = 16u };
 class CircuitBuilder {
  public:
   using InstSelections = std::vector<InstructionSelection>;
+  static constexpr const char *bytes_fragments_count_kind =
+    "__circuitous.byte_fragment_count";
+
+  struct Circuit0 {
+    static constexpr const char *name = "circuit_0";
+
+    Circuit0(CircuitBuilder &parent_) : parent(parent_) {}
+
+    llvm::FunctionType *FnT();
+    llvm::Function *GetFn();
+    llvm::Function *Create();
+
+    CircuitBuilder &parent;
+
+    using remill_reg = const remill::Register *;
+    // register - input - output
+    using Arg = std::tuple<remill_reg, llvm::Argument *, llvm::Argument *>;
+    // TODO(lukas): For compatibility with history, this must be
+    //              ordered hence vector and not map.
+    std::vector<Arg> reg_to_args;
+    std::vector<llvm::Argument *> inst_bytes;
+  };
 
   template <typename T>
   explicit CircuitBuilder(T initialize_arch)
@@ -117,13 +139,12 @@ class CircuitBuilder {
 
   // Build the first level circuit. We will analyze this function later to
   // get an accurate picture of instruction dependencies.
-  llvm::Function *BuildCircuit0(std::vector<InstructionSelection> isels);
+  Circuit0 BuildCircuit0(std::vector<InstructionSelection> isels);
 
   // Build the second level circuit. Here we analyze how the instruction checkers
   // use registers and try to eliminate unneeded registers from the function's
   // argument list.
-  llvm::Function *BuildCircuit1(llvm::Function *circuit0_func);
-
+  llvm::Function *BuildCircuit1(Circuit0 circuit0);
  public:
   llvm::LLVMContext context;
 
@@ -192,29 +213,6 @@ class CircuitBuilder {
 
   // Top-level registers.
   std::vector<const remill::Register *> regs;
-
-  struct Circuit0Fn {
-
-    static constexpr const char *name = "circuit_0";
-
-    Circuit0Fn(CircuitBuilder &parent_) : parent(parent_) {}
-
-    llvm::FunctionType *FnT();
-
-    llvm::Function *GetFn();
-    llvm::Function *Create();
-
-    CircuitBuilder &parent;
-
-    using remill_reg = const remill::Register *;
-    // register - input - output
-    using Arg = std::tuple<remill_reg, llvm::Argument *, llvm::Argument *>;
-
-    // TODO(lukas): For compatibility with history, this must be
-    //              ordered hence vector and not map.
-    std::vector<Arg> reg_to_args;
-    std::vector<llvm::Argument *> inst_bytes;
-  };
 };
 
 }  // namespace circuitous
