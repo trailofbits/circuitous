@@ -52,16 +52,20 @@ def check_retcode(pipes, component : str):
     out, err = pipes.communicate()
     ret_code = pipes.returncode
     if ret_code != 0:
-      err_message = "Unexpected return value of " + component + ": " + str(ret_code)
-      log_error(err_message)
-      log_error("Dump of stdout:")
-      print(out)
-      log_error("Dump of stderr:")
-      print(err)
-      raise PipelineFail(err_message)
+      raise PipelineFail(component, out, err)
 
 class PipelineFail(Exception):
-  pass
+  def __init__(self, component, out="", err=""):
+    self._out = out
+    self._err = err
+    self._component = component
+
+  def __str__(self):
+    msg = "Pipeline fail in: " + self._component + '\n'
+    msg += "Stdout:\n" + self._out + '\n'
+    msg += '\n-----\n'
+    msg += "Stderr:\n" + self._err + '\n'
+    return msg
 
 class Lifter:
   component = "circuitous lifter"
@@ -180,6 +184,13 @@ class Results:
   def ok(self):
     pass
 
+  def error(self, tc, e):
+    if self.fragile:
+      raise e
+    self.results["error"] += len(tc.cases)
+    print(yellow("Pipeline fail in: " + e._component))
+
+
   def report(self):
     log_info("Results:")
     for x in self.fails:
@@ -192,6 +203,8 @@ class Results:
         message = red(message)
       if x == "pass" and self.results[x] == sum(self.results.values()):
         message = green(message)
+      if x == "error" and self.results[x] != 0:
+        message = yellow(message)
       print(message)
 
 
@@ -208,11 +221,15 @@ def execute_tests(tests, top_dir):
     os.chdir(test_dir)
     x.generate()
 
-    Lifter().lift_test(x)
-    Interpret().run(x)
+    try:
+      Lifter().lift_test(x, extra_args)
+      Interpret().run(x)
 
-    rs.process(Comparator().compare(x), x.name)
-    os.chdir(top_level_dir)
+      rs.process(Comparator().compare(x), x.name)
+    except PipelineFail as e:
+      rs.error(x, e)
+    finally:
+      os.chdir(top_level_dir)
 
   rs.report()
 
