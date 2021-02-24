@@ -1,6 +1,6 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 
-from tc import State, Test, _regs
+from tc import State, Test, _all_regs
 
 import microx
 from microx_core import Executor
@@ -52,6 +52,6 @@ class MicroxGen:
     e.execute(t, 1)
 
     out = State()
-    for reg in _regs:
+    for reg in _all_regs:
       out.set_reg(reg, t.read_register(reg, t.REG_HINT_NONE))
     return out
