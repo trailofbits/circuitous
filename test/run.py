@@ -163,9 +163,12 @@ class Comparator:
     return True, ""
 
 class Results:
-  def __init__(self):
+  __slots__ = ('results', 'fails', 'fragile')
+
+  def __init__(self, fragile_=False):
     self.results = {"pass" : 0, "fail" : 0, "error" : 0}
     self.fails = []
+    self.fragile = fragile_
 
   def process(self, result, test_name):
     for name, (verdict, message) in result.items():
@@ -208,13 +211,13 @@ class Results:
       print(message)
 
 
-def execute_tests(tests, top_dir):
+def execute_tests(tests, top_dir, extra_args, fragile):
   log_info("Test dir is: " + top_dir)
   os.chdir(top_dir)
   global top_level_dir
   top_level_dir = os.path.abspath(top_dir)
 
-  rs = Results()
+  rs = Results(fragile)
   for x in tests:
     test_dir = tempfile.mkdtemp(dir=os.getcwd(),
                                 prefix=x.name.replace(' ', '.').replace('/', '.') + '_')
@@ -276,8 +279,13 @@ def main():
                            help="TODO: Run in dbg mode, which means be verbose.",
                            action='store_true',
                            default=True)
+  arg_parser.add_argument("--fragile",
+                          help="If pipeline fails, kill & report",
+                          action='store_true',
+                          default=False)
 
   args, command_args = arg_parser.parse_known_args()
+
   if args.tags is None:
     args.tags = ['all']
 
@@ -286,11 +294,11 @@ def main():
   if args.persist:
     log_info("Creating persistent directory")
     test_dir = tempfile.mkdtemp(dir=os.getcwd())
-    execute_tests(tests, test_dir)
+    execute_tests(tests, test_dir, command_args, args.fragile)
   else:
     log_info("Creating temporary directory")
     with tempfile.TemporaryDirectory(dir=os.getcwd()) as tmpdir:
-      execute_tests(tests, tmpdir)
+      execute_tests(tests, tmpdir, command_args, args.fragile)
 
 if __name__ == "__main__":
   main()
