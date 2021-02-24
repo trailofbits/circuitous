@@ -136,7 +136,7 @@ test_idiv = {
 
 test_add = {
   ModelTest("T:add rax imm") \
-  .bytes(intel(["add rax, 8"])).tags({'min', "add","imm_reduce"})
+  .bytes(intel(["add rax, 8"])).tags({'min', "add","reduce_imms"})
   .case("rax+=8",
     I = State().RAX(0x5).aflags(0),
     R = True
@@ -147,4 +147,19 @@ test_add = {
   )
 }
 
-circuitous_tests = [test_mov, test_lea, test_idiv, test_add]
+test_mov_add = {
+  ModelTest("T: add, mov") \
+  .bytes(intel(["add rax, 0x20", "mov rax, 0x10"]))
+  .tags({'min', 'reduce_imms'})
+  .case("add",
+    I = State().RAX(0x0).aflags(0),
+    run_bytes = 0,
+    R = True
+  ).case("mov",
+    I = State().RAX(0x0).aflags(0),
+    run_bytes = 1,
+    R = True
+  )
+}
+
+circuitous_tests = [test_mov, test_lea, test_idiv, test_add, test_mov_add]
