@@ -7,9 +7,8 @@ from microx_core import Executor
 
 class ModelTest(Test):
   def case(self, name_=None, **kwargs):
-    assert 'E' not in kwargs
+    assert 'E' not in kwargs and 'DE' not in kwargs
     super().case(name_, **kwargs)
-    self.expected = None
     return self
 
   def _expected_state(self, **kwargs):
@@ -17,9 +16,9 @@ class ModelTest(Test):
 
   def generate(self):
     for case in self.cases:
-      assert self.expected is None
+      result = True if case.expected.result is None else case.expected.result
       case.expected = MicroxGen().get(case.input)
-      case.expected.result = True
+      case.expected.result = result
     return self
 
 class MicroxGen:
