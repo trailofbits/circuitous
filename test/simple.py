@@ -16,7 +16,8 @@ test_mov = {
     E = State().RDX(0x13),
     run_bytes = "ba13000000",
     R = False
-  ).case(
+  ),
+  Test("mov imm rdx") .bytes("ba12000000").tags({"min", "!reduce_imms"}).case(
     E = State().RDX(0x13),
     run_bytes = "ff13000000",
     R = False
@@ -136,7 +137,7 @@ test_idiv = {
 
 test_add = {
   ModelTest("T:add rax imm") \
-  .bytes(intel(["add rax, 8"])).tags({'min', "add","reduce_imms"})
+  .bytes(intel(["add rax, 8"])).tags({'min', "add", "reduce_imms"})
   .case("rax+=8",
     I = State().RAX(0x5).aflags(0),
     R = True
@@ -144,6 +145,22 @@ test_add = {
     I = State().RAX(0x5).aflags(0),
     run_bytes = intel(["add rax, 16"])[0],
     R = True
+  ),
+  Test("T_reduced:add rax imm") \
+  .bytes(intel(["add rax, 0x10"])).tags({'reduce_imms', 'test2'})
+  .case("rax+=0x20",
+    I = State().RAX(0x0).aflags(0),
+    E = State().RAX(0x20),
+    run_bytes = intel(["add rax, 0x20"])[0],
+    R = True
+  ),
+  Test("T_reduced:add rax imm") \
+  .bytes(intel(["add rax, 0x10", "mov rcx, 0x10"])).tags({'reduce_imms', 'test2'})
+  .case("rax+=0x20",
+    I = State().RAX(0x0).RCX(0x0).aflags(0),
+    E = State().RAX(0x0).RCX(0x20),
+    run_bytes = intel(["add rcx, 0x20"])[0],
+    R = False
   )
 }
 
@@ -159,7 +176,27 @@ test_mov_add = {
     I = State().RAX(0x0).aflags(0),
     run_bytes = 1,
     R = True
-  )
+  ),
+  ModelTest("add, mov") \
+  .bytes(intel(["add rax, 0x20", "mov rax, 0x10"]))
+  .tags({'reduce_imms', 'test'})
+  .case("T:add",
+    I = State().RAX(0x0).aflags(0),
+    run_bytes = intel(["add rax, 0x30"])[0],
+    R = True
+  ).case("T:mov",
+    I = State().RAX(0x0).aflags(0),
+    run_bytes = intel(["mov rax, 0x40"])[0],
+    R = True
+  ).case("F:mov rbx",
+    I = State().RAX(0x0).RBX(0x0).aflags(0),
+    run_bytes = intel(["mov rbx, 0x40"])[0],
+    R = False
+  ).case("F:add rbx",
+    I = State().RAX(0x0).RBX(0x0).aflags(0),
+    run_bytes = intel(["add rbx, 0x40"])[0],
+    R = False
+  ),
 }
 
 circuitous_tests = [test_mov, test_lea, test_idiv, test_add, test_mov_add]
