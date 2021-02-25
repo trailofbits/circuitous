@@ -5,10 +5,12 @@
 #include <circuitous/IR/IR.h>
 #include <llvm/ADT/APInt.h>
 
+#include <unordered_map>
+
 namespace circuitous {
 class Interpreter : public Visitor<Interpreter> {
  private:
-  
+
   inline llvm::APInt TrueVal() {
     return llvm::APInt(1, 1);
   }
@@ -42,6 +44,7 @@ class Interpreter : public Visitor<Interpreter> {
   void VisitHint(Hint *op);
   void VisitUndefined(Undefined *op);
   // Operations
+  void VisitConcat(Concat *op);
   void VisitExtract(Extract *op);
   void VisitLLVMOperation(LLVMOperation *op);
   void VisitParity(Parity *op);

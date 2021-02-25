@@ -10,6 +10,7 @@
 #include <iosfwd>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -20,8 +21,16 @@ namespace llvm {
 class Constant;
 class Function;
 class Instruction;
+class StringRef;
 }  // namespace llvm
 namespace circuitous {
+
+// We can try to do some optimizations, but we want to be
+// able to toggle them (if for nothing we want to be able to
+// test them)
+struct Optimizations {
+  bool reduce_imms = false;
+};
 
 template <typename Derived>
 class Visitor;
@@ -507,11 +516,24 @@ class Circuit : public Condition {
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 
-  static std::unique_ptr<Circuit>
-  CreateFromInstructions(const std::string &arch_name,
-                         const std::string &os_name,
-                         const std::string &file_name);
+  using CircuitPtr = std::unique_ptr<Circuit>;
 
+
+  static CircuitPtr CreateFromInstructions(const std::string &arch_name,
+                                           const std::string &os_name,
+                                           const std::string &file_name,
+                                           const Optimizations &opts={});
+
+  static CircuitPtr CreateFromInstructions(const std::string &arch_name,
+                                           const std::string &os_name,
+                                           const llvm::StringRef &bytes,
+                                           const Optimizations &opts={});
+
+  static CircuitPtr CreateFromInstructions(const std::string &arch_name,
+                                           const std::string &os_name,
+                                           std::string_view bytes,
+                                           const Optimizations &opts={});
+ public:
   void Serialize(std::ostream &os);
 
   void Serialize(std::function<std::ostream &(const std::string &)> os_opener);

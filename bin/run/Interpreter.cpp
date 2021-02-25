@@ -38,8 +38,7 @@ void Interpreter::SetInputRegisterValue(const std::string &name,
       return;
     }
   }
-
-  LOG(FATAL) << "Input register " << name << " not present in circuit.";
+  LOG(WARNING) << "Input register " << name << " not present in circuit.";
 }
 
 uint64_t Interpreter::GetOutputRegisterValue(const std::string &name) {
@@ -122,6 +121,18 @@ void Interpreter::VisitExtract(Extract *op) {
   auto pos{op->low_bit_inc};
   auto num{op->high_bit_exc - pos};
   node_values[op] = val.extractBits(num, pos);
+}
+
+// TODO(lukas): Some non-align cases most likely need some extra handling
+//              which is currently not happening? Investigate.
+void Interpreter::VisitConcat(Concat *op) {
+    llvm::APInt build{ op->size, 0, false };
+    auto current = 0u;
+    for (auto i = 0u; i < op->operands.Size(); ++i) {
+        build.insertBits(node_values[op->operands[i]], current);
+        current += op->operands[i]->size;
+    }
+    node_values[op] = build;
 }
 
 void Interpreter::VisitLLVMOperation(LLVMOperation *op) {

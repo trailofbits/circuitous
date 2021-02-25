@@ -30,6 +30,10 @@ DEFINE_string(optimizations, "popcount2parity,reducepopcount",
               "Comma-separated list of optimizations to run");
 DEFINE_bool(append, false,
             "Append to output IR files, rather than overwriting.");
+DEFINE_bool(reduce_imms, false,
+            "Experimental: Try optimizations that extract immediates from inst_bytes");
+
+DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 
 namespace {
 
@@ -68,34 +72,55 @@ int main(int argc, char *argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
 
-  std::unique_ptr<circuitous::Circuit> circuit;
+  auto choose_optimizations = [&](){
+    circuitous::Optimizations out;
+    out.reduce_imms = FLAGS_reduce_imms;
+    return out;
+  };
 
-  if (!FLAGS_binary_in.empty()) {
-    circuitous::Circuit::CreateFromInstructions(FLAGS_arch, FLAGS_os,
-                                                FLAGS_binary_in)
-        .swap(circuit);
+  auto make_circuit = [&](auto buf) {
+    return circuitous::Circuit::CreateFromInstructions(
+      FLAGS_arch, FLAGS_os, buf, choose_optimizations());
+  };
 
-  } else if (!FLAGS_ir_in.empty()) {
-    if (FLAGS_ir_in == "-") {
-      FLAGS_ir_in = "/dev/stdin";
+  auto circuit = [&]() -> std::unique_ptr<circuitous::Circuit> {
+    if (!FLAGS_binary_in.empty()) {
+      return make_circuit(FLAGS_binary_in);
     }
 
-    std::ifstream is(FLAGS_ir_in, std::ios::binary);
-    if (!is.good()) {
-      LOG(ERROR) << "Error while opening input IR file.";
-      return EXIT_FAILURE;
+    if (!FLAGS_bytes_in.empty()) {
+      std::vector<uint8_t> buf;
+      for (auto i = 0U; i < FLAGS_bytes_in.size(); i += 2) {
+        std::string aux = {FLAGS_bytes_in[i], FLAGS_bytes_in[i + 1]};
+        auto casted = static_cast<uint8_t>(std::strtoul(aux.data(), nullptr, 16));
+        buf.push_back(casted);
+      }
+      auto as_sv = std::string_view( reinterpret_cast<char *>(buf.data()), buf.size());
+      return make_circuit(as_sv);
     }
-    circuitous::Circuit::Deserialize(is).swap(circuit);
 
-  } else {
+    if (!FLAGS_ir_in.empty()) {
+      if (FLAGS_ir_in == "-") {
+        FLAGS_ir_in = "/dev/stdin";
+      }
+
+      std::ifstream is(FLAGS_ir_in, std::ios::binary);
+      if (!is.good()) {
+        LOG(ERROR) << "Error while opening input IR file.";
+        return {};
+      }
+      return circuitous::Circuit::Deserialize(is);
+
+    }
     std::cerr << "Expected one of `--binary_in` or `--ir_in`" << std::endl;
-    return EXIT_FAILURE;
-  }
+    return {};
+  }();
 
   if (!circuit) {
     std::cerr << "Failed to get circuit IR" << std::endl;
     return EXIT_FAILURE;
   }
+
 
   std::unordered_map<std::string, bool (*)(circuitous::Circuit *)> optimizers;
   optimizers.emplace("popcount2parity", circuitous::ConvertPopCountToParity);
