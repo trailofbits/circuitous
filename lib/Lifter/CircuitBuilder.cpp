@@ -539,7 +539,7 @@ void CircuitBuilder::LiftInstructions(
 }
 
 // Apply a callback `cb(unsgined, const remill::Instruction &, llvm::CallInst *)`
-// to each call of `__circuitous_verify_inst` in `circuit_func`.
+// to each call of `__circuitous.verify_inst` in `circuit_func`.
 template <typename T>
 void CircuitBuilder::ForEachVerification(llvm::Function *circuit_func, T cb) {
   std::vector<llvm::CallInst *> verify_calls;
@@ -909,8 +909,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
 
       const auto icmp_eq = call_inst->getCalledFunction();
       CHECK_NOTNULL(icmp_eq);
-      CHECK(icmp_eq->getName().startswith("__circuitous_icmp_eq_"))
-        << LLVMName(icmp_eq);
+      CHECK(intrinsics::Eq::IsIntrinsic(icmp_eq)) << LLVMName(icmp_eq);
 
       const auto lhs = call_inst->getArgOperand(0);
       const auto rhs = call_inst->getArgOperand(1);
@@ -1005,7 +1004,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   // analysis determined to be used, and pass in null values (zeroes) for the
   // rest. We'll be able to observe calls like the following:
   //
-  //    %34 = tail call i1 (i8, i8, ...) @__circuitous_icmp_eq_8(i8 0, i8 0)
+  //    %34 = tail call i1 (i8, i8, ...) @instrinsics::Eq(i8 0, i8 0)
   //
   // Removing uses of these redundant comparisons will let us shrink down the
   // verification call arg lists to only verify used registers.
@@ -1036,7 +1035,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   // through the inlined body of circuit0_func.
   OptimizeSilently(arch.get(), module.get(), {circuit1_func});
 
-  // "Constant fold" the uses of `__circuitous_icmp_eq_8`.
+  // "Constant fold" the uses of `__circuitous.icmp_eq.8`.
   std::vector<llvm::CallInst *> to_fold;
 
   for (auto matcher : intrinsics::Eq::All(module.get())) {
@@ -1059,7 +1058,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
 
   std::vector<std::pair<llvm::CallInst *, llvm::CallInst *>> to_replace;
 
-  // Now go through an change the arguments to `__circuitous_verify_inst` to
+  // Now go through an change the arguments to `__circuitous.verify_inst` to
   // to reflect the new register transfer comparisons.
   ForEachVerification(circuit1_func, [&](llvm::CallInst *call_inst) {
     args.clear();

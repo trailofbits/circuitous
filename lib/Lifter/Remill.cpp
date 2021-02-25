@@ -629,12 +629,12 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
 
   std::unordered_set<Operation *> seen;
 
-  const auto verify_isnt_func = module->getFunction("__circuitous_verify_inst");
+  auto verify_inst_func = intrinsics::VerifyInst::CreateFn(module);
   auto all_verifications = impl->xor_all.Create();
   impl->operands.AddUse(all_verifications);
 
   ForEachCallTo(
-      circuit_func, verify_isnt_func, [&](llvm::CallInst *verify_isnt_call) {
+      circuit_func, verify_inst_func, [&](llvm::CallInst *verify_isnt_call) {
         const auto verify_inst = impl->verifications.Create();
         importer.verifier = verify_inst;
         all_verifications->operands.AddUse(verify_inst);
@@ -654,8 +654,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
           }
 
           const auto arg_cmp = llvm::cast<llvm::CallInst>(arg_use.get());
-          CHECK(arg_cmp->getCalledFunction()->getName().startswith(
-              "__circuitous_icmp_eq_") ||
+          CHECK(intrinsics::Eq::IsIntrinsic(arg_cmp->getCalledFunction()) ||
                 intrinsics::BitCompare::IsIntrinsic(arg_cmp->getCalledFunction()));
 
           const auto proposed_val = arg_cmp->getArgOperand(0u);

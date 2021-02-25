@@ -180,11 +180,11 @@ namespace data {
   };
 
   struct OneOf {
-    static constexpr const char *fn_prefix = "__circuitous_one_of";
+    static constexpr const char *fn_prefix = "__circuitous.one_of";
   };
 
   struct VerifyInst {
-    static constexpr const char *fn_prefix = "__circuitous_verify_inst";
+    static constexpr const char *fn_prefix = "__circuitous.verify_inst";
   };
 } //namespace data
 
@@ -203,7 +203,7 @@ struct ExtractRaw : impl::Interval<ExtractRaw> {
 
 struct Eq : impl::BinaryPredicate<Eq> {
   // TODO(lukas): Replace with .
-  static constexpr const char *fn_prefix = "__circuitous_icmp_eq_";
+  static constexpr const char *fn_prefix = "__circuitous.icmp_eq";
   static constexpr const char *separator = ".";
 };
 

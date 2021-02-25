@@ -134,7 +134,7 @@ class CircuitBuilder {
   void LiftInstructions(std::vector<InstructionSelection> &isels);
 
   // Apply a callback `cb(llvm::CallInst *)`
-  // to each call of `__circuitous_verify_inst` in `circuit_func`.
+  // to each call of `__circuitous.verify_inst` in `circuit_func`.
   template <typename T>
   void ForEachVerification(llvm::Function *circuit_func, T cb);
 
