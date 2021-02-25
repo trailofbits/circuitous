@@ -208,6 +208,12 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
   Operation *VisitExtractIntrinsic(llvm::Function *fn) {
     LOG(INFO) << "Handling extract intrinsic: " << LLVMName(fn);
+
+    // TODO(lukas): Refactor into separate method and check in a better way
+    //              that includes `_avx` variants.
+    auto triple = llvm::Triple(fn->getParent()->getTargetTriple());
+    CHECK(remill::GetArchName(triple) == remill::kArchAMD64);
+
     const auto &[from, size] = intrinsics::Extract::ParseArgs(fn);
 
     // TODO(lukas): For now we can only lower some specialized cases
@@ -246,13 +252,18 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   Operation *VisitExtractRawIntrinsic(llvm::Function *fn) {
     LOG(INFO) << "Handling extract raw intrinsic: " << LLVMName(fn);
 
+    // TODO(lukas): Refactor into separate method and check in a better way
+    //              that includes `_avx` variants.
+    auto triple = llvm::Triple(fn->getParent()->getTargetTriple());
+    CHECK(remill::GetArchName(triple) == remill::kArchAMD64);
+
     CHECK(impl->inst_bits.Size() == 1);
     const auto &inst_bytes = *impl->inst_bits.begin();
 
     const auto &[from, size] = intrinsics::ExtractRaw::ParseArgs(fn);
     auto op = impl->extracts.Create(
-      static_cast<unsigned>(from),
-      static_cast<unsigned>(from + size));
+        static_cast<unsigned>(from),
+        static_cast<unsigned>(from + size));
     LOG(INFO) << from << ", " << size;
     op->operands.AddUse(inst_bytes);
     return op;
