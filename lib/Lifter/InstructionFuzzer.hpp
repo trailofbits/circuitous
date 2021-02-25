@@ -138,9 +138,11 @@ struct InstructionFuzzer {
       return {};
     }
     auto compare_self = [](auto &self, auto &flipped) {
+      // TODO(lukas): Check in remill that is_signed is always properly
+      //              (and consistently) set.
       return flipped.type == remill::Operand::kTypeImmediate &&
              !(self.imm.val == flipped.imm.val &&
-               self.imm.is_signed != flipped.imm.is_signed);
+               self.imm.is_signed == flipped.imm.is_signed);
     };
     return ProcessResult(rinst, op, Permutate(rinst, op, compare_self));
   }
