@@ -648,6 +648,7 @@ auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels)
       // params.resize(num_instruction_parts);
       params.clear();
 
+      auto old_params_size = params.size();
       // Add instruction encoding check
       {
         // Reorders bytes so that they can be matched to extract from instruction
@@ -716,8 +717,7 @@ auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels)
             create_bit_check(current, isel.instructions[i].bytes.size() * 8));
         }
       }
-      // TODO(lukas): There can be something else present
-      auto fragments_size = params.size();
+      auto fragments_size = params.size() - old_params_size;
 
       // Final set of parameters are comparisons on whether or not the resulting
       // register after the semantic has executed matches the next state of that
