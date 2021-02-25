@@ -32,7 +32,10 @@ struct ImmAsIntrinsics : public intrinsics::Extract {
   std::unordered_map<remill::Instruction *, op_imm_regions_t> regions = {};
 
   void AddImmRegions(remill::Instruction *ptr, op_imm_regions_t value) {
-    // TODO(lukas): Not sure how we want to deal with this yet.
+    // We already have some immediate regions associated with this instruction
+    // - while adding the new ones can be a valid use case it is not atm.
+    // Also it is not clear what the effect on the existing should be
+    // union, replace, something else?
     if (regions.count(ptr)) {
       LOG(FATAL) << "Inserting new imm region map for present instruction";
     }
@@ -40,7 +43,7 @@ struct ImmAsIntrinsics : public intrinsics::Extract {
   }
 
   using functions_t = std::vector<llvm::Function *>;
-  // TODO(lukas): Technically We probably do not need the `remill::Instruction *`
+  // NOTE(lukas): Technically We probably do not need the `remill::Instruction *`
   //              since every instruction has unique Operands; therefore having
   //              just remill::Operand * as keys should be enough.
   functions_t GetImmediates(llvm::Module *module, remill::Instruction *inst,
@@ -71,7 +74,11 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
       return funcs[0];
     }
     llvm::Function *canditate = nullptr;
-    // TODO(lukas): This may need something smarter
+    // TODO(lukas): From all candidates we need to choose one - currently
+    //              there is no mechanism how to compare the candidates themselves
+    //              if more than one passes the criteria we cannot choose.
+    //              Ideally we would want to have some ranking, but currently I have
+    //              no idea how such thing could look like.
     auto set_candidate = [&](auto fn) {
       CHECK(!canditate);
       canditate = fn;
@@ -103,12 +110,13 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
     auto inst_fn = ChooseImm(arch_op, imm_getters);
     auto hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
 
-    if (hidden_imm->getType() != constant_imm->getType())
-    {
-      LOG(INFO) << remill::LLVMThingToString(hidden_imm->getType())
-                << " is not what a constant type would be: "
-                << remill::LLVMThingToString(constant_imm->getType())
-                << ". Coercion inserted";
+    if (hidden_imm->getType() != constant_imm->getType()) {
+      LOG(INFO) << "Coercing immediate operand of type"
+                << remill::LLVMThingToString(hidden_imm->getType())
+                << "to type"
+                << remill::LLVMThingToString(constant_imm->getType());
+      // NOTE(lukas): SExt used as it should be generally safer (we want to preserve)
+      //              the sign bit.
       return ir.CreateSExtOrTrunc(hidden_imm, constant_imm->getType());
     }
     return hidden_imm;

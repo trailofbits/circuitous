@@ -122,7 +122,7 @@ static void MuteStateEscape(llvm::Module &module, const char *func_name) {
 }
 
 
-void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
+static void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
                       const std::vector<llvm::Function *> &fns) {
   auto saved_threshold = module->getContext().getDiagnosticsHotnessThreshold();
   module->getContext().setDiagnosticsHotnessThreshold(1);
@@ -470,7 +470,7 @@ void CircuitBuilder::LiftInstructions(
   for (auto &group : isels) {
       CHECK(group.instructions.size() == group.encodings.size());
 
-    for (auto i = 0U; i < group.instructions.size(); ++i) {
+    for (auto i = 0ull; i < group.instructions.size(); ++i) {
       auto &inst = group.instructions[i];
       std::stringstream ss;
       ss << "inst_" << g << '_' << i;
