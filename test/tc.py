@@ -118,12 +118,19 @@ class TestCase:
     self.simulated = State()
     self._result_generator = None
 
+# Base class to define tests with -- unfortunately it already does a lot of custom options
+# feel free to come with better decomposition
+# Core method is the `case` method which adds the tests to be run. It has a lot of options,
+# some of which can be "inherited" from the `Test` itself (to avoid code repetition).
 class Test:
   __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
                '_tags', '_names', '_lift_opts', '_inst_arr',
                'default_istate')
 
   def __init__(self, name_=""):
+    # TODO(lukas): Split this into
+    #                * inheritable attributes
+    #                * helpers
     self.name = name_
     self.cases = []
     self.dir = None
@@ -176,6 +183,20 @@ class Test:
       return self.default_istate.mutate(distate)
     return State()
 
+  # Options -- [] denotes optional, <> denotes that it is inherited if not specified:
+  #  [*] 'name' - name of the case for better orientation
+  #  <*> 'lift_bytes' - bytes to lift
+  #  <*> 'run_bytes' - string representation of bytes or a number, which is an index
+  #                    into `Test` lift bytes
+  #   *  'R' - expected output
+  #  [*] 'RG' - generator of expected output -- see `Acceptance` class. Useful is result
+  #             is different with different lift options.
+  #  <*> 'I'  - input state, inherited from `Test` if not present
+  #  [*] 'DI' - use `Test` input state but modify it
+  #   *  'E'  - expected output state
+  #  [*] 'DE' - same as `DI` but for expected
+  # TODO(lukas): Fix `run_bytes` indexing into `Test` lift_bytes.
+  #              Test if `lift_bytes` actually work.
   def case(self, name_=None, **kwargs):
     case = TestCase()
     self._names += 1
