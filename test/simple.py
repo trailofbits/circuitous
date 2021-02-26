@@ -1,6 +1,6 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 
-from tc import State, Test
+from tc import State, Test, accept, reject, if_has, if_nhas
 from byte_generator import intel
 from model_test import ModelTest
 
@@ -15,6 +15,7 @@ test_mov = {
   ).case(
     E = State().RDX(0x13),
     run_bytes = "ba13000000",
+    RG = if_has("reduce_imms", True),
     R = False
   ),
   Test("mov imm rdx") .bytes("ba12000000").tags({"min", "!reduce_imms"}).case(
@@ -144,7 +145,8 @@ test_add = {
   ).case("rax+=16",
     I = State().RAX(0x5).aflags(0),
     run_bytes = intel(["add rax, 16"])[0],
-    R = True
+    RG = if_has("reduce_imms", True),
+    R = False
   ),
   Test("T_reduced:add rax imm") \
   .bytes(intel(["add rax, 0x10"])).tags({'reduce_imms', 'test2'})
@@ -152,7 +154,8 @@ test_add = {
     I = State().RAX(0x0).aflags(0),
     E = State().RAX(0x20),
     run_bytes = intel(["add rax, 0x20"])[0],
-    R = True
+    RG = if_has("reduce_imms", True),
+    R = False
   ),
   Test("T_reduced:add rax imm") \
   .bytes(intel(["add rax, 0x10", "mov rcx, 0x10"])).tags({'reduce_imms', 'test2'})
@@ -183,11 +186,13 @@ test_mov_add = {
   .case("T:add",
     I = State().RAX(0x0).aflags(0),
     run_bytes = intel(["add rax, 0x30"])[0],
-    R = True
+    RG = if_has("reduce_imms", True),
+    R = False
   ).case("T:mov",
     I = State().RAX(0x0).aflags(0),
     run_bytes = intel(["mov rax, 0x40"])[0],
-    R = True
+    RG = if_has("reduce_imms", True),
+    R = False
   ).case("F:mov rbx",
     I = State().RAX(0x0).RBX(0x0).aflags(0),
     run_bytes = intel(["mov rbx, 0x40"])[0],
