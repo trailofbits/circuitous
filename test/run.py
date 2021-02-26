@@ -10,6 +10,7 @@ from tc import State, Test
 import tc as TC
 
 import simple
+import basic
 import model_test as mp
 
 circuitous_prefix="../build"
@@ -258,6 +259,8 @@ def fetch_test(sets):
   x = mp.ModelTest("mov imm rdx").bytes("ba12000000").case(I = State(), R = True )
   result.add(x)
   for x in simple.circuitous_tests:
+    result.update(x)
+  for x in basic.circuitous_tests:
     result.update(x)
   return result
 
