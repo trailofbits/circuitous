@@ -14,7 +14,8 @@ class ModelTest(Test):
   def _expected_state(self, **kwargs):
     return State()
 
-  def generate(self):
+  def generate(self, **kwargs):
+    super().generate(**kwargs)
     for case in self.cases:
       result = True if case.expected.result is None else case.expected.result
       case.expected = MicroxGen().get(case.input)

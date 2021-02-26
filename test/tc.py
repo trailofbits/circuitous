@@ -57,8 +57,58 @@ _all_regs = _regs + _aflags
 for reg in _regs + _aflags:
   setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))
 
+
+class Acceptance():
+  def generate(self, case, **kwargs):
+    return self.should_accept(case, **kwargs)
+
+class AcceptByLiftOpts(Acceptance):
+  __slots__ = ('opts', 'val')
+
+  def __init__(self, opts_, val_):
+    if isinstance(opts_, list):
+      self.opts = opts_
+    else:
+      self.opts = [opts_]
+    self.val = val_
+
+  def should_accept(self, case, **kwargs):
+    lift_args = kwargs.get('lift')
+    assert lift_args is not None
+    valid = self.is_valid(lift_args)
+    print(lift_args, self.opts)
+    return valid, self.val
+
+class HasLiftArgs(AcceptByLiftOpts):
+  def is_valid(self, lift_args):
+    return all(x in lift_args for x in self.opts)
+
+class HasNotLiftArgs(AcceptByLiftOpts):
+  def is_valid(self, lift_args):
+    return all(x not in lift_args for x in self.opts)
+
+class Accept(Acceptance):
+  def should_accept(self, case, **kwargs):
+    return True, True;
+
+class Reject(Acceptance):
+  def should_accept(self, case, **kwargs):
+    return True, False;
+
+def if_has(what, val):
+  return HasLiftArgs(what, val)
+
+def if_nhas(what, val):
+  return HasNotLiftArgs(what, val)
+
+def accept():
+  return Accept()
+
+def reject():
+  return Reject()
+
 class TestCase:
-  __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated')
+  __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated', '_result_generator')
 
   def __init__(self, name_=None, bytes_=None, input_=None, expected_=None):
     self.name = name_
@@ -66,6 +116,7 @@ class TestCase:
     self.input = input_
     self.expected = expected_
     self.simulated = State()
+    self._result_generator = None
 
 class Test:
   __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
@@ -83,6 +134,7 @@ class Test:
     self._lift_opts = []
     self._inst_arr = []
     self.default_istate = State()
+
 
   def bytes(self, bytes_):
     if isinstance(bytes_, list):
@@ -148,6 +200,8 @@ class Test:
 
     case.expected.result = kwargs.get('R', None)
     assert case.expected.result is not None
+    verdict = kwargs = kwargs.get('RG', None)
+    case._result_generator = verdict
     self.cases.append(case)
     return self
 
@@ -158,5 +212,9 @@ class Test:
       self._tags.update(tags_)
     return self
 
-  def generate(self):
-    pass
+  def generate(self, **kwargs):
+    for case in self.cases:
+      if case._result_generator is not None:
+        should, val = case._result_generator.generate(self, **kwargs)
+        if should:
+          case.expected.result = val

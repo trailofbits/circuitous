@@ -54,6 +54,16 @@ def check_retcode(pipes, component : str):
     if ret_code != 0:
       raise PipelineFail(component, out, err)
 
+def strip(what):
+  out = []
+  for x in what:
+    if x[0:2] == '--':
+      out.append(x[2:])
+    elif x[0:1] == '-':
+      out.append(x[1:])
+  return out
+
+
 class PipelineFail(Exception):
   def __init__(self, component, out="", err=""):
     self._out = out
@@ -227,7 +237,7 @@ def execute_tests(tests, top_dir, extra_args, fragile):
     test_dir = tempfile.mkdtemp(dir=os.getcwd(),
                                 prefix=x.name.replace(' ', '.').replace('/', '.') + '_')
     os.chdir(test_dir)
-    x.generate()
+    x.generate(lift=strip(extra_args))
 
     try:
       Lifter().lift_test(x, extra_args)
