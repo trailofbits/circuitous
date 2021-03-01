@@ -173,6 +173,19 @@ class Comparator:
         message += "Register " + reg + " (expected != actual): " + \
                    str(e_val) + " != " + str(val) + "\n"
 
+    skipped = []
+    for reg in expected.registers.keys():
+      if reg not in after.registers  and reg not in input.registers.keys():
+        accept = False
+        skipped.append(reg)
+
+    if skipped:
+      message += "Registers that were expected but not present in result:\n["
+    for reg in skipped:
+        message += " " + reg
+    if skipped:
+      message += " ]\n"
+
     if expected.result:
       if after.result == False or accept == False:
         if after.result == False:
