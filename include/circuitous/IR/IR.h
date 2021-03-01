@@ -103,6 +103,8 @@ class Operation : public User, public Def<Operation> {
     // of the register before the instruction "executes".
     kInputRegister,
 
+    kInputImmediate,
+
     // Named register that is a hint input to teh circuit, representing the
     // value of the register after the instruction "executes". We need to verify
     // that the computed value of the register after the instruction matches
@@ -382,6 +384,18 @@ class InputRegister : public Operation {
   const std::string reg_name;
 };
 
+class InputImmediate : public Operation {
+  public:
+    virtual ~InputImmediate(void) = default;
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+  std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
+
+  explicit InputImmediate(unsigned size_)
+      : Operation(Operation::kInputImmediate, size_) {}
+};
+
 // An output register.
 class OutputRegister : public Operation {
  public:
@@ -556,6 +570,7 @@ class Circuit : public Condition {
   cb(PopulationCount, popcounts) \
   cb(Parity, parities) \
   cb(InputRegister, input_regs) \
+  cb(InputImmediate, input_imms) \
   cb(OutputRegister, output_regs) \
   cb(InputInstructionBits, inst_bits) \
   cb(RegisterCondition, transitions) \
