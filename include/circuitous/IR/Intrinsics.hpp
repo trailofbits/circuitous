@@ -159,6 +159,47 @@ namespace impl {
       return out;
     }
   };
+
+  template<typename Self_t>
+  struct Identity : Base<Self_t> {
+    using Parent = Base<Self_t>;
+
+    static std::string Name(uint64_t size) {
+      std::stringstream ss;
+      ss << Self_t::fn_prefix << Self_t::separator << size;
+      return ss.str();
+    }
+
+    static llvm::Function *CreateFn(llvm::Module *module, llvm::Type *type) {
+      auto size = llvm::cast<llvm::IntegerType>(type)->getScalarSizeInBits();
+      return CreateFn(module, size);
+    }
+
+    static llvm::Function *CreateFn(llvm::Module *module, uint64_t size) {
+      llvm::IRBuilder<> ir(module->getContext());
+      auto r_ty = ir.getIntNTy(static_cast<uint32_t>(size));
+      auto arg_ty = ir.getIntNTy(static_cast<uint32_t>(size));
+      auto fn_t = llvm::FunctionType::get(r_ty, {arg_ty, arg_ty}, false);
+      auto callee = module->getOrInsertFunction(Name(size), fn_t);
+      return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
+    }
+
+    using intrinsic_args_t = uint64_t;
+    static intrinsic_args_t ParseArgs(llvm::Function *fn) {
+      CHECK(Parent::IsIntrinsic(fn))
+        << "Cannot parse arguments of function: "
+        << LLVMName(fn)
+        << "that is not our intrinsic.";
+
+      llvm::StringRef name = fn->getName();
+      name.consume_front(Self_t::fn_prefix);
+      name.consume_front(Self_t::separator);
+
+      uint64_t out;
+      name.getAsInteger(10, out);
+      return out;
+    }
+  };
 } // namesapce impl
 
 // TODO(lukas): We want to check that `fn_prefix` is never prefix of some
@@ -202,8 +243,12 @@ struct ExtractRaw : impl::Interval<ExtractRaw> {
 };
 
 struct Eq : impl::BinaryPredicate<Eq> {
-  // TODO(lukas): Replace with .
   static constexpr const char *fn_prefix = "__circuitous.icmp_eq";
+  static constexpr const char *separator = ".";
+};
+
+struct InputImmediate : impl::Identity<InputImmediate> {
+  static constexpr const char *fn_prefix = "__circuitous.input_imm";
   static constexpr const char *separator = ".";
 };
 
