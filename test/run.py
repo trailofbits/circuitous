@@ -18,6 +18,8 @@ circuitous_run=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-run")
 circuitous_lift=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-lift"))
 top_level_dir=None
 
+dbg_verbose = False
+
 class Colors:
   GREEN = '\033[92m'
   RED = '\033[91m'
@@ -155,6 +157,9 @@ class Comparator:
         msg = out[case.name][1]
         msg += "\n\tLift bytes: " + tc._bytes
         msg += "\n\tRun bytes: " + case.input.bytes
+        if dbg_verbose:
+          msg += "\n\t" + os.path.abspath(case.input.as_json_file("failed."))
+          msg += "\n\t" + os.path.abspath(case.name + ".result.json")
         out[case.name] = (out[case.name][0], msg)
     return out
 
@@ -296,13 +301,16 @@ def main():
   arg_parser.add_argument("--dbg",
                            help="TODO: Run in dbg mode, which means be verbose.",
                            action='store_true',
-                           default=True)
+                           default=False)
   arg_parser.add_argument("--fragile",
                           help="If pipeline fails, kill & report",
                           action='store_true',
                           default=False)
 
   args, command_args = arg_parser.parse_known_args()
+
+  global dbg_verbose
+  dbg_verbose = args.dbg
 
   if args.tags is None:
     args.tags = ['all']
