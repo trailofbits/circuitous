@@ -65,7 +65,24 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
   auto LiftIntoBlock(remill::Instruction &inst, llvm::BasicBlock *block,
                      bool is_delayed, const op_imm_regions_t &imm_regions) {
       this->AddImmRegions(&inst, imm_regions);
-      return this->parent::LiftIntoBlock(inst, block, is_delayed);
+      auto lift_status = this->parent::LiftIntoBlock(inst, block, is_delayed);
+
+      // If the instruction was not lifted correctly we do not wanna do anything
+      // in the block.
+      if (lift_status != remill::kLiftedInstruction) {
+        return lift_status;
+      }
+
+      // We need to actually store the new value of instruction pointer
+      // into the corresponding register.
+      // NOTE(lukas): This should technically be responsiblity of remill::InstructionLifter
+      //              but it is not happening for some reason.
+      llvm::IRBuilder ir(block);
+      auto state_ptr = remill::NthArgument(block->getParent(), remill::kStatePointerArgNum);
+      auto pc_ref = LoadRegAddress(block, state_ptr, remill::kPCVariableName);
+      auto next_pc_ref = LoadRegAddress(block, state_ptr, remill::kNextPCVariableName);
+      ir.CreateStore(ir.CreateLoad(next_pc_ref), pc_ref);
+      return lift_status;
   }
 
   llvm::Function *ChooseImm(remill::Operand &arch_op, const functions_t &funcs) {
