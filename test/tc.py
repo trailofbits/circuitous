@@ -3,13 +3,26 @@
 import copy
 import json
 
+# Add methods same as register names to the State to make configuration easier
+_regs = [ "RIP",
+          "RAX", "RBX", "RCX", "RDX", "RSI", "RDI",
+          "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
+_e_regs = ["EAX, EBX", "ECX", "EDX"]
+_b_regs = ["AX", "BX", "CX", "DX"]
+_a_regs = ["AL", "AH"]
+_aflags = ["AF", "CF", "OF", "ZF", "PF", "SF"]
+_all_regs = _regs + _aflags + _e_regs + _b_regs + _a_regs
+
 class State:
   __slots__ = ('registers', 'bytes', 'result')
 
-  def __init__(self):
+  def __init__(self, default_val = 0, default_rip = 0x1000):
     self.registers = {}
     self.bytes = None
     self.result = None
+    for x in _regs + _aflags:
+      self.registers[x] = default_val
+    self.registers["RIP"] = default_rip
 
   def aflags(self, val):
     for flag in _aflags:
