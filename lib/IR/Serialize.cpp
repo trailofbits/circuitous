@@ -143,6 +143,13 @@ class SerializeVisitor : public Visitor<SerializeVisitor> {
     DEBUG_WRITE("}");
   }
 
+  void VisitInputImmediate(InputImmediate *op) {
+    DEBUG_WRITE("{INIMM:");
+    Write(op->size);
+    Write(op->operands);
+    DEBUG_WRITE("}");
+  }
+
   void VisitOutputRegister(OutputRegister *op) {
     DEBUG_WRITE("{OUTREG:");
     Write(op->size);
@@ -327,6 +334,17 @@ class DeserializeVisitor {
     Read(reg_name);
     DEBUG_READ("}");
     return circuit->input_regs.Create(size, std::move(reg_name));
+  }
+
+  InputImmediate *DecodeInputImmediate(void) {
+    unsigned size = 0;
+    DEBUG_READ("{INIMM:");
+    Read(size);
+    auto self = circuit->input_imms.Create(size);
+    Read(self->operands);
+    CHECK(self->operands.Size() == 1);
+    DEBUG_READ("}");
+    return self;
   }
 
   Constant *DecodeConstant(void) {

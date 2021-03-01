@@ -258,6 +258,15 @@ Operation *InputRegister::CloneWithoutOperands(Circuit *) const {
   return const_cast<InputRegister *>(this);
 }
 
+STREAM_NAME(InputImmediate, "INPUT_IMMEDIATE_" << size)
+bool InputImmediate::Equals(const Operation *other) const {
+  return this->Operation::Equals(other);
+}
+
+Operation *InputImmediate::CloneWithoutOperands(Circuit *) const {
+  return const_cast<InputImmediate *>(this);
+}
+
 COMMON_METHODS(OutputRegister)
 STREAM_NAME(OutputRegister, "OUTPUT_REGISTER_" << reg_name << "_" << size)
 
