@@ -184,7 +184,12 @@ test_idiv = {
   .case(DI = S().RIP(0x1000).RAX(0xffffff).RDX(0x1).RDI(0xfffff), R = True)
 }
 
+test_ip = {
+  Test("ip.update").bytes("ba12000000").tags({"min", "ip"})
+  .case(I = S().RDX(0x0).RIP(0x1000), E = S().RDX(0x12).RIP(0x1005), R = True)
+}
+
 # TODO(lukas): Division by zero
 
 circuitous_tests = \
-  [test_adc, test_sbb, test_shl, test_xor, test_or, test_and, test_div, test_idiv]
+  [test_adc, test_sbb, test_shl, test_xor, test_or, test_and, test_div, test_idiv, test_ip]
