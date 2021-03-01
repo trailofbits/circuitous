@@ -19,7 +19,7 @@ class State:
   def mutate(self, other):
     mutated = copy.deepcopy(self)
     for reg, val in other.registers.items():
-      mutated[reg] = val
+      mutated.set_reg(reg, val)
     return mutated
 
   def set_reg(self, reg, value):
@@ -76,7 +76,6 @@ class AcceptByLiftOpts(Acceptance):
     lift_args = kwargs.get('lift')
     assert lift_args is not None
     valid = self.is_valid(lift_args)
-    print(lift_args, self.opts)
     return valid, self.val
 
 class HasLiftArgs(AcceptByLiftOpts):
