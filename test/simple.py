@@ -5,7 +5,7 @@ from byte_generator import intel
 from model_test import ModelTest
 
 test_mov = {
-  Test("mov imm rdx") .bytes("ba12000000").tags("min")
+  Test("mov imm rdx") .bytes("ba12000000").tags({"min", "mov"})
   .case(
     E = State().RDX(0x12).RIP(0x1005),
     R = True,
@@ -18,14 +18,14 @@ test_mov = {
     RG = if_has("reduce_imms", True),
     R = False
   ),
-  Test("mov imm rdx") .bytes("ba12000000").tags({"min", "!reduce_imms"}).case(
+  Test("mov imm rdx") .bytes("ba12000000").tags({"min", "mov"}).case(
     E = State().RDX(0x13).RIP(0x1005),
     run_bytes = "ff13000000",
     R = False
   ),
   Test("mov imm eax/ebx/ecx/edx") \
   .bytes("b812000000bb12000000b912000000ba12000000")
-  .tags("min")
+  .tags({"min", "mov"})
   .DI(S().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42))
   .case("mov rax",
     DE = MS().RAX(0x12).RIP(0x1005),
@@ -54,7 +54,7 @@ test_mov = {
   ),
   Test("mov reg reg") \
   .bytes(intel(["mov rax, rbx", "mov rcx, rax", "mov rbx, rax"]))
-  .tags("min")
+  .tags({"min", "mov"})
   .DI(State().RAX(0x12).RBX(0x22).RCX(0x32))
   .case("rax:=rbx",
     DE = MS().RAX(0x22).RIP(0x1003),
@@ -71,7 +71,7 @@ test_mov = {
   ),
   Test("F: mov reg reg") \
   .bytes(intel(["mov rax, rbx", "mov rcx, rax", "mov rbx, rax"]))
-  .tags("min")
+  .tags({"min", "mov"})
   .DI(State().RAX(0x12).RBX(0x22).RCX(0x32))
   .case("rax:=rbx",
     DE = MS().RAX(0x32).RIP(0x1003),

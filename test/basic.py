@@ -2,7 +2,7 @@
 
 from byte_generator import intel
 from model_test import ModelTest, Test
-from tc import State, S, if_has
+from tc import State, S, MS, if_has
 
 test_adc = {
   ModelTest("adc").tags({"min", "adc"})
@@ -109,8 +109,8 @@ test_xor = {
   .bytes(intel(["xor rsi, rdi"]))
   .DI(S().RSI(0x42).RDI(0x42).OF(0x1))
   .case(R = True)
-  .case(DI = S().RSI(0x2), R = True)
-  .case(DI = S().RDI(0x22).CF(0x1), R = True)
+  .case(DI = MS().RSI(0x2), R = True)
+  .case(DI = MS().RDI(0x22).CF(0x1), R = True)
   .case(run_bytes = intel(["xor rdi, 0x12"]), R = False)
   .case(run_bytes = intel(["xor rdi, rax"]), R = False),
 
@@ -131,8 +131,8 @@ test_or = {
   .bytes(intel(["or rsi, rdi"]))
   .DI(S().RSI(0x42).RDI(0x42).OF(0x1))
   .case(R = True)
-  .case(DI = S().RSI(0x2), R = True)
-  .case(DI = S().RDI(0x22).CF(0x1), R = True)
+  .case(DI = MS().RSI(0x2), R = True)
+  .case(DI = MS().RDI(0x22).CF(0x1), R = True)
   .case(run_bytes = intel(["or rdi, 0x12"]), R = False)
   .case(run_bytes = intel(["or rdi, rax"]), R = False),
 
@@ -153,8 +153,8 @@ test_and = {
   .bytes(intel(["and rsi, rdi"]))
   .DI(S().RSI(0x42).RDI(0x42).OF(0x1))
   .case(R = True)
-  .case(DI = S().RSI(0x2), R = True)
-  .case(DI = S().RDI(0x22).CF(0x1), R = True)
+  .case(DI = MS().RSI(0x2), R = True)
+  .case(DI = MS().RDI(0x22).CF(0x1), R = True)
   .case(run_bytes = intel(["and rdi, 0x12"]), R = False)
   .case(run_bytes = intel(["and rdi, rax"]), R = False),
 
