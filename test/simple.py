@@ -1,78 +1,71 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 
-from tc import State, Test, accept, reject, if_has, if_nhas
+from tc import State, Test, accept, reject, if_has, if_nhas, S, MS
 from byte_generator import intel
 from model_test import ModelTest
 
 test_mov = {
   Test("mov imm rdx") .bytes("ba12000000").tags("min")
   .case(
-    E = State().RDX(0x12),
+    E = State().RDX(0x12).RIP(0x1005),
     R = True,
   ).case(
-    E = State().RDX(0x12000000),
+    E = State().RDX(0x12000000).RIP(0x1005),
     R = False
   ).case(
-    E = State().RDX(0x13),
+    E = State().RDX(0x13).RIP(0x1005),
     run_bytes = "ba13000000",
     RG = if_has("reduce_imms", True),
     R = False
   ),
   Test("mov imm rdx") .bytes("ba12000000").tags({"min", "!reduce_imms"}).case(
-    E = State().RDX(0x13),
+    E = State().RDX(0x13).RIP(0x1005),
     run_bytes = "ff13000000",
     R = False
   ),
   Test("mov imm eax/ebx/ecx/edx") \
   .bytes("b812000000bb12000000b912000000ba12000000")
   .tags("min")
+  .DI(S().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42))
   .case("mov rax",
-    I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
-    E = State().RAX(0x12),
+    DE = MS().RAX(0x12).RIP(0x1005),
     run_bytes = "b812000000",
     R = True
   ).case("mov rbx",
-    I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
-    E = State().RBX(0x12),
+    DE = MS().RBX(0x12).RIP(0x1005),
     run_bytes = "bb12000000",
     R = True
   ).case("mov rcx",
-    I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
-    E = State().RCX(0x12),
+    DE = MS().RCX(0x12).RIP(0x1005),
     run_bytes = "b912000000",
     R = True
   ).case("mov rdx",
-    I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
-    E = State().RDX(0x12),
+    DE = MS().RDX(0x12).RIP(0x1005),
     run_bytes = "ba12000000",
     R = True
   ).case("mov rbx, modify rax",
-    I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
-    E = State().RBX(0x12).RAX(0x12),
+    DE = MS().RBX(0x12).RAX(0x12).RIP(0x1005),
     run_bytes = "bb12000000",
     R = False
   ).case("false",
-    I = State().RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42),
-    E = State().RAX(0x14),
+    DE = MS().RAX(0x14).RIP(0x1005),
     run_bytes = "b812000000",
     R = False
   ),
   Test("mov reg reg") \
   .bytes(intel(["mov rax, rbx", "mov rcx, rax", "mov rbx, rax"]))
   .tags("min")
+  .DI(State().RAX(0x12).RBX(0x22).RCX(0x32))
   .case("rax:=rbx",
-    I = State().RAX(0x12).RBX(0x22).RCX(0x32),
-    E = State().RAX(0x22),
+    DE = MS().RAX(0x22).RIP(0x1003),
     run_bytes = 0,
     R = True
   ).case("rcx:=rax",
-    I = State().RAX(0x12).RBX(0x22).RCX(0x32),
-    E = State().RCX(0x12),
+    DE = MS().RCX(0x12).RIP(0x1003),
     run_bytes = 1,
     R = True
   ).case("rbx:=rax",
-    I = State().RAX(0x12).RBX(0x22).RCX(0x32),
-    E = State().RBX(0x12),
+    DE = MS().RBX(0x12).RIP(0x1003),
     run_bytes = 2,
     R = True
   ),
@@ -81,15 +74,15 @@ test_mov = {
   .tags("min")
   .DI(State().RAX(0x12).RBX(0x22).RCX(0x32))
   .case("rax:=rbx",
-    E = State().RAX(0x32),
+    DE = MS().RAX(0x32).RIP(0x1003),
     run_bytes = 0,
     R = False
   ).case("rcx:=rax",
-    E = State().RCX(0x32),
+    DE = MS().RCX(0x32).RIP(0x1003),
     run_bytes = 1,
     R = False
   ).case("rbx:=rax",
-    E = State().RBX(0x22),
+    DE = MS().RBX(0x22).RIP(0x1003),
     run_bytes = 2,
     R = False
   ),
@@ -152,7 +145,7 @@ test_add = {
   .bytes(intel(["add rax, 0x10"])).tags({'reduce_imms', 'test2'})
   .case("rax+=0x20",
     I = State().RAX(0x0).aflags(0),
-    E = State().RAX(0x20),
+    E = State().RAX(0x20).RIP(0x1004),
     run_bytes = intel(["add rax, 0x20"])[0],
     RG = if_has("reduce_imms", True),
     R = False
@@ -161,7 +154,7 @@ test_add = {
   .bytes(intel(["add rax, 0x10", "mov rcx, 0x10"])).tags({'reduce_imms', 'test2'})
   .case("rax+=0x20",
     I = State().RAX(0x0).RCX(0x0).aflags(0),
-    E = State().RAX(0x0).RCX(0x20),
+    E = State().RAX(0x0).RCX(0x20).RIP(0x1004),
     run_bytes = intel(["add rcx, 0x20"])[0],
     R = False
   )
