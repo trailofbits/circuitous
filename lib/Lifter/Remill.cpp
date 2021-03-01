@@ -242,11 +242,25 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     // ba 12 00 00 00 - mov 12, %rdx
     // If we do extract(32, 0) we end up with `12000000` as number, but we would
     // expect `00000012` therefore we must reorder them and then concat.
-    auto result = impl->concats.Create(static_cast<unsigned>(size));
+    auto full = impl->concats.Create(static_cast<unsigned>(size));
     for (auto x : partials) {
-      result->operands.AddUse(x);
+      full->operands.AddUse(x);
     }
-    return result;
+    return full;
+  }
+
+  Operation *VisitInputImmediate(llvm::CallInst *call, llvm::Function *fn) {
+    auto size = static_cast<uint32_t>(intrinsics::InputImmediate::ParseArgs(fn));
+    auto arg_i = call->getOperand(0);
+    if (val_to_op.count(arg_i) != 1) {
+      LOG(FATAL) << "Something went wrong and argument"
+                 << "of InputImmediate instrinsic was not visited";
+    }
+    auto full = val_to_op[arg_i];
+    CHECK(full);
+    auto as_input_imm = impl->input_imms.Create(static_cast<uint32_t>(size));
+    as_input_imm->operands.AddUse(full);
+    return as_input_imm;
   }
 
   Operation *VisitExtractRawIntrinsic(llvm::Function *fn) {
@@ -333,6 +347,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       op = VisitExtractIntrinsic(func);
     } else if (intrinsics::ExtractRaw::IsIntrinsic(func)) {
       op = VisitExtractRawIntrinsic(func);
+    } else if (intrinsics::InputImmediate::IsIntrinsic(func)) {
+      op = VisitInputImmediate(val, func);
     } else {
       LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(val);
     }
