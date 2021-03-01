@@ -125,7 +125,7 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
     }
 
     auto inst_fn = ChooseImm(arch_op, imm_getters);
-    auto hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
+    llvm::Value * hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
 
     if (hidden_imm->getType() != constant_imm->getType()) {
       LOG(INFO) << "Coercing immediate operand of type"
@@ -134,9 +134,10 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
                 << remill::LLVMThingToString(constant_imm->getType());
       // NOTE(lukas): SExt used as it should be generally safer (we want to preserve)
       //              the sign bit.
-      return ir.CreateSExtOrTrunc(hidden_imm, constant_imm->getType());
+      hidden_imm = ir.CreateSExtOrTrunc(hidden_imm, constant_imm->getType());
     }
-    return hidden_imm;
+    auto size = llvm::cast<llvm::IntegerType>(constant_imm->getType())->getScalarSizeInBits();
+    return ir.CreateCall(intrinsics::InputImmediate::CreateFn(module, size), hidden_imm);
   }
 };
 
