@@ -39,6 +39,7 @@ class Interpreter : public Visitor<Interpreter> {
   // Operands
   void VisitConstant(Constant *op);
   void VisitInputRegister(InputRegister *op);
+  void VisitInputImmediate(InputImmediate *op);
   void VisitOutputRegister(OutputRegister *op);
   void VisitInputInstructionBits(InputInstructionBits *op);
   void VisitHint(Hint *op);

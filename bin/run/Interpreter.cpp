@@ -85,6 +85,15 @@ void Interpreter::VisitInputRegister(InputRegister *op) {
       << "Input register " << op->reg_name << " bits not set.";
 }
 
+void Interpreter::VisitInputImmediate(InputImmediate *op) {
+  LOG(INFO) << "VisitInputImmediate: " << op->Name();
+  CHECK(op->operands.Size() == 1)
+    << "Incorrect number of operands of InputImmediate:"
+    << op->operands.Size() << "!= 1";
+  SetNodeVal(op, GetNodeVal(op->operands[0]));
+}
+
+
 void Interpreter::VisitOutputRegister(OutputRegister *op) {
   DLOG(INFO) << "VisitOutputRegister: " << op->Name();
   // TODO(surovic): figure out a better way to represent an
