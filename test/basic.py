@@ -1,7 +1,7 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 
 from byte_generator import intel
-from model_test import ModelTest
+from model_test import ModelTest, Test
 from tc import State, S, if_has
 
 test_adc = {
@@ -172,16 +172,16 @@ test_and = {
 
 test_div = {
   ModelTest("div").tags({"min", "div"}).bytes(intel(["div rdi"]))
-  .case(DI = S().RAX(0x10).RDX(0x0).RDI(0x1), R = True)
-  .case(DI = S().RAX(0x30).RDX(0x0).RDI(0x15), R = True)
-  .case(DI = S().RAX(0xffffff).RDX(0x1).RDI(0xfffff), R = True)
+  .case(DI = S().RIP(0x1000).RAX(0x10).RDX(0x0).RDI(0x1), R = True)
+  .case(DI = S().RIP(0x1000).RAX(0x30).RDX(0x0).RDI(0x15), R = True)
+  .case(DI = S().RIP(0x1000).RAX(0xffffff).RDX(0x1).RDI(0xfffff), R = True)
 }
 
 test_idiv = {
   ModelTest("idiv").tags({"min", "idiv"}).bytes(intel(["idiv rdi"])).DI(S().RIP(0x1000))
-  .case(DI = S().RAX(0x10).RDX(0x0).RDI(0x1), R = True)
-  .case(DI = S().RAX(0x30).RDX(0x0).RDI(0x15), R = True)
-  .case(DI = S().RAX(0xffffff).RDX(0x1).RDI(0xfffff), R = True)
+  .case(DI = S().RIP(0x1000).RAX(0x10).RDX(0x0).RDI(0x1), R = True)
+  .case(DI = S().RIP(0x1000).RAX(0x30).RDX(0x0).RDI(0x15), R = True)
+  .case(DI = S().RIP(0x1000).RAX(0xffffff).RDX(0x1).RDI(0xfffff), R = True)
 }
 
 # TODO(lukas): Division by zero
