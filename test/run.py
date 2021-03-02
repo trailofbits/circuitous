@@ -52,7 +52,12 @@ def log_info(what):
   print("[ > ]", what)
 
 def check_retcode(pipes, component : str):
-    out, err = pipes.communicate()
+    try:
+      out, err = pipes.communicate(timeout = 10)
+    except subprocess.TimeoutExpired:
+      pipes.kill()
+      out, err = pipes.communicate()
+      raise PipelineFail(component, out, err)
     ret_code = pipes.returncode
     if ret_code != 0:
       raise PipelineFail(component, out, err)
