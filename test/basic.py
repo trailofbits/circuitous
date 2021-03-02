@@ -119,11 +119,15 @@ test_xor = {
   .DI(S().RSI(0xff12ee).RDI(0x101).aflags(0))
   .case(run_bytes = 0, R = True)
   .case(run_bytes = 1, R = True)
-  .case(run_bytes = intel(["xor rsi, 0x101"]), RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["xor rdi, 0x7fff"]),
-        RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["xor rsi, 0x0"]), RG = if_has("reduce_imms", True), R = False)
   .case(run_bytes = intel(["xor rax, 0x12"]), R = False)
+  .case(run_bytes = intel(["xor rsi, 0x101"]), RG = if_has("reduce_imms", True), R = False)
+  # Following test have their immediates of incorrect sizes -- should not work even with
+  # --reduce_imms
+  .case(run_bytes = intel(["xor rsi, 0x0"]), RG = if_has("reduce_imms", False), R = False)
+  .case(run_bytes = intel(["xor rdi, 0x7fff"]),
+        RG = if_has("reduce_imms", False), R = False)
+
+
 }
 
 test_or = {
@@ -141,11 +145,13 @@ test_or = {
   .DI(S().RSI(0xff12ee).RDI(0x101).aflags(0))
   .case(run_bytes = 0, R = True)
   .case(run_bytes = 1, R = True)
-  .case(run_bytes = intel(["or rsi, 0x101"]), RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["or rdi, 0x7fff"]),
-        RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["or rsi, 0x0"]), RG = if_has("reduce_imms", True), R = False)
   .case(run_bytes = intel(["or rax, 0x12"]), R = False)
+  .case(run_bytes = intel(["or rsi, 0x101"]), RG = if_has("reduce_imms", True), R = False)
+  # Following test have their immediates of incorrect sizes -- should not work even with
+  # --reduce_imms
+  .case(run_bytes = intel(["or rsi, 0x0"]), RG = if_has("reduce_imms", False), R = False)
+  .case(run_bytes = intel(["or rdi, 0x7fff"]),
+        RG = if_has("reduce_imms", False), R = False)
 }
 
 test_and = {
@@ -163,11 +169,15 @@ test_and = {
   .DI(S().RSI(0xff12ee).RDI(0x101).aflags(0))
   .case(run_bytes = 0, R = True)
   .case(run_bytes = 1, R = True)
-  .case(run_bytes = intel(["and rsi, 0x101"]), RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["and rdi, 0x7fff"]),
-        RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["and rsi, 0x0"]), RG = if_has("reduce_imms", True), R = False)
   .case(run_bytes = intel(["and rax, 0x12"]), R = False)
+  .case(run_bytes = intel(["and rsi, 0x101"]), RG = if_has("reduce_imms", True), R = False)
+  # Following test have their immediates of incorrect sizes -- should not work even with
+  # --reduce_imms
+  .case(run_bytes = intel(["and rsi, 0x0"]), RG = if_has("reduce_imms", False), R = False)
+  .case(run_bytes = intel(["and rdi, 0x7fff"]),
+        RG = if_has("reduce_imms", False), R = False)
+
+
 }
 
 test_div = {
