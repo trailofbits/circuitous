@@ -66,6 +66,11 @@ class Mutator:
     self.registers[reg] = val
     return self
 
+  def aflags(self, val):
+    for flag in _aflags:
+      self.registers[flag] = val
+    return self
+
 def MS():
   return Mutator()
 
@@ -143,7 +148,7 @@ class TestCase:
 class Test:
   __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
                '_tags', '_names', '_lift_opts', '_inst_arr',
-               'default_istate')
+               'default_istate', 'e_mutators')
 
   def __init__(self, name_=""):
     # TODO(lukas): Split this into
@@ -159,6 +164,7 @@ class Test:
     self._lift_opts = []
     self._inst_arr = []
     self.default_istate = State()
+    self.e_mutators = []
 
 
   def bytes(self, bytes_):

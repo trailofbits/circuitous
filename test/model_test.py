@@ -1,14 +1,16 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 
-from tc import State, Test, _regs, _aflags
+from tc import State, Test, _regs, _aflags, MS
 
 import microx
 from microx_core import Executor
 
 class ModelTest(Test):
+
   def case(self, name_=None, **kwargs):
-    assert 'E' not in kwargs and 'DE' not in kwargs
+    assert 'E' not in kwargs
     super().case(name_, **kwargs)
+    self.e_mutators.append(kwargs.get('DE', MS()))
     return self
 
   def _expected_state(self, **kwargs):
@@ -16,9 +18,9 @@ class ModelTest(Test):
 
   def generate(self, **kwargs):
     super().generate(**kwargs)
-    for case in self.cases:
+    for idx, case in enumerate(self.cases):
       result = True if case.expected.result is None else case.expected.result
-      case.expected = MicroxGen().get(case.input)
+      case.expected = MicroxGen().get(case.input).mutate(self.e_mutators[idx])
       case.expected.result = result
     return self
 
