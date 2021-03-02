@@ -119,12 +119,15 @@ test_idiv = {
   ModelTest("T:idiv").bytes(intel(["idiv rsi"])).tags({"min", "idiv"}).
   case(
     I = State().RDX(0x0).RAX(0x66).RSI(0x22).RIP(0x1000).aflags(0),
+    DE = MS().aflags(0),
     R = True
   ).case(
     I = State().RDX(0x0).RAX(0x66).RSI(0x1).RIP(0x1000).aflags(0),
+    DE = MS().aflags(0),
     R = True
   ).case(
     I = State().RDX(0x0).RAX(0x66).RSI(0x66).RIP(0x1000).aflags(0),
+    DE = MS().aflags(0),
     R = True
   )
 }

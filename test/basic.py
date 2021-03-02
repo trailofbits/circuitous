@@ -172,16 +172,24 @@ test_and = {
 
 test_div = {
   ModelTest("div").tags({"min", "div"}).bytes(intel(["div rdi"]))
-  .case(DI = S().RIP(0x1000).RAX(0x10).RDX(0x0).RDI(0x1), R = True)
-  .case(DI = S().RIP(0x1000).RAX(0x30).RDX(0x0).RDI(0x15), R = True)
-  .case(DI = S().RIP(0x1000).RAX(0xffffff).RDX(0x1).RDI(0xfffff), R = True)
+  .case(DI = S().RIP(0x1000).RAX(0x10).RDX(0x0).RDI(0x1),
+        DE = MS().aflags(0), R = True)
+  .case(DI = S().RIP(0x1000).RAX(0x30).RDX(0x0).RDI(0x15),
+        DE = MS().aflags(0), R = True)
+  .case(DI = S().RIP(0x1000).RAX(0xffffff).RDX(0x1).RDI(0xfffff),
+        DE = MS().aflags(0), R = True)
 }
 
 test_idiv = {
-  ModelTest("idiv").tags({"min", "idiv"}).bytes(intel(["idiv rdi"])).DI(S().RIP(0x1000))
-  .case(DI = S().RIP(0x1000).RAX(0x10).RDX(0x0).RDI(0x1), R = True)
-  .case(DI = S().RIP(0x1000).RAX(0x30).RDX(0x0).RDI(0x15), R = True)
-  .case(DI = S().RIP(0x1000).RAX(0xffffff).RDX(0x1).RDI(0xfffff), R = True)
+  ModelTest("idiv").tags({"min", "idiv"})
+  .bytes(intel(["idiv rdi"]))
+  .DI(S().RIP(0x1000).aflags(0))
+  .case(DI = S().RIP(0x1000).RAX(0x10).RDX(0x0).RDI(0x1),
+        DE = MS().aflags(0), R = True)
+  .case(DI = S().RIP(0x1000).RAX(0x30).RDX(0x0).RDI(0x15),
+        DE = MS().aflags(0), R = True)
+  .case(DI = S().RIP(0x1000).RAX(0xffffff).RDX(0x1).RDI(0xfffff),
+        DE = MS().aflags(0), R = True)
 }
 
 test_ip = {
