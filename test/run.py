@@ -109,6 +109,8 @@ class Lifter:
     args = [self.binary,
             "--bytes_in", bytes,
             "--json_out", "out.json", "--ir_out", self.circuit_name(bytes)]
+    if dbg_verbose:
+      args += ["--dot_out", self.circuit_name(bytes) + ".dot"]
     args += extra_args
     pipes = subprocess.Popen(args,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
