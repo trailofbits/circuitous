@@ -110,6 +110,11 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
     return canditate;
   }
 
+  llvm::Value *HideValue(llvm::Value *val, llvm::BasicBlock *bb, uint64_t size) {
+    llvm::IRBuilder<> ir(bb);
+    return ir.CreateCall(intrinsics::InputImmediate::CreateFn(bb->getModule(), size), val);
+  }
+
   llvm::Value *LiftImmediateOperand(remill::Instruction &inst, llvm::BasicBlock *bb,
                                     llvm::Argument *arg,
                                     remill::Operand &arch_op) override {
@@ -120,8 +125,9 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
     auto constant_imm = this->parent::LiftImmediateOperand(inst, bb, arg, arch_op);
     auto imm_getters = GetImmediates(module, &inst, &arch_op);
 
+    auto size = llvm::cast<llvm::IntegerType>(constant_imm->getType())->getScalarSizeInBits();
     if (imm_getters.size() == 0) {
-      return constant_imm;
+      return HideValue(constant_imm, bb, size);
     }
 
     auto inst_fn = ChooseImm(arch_op, imm_getters);
@@ -136,8 +142,7 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
       //              the sign bit.
       hidden_imm = ir.CreateSExtOrTrunc(hidden_imm, constant_imm->getType());
     }
-    auto size = llvm::cast<llvm::IntegerType>(constant_imm->getType())->getScalarSizeInBits();
-    return ir.CreateCall(intrinsics::InputImmediate::CreateFn(module, size), hidden_imm);
+    return HideValue(hidden_imm, bb, size);
   }
 };
 
