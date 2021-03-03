@@ -47,6 +47,7 @@ class Interpreter : public Visitor<Interpreter> {
   // Operations
   void VisitConcat(Concat *op);
   void VisitExtract(Extract *op);
+  void VisitNot(Not *op);
   void VisitLLVMOperation(LLVMOperation *op);
   void VisitParity(Parity *op);
   void VisitPopulationCount(PopulationCount *op);
