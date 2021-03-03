@@ -87,7 +87,7 @@ test_sbb = {
 }
 
 test_shl = {
-  ModelTest("shl").tags({"min", "shl", "todo"})
+  ModelTest("shl").tags({"min", "shl"})
   .bytes(intel(["shl rdx, 0x20"]))
   .case(I = S().RDX(0x7fffffffffffffff).CF(0x0), R = True)
   .case(I = S().RDX(0xff).CF(0x0), R = True)
@@ -95,12 +95,12 @@ test_shl = {
     I = S().RDX(0x7fffffffffffffff).CF(0x0),
     run_bytes = intel(["shl rdx, 0x4"]),
     RG = if_has("reduce_imms", True),
-    R = True
+    R = False
   ).case(
     I = S().RDX(0x7fffffffffffffff).CF(0x0),
     run_bytes = intel(["shl rcx, 0x4"]),
     RG = if_has("reduce_imms", False),
-    R = True
+    R = False
   )
 }
 
