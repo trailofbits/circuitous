@@ -161,6 +161,13 @@ void Interpreter::VisitLLVMOperation(LLVMOperation *op) {
   auto lhs{[this, op] { return GetNodeVal(op->operands[0]); }};
   auto rhs{[this, op] { return GetNodeVal(op->operands[1]); }};
   switch (op->llvm_op_code) {
+    case llvm::Instruction::OtherOps::Select: {
+      auto selector = GetNodeVal(op->operands[0]);
+      auto true_val = GetNodeVal(op->operands[1]);
+      auto false_val = GetNodeVal(op->operands[2]);
+      SetNodeVal(op, selector.getBoolValue() ? true_val : false_val );
+    } break;
+
     case llvm::BinaryOperator::Add: {
       SetNodeVal(op, lhs() + rhs());
     } break;
