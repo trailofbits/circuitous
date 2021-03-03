@@ -104,6 +104,24 @@ test_shl = {
   )
 }
 
+test_shr = {
+  ModelTest("shr rax").tags({"min", "shr"}).bytes(intel(["shr rax"]))
+  .case(I = S().RAX(0b101).aflags(0), R = True)
+  .case(I = S().RAX(0b1010).aflags(0), R = True),
+
+  ModelTest("shr rbx imm8").tags({"min", "shr"}).bytes(intel(["shr rbx, 0x5"]))
+  .case(I = S().RBX(0b1011111).aflags(0), R = True)
+  .case(I = S().RBX(0b1000000).aflags(0), R = True),
+
+  ModelTest("shr rbx 0").tags({"min", "shr"}).bytes(intel(["shr rbx, 0"]))
+  .case(I = S().RBX(0b101).aflags(0), R = True)
+  .case(I = S().RBX(0b101).aflags(1), R = True),
+
+  ModelTest("shr rdx cl").tags({"min", "shr"}).bytes(intel(["shr rdx, cl"]))
+  .case(I = S().RCX(0x7fffffffffffffff).RCX(63), R = True)
+  .case(I = S().RCX(0x7fffffffffffffff).RCX(65), R = True)
+}
+
 test_xor = {
   ModelTest("xor").tags({"min", "xor"})
   .bytes(intel(["xor rsi, rdi"]))
@@ -210,4 +228,9 @@ test_ip = {
 # TODO(lukas): Division by zero
 
 circuitous_tests = \
-  [test_adc, test_sbb, test_shl, test_xor, test_or, test_and, test_div, test_idiv, test_ip]
+  [ test_adc, test_sbb,
+    test_shl, test_shr,
+    test_xor, test_or, test_and,
+    test_div, test_idiv,
+    test_ip
+  ]
