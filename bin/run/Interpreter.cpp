@@ -144,6 +144,18 @@ void Interpreter::VisitConcat(Concat *op) {
     node_values[op] = build;
 }
 
+void Interpreter::VisitNot(Not *op) {
+  LOG(INFO) << "Visit Not" << op->Name();
+  auto val = GetNodeVal(op->operands[0]);
+  CHECK(val.getBitWidth() == 1)
+    << "Cannot apply Not to value of bitwidth" << val.getBitWidth();
+  // NOTE(lukas): To avoid confusion the copy is here explicitly, since `negate` does
+  //              change the APInt instead of returning a new one.
+  llvm::APInt copy = val;
+  copy.negate();
+  SetNodeVal(op, copy);
+}
+
 void Interpreter::VisitLLVMOperation(LLVMOperation *op) {
   DLOG(INFO) << "VisitLLVMOperation: " << op->Name();
   auto lhs{[this, op] { return GetNodeVal(op->operands[0]); }};
