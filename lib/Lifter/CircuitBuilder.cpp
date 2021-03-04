@@ -336,6 +336,34 @@ void CircuitBuilder::FlattenControlFlow(
   std::vector<std::pair<llvm::ReturnInst *, llvm::Value *>> ret_vals;
 
 
+  // TODO(lukas): Refactor this entire thing into a separate class
+  std::map<llvm::SwitchInst *, std::map<llvm::BasicBlock *, llvm::Value *>> switch_conds;
+
+  auto init_switch = [ & ](auto inst, auto &ir) {
+    auto val = inst->getCondition();
+    auto default_dst = inst->getDefaultDest();
+    llvm::Value *default_cond = ir.getTrue();
+
+    auto &conditions = switch_conds[inst];
+    for (auto x : inst->cases()) {
+      auto target_val = x.getCaseValue();
+      auto dst = x.getCaseSuccessor();
+      auto cond = ir.CreateICmpEQ(target_val, val);
+      conditions[dst] = cond;
+      default_cond = ir.CreateAnd(default_cond, ir.CreateNot(cond));
+    }
+    if (default_dst) {
+      conditions[default_dst] = default_cond;
+    }
+  };
+
+  auto get_switch = [ & ](auto inst, auto &ir) {
+    if (!switch_conds.count(inst)) {
+      init_switch(inst, ir);
+    }
+    return switch_conds[inst];
+  };
+
   for (llvm::BasicBlock *block : it) {
     orig_blocks.push_back(block);
   }
@@ -384,7 +412,9 @@ void CircuitBuilder::FlattenControlFlow(
           }
 
         } else if (pred_switch) {
-          LOG(FATAL) << "TODO: Edge condition on switch.";
+          edge_cond = get_switch(pred_switch, ir)[block];
+          CHECK(edge_cond);
+          edge_cond = ir.CreateAnd(pred_cond, edge_cond);
         }
 
         pred_conds[block].emplace(pred_block, edge_cond);
