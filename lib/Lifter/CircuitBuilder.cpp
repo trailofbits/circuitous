@@ -128,6 +128,35 @@ static void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
   module->getContext().setDiagnosticsHotnessThreshold(1);
   remill::OptimizeModule(arch, module, fns);
   module->getContext().setDiagnosticsHotnessThreshold(saved_threshold);
+
+  // TOOD(lukas): This most likely wants its own class
+  // We want to lower some intrinsics that llvm optimizations introduced
+  // `usub.sat` is a result of InstCombining.
+  std::vector<llvm::Instruction *> calls;
+  for (auto fn : fns) {
+    for (auto &bb : *fn) {
+      for (auto &inst : bb) {
+        if (auto cs = llvm::CallSite(&inst)) {
+          if (cs.isCall() &&
+              cs.getCalledFunction()->getIntrinsicID() == llvm::Intrinsic::usub_sat)
+              calls.push_back(cs.getInstruction());
+        }
+      }
+    }
+  }
+  for (auto inst : calls) {
+    llvm::IRBuilder<> ir(inst);
+    auto call = llvm::cast<llvm::CallInst>(inst);
+    auto a = call->getOperand(0);
+    auto b = call->getOperand(1);
+    auto size = static_cast<uint32_t>(inst->getType()->getPrimitiveSizeInBits());
+    auto sub = ir.CreateSub(a, b);
+    auto flag = ir.CreateICmpULT(a, b);
+    auto zero = ir.getIntN(size, 0);
+    auto select = ir.CreateSelect(flag, zero, sub);
+    call->replaceAllUsesWith(select);
+    call->eraseFromParent();
+  }
 }
 
 }  // namespace
