@@ -158,20 +158,33 @@ class Test:
     self.cases = []
     self.dir = None
     self.metafiles = {}
-    self._bytes = None
+
     self._tags = set()
     self._names = 0
     self._lift_opts = []
-    self._inst_arr = []
+
     self.default_istate = State()
     self.e_mutators = []
 
+    # To allow a delayed byte generation, we allow two types of bytes
+    # TODO(lukas): What if I want to combine them?
+
+    # _bytes must always be a `Union[str, LazyBytes]`
+    self._bytes = None
+    # _inst_arr must always be a `Union[list[str], LazyBytes]`
+    self._inst_arr = []
+
 
   def bytes(self, bytes_):
+    assert bytes_ is not None, "Cannot build the bytes yet (TODO)."
     if isinstance(bytes_, list):
       self._inst_arr = bytes_
       self._bytes = "".join(bytes_)
+    elif isinstance(bytes_, str):
+      self._inst_arr = [bytes_]
+      self._bytes = bytes_
     else:
+      self._inst_arr = bytes_
       self._bytes = bytes_
     return self
 
@@ -232,14 +245,17 @@ class Test:
     case.expected = self._expected_state(**kwargs)
     case.input = self._input_state(**kwargs)
 
-    inst_chooser = kwargs.get('run_bytes', self._bytes)
-    # TODO(lukas): A bit bleh.
-    if isinstance(inst_chooser, int):
+    inst_chooser = kwargs.get('run_bytes', None)
+
+    # TODO(lukas): A "bit" bleh.
+    if inst_chooser is None:
+      assert len(self._inst_arr) == 1, "Cannot default to multiple insts."
+      case.input.bytes = self._bytes
+    elif isinstance(inst_chooser, int):
       case.input.bytes = self._inst_arr[inst_chooser]
     elif isinstance(inst_chooser, list):
-      assert len(inst_chooser) == 1, "Cannot run more than one inst"
+      assert len(inst_chooser) == 1, "Cannot run more than one inst."
       case.input.bytes = "".join(inst_chooser[0])
-      print(case.input.bytes)
     else:
       case.input.bytes = inst_chooser
 
@@ -258,7 +274,16 @@ class Test:
     return self
 
   def generate(self, **kwargs):
+    def check_bytes(which):
+      if not isinstance(which, str):
+        return "".join(which.compile())
+      return which
+
+    print("[ > ] Generating test case", self.name)
+    self._bytes = check_bytes(self._bytes)
     for case in self.cases:
+      case.bytes = check_bytes(case.bytes)
+      case.input.bytes = check_bytes(case.input.bytes)
       if case._result_generator is not None:
         should, val = case._result_generator.generate(self, **kwargs)
         if should:
