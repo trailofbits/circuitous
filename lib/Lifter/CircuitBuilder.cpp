@@ -430,7 +430,7 @@ void CircuitBuilder::FlattenControlFlow(
     }
 
     for (auto inst : insts) {
-      if (auto phi = llvm::dyn_cast<llvm::PHINode>(inst); phi) {
+      if (auto phi = llvm::dyn_cast<llvm::PHINode>(inst)) {
         llvm::IRBuilder<> ir(new_block);
 
         const auto num_preds = phi->getNumIncomingValues();
@@ -467,9 +467,25 @@ void CircuitBuilder::FlattenControlFlow(
         phi->replaceAllUsesWith(sel_val);
         to_remove.push_back(inst);
 
-      } else if (auto ret = llvm::dyn_cast<llvm::ReturnInst>(inst); ret) {
+      } else if (auto ret = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
         ret_vals.emplace_back(ret, reaching_cond[block]);
-
+      } else if (auto store = llvm::dyn_cast<llvm::StoreInst>(inst)) {
+        // Consider following:
+        //   if (x) return;
+        //   SF <- 0
+        // We need to wrap SF <- 0 as:
+        //   SF <- select(path_condition, 0, Load(SF))
+        // Otherwise the SF would always be `0` no matter the `x`
+        auto ptr_op = store->getPointerOperand();
+        auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(ptr_op);
+        auto state = remill::NthArgument(func, remill::kStatePointerArgNum);
+        if (gep && gep->getPointerOperand() == state) {
+          llvm::IRBuilder<> ir(new_block);
+          auto original = ir.CreateLoad(gep);
+          auto guarded = ir.CreateSelect(reaching_cond[block], store->getOperand(0), original);
+          ir.CreateStore(guarded, gep);
+        }
+        to_remove.push_back(inst);
       } else if (!inst->isTerminator()) {
         inst->removeFromParent();
         new_block->getInstList().insert(new_block->end(), inst);
@@ -516,6 +532,7 @@ void CircuitBuilder::FlattenControlFlow(
   for (auto block : orig_blocks) {
     block->eraseFromParent();
   }
+  remill::VerifyModule(module.get());
 }
 
 // Decode all instructions in `buff` using `arch` and fill up `inst_funcs`.
@@ -565,9 +582,7 @@ void CircuitBuilder::LiftInstructions(
         default:
           break;
       }
-
     }
-
     ++g;
   }
 
