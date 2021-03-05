@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 import queue
 
 from tc import State, Test
@@ -54,7 +55,7 @@ def log_info(what):
 
 def check_retcode(pipes, component : str):
     try:
-      out, err = pipes.communicate(timeout = 10)
+      out, err = pipes.communicate(timeout = 30)
     except subprocess.TimeoutExpired:
       pipes.kill()
       out, err = pipes.communicate()
@@ -86,16 +87,24 @@ class PipelineFail(Exception):
     msg += "Stderr:\n" + self._err + '\n'
     return msg
 
-class Lifter:
+
+class SimulateCWDMixin():
+  def locate(self, target):
+    return os.path.join(self.test_dir, target)
+
+class Lifter(SimulateCWDMixin):
+  __slots__ = ('binary', 'test_dir')
+
   component = "circuitous lifter"
 
-  def __init__(self, binary=circuitous_lift):
+  def __init__(self, test_dir_, binary=circuitous_lift):
     self.binary = binary
+    self.test_dir = test_dir_
 
   def lift_test(self, tc, extra_args):
     for case in tc.cases:
       bytes = case.bytes
-      circuit = self.circuit_name(bytes)
+      circuit = self.locate(self.circuit_name(bytes))
       log_info("Lifting: " + '.' * 16 + " " + tc.name + " -> " + case.name)
       if not circuit in tc.metafiles:
         tc.metafiles[circuit] = self.lift(case.bytes, tc._lift_opts + extra_args)
@@ -109,22 +118,26 @@ class Lifter:
   def lift(self, bytes, extra_args):
     args = [self.binary,
             "--bytes_in", bytes,
-            "--json_out", "out.json", "--ir_out", self.circuit_name(bytes)]
+            "--json_out", self.locate("out.json"),
+            "--ir_out", self.locate(self.circuit_name(bytes))]
     if dbg_verbose:
-      args += ["--dot_out", self.circuit_name(bytes) + ".dot"]
+      args += ["--dot_out", self.locate(self.circuit_name(bytes) + ".dot")]
     args += extra_args
     pipes = subprocess.Popen(args,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              text=True)
     check_retcode(pipes, self.component)
 
-    return self.circuit_name(bytes)
+    return self.locate(self.circuit_name(bytes))
 
-class Interpret:
+class Interpret(SimulateCWDMixin):
+  __slots__ = ('binary', 'test_dir')
+
   component = "circuitous interpret"
 
-  def __init__(self, binary=circuitous_run):
+  def __init__(self, test_dir_, binary=circuitous_run):
     self.binary = binary
+    self.test_dir = test_dir_
 
   def run(self, tc):
     for case in tc.cases:
@@ -132,8 +145,8 @@ class Interpret:
 
   def run_case(self, case, ir, parent):
     args = [self.binary,
-            "--json_in", case.input.as_json_file(case.name),
-            "--json_out", case.name + ".result.json",
+            "--json_in", case.input.as_json_file(case.name, self.test_dir),
+            "--json_out", self.locate(case.name + ".result.json"),
             "--ir_in", ir]
     log_info("Running: " + '.' * 16 + " " + parent.name + " -> " + case.name)
     pipes = subprocess.Popen(args,
@@ -141,7 +154,7 @@ class Interpret:
                              text=True)
     check_retcode(pipes, self.component)
 
-    self.update_state(case, case.name + ".result.json")
+    self.update_state(case, self.locate(case.name + ".result.json"))
 
   def update_state(self, case, result):
     with open(result) as f:
@@ -183,9 +196,10 @@ class Comparator:
         msg = out[case.name].msg
         msg += "\n\tLift bytes: " + tc._bytes
         msg += "\n\tRun bytes: " + case.input.bytes
-        if dbg_verbose:
-          msg += "\n\t" + os.path.abspath(case.input.as_json_file("failed."))
-          msg += "\n\t" + os.path.abspath(case.name + ".result.json")
+        # TODO(lukas): Not sure how to fix cleanly (threads broke it)
+        #if dbg_verbose:
+        #  msg += "\n\t" + os.path.abspath(case.input.as_json_file("failed."))
+        #  msg += "\n\t" + os.path.abspath(case.name + ".result.json")
         out[case.name].msg = msg
     return out
 
@@ -230,8 +244,8 @@ class Results:
     self.fails = []
     self.fragile = fragile_
 
-  def process(self, result, test_name):
-    for name, result in result.items():
+  def process(self, results, test_name):
+    for name, result in results.items():
       verdict, message, e = result.as_tuple()
       full_name = test_name + " -> " + name
       if verdict == TestResult.fail:
@@ -276,30 +290,50 @@ class Results:
       print(message)
 
 
-def execute_tests(tests, top_dir, extra_args, fragile):
+def execute_tests(tests, top_dir, extra_args, fragile, jobs):
   log_info("Test dir is: " + top_dir)
   os.chdir(top_dir)
   global top_level_dir
   top_level_dir = os.path.abspath(top_dir)
 
   results = queue.Queue()
-  for x in tests:
-    test_dir = tempfile.mkdtemp(dir=os.getcwd(),
-                                prefix=x.name.replace(' ', '.').replace('/', '.') + '_')
-    os.chdir(test_dir)
-    x.generate(lift=strip(extra_args))
+  todo = queue.Queue()
 
-    try:
-      Lifter().lift_test(x, extra_args)
-      Interpret().run(x)
-      r = Comparator().compare(x)
-      results.put((x.name, r))
-    except PipelineFail as e:
-      results.put((x.name, TestResult(TestResult.error, "", e)))
-      if fragile:
-        raise e
-    finally:
-      os.chdir(top_level_dir)
+  for x in tests:
+    x.generate(lift=strip(extra_args))
+    todo.put(x)
+
+  def parallel_exec():
+    while not todo.empty():
+      x = None
+      try:
+        x = todo.get()
+      except queue.Empty:
+        return
+
+      test_dir = tempfile.mkdtemp(dir=os.getcwd(),
+                                  prefix=x.name.replace(' ', '.').replace('/', '.') + '_')
+      test_dir = os.path.abspath(test_dir)
+      #os.chdir(test_dir)
+      try:
+        Lifter(test_dir).lift_test(x, extra_args)
+        Interpret(test_dir).run(x)
+        r = Comparator().compare(x)
+        results.put((x.name, r))
+      except PipelineFail as e:
+        results.put((x.name, {"pipeline" : TestResult(TestResult.error, "", e)}))
+        if fragile and jobs == 1:
+          raise e
+
+  threads = []
+  for i in range(jobs):
+    t = threading.Thread(target=parallel_exec)
+    t.start()
+    threads.append(t)
+  for t in threads:
+    t.join()
+
+
 
   rs = Results(fragile)
   while not results.empty():
@@ -355,6 +389,9 @@ def main():
                            help="TODO: Run in dbg mode, which means be verbose.",
                            action='store_true',
                            default=False)
+  arg_parser.add_argument("--jobs",
+                          help="Number of python threads. Should improve execution time.",
+                          default=1)
   arg_parser.add_argument("--fragile",
                           help="If pipeline fails, kill & report",
                           action='store_true',
@@ -367,17 +404,19 @@ def main():
 
   if args.tags is None:
     args.tags = ['all']
+  args.jobs = int(args.jobs)
 
   tests = filter_by_tag(fetch_test(args.sets), args.tags)
   log_info("Filtered " + str(len(tests)) + " tests.")
   if args.persist:
     log_info("Creating persistent directory")
     test_dir = tempfile.mkdtemp(dir=os.getcwd())
-    execute_tests(tests, test_dir, command_args, args.fragile)
+    execute_tests(tests, test_dir, command_args, args.fragile, args.jobs)
   else:
     log_info("Creating temporary directory")
     with tempfile.TemporaryDirectory(dir=os.getcwd()) as tmpdir:
-      execute_tests(tests, tmpdir, command_args, args.fragile)
+      execute_tests(tests, tmpdir, command_args, args.fragile, args.jobs)
+
 
 if __name__ == "__main__":
   main()
