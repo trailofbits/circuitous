@@ -19,128 +19,124 @@
 namespace circuitous {
 
 struct Flattener {
-
   llvm::Function *func;
   // Function that generates errors
   llvm::Function *error;
+  llvm::BasicBlock *new_block = nullptr;
+
+  using instructions_t = std::vector<llvm::Instruction *>;
+  template<typename T>
+  using bb_map = std::unordered_map<llvm::BasicBlock *, T>;
+
+  bb_map<llvm::Value *> reaching_cond;
+  bb_map<bb_map<llvm::Value *>> pred_conds;
+  std::unordered_map<llvm::SwitchInst *, bb_map<llvm::Value *>> switch_conds;
+
+  std::vector<std::pair<llvm::ReturnInst *, llvm::Value *>> ret_vals;
+  instructions_t to_remove;
+  std::vector<llvm::BasicBlock *> orig_blocks;
 
   Flattener(llvm::Function *func_, llvm::Function *error_) :
     func(func_), error(error_)
   {}
 
-  void Run() {
-    auto module = func->getParent();
+  void FlattenSwitch(llvm::SwitchInst *inst, llvm::IRBuilder<> &ir) {
+    auto val = inst->getCondition();
+    auto default_dst = inst->getDefaultDest();
+    llvm::Value *default_cond = ir.getTrue();
+
+    auto &conditions = switch_conds[inst];
+    for (auto x : inst->cases()) {
+      auto target_val = x.getCaseValue();
+      auto dst = x.getCaseSuccessor();
+      auto cond = ir.CreateICmpEQ(target_val, val);
+      conditions[dst] = cond;
+      default_cond = ir.CreateAnd(default_cond, ir.CreateNot(cond));
+    }
+    if (default_dst) {
+      conditions[default_dst] = default_cond;
+    }
+  }
+
+  auto &SwitchTarget(llvm::SwitchInst *inst, llvm::IRBuilder<> &ir) {
+    if (!switch_conds.count(inst)) {
+      FlattenSwitch(inst, ir);
+    }
+    return switch_conds[inst];
+  }
+
+  // Compute condition `pred_block -> block` and insert new instructions if needed
+  // by `ir` (which is inserting into `new_block`).
+  llvm::Value *GetCondition(llvm::BasicBlock *block, llvm::BasicBlock *pred_block,
+                            llvm::IRBuilder<> &ir) {
+    const auto pred_cond = reaching_cond[pred_block];
+    LOG_IF(FATAL, !pred_cond)
+        << "Cycle in control-flow graphs are not handled";
+
+    // Figure out the reaching condition for `block` coming through
+    // `pred`.
+    auto inst = pred_block->getTerminator();
+    if (auto pred_br = llvm::dyn_cast<llvm::BranchInst>(inst)) {
+      // There is no condition, just inherit
+      if (!pred_br->isConditional()) {
+        return pred_cond;
+      }
+
+      auto true_succ = pred_br->getSuccessor(0);
+      auto false_succ = pred_br->getSuccessor(1);
+
+      if (true_succ == false_succ) {
+        // TODO(lukas): Probably just return `pred_cond`
+        LOG(FATAL) << "TODO: Not sure how to handle when true_succ == false_succ";
+      }
+      auto edge_cond = pred_br->getCondition();
+      if (true_succ == block) {
+        return ir.CreateAnd(pred_cond, edge_cond);
+      }
+      return ir.CreateAnd(pred_cond, ir.CreateNot(edge_cond));
+    }
+    if (auto pred_switch = llvm::dyn_cast<llvm::SwitchInst>(inst)) {
+      auto edge_cond = SwitchTarget(pred_switch, ir)[block];
+      CHECK(edge_cond);
+      return ir.CreateAnd(pred_cond, edge_cond);
+    }
+    return pred_cond;
+  }
+
+  void CreatePathCondition(llvm::BasicBlock *block) {
+    // The entry block is guaranteed to be reachable.
+    llvm::IRBuilder<> ir(new_block);
+    if (block->hasNPredecessors(0)) {
+      reaching_cond.emplace(block, ir.getTrue());
+      pred_conds[block].emplace(nullptr, ir.getTrue());
+      pred_conds[block].emplace(block, ir.getTrue());
+      return;
+    }
+    // Figure out the reaching conditions for this block, and express them as
+    // data flow (i.e. instructions).
+
+    llvm::Value *cond = ir.getFalse();
+
+    for (auto pred_block : llvm::predecessors(block)) {
+      auto edge_cond = GetCondition(block, pred_block, ir);
+      pred_conds[block].emplace(pred_block, edge_cond);
+      cond = ir.CreateXor(cond, edge_cond);
+    }
+    reaching_cond.emplace(block, cond);
+  }
+
+  void HandleBBs() {
+    CHECK(new_block);
     auto &context = func->getContext();
     llvm::IRBuilder<> ctx_b(context);
     auto true_value = ctx_b.getTrue();
-    auto false_value = ctx_b.getFalse();
-
-    const auto entry_block = &(func->getEntryBlock());
-    llvm::ReversePostOrderTraversal<llvm::BasicBlock *> it(entry_block);
-
-    std::unordered_map<llvm::BasicBlock *, llvm::Value *> reaching_cond;
-    std::unordered_map<llvm::BasicBlock *,
-                      std::unordered_map<llvm::BasicBlock *, llvm::Value *>>
-        pred_conds;
-
-    const auto new_block =
-        llvm::BasicBlock::Create(context, "", func, entry_block);
 
     std::vector<llvm::Instruction *> insts;
-    std::vector<llvm::Instruction *> to_remove;
-    std::vector<llvm::BasicBlock *> orig_blocks;
-    std::vector<std::pair<llvm::ReturnInst *, llvm::Value *>> ret_vals;
-
-
-    // TODO(lukas): Refactor this entire thing into a separate class
-    std::map<llvm::SwitchInst *, std::map<llvm::BasicBlock *, llvm::Value *>> switch_conds;
-
-    auto init_switch = [ & ](auto inst, auto &ir) {
-      auto val = inst->getCondition();
-      auto default_dst = inst->getDefaultDest();
-      llvm::Value *default_cond = ir.getTrue();
-
-      auto &conditions = switch_conds[inst];
-      for (auto x : inst->cases()) {
-        auto target_val = x.getCaseValue();
-        auto dst = x.getCaseSuccessor();
-        auto cond = ir.CreateICmpEQ(target_val, val);
-        conditions[dst] = cond;
-        default_cond = ir.CreateAnd(default_cond, ir.CreateNot(cond));
-      }
-      if (default_dst) {
-        conditions[default_dst] = default_cond;
-      }
-    };
-
-    auto get_switch = [ & ](auto inst, auto &ir) {
-      if (!switch_conds.count(inst)) {
-        init_switch(inst, ir);
-      }
-      return switch_conds[inst];
-    };
-
-    for (llvm::BasicBlock *block : it) {
-      orig_blocks.push_back(block);
-    }
 
     for (auto block : orig_blocks) {
+      CreatePathCondition(block);
 
-      // The entry block is guaranteed to be reachable.
-      if (block->hasNPredecessors(0)) {
-        reaching_cond.emplace(block, true_value);
-        pred_conds[block].emplace(nullptr, true_value);
-        pred_conds[block].emplace(block, true_value);
-
-      // Figure out the reaching conditions for this block, and express them as
-      // data flow (i.e. instructions).
-      } else {
-        llvm::IRBuilder<> ir(new_block);
-        llvm::Value *cond = false_value;
-
-        for (auto pred_block : llvm::predecessors(block)) {
-          const auto pred_cond = reaching_cond[pred_block];
-          LOG_IF(FATAL, !pred_cond)
-              << "Cycle in control-flow graphs are not handled";
-
-          const auto pred_br =
-              llvm::dyn_cast<llvm::BranchInst>(pred_block->getTerminator());
-
-          const auto pred_switch =
-              llvm::dyn_cast<llvm::SwitchInst>(pred_block->getTerminator());
-
-          // Figure out the reaching condition for `block` coming through
-          // `pred`.
-          llvm::Value *edge_cond = pred_cond;
-          if (pred_br && pred_br->isConditional()) {
-            const auto true_succ = pred_br->getSuccessor(0);
-            const auto false_succ = pred_br->getSuccessor(1);
-
-            if (true_succ != false_succ) {
-              edge_cond = pred_br->getCondition();
-              if (true_succ == block) {
-                edge_cond = ir.CreateAnd(pred_cond, edge_cond);
-              } else {
-                edge_cond = ir.CreateAnd(pred_cond, ir.CreateNot(edge_cond));
-              }
-            } else {
-              edge_cond = pred_cond;
-            }
-
-          } else if (pred_switch) {
-            edge_cond = get_switch(pred_switch, ir)[block];
-            CHECK(edge_cond);
-            edge_cond = ir.CreateAnd(pred_cond, edge_cond);
-          }
-
-          pred_conds[block].emplace(pred_block, edge_cond);
-          cond = ir.CreateXor(cond, edge_cond);
-        }
-
-        reaching_cond.emplace(block, cond);
-      }
-
-      insts.clear();
+      std::vector<llvm::Instruction *> insts;
       for (llvm::Instruction &inst : *block) {
         insts.push_back(&inst);
       }
@@ -211,6 +207,31 @@ struct Flattener {
         }
       }
     }
+  }
+
+  void CopyInsts(llvm::BasicBlock *bb) {
+
+  }
+
+  void Run() {
+    auto module = func->getParent();
+    auto &context = func->getContext();
+    llvm::IRBuilder<> ctx_b(context);
+    auto true_value = ctx_b.getTrue();
+
+    const auto entry_block = &(func->getEntryBlock());
+    llvm::ReversePostOrderTraversal<llvm::BasicBlock *> it(entry_block);
+
+    for (llvm::BasicBlock *block : it) {
+      orig_blocks.push_back(block);
+    }
+
+    new_block = llvm::BasicBlock::Create(context, "", func, entry_block);
+
+    std::vector<llvm::Instruction *> insts;
+    std::vector<llvm::BasicBlock *> orig_blocks;
+
+    HandleBBs();
     // Add a final return value to the data flow function.
     CHECK(!ret_vals.empty());
     if (1 == ret_vals.size()) {
