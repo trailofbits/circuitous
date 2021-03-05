@@ -2,6 +2,7 @@
 
 import copy
 import json
+import os
 
 # Add methods same as register names to the State to make configuration easier
 _regs = [ "RIP",
@@ -50,10 +51,12 @@ class State:
       out["input_regs"][reg] = str(val)
     return out
 
-  def as_json_file(self, prefix="def."):
-    with open(prefix + "input.json", 'w') as out:
+  def as_json_file(self, prefix="def.", dir=None):
+    fname = prefix + "input.json"
+    path = fname if dir is None else os.path.join(dir, fname)
+    with open(path, 'w') as out:
       json.dump(self.get(), out)
-    return prefix + "input.json"
+    return path
 
 
 class Mutator:
