@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import tempfile
+import queue
 
 from tc import State, Test
 import tc as TC
@@ -281,7 +282,7 @@ def execute_tests(tests, top_dir, extra_args, fragile):
   global top_level_dir
   top_level_dir = os.path.abspath(top_dir)
 
-  rs = Results(fragile)
+  results = queue.Queue()
   for x in tests:
     test_dir = tempfile.mkdtemp(dir=os.getcwd(),
                                 prefix=x.name.replace(' ', '.').replace('/', '.') + '_')
@@ -291,13 +292,22 @@ def execute_tests(tests, top_dir, extra_args, fragile):
     try:
       Lifter().lift_test(x, extra_args)
       Interpret().run(x)
-
-      rs.process(Comparator().compare(x), x.name)
+      r = Comparator().compare(x)
+      results.put((x.name, r))
     except PipelineFail as e:
-      rs.error(x, e)
+      results.put((x.name, TestResult(TestResult.error, "", e)))
+      if fragile:
+        raise e
     finally:
       os.chdir(top_level_dir)
 
+  rs = Results(fragile)
+  while not results.empty():
+    try:
+      name, result = results.get()
+    except queue.Empty:
+      break
+    rs.process(result, name)
   rs.report()
 
 
