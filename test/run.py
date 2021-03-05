@@ -149,8 +149,25 @@ class Interpret:
         case.simulated.set_reg(reg, int(val, 10))
       case.simulated.result = result["result"]
 
-class Model:
-  pass
+
+class TestResult:
+  ok = 0
+  fail = 1
+  error = 2
+
+  __slots__ = ('status', 'msg', 'error_exception')
+
+  def __init__(self, status_, msg_="", error_exception_=None):
+    self.status = status_
+    self.msg = msg_
+    self.error_exception = error_exception_
+
+  def __bool__(self):
+    return self.status == self.ok
+
+  # TODO(lukas): Want to get unpack, did not wanna bother with __iter__
+  def as_tuple(self):
+    return (self.status, self.msg, self.error_exception)
 
 class Comparator:
   def __init__(self):
@@ -159,15 +176,16 @@ class Comparator:
   def compare(self, tc):
     out = {}
     for case in tc.cases:
-      out[case.name] = self.compare_case(case.input, case.simulated, case.expected)
-      if not out[case.name][0]:
-        msg = out[case.name][1]
+      accept, msg = self.compare_case(case.input, case.simulated, case.expected)
+      out[case.name] = TestResult(TestResult.ok if accept else TestResult.fail, msg)
+      if not out[case.name]:
+        msg = out[case.name].msg
         msg += "\n\tLift bytes: " + tc._bytes
         msg += "\n\tRun bytes: " + case.input.bytes
         if dbg_verbose:
           msg += "\n\t" + os.path.abspath(case.input.as_json_file("failed."))
           msg += "\n\t" + os.path.abspath(case.name + ".result.json")
-        out[case.name] = (out[case.name][0], msg)
+        out[case.name].msg = msg
     return out
 
   def compare_case(self, input, after, expected):
@@ -212,14 +230,19 @@ class Results:
     self.fragile = fragile_
 
   def process(self, result, test_name):
-    for name, (verdict, message) in result.items():
+    for name, result in result.items():
+      verdict, message, e = result.as_tuple()
       full_name = test_name + " -> " + name
-      if not verdict:
+      if verdict == TestResult.fail:
         self.failed(full_name, message)
         self.results["fail"] += 1
-      else:
+      elif verdict == TestResult.ok:
         self.ok()
         self.results["pass"] += 1
+      elif verdict == TestResult.error:
+        self.results["error"] += 1
+        print(yellow("Pipeline fail in: " + e._component))
+
 
   def failed(self, name, message):
     print(red("[" + name + "]"), "\n", message)
