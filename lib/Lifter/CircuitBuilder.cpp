@@ -862,20 +862,8 @@ llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
 
   auto circuit0_func = circuit_fn;
 
-  llvm::Value *inst_func_args[remill::kNumBlockArgs] = {};
-  inst_func_args[remill::kPCArgNum] = pc;
-  inst_func_args[remill::kMemoryPointerArgNum] =
-      llvm::UndefValue::get(parent.mem_ptr_type);
-
-  // General parameters array. First used for collecting results of comparing
-  // register states. Then used for collecting the bits that we use to encode
-  // instructions given a verified instruction.
-  std::vector<llvm::Value *> params;
-
   auto i = 0u;
   const auto inst_name = IselName(isel.instructions.back());
-
-  params.clear();
 
   // Add one basic block per lifted instruction. Each block allocates a
   // separate state structure.
@@ -892,11 +880,10 @@ llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
     prev_block = inst_block;
 
     ir.SetInsertPoint(inst_block);
-    const auto state_ptr = ir.CreateAlloca(parent.state_ptr_type->getElementType());
+    auto state_ptr = ir.CreateAlloca(parent.state_ptr_type->getElementType());
 
-    for (auto [reg, arg, _] : reg_to_args) {
-      // TODO(surovic): The code from here down to and including
-      // the bitcast is copy-pasted further down. Rewrite this.
+    // All of the following lambdas capture `ir` and `state_ptr`.
+    auto access_reg = [&](const auto &reg) {
       const auto reg_type = IntegralRegisterType(*parent.module, reg);
       const auto reg_store_type = ir.getIntNTy(
           static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
@@ -905,17 +892,29 @@ llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
       if (reg_addr->getType() != reg_addr_type) {
         reg_addr = ir.CreateBitCast(reg_addr, reg_addr_type);
       }
-      // TODO(surovic): End-Of-Pasta
-      llvm::Value *reg_val = arg;
+      return std::make_tuple(reg_type, reg_addr_type, reg_store_type, reg_addr);
+    };
+
+    auto store_to_reg = [&](const auto &reg, llvm::Value *val) {
+      const auto &[reg_type, reg_addr_type, reg_store_type, reg_addr] = access_reg(reg);
       if (reg_type != reg_store_type) {
-        reg_val = ir.CreateZExt(reg_val, reg_store_type);
+        val = ir.CreateZExt(val, reg_store_type);
       }
+      ir.CreateStore(val, reg_addr);
+    };
 
-      ir.CreateStore(reg_val, reg_addr);
+    auto load_from_reg = [&](const auto &reg) -> llvm::Value * {
+      const auto &[reg_type, reg_addr_type, reg_store_type, reg_addr] = access_reg(reg);
+      llvm::Value *val = ir.CreateLoad(reg_addr);
+      if (reg_type != reg_store_type) {
+        val = ir.CreateTrunc(val, reg_type);
+      }
+      return val;
+    };
+
+    for (auto [reg, arg, _] : reg_to_args) {
+      store_to_reg(reg, arg);
     }
-
-    inst_func_args[remill::kStatePointerArgNum] = state_ptr;
-    ir.CreateCall(inst_func, inst_func_args);
 
     // First few arguments are the known parts of this instruction's encoding
     // and are common across all instructions sharing the same ISEL.
@@ -929,22 +928,9 @@ llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
     // register after the semantic has executed matches the next state of that
     // register.
     for (auto [reg, _, expected_reg_val] : reg_to_args) {
-      // TODO(surovic): See above TODO tag about duplication.
-      const auto reg_type = IntegralRegisterType(*parent.module, reg);
-      const auto reg_store_type = ir.getIntNTy(
-          static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
-      auto reg_addr = reg->AddressOf(state_ptr, inst_block);
-      auto reg_addr_type = llvm::PointerType::get(reg_store_type, 0);
-      if (reg_addr->getType() != reg_addr_type) {
-        reg_addr = ir.CreateBitCast(reg_addr, reg_addr_type);
-      }
-      // TODO(surovic): End-Of-Pasta
-      llvm::Value *reg_val = ir.CreateLoad(reg_addr);
-      if (reg_type != reg_store_type) {
-        reg_val = ir.CreateTrunc(reg_val, reg_type);
-      }
+      auto reg_val = load_from_reg(reg);
 
-      auto eq_func = intrinsics::Eq::CreateFn(parent.module.get(), reg_type);
+      auto eq_func = intrinsics::Eq::CreateFn(parent.module.get(), reg_val->getType());
       llvm::Value *eq_args[] = {reg_val, expected_reg_val};
       params.push_back(ir.CreateCall(eq_func, eq_args));
     }
