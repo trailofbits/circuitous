@@ -837,101 +837,99 @@ void CircuitBuilder::Circuit0::InjectISELs(std::vector<InstructionSelection> ise
   auto exit_block = llvm::BasicBlock::Create(parent.context, "", circuit0_func);
   auto prev_block = entry_block;
 
-  auto g = 0u;
   for (const auto &isel : isels) {
-    prev_block = InjectISEL(isel, prev_block, exit_block, g);
-    ++g;
+    prev_block = InjectISEL(isel,  prev_block, exit_block);
   }
-  llvm::IRBuilder<> ir(prev_block);
+
   llvm::BranchInst::Create(exit_block, prev_block);
-  ir.SetInsertPoint(exit_block);
+
+  llvm::IRBuilder<> ir(exit_block);
   ir.CreateRet(ir.CreateCall(parent.one_of_func, verified_insts));
 }
 
 llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
     const InstructionSelection &isel,
     llvm::BasicBlock *prev_block,
-    llvm::BasicBlock *exit_block,
-    uint32_t g) {
-  const auto &dl = parent.module->getDataLayout();
+    llvm::BasicBlock *exit_block) {
   // Add one basic block per lifted instruction. Each block allocates a
   // separate state structure.
   for (auto i = 0u; i < isel.instructions.size(); ++i) {
-    // TODO(lukas): Remove dependency, LiftInstruciton really renames them to this
-    //              format.
-    auto inst_func = isel.lifted_fns[i];
-    CHECK_NOTNULL(inst_func);
-
     auto inst_block = llvm::BasicBlock::Create(parent.context, "", circuit_fn);
     llvm::BranchInst::Create(inst_block, prev_block);
     prev_block = inst_block;
 
-    llvm::IRBuilder<> ir(inst_block);
-    auto state_ptr = ir.CreateAlloca(parent.state_ptr_type->getElementType());
-
-    // All of the following lambdas capture `ir` and `state_ptr`.
-    auto access_reg = [&](const auto &reg) {
-      const auto reg_type = IntegralRegisterType(*parent.module, reg);
-      const auto reg_store_type = ir.getIntNTy(
-          static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
-      auto reg_addr = reg->AddressOf(state_ptr, inst_block);
-      auto reg_addr_type = llvm::PointerType::get(reg_store_type, 0);
-      if (reg_addr->getType() != reg_addr_type) {
-        reg_addr = ir.CreateBitCast(reg_addr, reg_addr_type);
-      }
-      return std::make_tuple(reg_type, reg_addr_type, reg_store_type, reg_addr);
-    };
-
-    auto store_to_reg = [&](const auto &reg, llvm::Value *val) {
-      const auto &[reg_type, reg_addr_type, reg_store_type, reg_addr] = access_reg(reg);
-      if (reg_type != reg_store_type) {
-        val = ir.CreateZExt(val, reg_store_type);
-      }
-      ir.CreateStore(val, reg_addr);
-    };
-
-    auto load_from_reg = [&](const auto &reg) -> llvm::Value * {
-      const auto &[reg_type, reg_addr_type, reg_store_type, reg_addr] = access_reg(reg);
-      llvm::Value *val = ir.CreateLoad(reg_addr);
-      if (reg_type != reg_store_type) {
-        val = ir.CreateTrunc(val, reg_type);
-      }
-      return val;
-    };
-
-    for (auto [reg, arg, _] : reg_to_args) {
-      store_to_reg(reg, arg);
-    }
-
-    CallSemantic(ir, inst_func, state_ptr, pc, llvm::UndefValue::get(parent.mem_ptr_type));
-
-    auto params = ByteFragments(ir, ISEL_view(isel, i));
-    auto fragments_size = params.size();
-
-    // Final set of parameters are comparisons on whether or not the resulting
-    // register after the semantic has executed matches the next state of that
-    // register.
-    for (auto [reg, _, expected_reg_val] : reg_to_args) {
-      auto reg_val = load_from_reg(reg);
-
-      auto eq_func = intrinsics::Eq::CreateFn(parent.module.get(), reg_val->getType());
-      llvm::Value *eq_args[] = {reg_val, expected_reg_val};
-      params.push_back(ir.CreateCall(eq_func, eq_args));
-    }
-
-    // Call the instruction verification function. This returns `1` iff we
-    // verified the isel decoding (first argument) and if all other arguments
-    // (register comparisons) are true.
-    ir.SetInsertPoint(exit_block);
-    auto call = ir.CreateCall(parent.verify_inst_func, params);
-    AddMetadata(call, bytes_fragments_count_kind, fragments_size);
-    verified_insts.push_back(call);
+    InjectSemantic(inst_block, exit_block, ISEL_view(isel, i));
   }
   return prev_block;
 }
 
 void CircuitBuilder::Circuit0::InjectSemantic(
-    llvm::BasicBlock *inst_block, llvm::Function *inst_func) {}
+    llvm::BasicBlock *inst_block, llvm::BasicBlock *exit_block, ISEL_view isel) {
+
+  const auto &dl = parent.module->getDataLayout();
+  CHECK_NOTNULL(isel.lifted);
+
+  llvm::IRBuilder<> ir(inst_block);
+  auto state_ptr = ir.CreateAlloca(parent.state_ptr_type->getElementType());
+
+  // All of the following lambdas capture `ir` and `state_ptr`.
+  auto access_reg = [&](const auto &reg) {
+    const auto reg_type = IntegralRegisterType(*parent.module, reg);
+    const auto reg_store_type = ir.getIntNTy(
+        static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
+    auto reg_addr = reg->AddressOf(state_ptr, inst_block);
+    auto reg_addr_type = llvm::PointerType::get(reg_store_type, 0);
+    if (reg_addr->getType() != reg_addr_type) {
+      reg_addr = ir.CreateBitCast(reg_addr, reg_addr_type);
+    }
+    return std::make_tuple(reg_type, reg_addr_type, reg_store_type, reg_addr);
+  };
+
+  auto store_to_reg = [&](const auto &reg, llvm::Value *val) {
+    const auto &[reg_type, reg_addr_type, reg_store_type, reg_addr] = access_reg(reg);
+    if (reg_type != reg_store_type) {
+      val = ir.CreateZExt(val, reg_store_type);
+    }
+    ir.CreateStore(val, reg_addr);
+  };
+
+  auto load_from_reg = [&](const auto &reg) -> llvm::Value * {
+    const auto &[reg_type, reg_addr_type, reg_store_type, reg_addr] = access_reg(reg);
+    llvm::Value *val = ir.CreateLoad(reg_addr);
+    if (reg_type != reg_store_type) {
+      val = ir.CreateTrunc(val, reg_type);
+    }
+    return val;
+  };
+
+  for (auto [reg, arg, _] : reg_to_args) {
+    store_to_reg(reg, arg);
+  }
+
+  CallSemantic(ir, isel.lifted, state_ptr, pc, llvm::UndefValue::get(parent.mem_ptr_type));
+
+  auto params = ByteFragments(ir, isel);
+  auto fragments_size = params.size();
+
+  // Final set of parameters are comparisons on whether or not the resulting
+  // register after the semantic has executed matches the next state of that
+  // register.
+  for (auto [reg, _, expected_reg_val] : reg_to_args) {
+    auto reg_val = load_from_reg(reg);
+
+    auto eq_func = intrinsics::Eq::CreateFn(parent.module.get(), reg_val->getType());
+    llvm::Value *eq_args[] = {reg_val, expected_reg_val};
+    params.push_back(ir.CreateCall(eq_func, eq_args));
+  }
+
+  // Call the instruction verification function. This returns `1` iff we
+  // verified the isel decoding (first argument) and if all other arguments
+  // (register comparisons) are true.
+  ir.SetInsertPoint(exit_block);
+  auto call = ir.CreateCall(parent.verify_inst_func, params);
+  AddMetadata(call, bytes_fragments_count_kind, fragments_size);
+  verified_insts.push_back(call);
+}
 
 std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
     llvm::IRBuilder<> &ir, ISEL_view isel) {
@@ -953,7 +951,6 @@ std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
   };
 
   std::vector<llvm::Value *> out;
-
   auto rinst_size = isel.instruction.bytes.size() * 8;
 
   auto create_bit_check = [&](auto from, auto to) {
@@ -981,6 +978,7 @@ std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
     return y;
   };
 
+  // Flatten the data structure that holds information about imm regions.
   std::map<uint64_t, uint64_t> flattened_imm_regions;
   for (auto &[_, data] : isel.imms) {
     for(auto &[from, size] : data) {
@@ -988,6 +986,7 @@ std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
     }
   }
 
+  // For each chunk that is *not* an immediate region create a bitcheck.
   uint64_t current = 0;
   for (auto &[from, to] : flattened_imm_regions) {
     if (current != from) {
@@ -995,6 +994,7 @@ std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
     }
     current = to;
   }
+  // If there is some chunk left we need to include it as well.
   if (current != rinst_size) {
     out.push_back(create_bit_check(current, rinst_size));
   }
