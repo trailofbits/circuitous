@@ -916,10 +916,7 @@ llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
       store_to_reg(reg, arg);
     }
 
-    // First few arguments are the known parts of this instruction's encoding
-    // and are common across all instructions sharing the same ISEL.
-    // params.resize(num_instruction_parts);
-    params.clear();
+    CallSemantic(ir, inst_func, state_ptr, pc, llvm::UndefValue::get(parent.mem_ptr_type));
 
     params = ByteFragments(ir, ISEL_view(isel, i));
     auto fragments_size = params.size();

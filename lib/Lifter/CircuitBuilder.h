@@ -97,6 +97,15 @@ class CircuitBuilder {
                     uint32_t);
     void InjectSemantic(llvm::BasicBlock *into, llvm::Function *semantic);
 
+    void CallSemantic(llvm::IRBuilder<> &ir, llvm::Function *fn,
+                      llvm::Value *state, llvm::Value *pc, llvm::Value *memory) {
+      llvm::Value *inst_func_args[remill::kNumBlockArgs] = {};
+      inst_func_args[remill::kPCArgNum] = pc;
+      inst_func_args[remill::kMemoryPointerArgNum] = memory;
+      inst_func_args[remill::kStatePointerArgNum] = state;
+      ir.CreateCall(fn, inst_func_args);
+    }
+
     std::vector<llvm::Value *> ByteFragments(llvm::IRBuilder<> &ir, ISEL_view isel);
 
     using remill_reg = const remill::Register *;
