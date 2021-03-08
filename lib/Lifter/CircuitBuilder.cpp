@@ -330,16 +330,17 @@ void CircuitBuilder::LiftInstructions(
   InstructionLifter lifter(arch, intrinsics);
   std::vector<llvm::Function *> inst_funcs;
 
-  unsigned g = 0u;
   for (auto &group : isels) {
       CHECK(group.instructions.size() == group.encodings.size());
 
     for (auto i = 0ull; i < group.instructions.size(); ++i) {
       auto &inst = group.instructions[i];
       std::stringstream ss;
-      ss << "inst_" << g << '_' << i;
+      ss << "inst_" << inst.bytes;
 
       auto func = remill::DeclareLiftedFunction(module.get(), ss.str());
+      group.lifted_fns.push_back(func);
+
       remill::CloneBlockFunctionInto(func);
       auto block = &func->getEntryBlock();
 
@@ -371,7 +372,7 @@ void CircuitBuilder::LiftInstructions(
           break;
       }
     }
-    ++g;
+    CHECK(group.instructions.size() == group.lifted_fns.size());
   }
 
   OptimizeSilently(arch.get(), module.get(), inst_funcs);
@@ -871,8 +872,7 @@ llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
     std::stringstream ss;
     // TODO(lukas): Remove dependency, LiftInstruciton really renames them to this
     //              format.
-    ss << "inst_" << g << '_' << i;
-    const auto inst_func = parent.module->getFunction(ss.str());
+    auto inst_func = isel.lifted_fns[i];
     CHECK_NOTNULL(inst_func);
 
     auto inst_block = llvm::BasicBlock::Create(parent.context, "", circuit0_func);

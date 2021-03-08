@@ -37,9 +37,7 @@ struct InstructionSelection {
   using imm_meta_list_t = std::map<remill::Operand *, imm_meta_t>;
   std::vector<imm_meta_list_t> imms;
 
-  // Each `1` bit in this bitset represents a bit that is always zero or always
-  // one at the same position across all of the encodings in `encodings`.
-  // InstructionEncoding known_bits;
+  std::vector<llvm::Function *> lifted_fns;
 };
 
 struct ISEL_view {
