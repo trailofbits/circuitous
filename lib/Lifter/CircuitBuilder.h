@@ -44,30 +44,13 @@ struct ISEL_view {
   const remill::Instruction &instruction;
   const InstructionEncoding &encoding;
   const InstructionSelection::imm_meta_list_t &imms;
+  llvm::Function *lifted;
 
   ISEL_view(const InstructionSelection &isel, uint64_t i)
-    : instruction(isel.instructions[i]), encoding(isel.encodings[i]), imms(isel.imms[i])
+    : instruction(isel.instructions[i]), encoding(isel.encodings[i]),
+      imms(isel.imms[i]), lifted(isel.lifted_fns[i])
   {}
 };
-
-// struct EncodedInstructionPart {
-
-//   // A bit offset in an `InstructionEncoding`.
-//   unsigned offset{0};
-
-//   // The number of bits spanned by this part in an `InstructionEncoding`.
-//   unsigned num_bits{0};
-
-//   // Which instruction semantics know the values of these bits. Maps the
-//   // function name to the value of the bits.
-//   std::map<std::string, std::bitset<64>> known_by;
-
-//   // Which instruction semantics don't know the values of these bits.
-//   std::set<std::string> unknown_by;
-// };
-
-// Represents the components of an instruction decoding.
-// using EncodedInstructionParts = std::vector<EncodedInstructionPart>;
 
 enum : unsigned { kMaxNumBytesRead = 16u };
 
@@ -88,12 +71,15 @@ class CircuitBuilder {
     llvm::Function *GetFn();
     llvm::Function *Create();
 
+    // Helper functions to decouple a lot of stuff that was originally in
+    // one huge function.
     void InjectISELs(std::vector<InstructionSelection> isels);
     llvm::BasicBlock *InjectISEL(const InstructionSelection &isel,
-                    llvm::BasicBlock *,
-                    llvm::BasicBlock *,
-                    uint32_t);
-    void InjectSemantic(llvm::BasicBlock *into, llvm::Function *semantic);
+                    llvm::BasicBlock *prev,
+                    llvm::BasicBlock *exit);
+
+    // Inject ISEL into block `into`. Into `exit` a verify call is emitted.
+    void InjectSemantic(llvm::BasicBlock *into, llvm::BasicBlock *exit, ISEL_view isel);
 
     void CallSemantic(llvm::IRBuilder<> &ir, llvm::Function *fn,
                       llvm::Value *state, llvm::Value *pc, llvm::Value *memory) {
@@ -104,6 +90,8 @@ class CircuitBuilder {
       ir.CreateCall(fn, inst_func_args);
     }
 
+    // For given ISEL return back list of byte checks that should be included in
+    // the final verify.
     std::vector<llvm::Value *> ByteFragments(llvm::IRBuilder<> &ir, ISEL_view isel);
 
     using remill_reg = const remill::Register *;
@@ -121,6 +109,8 @@ class CircuitBuilder {
 
     llvm::Function *circuit_fn = nullptr;
 
+    // TODO(lukas): Eventually transform into lift context after all lift methods
+    //              are refactored out.
     CircuitBuilder &parent;
   };
 
