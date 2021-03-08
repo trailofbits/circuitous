@@ -72,13 +72,17 @@ class CircuitBuilder {
   struct Circuit0 {
     static constexpr const char *name = "circuit_0";
 
-    Circuit0(CircuitBuilder &parent_) : parent(parent_) {}
+    Circuit0(CircuitBuilder &parent_)
+      : parent(parent_)
+    {}
 
     llvm::FunctionType *FnT();
     llvm::Function *GetFn();
     llvm::Function *Create();
 
-    CircuitBuilder &parent;
+    void InjectISELs(std::vector<InstructionSelection> isels);
+    void InjectISEL(const InstructionSelection &isel);
+    void InjectSemantic();
 
     using remill_reg = const remill::Register *;
     // register - input - output
@@ -87,6 +91,10 @@ class CircuitBuilder {
     //              ordered hence vector and not map.
     std::vector<Arg> reg_to_args;
     std::vector<llvm::Argument *> inst_bytes;
+
+    llvm::Function *circuit_fn = nullptr;
+
+    CircuitBuilder &parent;
   };
 
   template <typename T>
