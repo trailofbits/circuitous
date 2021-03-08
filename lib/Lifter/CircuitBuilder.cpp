@@ -837,9 +837,6 @@ void CircuitBuilder::Circuit0::InjectISELs(std::vector<InstructionSelection> ise
   auto exit_block = llvm::BasicBlock::Create(parent.context, "", circuit0_func);
   auto prev_block = entry_block;
 
-
-
-
   auto g = 0u;
   for (const auto &isel : isels) {
     prev_block = InjectISEL(isel, prev_block, exit_block, g);
@@ -856,30 +853,20 @@ llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
     llvm::BasicBlock *prev_block,
     llvm::BasicBlock *exit_block,
     uint32_t g) {
-  // We'll be using this one a lot
-  llvm::IRBuilder<> ir(parent.context);
-
   const auto &dl = parent.module->getDataLayout();
-
-  auto circuit0_func = circuit_fn;
-
-  auto i = 0u;
-  const auto inst_name = IselName(isel.instructions.back());
-
   // Add one basic block per lifted instruction. Each block allocates a
   // separate state structure.
-  for (i = 0u; i < isel.instructions.size(); ++i) {
-    std::stringstream ss;
+  for (auto i = 0u; i < isel.instructions.size(); ++i) {
     // TODO(lukas): Remove dependency, LiftInstruciton really renames them to this
     //              format.
     auto inst_func = isel.lifted_fns[i];
     CHECK_NOTNULL(inst_func);
 
-    auto inst_block = llvm::BasicBlock::Create(parent.context, "", circuit0_func);
+    auto inst_block = llvm::BasicBlock::Create(parent.context, "", circuit_fn);
     llvm::BranchInst::Create(inst_block, prev_block);
     prev_block = inst_block;
 
-    ir.SetInsertPoint(inst_block);
+    llvm::IRBuilder<> ir(inst_block);
     auto state_ptr = ir.CreateAlloca(parent.state_ptr_type->getElementType());
 
     // All of the following lambdas capture `ir` and `state_ptr`.
@@ -942,6 +929,9 @@ llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
   }
   return prev_block;
 }
+
+void CircuitBuilder::Circuit0::InjectSemantic(
+    llvm::BasicBlock *inst_block, llvm::Function *inst_func) {}
 
 std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
     llvm::IRBuilder<> &ir, ISEL_view isel) {
@@ -1010,8 +1000,5 @@ std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
   }
   return out;
 }
-
-void CircuitBuilder::Circuit0::InjectSemantic(
-    llvm::BasicBlock *inst_block, llvm::Function *inst_func) {}
 
 }  // namespace circuitous
