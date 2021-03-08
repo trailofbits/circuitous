@@ -7,13 +7,10 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
-#include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <llvm/ADT/PostOrderIterator.h>
-#include <llvm/IR/CallSite.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Verifier.h>
-#include <llvm/Codegen/IntrinsicLowering.h>
 #pragma clang diagnostic pop
 
 namespace circuitous {
