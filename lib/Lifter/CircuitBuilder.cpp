@@ -918,7 +918,7 @@ llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
 
     CallSemantic(ir, inst_func, state_ptr, pc, llvm::UndefValue::get(parent.mem_ptr_type));
 
-    params = ByteFragments(ir, ISEL_view(isel, i));
+    auto params = ByteFragments(ir, ISEL_view(isel, i));
     auto fragments_size = params.size();
 
     // Final set of parameters are comparisons on whether or not the resulting
