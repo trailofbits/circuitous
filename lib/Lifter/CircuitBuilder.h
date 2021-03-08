@@ -42,6 +42,16 @@ struct InstructionSelection {
   // InstructionEncoding known_bits;
 };
 
+struct ISEL_view {
+  const remill::Instruction &instruction;
+  const InstructionEncoding &encoding;
+  const InstructionSelection::imm_meta_list_t &imms;
+
+  ISEL_view(const InstructionSelection &isel, uint64_t i)
+    : instruction(isel.instructions[i]), encoding(isel.encodings[i]), imms(isel.imms[i])
+  {}
+};
+
 // struct EncodedInstructionPart {
 
 //   // A bit offset in an `InstructionEncoding`.
@@ -81,8 +91,13 @@ class CircuitBuilder {
     llvm::Function *Create();
 
     void InjectISELs(std::vector<InstructionSelection> isels);
-    void InjectISEL(const InstructionSelection &isel);
-    void InjectSemantic();
+    llvm::BasicBlock *InjectISEL(const InstructionSelection &isel,
+                    llvm::BasicBlock *,
+                    llvm::BasicBlock *,
+                    uint32_t);
+    void InjectSemantic(llvm::BasicBlock *into, llvm::Function *semantic);
+
+    std::vector<llvm::Value *> ByteFragments(llvm::IRBuilder<> &ir, ISEL_view isel);
 
     using remill_reg = const remill::Register *;
     // register - input - output
@@ -92,6 +107,10 @@ class CircuitBuilder {
     std::vector<Arg> reg_to_args;
     std::vector<llvm::Argument *> inst_bytes;
     llvm::Value *pc = nullptr;
+
+    // Vector of return values, one for each result of doing a
+    // `__circuitous_verify_decode`.
+    std::vector<llvm::Value *> verified_insts;
 
     llvm::Function *circuit_fn = nullptr;
 
