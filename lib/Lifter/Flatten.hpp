@@ -32,8 +32,6 @@ struct Flattener {
   bb_map<bb_map<llvm::Value *>> pred_conds;
   std::unordered_map<llvm::SwitchInst *, bb_map<llvm::Value *>> switch_conds;
 
-  std::vector<std::pair<llvm::ReturnInst *, llvm::Value *>> ret_vals;
-  instructions_t to_remove;
   std::vector<llvm::BasicBlock *> orig_blocks;
 
   Flattener(llvm::Function *func_, llvm::Function *error_) :
@@ -127,15 +125,14 @@ struct Flattener {
 
   void HandleBBs() {
     CHECK(new_block);
-    auto &context = func->getContext();
-    llvm::IRBuilder<> ctx_b(context);
-    auto true_value = ctx_b.getTrue();
 
-    std::vector<llvm::Instruction *> insts;
-
+    // We need to keep account of them as they are processed last
+    std::unordered_map<llvm::ReturnInst *, llvm::Value *> ret_vals;
     for (auto block : orig_blocks) {
       CreatePathCondition(block);
 
+      // We are going to modify the block, we need to copy the instructions before
+      // hand - iterating the block while modifying it is a **terrible** idea.
       std::vector<llvm::Instruction *> insts;
       for (llvm::Instruction &inst : *block) {
         insts.push_back(&inst);
@@ -158,7 +155,7 @@ struct Flattener {
             auto pred_block = phi->getIncomingBlock(0);
             auto val_cond = pred_conds[block][pred_block];
             LOG_IF(FATAL, !val_cond) << "Missing reaching condition for value";
-            CHECK_NE(val_cond, true_value);
+            CHECK_NE(val_cond, ir.getTrue());
             auto true_val = phi->getIncomingValue(0);
             auto false_val = phi->getIncomingValue(1);
             sel_val = ir.CreateSelect(val_cond, true_val, false_val);
@@ -171,16 +168,15 @@ struct Flattener {
               auto pred_val = phi->getIncomingValue(i);
               auto val_cond = pred_conds[block][pred_block];
               LOG_IF(FATAL, !val_cond) << "Missing reaching condition for value";
-              CHECK_NE(val_cond, true_value);
+              CHECK_NE(val_cond, ir.getTrue());
               sel_val = ir.CreateSelect(val_cond, pred_val, sel_val);
             }
           }
 
           phi->replaceAllUsesWith(sel_val);
-          to_remove.push_back(inst);
 
         } else if (auto ret = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
-          ret_vals.emplace_back(ret, reaching_cond[block]);
+          ret_vals[ret] = reaching_cond[block];
         } else if (auto store = llvm::dyn_cast<llvm::StoreInst>(inst)) {
           // Consider following:
           //   if (x) return;
@@ -197,74 +193,63 @@ struct Flattener {
             auto guarded = ir.CreateSelect(reaching_cond[block], store->getOperand(0), original);
             ir.CreateStore(guarded, gep);
           }
-          to_remove.push_back(inst);
         } else if (!inst->isTerminator()) {
           inst->removeFromParent();
           new_block->getInstList().insert(new_block->end(), inst);
 
         } else {
-          to_remove.push_back(inst);
+          // Here only Terminator instructions such as `br` or `switch` should fall through,
+          // and we have already taken care of those.
+          CHECK(llvm::isa<llvm::BranchInst>(inst) || llvm::isa<llvm::SwitchInst>(inst));
         }
       }
     }
+    HandleReturns(ret_vals);
   }
 
-  void CopyInsts(llvm::BasicBlock *bb) {
+  void HandleReturns(const std::unordered_map<llvm::ReturnInst *, llvm::Value *> &ret_vals) {
+    CHECK(!ret_vals.empty());
+    if (1 == ret_vals.size()) {
+      auto &[ret, _] = *ret_vals.begin();
+      ret->removeFromParent();
+      new_block->getInstList().insert(new_block->end(), ret);
+      return;
+    }
+    // Create a tower of selects, where the default value is a call to
+    // `__remill_error`, which will signal downstream translation to
+    // the IR to produce set the error bit.
+    llvm::IRBuilder<> ir(new_block);
 
+    llvm::Value *args[remill::kNumBlockArgs];
+    for (auto i = 0u; i < remill::kNumBlockArgs; ++i) {
+      args[i] = llvm::UndefValue::get(remill::NthArgument(func, i)->getType());
+    }
+
+    llvm::Value *sel_val = ir.CreateCall(error, args);
+    for (auto [ret_inst, reaching_cond] : ret_vals) {
+      CHECK_NE(reaching_cond, ir.getTrue());
+      llvm::Value *ret_val = ret_inst->getReturnValue();
+      sel_val = ir.CreateSelect(reaching_cond, ret_val, sel_val);
+      ret_inst->eraseFromParent();
+    }
+
+    ir.CreateRet(sel_val);
   }
 
   void Run() {
     auto module = func->getParent();
     auto &context = func->getContext();
-    llvm::IRBuilder<> ctx_b(context);
-    auto true_value = ctx_b.getTrue();
 
-    const auto entry_block = &(func->getEntryBlock());
-    llvm::ReversePostOrderTraversal<llvm::BasicBlock *> it(entry_block);
-
-    for (llvm::BasicBlock *block : it) {
+    auto entry_block = &(func->getEntryBlock());
+    // Store these so we have them in nice iterable shape before we add a new block
+    for (llvm::BasicBlock *block : llvm::ReversePostOrderTraversal(entry_block)) {
       orig_blocks.push_back(block);
     }
 
     new_block = llvm::BasicBlock::Create(context, "", func, entry_block);
-
-    std::vector<llvm::Instruction *> insts;
-    std::vector<llvm::BasicBlock *> orig_blocks;
-
     HandleBBs();
-    // Add a final return value to the data flow function.
-    CHECK(!ret_vals.empty());
-    if (1 == ret_vals.size()) {
-      ret_vals[0].first->removeFromParent();
-      new_block->getInstList().insert(new_block->end(), ret_vals[0].first);
-      ret_vals.clear();
 
-    // Create a tower of selects, where the default value is a call to
-    // `__remill_error`, which will signal downstream translation to
-    // the IR to produce set the error bit.
-    } else {
-      llvm::IRBuilder<> ir(new_block);
-
-      llvm::Value *args[remill::kNumBlockArgs];
-      for (auto i = 0u; i < remill::kNumBlockArgs; ++i) {
-        args[i] = llvm::UndefValue::get(remill::NthArgument(func, i)->getType());
-      }
-
-      llvm::Value *sel_val = ir.CreateCall(error, args);
-      for (auto [ret_inst, reaching_cond] : ret_vals) {
-        CHECK_NE(reaching_cond, true_value);
-        llvm::Value *ret_val = ret_inst->getReturnValue();
-        sel_val = ir.CreateSelect(reaching_cond, ret_val, sel_val);
-        ret_inst->eraseFromParent();
-      }
-
-      ir.CreateRet(sel_val);
-    }
-
-    for (auto inst : to_remove) {
-      inst->eraseFromParent();
-    }
-
+    // We no longer need any of the original blocks
     for (auto block : orig_blocks) {
       block->eraseFromParent();
     }
