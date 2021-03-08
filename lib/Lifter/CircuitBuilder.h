@@ -91,6 +91,7 @@ class CircuitBuilder {
     //              ordered hence vector and not map.
     std::vector<Arg> reg_to_args;
     std::vector<llvm::Argument *> inst_bytes;
+    llvm::Value *pc = nullptr;
 
     llvm::Function *circuit_fn = nullptr;
 
