@@ -815,8 +815,15 @@ llvm::Function *CircuitBuilder::Circuit0::Create() {
     output_reg->setName(reg->name + "_next");
 
     reg_to_args.emplace_back(reg, input_reg, output_reg);
+
+    if (reg->name == parent.arch->ProgramCounterRegisterName()) {
+      pc = input_reg;
+    }
   }
 
+  // Sanity check, we are going to need pc later on.
+  CHECK(pc != nullptr) << "Couldn't find program counter register "
+                      << parent.arch->ProgramCounterRegisterName();
   return circuit_fn;
 }
 
@@ -833,19 +840,6 @@ void CircuitBuilder::Circuit0::InjectISELs(std::vector<InstructionSelection> ise
   auto entry_block = llvm::BasicBlock::Create(parent.context, "", circuit0_func);
   auto exit_block = llvm::BasicBlock::Create(parent.context, "", circuit0_func);
   auto prev_block = entry_block;
-
-  // TODO(lukas): Maybe do this when budiling the fn.
-  auto pc = [&]() -> llvm::Value *{
-    for (auto &[reg, in, _] : reg_to_args) {
-      if (reg->name == parent.arch->ProgramCounterRegisterName()) {
-        return in;
-      }
-    }
-    return nullptr;
-  }();
-
-  CHECK(pc != nullptr) << "Couldn't find program counter register "
-                       << parent.arch->ProgramCounterRegisterName();
 
   llvm::Value *inst_func_args[remill::kNumBlockArgs] = {};
   inst_func_args[remill::kPCArgNum] = pc;
