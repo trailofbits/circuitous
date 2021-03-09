@@ -5,6 +5,7 @@
 #include <circuitous/IR/IR.h>
 
 #include <ostream>
+#include <unordered_map>
 
 namespace circuitous {
 namespace {
@@ -14,15 +15,18 @@ static const char *const kBeginDOTNode =
 static const char *const kEndDOTNode = "</TR></TABLE>>];\n";
 
 class DOTPrinter : public UniqueVisitor<DOTPrinter> {
+  using value_map_t = std::unordered_map<Operation *, std::string>;
  public:
-  explicit DOTPrinter(std::ostream &os_) : os(os_) {}
+  explicit DOTPrinter(std::ostream &os_, const value_map_t &vals)
+    : os(os_), node_values(vals) {}
 
   void PrintOperands(Operation *op) {
     if (!op->operands.Empty()) {
       os << "</TR><TR>";
       for (auto sub_op : op->operands) {
-        const auto sub_id = reinterpret_cast<uintptr_t>(sub_op);
-        os << "<TD port=\"s" << sub_id << "\"> &nbsp; </TD>";
+        os << "<TD port=\"s";
+        os << reinterpret_cast<uintptr_t>(sub_op);
+        os << "\"> &nbsp; </TD>";
       }
     }
     os << kEndDOTNode;
@@ -39,7 +43,11 @@ class DOTPrinter : public UniqueVisitor<DOTPrinter> {
     if (!op->operands.Empty()) {
       os << " colspan=\"" << op->operands.Size() << "\"";
     }
-    os << ">" << op->Name() << "</TD>";
+    os << ">" << op->Name();
+    if (node_values.count(op)) {
+      os << " = " << node_values.find(op)->second;
+    }
+    os << "</TD>";
   }
 
   void VisitOperation(Operation *op) {
@@ -59,12 +67,14 @@ class DOTPrinter : public UniqueVisitor<DOTPrinter> {
 
  private:
   std::ostream &os;
+  const value_map_t &node_values;
 };
 
 }  // namespace
 
-void PrintDOT(std::ostream &os, Circuit *circuit) {
-  circuitous::DOTPrinter dot_os(os);
+void PrintDOT(std::ostream &os, Circuit *circuit,
+              const std::unordered_map<Operation *, std::string> &node_values) {
+  circuitous::DOTPrinter dot_os(os, node_values);
   dot_os.Visit(circuit);
 }
 
