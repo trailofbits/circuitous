@@ -15,15 +15,16 @@ _aflags = ["AF", "CF", "OF", "ZF", "PF", "SF"]
 _all_regs = _regs + _aflags + _e_regs + _b_regs + _a_regs
 
 class State:
-  __slots__ = ('registers', 'bytes', 'result')
+  __slots__ = ('registers', 'bytes', 'result', 'undefined')
 
-  def __init__(self, default_val = 0, default_rip = 0x1000):
+  def __init__(self, default_val = None, default_rip = 0x1000):
     self.registers = {}
     self.bytes = None
     self.result = None
     for x in _regs + _aflags:
       self.registers[x] = default_val
     self.registers["RIP"] = default_rip
+    self.undefined = set()
 
   def aflags(self, val):
     for flag in _aflags:
@@ -34,6 +35,9 @@ class State:
     mutated = copy.deepcopy(self)
     for reg, val in other.registers.items():
       mutated.set_reg(reg, val)
+    for reg in other.removed:
+      mutated.registers.pop(reg)
+      mutated.undefined.add(reg)
     return mutated
 
   def set_reg(self, reg, value):
@@ -60,13 +64,18 @@ class State:
 
 
 class Mutator:
-  __slots__ = ('registers')
+  __slots__ = ('registers', 'removed')
 
   def __init__(self):
     self.registers = {}
+    self.removed = set()
 
   def set_reg(self, reg, val):
     self.registers[reg] = val
+    return self
+
+  def unset(self, reg):
+    self.removed.add(reg)
     return self
 
   def aflags(self, val):
@@ -80,9 +89,10 @@ def MS():
 def S():
   return State()
 
-for reg in _all_regs:
+for reg in _regs + _aflags:
   setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))
   setattr(Mutator, reg, lambda s,v,r=reg : s.set_reg(r, v))
+  setattr(Mutator, "u" + reg, lambda s,r=reg : s.unset(r))
 
 
 class Acceptance():

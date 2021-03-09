@@ -55,14 +55,14 @@ def log_info(what):
 
 def check_retcode(pipes, component : str):
     try:
-      out, err = pipes.communicate(timeout = 30)
+      out, err = pipes.communicate(timeout = 45)
     except subprocess.TimeoutExpired:
       pipes.kill()
       out, err = pipes.communicate()
-      raise PipelineFail(component, out, err)
+      raise PipelineFail(component, out, err, "Timeout")
     ret_code = pipes.returncode
     if ret_code != 0:
-      raise PipelineFail(component, out, err)
+      raise PipelineFail(component, out, err, "Ret code != 0")
 
 def strip(what):
   out = []
@@ -75,13 +75,15 @@ def strip(what):
 
 
 class PipelineFail(Exception):
-  def __init__(self, component, out="", err=""):
+  def __init__(self, component, out="", err="", cause=None):
     self._out = out
     self._err = err
     self._component = component
+    self._cause = cause
 
   def __str__(self):
     msg = "Pipeline fail in: " + self._component + '\n'
+    msg += "Cause: " + "Unknown" if self._cause is None else self._cause + '\n'
     msg += "Stdout:\n" + self._out + '\n'
     msg += '\n-----\n'
     msg += "Stderr:\n" + self._err + '\n'
@@ -207,6 +209,8 @@ class Comparator:
     accept = True
     message = ""
     for reg, val in after.registers.items():
+      if reg in expected.undefined or val is None:
+        continue
       e_val = expected.registers.get(reg, input.registers.get(reg))
       if e_val != int(val):
         accept = False
@@ -256,7 +260,9 @@ class Results:
         self.results["pass"] += 1
       elif verdict == TestResult.error:
         self.results["error"] += 1
-        print(yellow("Pipeline fail in: " + e._component))
+        print(yellow(test_name + ": Pipeline fail in: " + e._component))
+        if dbg_verbose:
+          print(e)
 
 
   def failed(self, name, message):
@@ -270,7 +276,7 @@ class Results:
     if self.fragile:
       raise e
     self.results["error"] += len(tc.cases)
-    print(yellow("Pipeline fail in: " + e._component))
+    print(yellow(tc.name + ": Pipeline fail in: " + e._component))
 
 
   def report(self):

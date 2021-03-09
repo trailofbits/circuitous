@@ -44,7 +44,8 @@ class MicroxGen:
 
     t = microx.EmptyThread(o)
     for reg, val in input.registers.items():
-      t.write_register(reg, val)
+      if val is not None:
+        t.write_register(reg, val)
     t.write_register("RIP", rip)
 
     m = microx.Memory(o, 64)
