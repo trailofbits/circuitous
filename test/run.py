@@ -150,11 +150,15 @@ class Interpret(SimulateCWDMixin):
             "--json_in", case.input.as_json_file(case.name, self.test_dir),
             "--json_out", self.locate(case.name + ".result.json"),
             "--ir_in", ir]
+    if dbg_verbose:
+      args += ["--dot_out", self.locate(case.name + ".result.dot")]
+      parent.metafiles[case.name + ".result.dot"] = self.locate(case.name + ".result.dot")
     log_info("Running: " + '.' * 16 + " " + parent.name + " -> " + case.name)
     pipes = subprocess.Popen(args,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              text=True)
     check_retcode(pipes, self.component)
+    parent.metafiles[case.name + ".result.json"] = self.locate(case.name + ".result.json")
 
     self.update_state(case, self.locate(case.name + ".result.json"))
 
@@ -185,9 +189,9 @@ class TestResult:
   def as_tuple(self):
     return (self.status, self.msg, self.error_exception)
 
-class Comparator:
-  def __init__(self):
-    pass
+class Comparator(SimulateCWDMixin):
+  def __init__(self, test_dir_):
+    self.test_dir = test_dir_
 
   def compare(self, tc):
     out = {}
@@ -199,9 +203,10 @@ class Comparator:
         msg += "\n\tLift bytes: " + tc._bytes
         msg += "\n\tRun bytes: " + case.input.bytes
         # TODO(lukas): Not sure how to fix cleanly (threads broke it)
-        #if dbg_verbose:
-        #  msg += "\n\t" + os.path.abspath(case.input.as_json_file("failed."))
-        #  msg += "\n\t" + os.path.abspath(case.name + ".result.json")
+        if dbg_verbose:
+          msg += "\n\t" + tc.metafiles[case.name + ".circuit"]
+          msg += "\n\t" + tc.metafiles[case.name + ".result.json"]
+          msg += "\n\t" + tc.metafiles[case.name + ".result.dot"]
         out[case.name].msg = msg
     return out
 
@@ -324,7 +329,7 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
       try:
         Lifter(test_dir).lift_test(x, extra_args)
         Interpret(test_dir).run(x)
-        r = Comparator().compare(x)
+        r = Comparator(test_dir).compare(x)
         results.put((x.name, r))
       except PipelineFail as e:
         results.put((x.name, {"pipeline" : TestResult(TestResult.error, "", e)}))
