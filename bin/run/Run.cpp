@@ -9,17 +9,21 @@
 #include <glog/logging.h>
 #pragma clang diagnostic pop
 #include <circuitous/IR/IR.h>
+#include <circuitous/IR/Verify.hpp>
+#include <circuitous/Printers.h>
 #include <llvm/Support/JSON.h>
 #include <llvm/Support/MemoryBuffer.h>
 
 #include <fstream>
 #include <iostream>
+#include <unordered_map>
 
 #include "Interpreter.h"
 
 DEFINE_string(ir_in, "", "Path to a serialized circuitous IR file.");
-DEFINE_string(json_in, "", "Path to a input state JSON file.");
-DEFINE_string(json_out, "", "Path to a output state JSON file.");
+DEFINE_string(json_in, "", "Path to an input state JSON file.");
+DEFINE_string(json_out, "", "Path to an output state JSON file.");
+DEFINE_string(dot_out, "", "Path to dump annotated dot file.");
 
 namespace {
 
@@ -139,6 +143,15 @@ int main(int argc, char *argv[]) {
     output_obj["result"] = result;
     output_obj["inst_bytes"] = *inst;
     output << llvm::json::Value(std::move(output_obj));
+  }
+
+  if (!FLAGS_dot_out.empty()) {
+    std::unordered_map<circuitous::Operation *, std::string> values;
+    for (auto &[op, val] : run.values()) {
+      values[op] = val.toString(16, false);
+    }
+    std::ofstream os(FLAGS_dot_out);
+    circuitous::PrintDOT(os, circuit.get(), values);
   }
 
   return EXIT_SUCCESS;
