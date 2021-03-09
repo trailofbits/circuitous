@@ -81,6 +81,7 @@ int main(int argc, char *argv[]) {
     LOG(ERROR) << "Error while opening input IR file: " << std::strerror(errno);
     return EXIT_FAILURE;
   }
+
   // Read input state JSON file
   auto maybe_buff{llvm::MemoryBuffer::getFile(FLAGS_json_in)};
   if (!maybe_buff) {
@@ -88,6 +89,7 @@ int main(int argc, char *argv[]) {
                << GetErrorString(maybe_buff);
     return EXIT_FAILURE;
   }
+
   // Parse JSON
   auto maybe_json{llvm::json::parse(maybe_buff.get()->getBuffer())};
   if (!maybe_json) {
@@ -95,6 +97,7 @@ int main(int argc, char *argv[]) {
                << GetErrorString(maybe_json);
     return EXIT_FAILURE;
   }
+
   // Get top level JSON object
   auto input_obj{maybe_json.get().getAsObject()};
   CHECK(input_obj) << "Invalid input state JSON object";
@@ -106,6 +109,12 @@ int main(int argc, char *argv[]) {
   CHECK(input_regs_obj) << "Invalid input registers JSON object";
   // Deserialize circuit from binary IR file
   auto circuit{circuitous::Circuit::Deserialize(ir)};
+
+  const auto &[status, msg] = circuitous::VerifyCircuit(circuit.get());
+  if (!status) {
+    LOG(FATAL) << "Loaded IR is not valid -- Aborting.\n" << msg;
+  }
+
   circuitous::Interpreter run(circuit.get());
   // Initialize instruction bits
   run.SetInstructionBitsValue(*inst);
