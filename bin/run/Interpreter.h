@@ -63,5 +63,9 @@ class Interpreter : public Visitor<Interpreter> {
   void VisitCircuit(Circuit *op);
   // Runner
   bool Run();
+
+  std::unordered_map<Operation *, llvm::APInt> values() const {
+    return node_values;
+  }
 };
 }  // namespace circuitous
