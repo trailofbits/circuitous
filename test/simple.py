@@ -148,7 +148,7 @@ test_add = {
   .bytes(intel(["add rax, 0x10"])).tags({'reduce_imms', 'test2'})
   .case("rax+=0x20",
     I = State().RAX(0x0).aflags(0),
-    E = State().RAX(0x20).RIP(0x1004),
+    E = State().RAX(0x20).RIP(0x1004).aflags(0),
     run_bytes = intel(["add rax, 0x20"])[0],
     RG = if_has("reduce_imms", True),
     R = False
