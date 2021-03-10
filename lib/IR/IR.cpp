@@ -95,7 +95,7 @@ LLVMOperation::LLVMOperation(llvm::Instruction *inst)
 COMMON_METHODS(LLVMOperation)
 
 Operation *LLVMOperation::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->llvm_insts.Create(llvm_op_code, llvm_predicate, size);
+  return circuit->Create<LLVMOperation>(llvm_op_code, llvm_predicate, size);
 }
 
 std::string LLVMOperation::Name(void) const {
@@ -143,7 +143,7 @@ bool LLVMOperation::Equals(const Operation *that_) const {
 COMMON_METHODS(Undefined)
 STREAM_NAME(Undefined, "UNDEF_" << size)
 Operation *Undefined::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->undefs.Create(size);
+  return circuit->Create<Undefined>(size);
 }
 
 COMMON_METHODS(Constant)
@@ -166,7 +166,7 @@ bool Constant::Equals(const Operation *that_) const {
 }
 
 Operation *Constant::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->constants.Create(bits, size);
+  return circuit->Create<Constant>(bits, size);
 }
 
 BitOperation::~BitOperation(void) {}
@@ -175,7 +175,7 @@ COMMON_METHODS(Not)
 RETURN_NAME(Not, "NOT")
 
 Operation *Not::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->nots.Create(size);
+  return circuit->Create<Not>(size);
 }
 
 COMMON_METHODS(Extract)
@@ -194,35 +194,35 @@ bool Extract::Equals(const Operation *that_) const {
 }
 
 Operation *Extract::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->extracts.Create(low_bit_inc, high_bit_exc);
+  return circuit->Create<Extract>(low_bit_inc, high_bit_exc);
 }
 
 COMMON_METHODS(Concat)
 RETURN_NAME(Concat, "CONCAT")
 
 Operation *Concat::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->concats.Create(size);
+  return circuit->Create<Concat>(size);
 }
 
 COMMON_METHODS(PopulationCount)
 STREAM_NAME(PopulationCount, "POPULATION_COUNT_" << operands[0]->size)
 
 Operation *PopulationCount::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->popcounts.Create(size);
+  return circuit->Create<PopulationCount>(size);
 }
 
 COMMON_METHODS(CountLeadingZeroes)
 STREAM_NAME(CountLeadingZeroes, "COUNT_LEADING_ZEROES_" << operands[0]->size)
 
 Operation *CountLeadingZeroes::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->clzs.Create(size);
+  return circuit->Create<CountLeadingZeroes>(size);
 }
 
 COMMON_METHODS(CountTrailingZeroes)
 STREAM_NAME(CountTrailingZeroes, "COUNT_TRAILING_ZEROES_" << operands[0]->size)
 
 Operation *CountTrailingZeroes::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->ctzs.Create(size);
+  return circuit->Create<CountTrailingZeroes>(size);
 }
 
 Condition::~Condition(void) {}
@@ -231,14 +231,14 @@ COMMON_METHODS(Parity)
 STREAM_NAME(Parity, "PARITY_" << operands[0]->size)
 
 Operation *Parity::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->parities.Create();
+  return circuit->Create<Parity>();
 }
 
 COMMON_METHODS(ReadMemoryCondition)
 STREAM_NAME(ReadMemoryCondition, "CHECK_MEM_READ_ADDR_" << operands[0]->size)
 
 Operation *ReadMemoryCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->memory_reads.Create();
+  return circuit->Create<ReadMemoryCondition>();
 }
 
 COMMON_METHODS(InputRegister)
@@ -292,14 +292,14 @@ STREAM_NAME(
         << "_" << operands[kOutputRegister]->size)
 
 Operation *RegisterCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->transitions.Create();
+  return circuit->Create<RegisterCondition>();
 }
 
 COMMON_METHODS(HintCondition)
 STREAM_NAME(HintCondition, "HINT_CHECK_" << operands[kHint]->size)
 
 Operation *HintCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->hint_conds.Create();
+  return circuit->Create<HintCondition>();
 }
 
 COMMON_METHODS(PreservedCondition)
@@ -310,7 +310,9 @@ STREAM_NAME(
         << "_" << operands[kOutputRegister]->size)
 
 Operation *PreservedCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->transitions.Create();
+  // TOOD(lukas): Was originally, is it correct?
+  // return circuit->transitions.Create();
+  return circuit->Create<RegisterCondition>();
 }
 
 COMMON_METHODS(CopyCondition)
@@ -321,7 +323,8 @@ STREAM_NAME(
         << "_" << operands[kOutputRegister]->size)
 
 Operation *CopyCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->transitions.Create();
+  // TODO(lukas): Same as above
+  return circuit->Create<RegisterCondition>();
 }
 
 COMMON_METHODS(Hint)
@@ -342,32 +345,26 @@ COMMON_METHODS(DecodeCondition)
 STREAM_NAME(DecodeCondition, "INSTRUCTION_BITS_CHECK_" << operands[0]->size)
 
 Operation *DecodeCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->decode_conditions.Create();
+  return circuit->Create<DecodeCondition>();
 }
 
 COMMON_METHODS(VerifyInstruction)
 STREAM_NAME(VerifyInstruction, "ALL_OF_" << operands.Size())
 
 Operation *VerifyInstruction::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->verifications.Create();
+  return circuit->Create<VerifyInstruction>();
 }
 
 COMMON_METHODS(OnlyOneCondition)
 STREAM_NAME(OnlyOneCondition, "ONE_OF_" << operands.Size())
 
 Operation *OnlyOneCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->xor_all.Create();
+  return circuit->Create<OnlyOneCondition>();
 }
 
 Circuit::~Circuit(void) {
   operands.ClearWithoutErasure();
-#define CLEAR_FIELD(type, field) \
-  for (auto op : field) { \
-    op->operands.ClearWithoutErasure(); \
-  }
-
-  FOR_EACH_OPERATION(CLEAR_FIELD)
-#undef CLEAR_FIELD
+  AllAttributes::ClearWithoutErasure();
 }
 
 RETURN_NAME(Circuit, "RESULT")
@@ -377,11 +374,7 @@ Operation *Circuit::CloneWithoutOperands(Circuit *) const {
   return nullptr;
 }
 
-#define INIT_FIELD(type, field) , field(this)
-
 Circuit::Circuit(void)
-    : Condition(Operation::kCircuit) FOR_EACH_OPERATION(INIT_FIELD) {}
-
-#undef INIT_FIELD
+    : Condition(Operation::kCircuit), AllAttributes(this) {}
 
 }  // namespace circuitous

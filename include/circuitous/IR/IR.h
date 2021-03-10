@@ -172,8 +172,11 @@ class Operation : public User, public Def<Operation> {
     kCircuit
   };
 
+  uint64_t id() { return _id; }
+
   // The "opcode" of this.
   const unsigned op_code{0};
+  uint64_t _id = 0;
 
   // Size in bits of this instruction's "result" value. For example, a zero-
   // extension will represent the size of the output value.
@@ -194,6 +197,36 @@ class Operation : public User, public Def<Operation> {
  protected:
   explicit Operation(unsigned op_code_, unsigned size_);
 };
+
+template<typename Kind>
+static inline std::string to_string(Kind kind) {
+  switch (kind) {
+    case Operation::kConstant : return "Constant";
+    case Operation::kUndefined : return "Undefined";
+    case Operation::kLLVMOperation : return "LLVMOperation";
+    case Operation::kNot : return "Not";
+    case Operation::kExtract : return "Extract";
+    case Operation::kPopulationCount : return "PopulationCount";
+    case Operation::kParity : return "Parity";
+    case Operation::kCountLeadingZeroes : return "CountLeadingZeroes";
+    case Operation::kCountTrailingZeroes : return "CountTrailingZeroes";
+    case Operation::kReadMemoryCondition: return "ReadMemoryCondition";
+    case Operation::kInputRegister: return "InputRegister";
+    case Operation::kInputImmediate : return "InputImmediate";
+    case Operation::kInputInstructionBits : return "InputInstrunctionBits";
+    case Operation::kHintCondition : return "HintCondition";
+    case Operation::kRegisterCondition : return "RegisterCondition";
+    case Operation::kPreservedCondition : return "PreservedCondition";
+    case Operation::kCopyCondition : return "CopyCondition";
+    case Operation::kDecodeCondition : return "DecodeCondition";
+    case Operation::kVerifyInstruction : return "VerifyInstruction";
+    case Operation::kHint : return "Hint";
+    case Operation::kOnlyOneCondition : return "OnlyOneCondition";
+    case Operation::kCircuit : return "Circuit";
+    default : LOG(FATAL) << "Unknown kind" << kind; return "";
+  }
+}
+
 
 #define FORWARD_CONSTRUCTOR(base_class, derived_class) \
   inline explicit derived_class(unsigned size_) \
@@ -522,8 +555,98 @@ class OnlyOneCondition final : public Condition {
 #undef FORWARD_CONSTRUCTOR
 #undef CONDITION_CONSTRUCTOR
 
+template<typename OP>
+struct MaterializedDefList {
+  DefList<OP> data;
+
+  MaterializedDefList(User *owner) : data(owner) {}
+
+  template<typename CB>
+  void ForEachOperation(CB &&cb) {
+    for (auto op : this->data) {
+      cb(op);
+    }
+  }
+
+  template<typename CB>
+  void Apply(CB &&cb) {
+    cb(data);
+  }
+
+  auto &Attr() { return data; }
+};
+
+
+template<typename ... Ops>
+struct Attributes : MaterializedDefList<Ops> ... {
+
+  template<typename T>
+  using parent = MaterializedDefList<T>;
+
+  Attributes(User *owner) : parent<Ops>(owner)... {}
+
+  template<typename T>
+  auto &Attr() {
+    return this->parent<T>::Attr();
+  }
+
+  template<typename CB>
+  void ForEachOperation(CB cb) {
+    (parent<Ops>::ForEachOperation(cb), ...);
+  }
+
+  void ClearWithoutErasure() {
+    auto clear = [](auto &field) {
+      for (auto op : field) {
+        op->operands.ClearWithoutErasure();
+      }
+    };
+    (parent<Ops>::Apply(clear), ...);
+  }
+
+  template<typename CB>
+  void ForEachField(CB cb) {
+    (parent<Ops>::Apply(cb), ...);
+  }
+};
+
+using AllAttributes =
+  Attributes<Constant, Undefined, LLVMOperation, Not, Concat,
+             CountLeadingZeroes, CountTrailingZeroes, Extract, PopulationCount,
+             Parity, InputRegister, InputImmediate,  OutputRegister, InputInstructionBits,
+             RegisterCondition, PreservedCondition, CopyCondition, DecodeCondition,
+             VerifyInstruction, ReadMemoryCondition, OnlyOneCondition,
+             Hint, HintCondition>;
+
+// TODO(lukas): Get rid of this
+#define FOR_EACH_OPERATION(what) \
+  what(Constant) \
+  what(Undefined) \
+  what(LLVMOperation) \
+  what(Not) \
+  what(Concat) \
+  what(CountLeadingZeroes) \
+  what(CountTrailingZeroes) \
+  what(Extract) \
+  what(PopulationCount) \
+  what(Parity) \
+  what(InputRegister) \
+  what(InputImmediate) \
+  what(OutputRegister) \
+  what(InputInstructionBits) \
+  what(RegisterCondition) \
+  what(PreservedCondition) \
+  what(CopyCondition) \
+  what(DecodeCondition) \
+  what(VerifyInstruction) \
+  what(ReadMemoryCondition) \
+  what(OnlyOneCondition) \
+  what(Hint) \
+  what(HintCondition)
+
+
 // Represents the results of verifying a circuit.
-class Circuit : public Condition {
+class Circuit : public Condition, AllAttributes {
  public:
   virtual ~Circuit(void);
 
@@ -558,53 +681,19 @@ class Circuit : public Condition {
 
   // clang-format off
 
-#define FOR_EACH_OPERATION(cb) \
-  cb(Constant, constants) \
-  cb(Undefined, undefs) \
-  cb(LLVMOperation, llvm_insts) \
-  cb(Not, nots) \
-  cb(Concat, concats) \
-  cb(CountLeadingZeroes, clzs) \
-  cb(CountTrailingZeroes, ctzs) \
-  cb(Extract, extracts) \
-  cb(PopulationCount, popcounts) \
-  cb(Parity, parities) \
-  cb(InputRegister, input_regs) \
-  cb(InputImmediate, input_imms) \
-  cb(OutputRegister, output_regs) \
-  cb(InputInstructionBits, inst_bits) \
-  cb(RegisterCondition, transitions) \
-  cb(PreservedCondition, preserved_regs) \
-  cb(CopyCondition, copied_regs) \
-  cb(DecodeCondition, decode_conditions) \
-  cb(VerifyInstruction, verifications) \
-  cb(ReadMemoryCondition, memory_reads) \
-  cb(OnlyOneCondition, xor_all) \
-  cb(Hint, hints) \
-  cb(HintCondition, hint_conds)
+  using AllAttributes::ForEachOperation;
 
-  // clang-format on
+  uint64_t ids = 0;
 
-#define DECLARE_MEMBER(type, field) DefList<type> field;
-
-  FOR_EACH_OPERATION(DECLARE_MEMBER)
-#undef DECLARE_MEMBER
-
-  template <typename CB>
-  void ForEachOperation(CB cb) {
-    std::vector<Operation *> ops;
-
-#define PUSH_OP(type, field) \
-  for (auto op : field) { \
-    ops.push_back(op); \
+  template<typename T> auto &Attr() {
+    static_assert(std::is_base_of_v<Operation, T>);
+    return this->AllAttributes::Attr<T>();
   }
 
-    FOR_EACH_OPERATION(PUSH_OP)
-#undef PUSH_OP
-
-    for (auto op : ops) {
-      cb(op);
-    }
+  template<typename T, typename ...Args> T* Create(Args &&...args) {
+    auto op = Attr<T>().Create(std::forward<Args>(args)...);
+    op->_id = ++ids;
+    return op;
   }
 
  private:
@@ -622,7 +711,7 @@ class Visitor {
   void Visit(Operation *op) {
     auto self = static_cast<Derived *>(this);
     switch (const auto op_code = op->op_code; op_code) {
-#define VISITOR_CASE(type, field) \
+#define VISITOR_CASE(type) \
   case Operation::k##type: \
     if (auto typed_op = dynamic_cast<type *>(op); typed_op) { \
       self->Visit##type(typed_op); \
@@ -633,20 +722,20 @@ class Visitor {
     break;
 
       FOR_EACH_OPERATION(VISITOR_CASE)
-      VISITOR_CASE(Circuit, ...)
+      VISITOR_CASE(Circuit)
 #undef VISITOR_CASE
       default: LOG(FATAL) << "Unhandled operation: " << op->Name();
     }
   }
 
-#define DECLARE_VISITOR(type, field) \
+#define DECLARE_VISITOR(type) \
   void Visit##type(type *op) { \
     auto self = static_cast<Derived *>(this); \
     self->VisitOperation(op); \
   }
 
   FOR_EACH_OPERATION(DECLARE_VISITOR)
-  DECLARE_VISITOR(Circuit, ...)
+  DECLARE_VISITOR(Circuit)
 #undef DECLARE_VISITOR
 };
 

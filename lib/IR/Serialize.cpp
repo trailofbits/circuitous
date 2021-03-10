@@ -190,7 +190,7 @@ class DeserializeVisitor {
 
   Operation *Decode(unsigned op_code) {
     switch (op_code) {
-#define GOTO_VISITOR(type, field) \
+#define GOTO_VISITOR(type) \
   case Operation::k##type: return this->Decode##type();
 
       FOR_EACH_OPERATION(GOTO_VISITOR)
@@ -333,14 +333,14 @@ class DeserializeVisitor {
     Read(size);
     Read(reg_name);
     DEBUG_READ("}");
-    return circuit->input_regs.Create(size, std::move(reg_name));
+    return circuit->Create<InputRegister>(size, std::move(reg_name));
   }
 
   InputImmediate *DecodeInputImmediate(void) {
     unsigned size = 0;
     DEBUG_READ("{INIMM:");
     Read(size);
-    auto self = circuit->input_imms.Create(size);
+    auto self = circuit->Create<InputImmediate>(size);
     Read(self->operands);
     CHECK(self->operands.Size() == 1);
     DEBUG_READ("}");
@@ -354,7 +354,7 @@ class DeserializeVisitor {
     Read(size);
     Read(bits);
     DEBUG_READ("}");
-    return circuit->constants.Create(std::move(bits), size);
+    return circuit->Create<Constant>(std::move(bits), size);
   }
 
   OutputRegister *DecodeOutputRegister(void) {
@@ -364,7 +364,7 @@ class DeserializeVisitor {
     Read(size);
     Read(reg_name);
     DEBUG_READ("}");
-    return circuit->output_regs.Create(size, std::move(reg_name));
+    return circuit->Create<OutputRegister>(size, std::move(reg_name));
   }
 
   Extract *DecodeExtract(void) {
@@ -376,7 +376,7 @@ class DeserializeVisitor {
     Read(low_bit_inc);
     Read(value);
     DEBUG_READ("}");
-    auto op = circuit->extracts.Create(low_bit_inc, high_bit_exc);
+    auto op = circuit->Create<Extract>(low_bit_inc, high_bit_exc);
     op->operands.AddUse(value);
     return op;
   }
@@ -389,53 +389,53 @@ class DeserializeVisitor {
     Read(size);
     Read(llvm_op_code);
     Read(llvm_predicate);
-    auto op = circuit->llvm_insts.Create(llvm_op_code, llvm_predicate, size);
+    auto op = circuit->Create<LLVMOperation>(llvm_op_code, llvm_predicate, size);
     Read(op->operands);
     DEBUG_READ("}");
     return op;
   }
 
-#define DECODE_GENERIC(cls, field) \
+#define DECODE_GENERIC(cls) \
   cls *Decode##cls(void) { \
     unsigned size = 0; \
     DEBUG_READ("{size="); \
     Read(size); \
-    auto op = circuit->field.Create(size); \
+    auto op = circuit->Create<cls>(size); \
     DEBUG_READ(";operands="); \
     Read(op->operands); \
     DEBUG_READ("}"); \
     return op; \
   }
 
-#define DECODE_CONDITION(cls, field) \
+#define DECODE_CONDITION(cls) \
   cls *Decode##cls(void) { \
     unsigned size = 0; \
     DEBUG_READ("{size="); \
     Read(size); \
     CHECK_EQ(size, 1); \
-    auto op = circuit->field.Create(); \
+    auto op = circuit->Create<cls>(); \
     DEBUG_READ(";operands="); \
     Read(op->operands); \
     DEBUG_READ("}"); \
     return op; \
   }
 
-  DECODE_GENERIC(Undefined, undefs)
-  DECODE_GENERIC(Not, nots)
-  DECODE_GENERIC(Concat, concats)
-  DECODE_GENERIC(PopulationCount, popcounts)
-  DECODE_CONDITION(Parity, parities)
-  DECODE_GENERIC(CountLeadingZeroes, clzs)
-  DECODE_GENERIC(CountTrailingZeroes, ctzs)
-  DECODE_CONDITION(ReadMemoryCondition, memory_reads)
-  DECODE_CONDITION(HintCondition, hint_conds)
-  DECODE_CONDITION(RegisterCondition, transitions)
-  DECODE_CONDITION(PreservedCondition, preserved_regs)
-  DECODE_CONDITION(CopyCondition, copied_regs)
-  DECODE_GENERIC(InputInstructionBits, inst_bits)
-  DECODE_CONDITION(DecodeCondition, decode_conditions)
-  DECODE_GENERIC(Hint, hints)
-  DECODE_CONDITION(VerifyInstruction, verifications)
+  DECODE_GENERIC(Undefined)
+  DECODE_GENERIC(Not)
+  DECODE_GENERIC(Concat)
+  DECODE_GENERIC(PopulationCount)
+  DECODE_CONDITION(Parity)
+  DECODE_GENERIC(CountLeadingZeroes)
+  DECODE_GENERIC(CountTrailingZeroes)
+  DECODE_CONDITION(ReadMemoryCondition)
+  DECODE_CONDITION(HintCondition)
+  DECODE_CONDITION(RegisterCondition)
+  DECODE_CONDITION(PreservedCondition)
+  DECODE_CONDITION(CopyCondition)
+  DECODE_GENERIC(InputInstructionBits)
+  DECODE_CONDITION(DecodeCondition)
+  DECODE_GENERIC(Hint)
+  DECODE_CONDITION(VerifyInstruction)
 
   Operation *DecodeOnlyOneCondition(void) {
     LOG(FATAL) << "OnlyOneCondition nodes should not appear in serialized file";
@@ -456,7 +456,7 @@ class DeserializeVisitor {
 
 void Circuit::Serialize(std::ostream &os) {
   SerializeVisitor vis(os);
-  for (auto xor_all_op : xor_all) {
+  for (auto xor_all_op : Attr<OnlyOneCondition>()) {
     for (auto op : xor_all_op->operands) {
       vis.Write(op);
     }
@@ -470,7 +470,7 @@ void Circuit::Serialize(
   std::unordered_map<std::string, SerializeVisitor> visitors;
 
   std::string topology;
-  for (auto xor_all_op : xor_all) {
+  for (auto xor_all_op : Attr<OnlyOneCondition>()) {
 
     // Each of `op` should be a single `VerifyInstruction` operation.
     for (auto op : xor_all_op->operands) {
@@ -510,29 +510,29 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   std::unordered_map<std::string, OutputRegister *> out_regs;
   std::unordered_map<std::string, InputRegister *> in_regs;
   std::unordered_set<std::string> seen_reg_names;
-  for (auto in_reg : circuit->input_regs) {
+  for (auto in_reg : circuit->Attr<InputRegister>()) {
     in_regs.emplace(in_reg->reg_name, in_reg);
   }
 
-  for (auto out_reg : circuit->output_regs) {
+  for (auto out_reg : circuit->Attr<OutputRegister>()) {
     out_regs.emplace(out_reg->reg_name, out_reg);
   }
 
   for (const auto &[name, op] : in_regs) {
     if (!out_regs.count(name)) {
       out_regs.emplace(name,
-                       circuit->output_regs.Create(op->size, op->reg_name));
+                       circuit->Create<OutputRegister>(op->size, op->reg_name));
     }
   }
 
   for (const auto &[name, op] : out_regs) {
     if (!in_regs.count(name)) {
-      in_regs.emplace(name, circuit->input_regs.Create(op->size, op->reg_name));
+      in_regs.emplace(name, circuit->Create<InputRegister>(op->size, op->reg_name));
     }
   }
 
   std::unordered_map<std::string, PreservedCondition *> preserved_regs;
-  for (auto cond : circuit->preserved_regs) {
+  for (auto cond : circuit->Attr<PreservedCondition>()) {
     auto lhs = dynamic_cast<InputRegister *>(cond->operands[0]);
     auto rhs = dynamic_cast<OutputRegister *>(cond->operands[1]);
     CHECK_NOTNULL(lhs);
@@ -541,7 +541,7 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
     preserved_regs.emplace(lhs->reg_name, cond);
   }
 
-  auto xor_all = circuit->xor_all.Create();
+  auto xor_all = circuit->Create<OnlyOneCondition>();
   circuit->operands.AddUse(xor_all);
 
   for (auto [offset, op] : vis.offset_to_op) {
@@ -581,7 +581,7 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
       if (!seen_reg_names.count(name)) {
         auto &cond = preserved_regs[name];
         if (!cond) {
-          cond = circuit->preserved_regs.Create();
+          cond = circuit->Create<PreservedCondition>();
           cond->operands.AddUse(in_regs[name]);
           cond->operands.AddUse(out_regs[name]);
         }
@@ -596,12 +596,22 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
 }
 
 void Circuit::RemoveUnused(void) {
+  uint64_t num_removed = 0;
+  auto clear = [&](auto &field) {
+    num_removed += field.RemoveUnused();
+  };
+  while (num_removed) {
+    this->ForEachField(clear);
+  }
+
+/**
 #define CLEAR_UNUSED(cls, field) num_removed += field.RemoveUnused();
   for (auto num_removed = 1ull; num_removed;) {
     num_removed = 0;
     FOR_EACH_OPERATION(CLEAR_UNUSED)
   }
 #undef CLEAR_UNUSED
+**/
 }
 
 }  // namespace circuitous
