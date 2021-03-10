@@ -51,7 +51,7 @@ MergeLeaves(Circuit *circuit, const OpUseList &op_uses,
   // NOTE(pag): We don't cache these, because otherwise if one operation
   //            does something like `add a, a` then it might not be mergable
   //            with another one that does `add b, c`.
-  auto hint = circuit->hints.Create(first_op->size);
+  auto hint = circuit->Create<Hint>(first_op->size);
 
   Operation *last_op = nullptr;
   Operation *last_check = nullptr;
@@ -62,7 +62,7 @@ MergeLeaves(Circuit *circuit, const OpUseList &op_uses,
     if (last_op == op) {
       check = last_check;
     } else {
-      check = circuit->hint_conds.Create();
+      check = circuit->Create<HintCondition>();
       check->operands.AddUse(op);
       check->operands.AddUse(hint);
       last_check = check;
@@ -158,7 +158,7 @@ static Operation *Merge(Circuit *circuit, const OpUseList &op_uses,
   Operation *merged_op = nullptr;
 
   switch (op_code) {
-#define CASE(cls, field) \
+#define CASE(cls) \
   case Operation::k##cls: \
     merged_op = first_op->CloneWithoutOperands(circuit); \
     break;
@@ -222,7 +222,7 @@ ExtractCommonTopologies(Circuit *circuit, const OpUseList &op_uses,
 // shared by multiple different expressions.
 bool ExtractCommonTopologies(Circuit *circuit) {
 
-  circuit->transitions.RemoveUnused();
+  circuit->Attr<RegisterCondition>().RemoveUnused();
 
   std::unordered_map<Operation *, VerifyList> values_by_inst;
 
@@ -231,7 +231,7 @@ bool ExtractCommonTopologies(Circuit *circuit) {
   // NOTE(pag): We need to keep things "context-sensitive" with respect to the
   //            `VerifyInstruction` so that we can later add hint conditions
   //            into them.
-  for (auto verification : circuit->verifications) {
+  for (auto verification : circuit->Attr<VerifyInstruction>()) {
     for (auto op : verification->operands) {
       if (dynamic_cast<RegisterCondition *>(op) ||
           dynamic_cast<HintCondition *>(op)) {
