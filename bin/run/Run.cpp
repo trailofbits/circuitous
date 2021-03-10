@@ -142,7 +142,7 @@ int main(int argc, char *argv[]) {
                << ec.message();
     // Dump output register values to JSON
     llvm::json::Object output_regs_obj;
-    for (auto reg : circuit->output_regs) {
+    for (auto reg : circuit->Attr<circuitous::OutputRegister>()) {
       auto key{reg->reg_name};
       output_regs_obj[key] = std::to_string(run.GetOutputRegisterValue(key));
     }
