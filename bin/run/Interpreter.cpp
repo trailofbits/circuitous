@@ -26,13 +26,13 @@ llvm::APInt &Interpreter::GetNodeVal(Operation *op) {
 }
 
 void Interpreter::SetInstructionBitsValue(const std::string &bits) {
-  auto inst{circuit->inst_bits[0]};
+  auto inst = circuit->Attr<InputInstructionBits>()[0];
   SetNodeVal(inst, llvm::APInt(inst->size, bits, /*radix=*/16U));
 }
 
 void Interpreter::SetInputRegisterValue(const std::string &name,
                                         uint64_t bits) {
-  for (auto reg : circuit->input_regs) {
+  for (auto reg : circuit->Attr<InputRegister>()) {
     if (reg->reg_name == name) {
       SetNodeVal(reg, llvm::APInt(reg->size, bits));
       return;
@@ -42,7 +42,7 @@ void Interpreter::SetInputRegisterValue(const std::string &name,
 }
 
 uint64_t Interpreter::GetOutputRegisterValue(const std::string &name) {
-  for (auto reg : circuit->output_regs) {
+  for (auto reg : circuit->Attr<OutputRegister>()) {
     if (reg->reg_name == name) {
       return GetNodeVal(reg).getLimitedValue();
     }
@@ -356,7 +356,7 @@ bool Interpreter::Run() {
   // Save initial node values
   auto node_values_init{node_values};
   // Run verification nodes until one succeeds
-  for (auto op : circuit->verifications) {
+  for (auto op : circuit->Attr<VerifyInstruction>()) {
     // Re-initialize node values
     node_values.swap(node_values_init);
     // Reset
