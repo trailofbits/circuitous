@@ -109,7 +109,7 @@ struct Verifier {
     bool out = true;
     std::unordered_map<Operation *, std::unordered_set<VerifyInstruction *>> hint_to_ctxs;
     std::unordered_map<Operation *, VerifyInstruction *> ctx;
-    for (auto verif : circuit->verifications) {
+    for (auto verif : circuit->Attr<VerifyInstruction>()) {
       for (auto op : verif->operands) {
         if (op->op_code == Operation::kHintCondition) {
           ctx[op] = verif;
