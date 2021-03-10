@@ -42,7 +42,7 @@ class Operation : public User, public Def<Operation> {
  public:
   virtual ~Operation(void) = default;
 
-  virtual std::string Name(void) const = 0;
+  virtual std::string Name(void) const;
   virtual Operation *CloneWithoutOperands(Circuit *) const = 0;
 
   virtual bool Equals(const Operation *that) const;
@@ -169,7 +169,10 @@ class Operation : public User, public Def<Operation> {
     // Output value (0 or 1) of the circuit. This is really just a specialized
     // equivalence class, where all the inputs are equivalent ways of expressing
     // the circuit, of which the minimum cost one is chosen.
-    kCircuit
+    kCircuit,
+
+    // Invalid -- you cannot have this tag present in you tree.
+    kInvalid
   };
 
   uint64_t id() { return _id; }
@@ -194,6 +197,8 @@ class Operation : public User, public Def<Operation> {
     }
   }
 
+  static constexpr inline uint32_t kind = kInvalid;
+
  protected:
   explicit Operation(unsigned op_code_, unsigned size_);
 };
@@ -201,45 +206,47 @@ class Operation : public User, public Def<Operation> {
 template<typename Kind>
 static inline std::string to_string(Kind kind) {
   switch (kind) {
-    case Operation::kConstant : return "Constant";
-    case Operation::kUndefined : return "Undefined";
-    case Operation::kLLVMOperation : return "LLVMOperation";
-    case Operation::kNot : return "Not";
-    case Operation::kExtract : return "Extract";
-    case Operation::kPopulationCount : return "PopulationCount";
-    case Operation::kParity : return "Parity";
-    case Operation::kCountLeadingZeroes : return "CountLeadingZeroes";
-    case Operation::kCountTrailingZeroes : return "CountTrailingZeroes";
-    case Operation::kReadMemoryCondition: return "ReadMemoryCondition";
-    case Operation::kInputRegister: return "InputRegister";
-    case Operation::kInputImmediate : return "InputImmediate";
-    case Operation::kInputInstructionBits : return "InputInstrunctionBits";
-    case Operation::kHintCondition : return "HintCondition";
-    case Operation::kRegisterCondition : return "RegisterCondition";
-    case Operation::kPreservedCondition : return "PreservedCondition";
-    case Operation::kCopyCondition : return "CopyCondition";
-    case Operation::kDecodeCondition : return "DecodeCondition";
-    case Operation::kVerifyInstruction : return "VerifyInstruction";
-    case Operation::kHint : return "Hint";
-    case Operation::kOnlyOneCondition : return "OnlyOneCondition";
-    case Operation::kCircuit : return "Circuit";
-    default : LOG(FATAL) << "Unknown kind" << kind; return "";
+    case Operation::kConstant : return "CONSTANT";
+    case Operation::kUndefined : return "UNDEFINED";
+    case Operation::kLLVMOperation : return "LLVMOPERATION";
+    case Operation::kNot : return "NOT";
+    case Operation::kExtract : return "EXTRACT";
+    case Operation::kConcat : return "CONCAT";
+    case Operation::kPopulationCount : return "POPULATION_COUNT";
+    case Operation::kParity : return "PARITY";
+    case Operation::kCountLeadingZeroes : return "COUNT_LEADING_ZEROES";
+    case Operation::kCountTrailingZeroes : return "COUNT_TRAILING_ZEROES";
+    case Operation::kReadMemoryCondition: return "READ_MEMORY_CONDITION";
+    case Operation::kInputRegister: return "INPUT_REGISTER";
+    case Operation::kInputImmediate : return "INPUT_IMMEDIATE";
+    case Operation::kInputInstructionBits : return "INSTRUNCTION_BITS";
+    case Operation::kHintCondition : return "HINT_CONDITION";
+    case Operation::kRegisterCondition : return "OUTPUT_REGISTER_CHECK";
+    case Operation::kPreservedCondition : return "PRESERVED_REGISTER_CHECK";
+    case Operation::kCopyCondition : return "COPIED_REGISTER_CHECK";
+    case Operation::kDecodeCondition : return "INSTRUCTION_BITS_CHECK";
+    case Operation::kVerifyInstruction : return "ALL_OF";
+    case Operation::kHint : return "HINT";
+    case Operation::kOnlyOneCondition : return "ONE_OF";
+    case Operation::kCircuit : return "RESULT";
+    case Operation::kInvalid : return "INVALID";
+    default : LOG(FATAL) << "Unknown kind " << kind; return "";
   }
 }
 
-
 #define FORWARD_CONSTRUCTOR(base_class, derived_class) \
   inline explicit derived_class(unsigned size_) \
-      : base_class(Operation::k##derived_class, size_) {}
+      : base_class(derived_class::kind, size_) {}
 
 
 #define CONDITION_CONSTRUCTOR(derived_class) \
   inline explicit derived_class(void) \
-      : Condition(Operation::k##derived_class) {}
+      : Condition(derived_class::kind) {}
 
 
 // Mirrors an instruction from LLVM. `op_code` is `inst->getOpcode()`.
 class LLVMOperation final : public Operation {
+  static constexpr inline uint32_t kind = kLLVMOperation;
  public:
   explicit LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
                          unsigned size_);
@@ -258,6 +265,7 @@ class LLVMOperation final : public Operation {
 
 // An undefined value.
 class Undefined final : public Operation {
+  static constexpr inline uint32_t kind = kUndefined;
  public:
   inline explicit Undefined(unsigned size_)
       : Operation(Operation::kUndefined, size_) {}
@@ -270,6 +278,7 @@ class Undefined final : public Operation {
 };
 
 class Constant final : public Operation {
+  static constexpr inline uint32_t kind = kConstant;
  public:
   inline explicit Constant(std::string bits_, unsigned size_)
       : Operation(Operation::kConstant, size_),
@@ -287,7 +296,10 @@ class Constant final : public Operation {
 
 // Some bitwise operation; must be extended.
 class BitOperation : public Operation {
+  static constexpr inline uint32_t kind = kInvalid;
+
  public:
+  std::string Name() const override;
 
  protected:
   using Operation::Operation;
@@ -295,16 +307,16 @@ class BitOperation : public Operation {
 
 // Flip all bits in a bitvector.
 class Not final : public BitOperation {
+  static constexpr inline uint32_t kind = kNot;
  public:
   FORWARD_CONSTRUCTOR(BitOperation, Not)
 
-
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
 };
 
 // Extract bits.
 class Extract final : public BitOperation {
+  static constexpr inline uint32_t kind = kExtract;
  public:
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -322,39 +334,38 @@ class Extract final : public BitOperation {
 
 // Concatenate two bitvectors.
 class Concat final : public BitOperation {
+  static constexpr inline uint32_t kind = kConcat;
  public:
   FORWARD_CONSTRUCTOR(BitOperation, Concat)
 
-
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
 };
 
 // Population count of some bits. Needed for things like parity count
 // calculation.
 class PopulationCount final : public BitOperation {
+  static constexpr inline uint32_t kind = kPopulationCount;
  public:
   FORWARD_CONSTRUCTOR(BitOperation, PopulationCount)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
 };
 
 // Count the leading zeroes of some bits.
 class CountLeadingZeroes final : public BitOperation {
+  static constexpr inline uint32_t kind = kCountLeadingZeroes;
  public:
   FORWARD_CONSTRUCTOR(BitOperation, CountLeadingZeroes)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
 };
 
 class CountTrailingZeroes final : public BitOperation {
+  static constexpr inline uint32_t kind = kCountTrailingZeroes;
  public:
   FORWARD_CONSTRUCTOR(BitOperation, CountTrailingZeroes)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
 };
 
 class Condition : public Operation {
@@ -366,7 +377,9 @@ class Condition : public Operation {
 
 // Returns `0` if there are an even numbers of bits in a bit string, and `1`
 // if there are an odd number of bits in a bit string.
+// TODO(lukas): Should this not inherit from BitOperation?
 class Parity final : public Condition {
+  static constexpr inline uint32_t kind = kParity;
  public:
   CONDITION_CONSTRUCTOR(Parity)
 
@@ -376,6 +389,7 @@ class Parity final : public Condition {
 
 // Condition that verifies that some computed address matches a hint address.
 class ReadMemoryCondition final : public Condition {
+  static constexpr inline uint32_t kind = kReadMemoryCondition;
  public:
   enum : unsigned {
     kDynamicAddress = 0u,
@@ -389,6 +403,7 @@ class ReadMemoryCondition final : public Condition {
 
 // An input register.
 class InputRegister : public Operation {
+  static constexpr inline uint32_t kind = kInputRegister;
  public:
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -403,7 +418,8 @@ class InputRegister : public Operation {
 };
 
 class InputImmediate : public Operation {
-  public:
+  static constexpr inline uint32_t kind = kInputImmediate;
+ public:
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -415,6 +431,7 @@ class InputImmediate : public Operation {
 
 // An output register.
 class OutputRegister : public Operation {
+  static constexpr inline uint32_t kind = kOutputRegister;
  public:
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -431,6 +448,7 @@ class OutputRegister : public Operation {
 // A comparison between the proposed output value of a register, and the
 // output register itself.
 class RegisterCondition final : public Condition {
+  static constexpr inline uint32_t kind = kRegisterCondition;
  public:
   enum : unsigned { kDynamicRegisterValue = 0u, kOutputRegister = 1u };
 
@@ -443,6 +461,7 @@ class RegisterCondition final : public Condition {
 // A comparison between the proposed output value of a register, and the
 // output register itself.
 class HintCondition final : public Condition {
+  static constexpr inline uint32_t kind = kHintCondition;
  public:
   enum : unsigned { kDynamicValue = 0u, kHint = 1u };
 
@@ -454,6 +473,7 @@ class HintCondition final : public Condition {
 
 // Says that we are preserving the value of a register.
 class PreservedCondition final : public Condition {
+  static constexpr inline uint32_t kind = kPreservedCondition;
  public:
   enum : unsigned { kInputRegister = 0u, kOutputRegister = 1u };
 
@@ -465,6 +485,7 @@ class PreservedCondition final : public Condition {
 
 // Says that we are moving one register to a different register.
 class CopyCondition final : public Condition {
+  static constexpr inline uint32_t kind = kCopyCondition;
  public:
   enum : unsigned { kOtherInputRegister = 0u, kOutputRegister = 1u };
 
@@ -476,6 +497,7 @@ class CopyCondition final : public Condition {
 
 // Input bits that
 class InputInstructionBits : public Operation {
+  static constexpr inline uint32_t kind = kInputInstructionBits;
  public:
   FORWARD_CONSTRUCTOR(Operation, InputInstructionBits)
 
@@ -486,6 +508,7 @@ class InputInstructionBits : public Operation {
 // Checks whether or not some instruction bits (second operand) equals some
 // proposed values.
 class DecodeCondition final : public Condition {
+  static constexpr inline uint32_t kind = kDecodeCondition;
  public:
   CONDITION_CONSTRUCTOR(DecodeCondition)
 
@@ -496,6 +519,7 @@ class DecodeCondition final : public Condition {
 // A hint value is an input to the circuit. It can serve several purposes,
 // e.g.
 class Hint final : public Operation {
+  static constexpr inline uint32_t kind = kHint;
  public:
 
   inline explicit Hint(unsigned size_)
@@ -511,6 +535,7 @@ class Hint final : public Operation {
 };
 
 class VerifyInstruction final : public Condition {
+  static constexpr inline uint32_t kind = kVerifyInstruction;
  public:
   CONDITION_CONSTRUCTOR(VerifyInstruction)
 
@@ -519,6 +544,7 @@ class VerifyInstruction final : public Condition {
 };
 
 class OnlyOneCondition final : public Condition {
+  static constexpr inline uint32_t kind = kOnlyOneCondition;
  public:
   CONDITION_CONSTRUCTOR(OnlyOneCondition)
 
@@ -625,7 +651,6 @@ class Circuit : public Condition, AllAttributes {
   virtual ~Circuit(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
 
   using CircuitPtr = std::unique_ptr<Circuit>;
 

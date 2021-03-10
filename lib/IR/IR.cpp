@@ -34,6 +34,13 @@ static unsigned Predicate(llvm::Instruction *inst) {
   }
 }
 
+template<typename ...Args>
+std::string StreamName(Args &&... args) {
+  std::stringstream ss;
+  (ss << ... << args);
+  return ss.str();
+}
+
 }  // namespace
 
 
@@ -67,7 +74,9 @@ bool Operation::Equals(const Operation *that) const {
   return true;
 }
 
-
+std::string Operation::Name(void) const {
+  return to_string(op_code);
+}
 
 LLVMOperation::LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
                              unsigned size_)
@@ -83,11 +92,6 @@ LLVMOperation::LLVMOperation(llvm::Instruction *inst)
     std::stringstream ss; \
     ss << __VA_ARGS__; \
     return ss.str(); \
-  }
-
-#define RETURN_NAME(cls, ...) \
-  std::string cls::Name(void) const { \
-    return __VA_ARGS__; \
   }
 
 
@@ -160,11 +164,14 @@ bool Constant::Equals(const Operation *that_) const {
   }
 }
 
+std::string BitOperation::Name() const {
+  CHECK(operands.Size() != 0);
+  return StreamName(to_string(op_code), "_", operands[0]->size);
+}
+
 Operation *Constant::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<Constant>(bits, size);
 }
-
-RETURN_NAME(Not, "NOT")
 
 Operation *Not::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<Not>(size);
@@ -188,34 +195,29 @@ Operation *Extract::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<Extract>(low_bit_inc, high_bit_exc);
 }
 
-RETURN_NAME(Concat, "CONCAT")
-
 Operation *Concat::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<Concat>(size);
 }
-
-STREAM_NAME(PopulationCount, "POPULATION_COUNT_" << operands[0]->size)
 
 Operation *PopulationCount::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<PopulationCount>(size);
 }
 
-STREAM_NAME(CountLeadingZeroes, "COUNT_LEADING_ZEROES_" << operands[0]->size)
-
 Operation *CountLeadingZeroes::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<CountLeadingZeroes>(size);
 }
-
-STREAM_NAME(CountTrailingZeroes, "COUNT_TRAILING_ZEROES_" << operands[0]->size)
 
 Operation *CountTrailingZeroes::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<CountTrailingZeroes>(size);
 }
 
-STREAM_NAME(Parity, "PARITY_" << operands[0]->size)
-
 Operation *Parity::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<Parity>();
+}
+
+std::string Parity::Name() const {
+  CHECK(operands.Size() != 0);
+  return StreamName(to_string(this->op_code), "_", operands[0]-size);
 }
 
 STREAM_NAME(ReadMemoryCondition, "CHECK_MEM_READ_ADDR_" << operands[0]->size)
@@ -338,8 +340,6 @@ Circuit::~Circuit(void) {
   operands.ClearWithoutErasure();
   AllAttributes::ClearWithoutErasure();
 }
-
-RETURN_NAME(Circuit, "RESULT")
 
 Operation *Circuit::CloneWithoutOperands(Circuit *) const {
   LOG(FATAL) << "Not allowed to clone the circuit";
