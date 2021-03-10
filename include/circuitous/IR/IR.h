@@ -40,7 +40,7 @@ class Circuit;
 // A general instruction.
 class Operation : public User, public Def<Operation> {
  public:
-  virtual ~Operation(void);
+  virtual ~Operation(void) = default;
 
   virtual std::string Name(void) const = 0;
   virtual Operation *CloneWithoutOperands(Circuit *) const = 0;
@@ -245,16 +245,15 @@ class LLVMOperation final : public Operation {
                          unsigned size_);
 
   explicit LLVMOperation(llvm::Instruction *inst_);
-  virtual ~LLVMOperation(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
-  const unsigned llvm_op_code;
-  const unsigned llvm_predicate;
+  const uint32_t llvm_op_code;
+  const uint32_t llvm_predicate;
 
-  static const unsigned kInvalidLLVMPredicate;
+  static const uint32_t kInvalidLLVMPredicate;
 };
 
 // An undefined value.
@@ -262,8 +261,6 @@ class Undefined final : public Operation {
  public:
   inline explicit Undefined(unsigned size_)
       : Operation(Operation::kUndefined, size_) {}
-
-  virtual ~Undefined(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -278,7 +275,6 @@ class Constant final : public Operation {
       : Operation(Operation::kConstant, size_),
         bits(bits_) {}
 
-  virtual ~Constant(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -292,7 +288,6 @@ class Constant final : public Operation {
 // Some bitwise operation; must be extended.
 class BitOperation : public Operation {
  public:
-  virtual ~BitOperation(void);
 
  protected:
   using Operation::Operation;
@@ -303,7 +298,6 @@ class Not final : public BitOperation {
  public:
   FORWARD_CONSTRUCTOR(BitOperation, Not)
 
-  virtual ~Not(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -312,7 +306,6 @@ class Not final : public BitOperation {
 // Extract bits.
 class Extract final : public BitOperation {
  public:
-  virtual ~Extract(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -323,8 +316,8 @@ class Extract final : public BitOperation {
         low_bit_inc(low_bit_inc_),
         high_bit_exc(high_bit_exc_) {}
 
-  const unsigned low_bit_inc;
-  const unsigned high_bit_exc;
+  const uint32_t low_bit_inc;
+  const uint32_t high_bit_exc;
 };
 
 // Concatenate two bitvectors.
@@ -332,7 +325,6 @@ class Concat final : public BitOperation {
  public:
   FORWARD_CONSTRUCTOR(BitOperation, Concat)
 
-  virtual ~Concat(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -343,7 +335,6 @@ class Concat final : public BitOperation {
 class PopulationCount final : public BitOperation {
  public:
   FORWARD_CONSTRUCTOR(BitOperation, PopulationCount)
-  virtual ~PopulationCount(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -353,7 +344,6 @@ class PopulationCount final : public BitOperation {
 class CountLeadingZeroes final : public BitOperation {
  public:
   FORWARD_CONSTRUCTOR(BitOperation, CountLeadingZeroes)
-  virtual ~CountLeadingZeroes(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -362,7 +352,6 @@ class CountLeadingZeroes final : public BitOperation {
 class CountTrailingZeroes final : public BitOperation {
  public:
   FORWARD_CONSTRUCTOR(BitOperation, CountTrailingZeroes)
-  virtual ~CountTrailingZeroes(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -370,7 +359,6 @@ class CountTrailingZeroes final : public BitOperation {
 
 class Condition : public Operation {
  public:
-  virtual ~Condition(void);
 
  protected:
   inline explicit Condition(unsigned op_code_) : Operation(op_code_, 1u) {}
@@ -381,7 +369,6 @@ class Condition : public Operation {
 class Parity final : public Condition {
  public:
   CONDITION_CONSTRUCTOR(Parity)
-  virtual ~Parity(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -396,7 +383,6 @@ class ReadMemoryCondition final : public Condition {
     kHintedValue = 2u
   };
   CONDITION_CONSTRUCTOR(ReadMemoryCondition)
-  virtual ~ReadMemoryCondition(void);
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
@@ -404,7 +390,6 @@ class ReadMemoryCondition final : public Condition {
 // An input register.
 class InputRegister : public Operation {
  public:
-  virtual ~InputRegister(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -419,7 +404,6 @@ class InputRegister : public Operation {
 
 class InputImmediate : public Operation {
   public:
-    virtual ~InputImmediate(void) = default;
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -432,7 +416,6 @@ class InputImmediate : public Operation {
 // An output register.
 class OutputRegister : public Operation {
  public:
-  virtual ~OutputRegister(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -452,7 +435,6 @@ class RegisterCondition final : public Condition {
   enum : unsigned { kDynamicRegisterValue = 0u, kOutputRegister = 1u };
 
   CONDITION_CONSTRUCTOR(RegisterCondition)
-  virtual ~RegisterCondition(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -465,7 +447,6 @@ class HintCondition final : public Condition {
   enum : unsigned { kDynamicValue = 0u, kHint = 1u };
 
   CONDITION_CONSTRUCTOR(HintCondition)
-  virtual ~HintCondition(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -477,7 +458,6 @@ class PreservedCondition final : public Condition {
   enum : unsigned { kInputRegister = 0u, kOutputRegister = 1u };
 
   CONDITION_CONSTRUCTOR(PreservedCondition)
-  virtual ~PreservedCondition(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -489,7 +469,6 @@ class CopyCondition final : public Condition {
   enum : unsigned { kOtherInputRegister = 0u, kOutputRegister = 1u };
 
   CONDITION_CONSTRUCTOR(CopyCondition)
-  virtual ~CopyCondition(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -499,7 +478,6 @@ class CopyCondition final : public Condition {
 class InputInstructionBits : public Operation {
  public:
   FORWARD_CONSTRUCTOR(Operation, InputInstructionBits)
-  virtual ~InputInstructionBits(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -510,7 +488,6 @@ class InputInstructionBits : public Operation {
 class DecodeCondition final : public Condition {
  public:
   CONDITION_CONSTRUCTOR(DecodeCondition)
-  virtual ~DecodeCondition(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -520,7 +497,6 @@ class DecodeCondition final : public Condition {
 // e.g.
 class Hint final : public Operation {
  public:
-  virtual ~Hint(void);
 
   inline explicit Hint(unsigned size_)
       : Operation(Operation::kHint, size_),
@@ -537,7 +513,6 @@ class Hint final : public Operation {
 class VerifyInstruction final : public Condition {
  public:
   CONDITION_CONSTRUCTOR(VerifyInstruction)
-  virtual ~VerifyInstruction(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -546,7 +521,6 @@ class VerifyInstruction final : public Condition {
 class OnlyOneCondition final : public Condition {
  public:
   CONDITION_CONSTRUCTOR(OnlyOneCondition)
-  virtual ~OnlyOneCondition(void);
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
