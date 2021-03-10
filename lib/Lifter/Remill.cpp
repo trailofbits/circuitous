@@ -217,10 +217,10 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     const auto &[from, size] = intrinsics::Extract::ParseArgs(fn);
 
     // TODO(lukas): For now we can only lower some specialized cases
-    CHECK(impl->inst_bits.Size() == 1);
+    CHECK(impl->Attr<InputInstructionBits>().Size() == 1);
     CHECK(from % 8 == 0 && size % 8 == 0);
 
-    const auto &inst_bytes = *impl->inst_bits.begin();
+    const auto &inst_bytes = *impl->Attr<InputInstructionBits>().begin();
 
     // We split extract to sepratate bytes. This is so we can reorder them,
     // which can be handy if the extracted data are in a different order
@@ -228,7 +228,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     const unsigned step = 8;
     std::deque<Operation *> partials;
     for (unsigned i = static_cast<unsigned>(from); i < from + size; i += step) {
-      auto op = impl->extracts.Create(i, i + step);
+      auto op = impl->Create<Extract>(i, i + step);
       op->operands.AddUse(inst_bytes);
       partials.push_front(op);
     }
@@ -242,7 +242,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     // ba 12 00 00 00 - mov 12, %rdx
     // If we do extract(32, 0) we end up with `12000000` as number, but we would
     // expect `00000012` therefore we must reorder them and then concat.
-    auto full = impl->concats.Create(static_cast<unsigned>(size));
+    auto full = impl->Create<Concat>(static_cast<unsigned>(size));
     for (auto x : partials) {
       full->operands.AddUse(x);
     }
@@ -258,7 +258,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
     auto full = val_to_op[arg_i];
     CHECK(full);
-    auto as_input_imm = impl->input_imms.Create(static_cast<uint32_t>(size));
+    auto as_input_imm = impl->Create<InputImmediate>(static_cast<uint32_t>(size));
     as_input_imm->operands.AddUse(full);
     return as_input_imm;
   }
@@ -271,11 +271,11 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     auto triple = llvm::Triple(fn->getParent()->getTargetTriple());
     CHECK(remill::GetArchName(triple) == remill::kArchAMD64);
 
-    CHECK(impl->inst_bits.Size() == 1);
-    const auto &inst_bytes = *impl->inst_bits.begin();
+    CHECK(impl->Attr<InputInstructionBits>().Size() == 1);
+    const auto &inst_bytes = *impl->Attr<InputInstructionBits>().begin();
 
     const auto &[from, size] = intrinsics::ExtractRaw::ParseArgs(fn);
-    auto op = impl->extracts.Create(
+    auto op = impl->Create<Extract>(
         static_cast<unsigned>(from),
         static_cast<unsigned>(from + size));
     LOG(INFO) << from << ", " << size;
@@ -301,9 +301,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       case llvm::Intrinsic::ctpop: {
         const auto op0 = val_to_op[val->getArgOperand(0u)];
         if (op0->op_code == Operation::kUndefined) {
-          op = impl->undefs.Create(res_size);
+          op = impl->Create<Undefined>(res_size);
         } else {
-          op = impl->popcounts.Create(res_size);
+          op = impl->Create<PopulationCount>(res_size);
           op->operands.AddUse(op0);
         }
         return;
@@ -311,9 +311,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       case llvm::Intrinsic::ctlz: {
         const auto op0 = val_to_op[val->getArgOperand(0u)];
         if (op0->op_code == Operation::kUndefined) {
-          op = impl->undefs.Create(res_size);
+          op = impl->Create<Undefined>(res_size);
         } else {
-          op = impl->clzs.Create(res_size);
+          op = impl->Create<CountLeadingZeroes>(res_size);
           op->operands.AddUse(op0);
         }
         return;
@@ -321,9 +321,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       case llvm::Intrinsic::cttz: {
         const auto op0 = val_to_op[val->getArgOperand(0u)];
         if (op0->op_code == Operation::kUndefined) {
-          op = impl->undefs.Create(res_size);
+          op = impl->Create<Undefined>(res_size);
         } else {
-          op = impl->ctzs.Create(res_size);
+          op = impl->Create<CountTrailingZeroes>(res_size);
           op->operands.AddUse(op0);
         }
         return;
@@ -339,7 +339,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       op = CreateMemoryRead(val, SizeFromSuffix(name));
 
     } else if (name.startswith("__remill_undefined_")) {
-      op = impl->undefs.Create(SizeFromSuffix(name));
+      op = impl->Create<Undefined>(SizeFromSuffix(name));
 
     } else if (name.startswith("__remill_write_memory_")) {
       LOG(FATAL) << "Memory write intrinsics not yet supported";
@@ -374,7 +374,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     // The condition is undefined, that means we aren't selecting either value,
     // unfortunately :-(
     if (cond_op->op_code == Operation::kUndefined) {
-      op = impl->undefs.Create(static_cast<unsigned>(num_bits));
+      op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
 
     // Condition is defined.
     } else {
@@ -392,13 +392,13 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
         return;
       }
 
-      op = impl->llvm_insts.Create(val);
+      op = impl->Create<LLVMOperation>(val);
       op->operands.AddUse(cond_op);
 
       // True side is undefined; convert it into a defined value that is not
       // the same as the False side.
       if (true_op->op_code == Operation::kUndefined) {
-        auto not_false_op = impl->nots.Create(num_bits);
+        auto not_false_op = impl->Create<Not>(num_bits);
         not_false_op->operands.AddUse(false_op);
 
         op->operands.AddUse(not_false_op);
@@ -407,7 +407,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       // False side is undefined; convert it into a defined value that is not
       // the same as the True side.
       } else if (false_op->op_code == Operation::kUndefined) {
-        auto not_true_op = impl->nots.Create(num_bits);
+        auto not_true_op = impl->Create<Not>(num_bits);
         not_true_op->operands.AddUse(true_op);
 
         op->operands.AddUse(true_op);
@@ -439,10 +439,10 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     if (lhs_op->op_code == Operation::kUndefined ||
         rhs_op->op_code == Operation::kUndefined) {
       const auto num_bits = dl.getTypeSizeInBits(val->getType());
-      op = impl->undefs.Create(static_cast<unsigned>(num_bits));
+      op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
 
     } else {
-      op = impl->llvm_insts.Create(val);
+      op = impl->Create<LLVMOperation>(val);
       op->operands.AddUse(lhs_op);
       op->operands.AddUse(rhs_op);
     }
@@ -493,7 +493,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     CHECK_EQ(num_bits, bits_str.size());
 
-    bits_op = impl->constants.Create(std::move(bits_str),
+    bits_op = impl->Create<Constant>(std::move(bits_str),
                                      static_cast<unsigned>(num_bits));
     op = bits_op;
   }
@@ -505,7 +505,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
 
     const auto num_bits = dl.getTypeSizeInBits(val->getType());
-    op = impl->undefs.Create(static_cast<unsigned>(num_bits));
+    op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
   }
 
   void VisitConstantInt(llvm::Function *, llvm::Use &, llvm::ConstantInt *val) {
@@ -614,7 +614,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
     num_inst_bits += static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
   }
 
-  const auto inst_bits = impl->inst_bits.Create(num_inst_bits);
+  const auto inst_bits = impl->Create<InputInstructionBits>(num_inst_bits);
   for (auto &arg : circuit_func->args()) {
     const auto arg_size =
         static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
@@ -625,14 +625,14 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
 
       // Expected output register.
       if (arg.getName().endswith("_next")) {
-        op = impl->output_regs.Create(
+        op = impl->Create<OutputRegister>(
             arg_size,
             arg.getName().substr(0u, arg.getName().size() - 5u).str());
         ++num_output_regs;
 
       // Input register.
       } else {
-        op = impl->input_regs.Create(arg_size, arg.getName().str());
+        op = impl->Create<InputRegister>(arg_size, arg.getName().str());
         ++num_input_regs;
       }
 
@@ -641,7 +641,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
       CHECK(!num_input_regs);
       CHECK(!num_output_regs);
 
-      op = impl->extracts.Create(num_inst_bits - arg_size, num_inst_bits);
+      op = impl->Create<Extract>(num_inst_bits - arg_size, num_inst_bits);
       op->operands.AddUse(inst_bits);
 
       ++num_inst_parts;
@@ -657,12 +657,12 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
   std::unordered_set<Operation *> seen;
 
   auto verify_inst_func = intrinsics::VerifyInst::CreateFn(module);
-  auto all_verifications = impl->xor_all.Create();
+  auto all_verifications = impl->Create<OnlyOneCondition>();
   impl->operands.AddUse(all_verifications);
 
   ForEachCallTo(
       circuit_func, verify_inst_func, [&](llvm::CallInst *verify_isnt_call) {
-        const auto verify_inst = impl->verifications.Create();
+        const auto verify_inst = impl->Create<VerifyInstruction>();
         importer.verifier = verify_inst;
         all_verifications->operands.AddUse(verify_inst);
 
@@ -703,19 +703,19 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
               if (const auto input_reg = dynamic_cast<InputRegister *>(lhs_op);
                   input_reg) {
                 if (input_reg->reg_name == output_reg->reg_name) {
-                  op = impl->preserved_regs.Create();
+                  op = impl->Create<PreservedCondition>();
                 } else {
-                  op = impl->copied_regs.Create();
+                  op = impl->Create<CopyCondition>();
                 }
               } else {
-                op = impl->transitions.Create();
+                op = impl->Create<RegisterCondition>();
               }
 
             // Proposed value of this register is dynamically computed.
             } else {
               importer.Visit(circuit_func, arg_cmp->getArgOperandUse(0u));
               CHECK_NOTNULL(lhs_op);
-              op = impl->transitions.Create();
+              op = impl->Create<RegisterCondition>();
             }
 
           } else if (const auto output_bits = dynamic_cast<Extract *>(rhs_op);
@@ -729,7 +729,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
               CHECK_NOTNULL(lhs_op);
             }
 
-            op = impl->decode_conditions.Create();
+            op = impl->Create<DecodeCondition>();
 
           } else {
             LOG(FATAL) << "Unexpected argument: "
