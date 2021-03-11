@@ -22,7 +22,7 @@ struct Verifier {
   std::string Report() { return ss.str(); }
 
   bool LogError(Operation *op) {
-    ss << op->Name() << " has " << op->operands.Size() << " which is invalid.\n";
+    ss << op->Name() << " has " << op->operands.Size() << " operands which is invalid.\n";
     return false;
   }
 
