@@ -163,6 +163,36 @@ struct Verifier {
     return out;
   }
 
+
+  void VerifyIDs(Circuit *circuit) {
+    std::unordered_set<Operation *> seen;
+    std::unordered_map<uint64_t, uint64_t> ids;
+    CollectIDs(circuit, seen, ids);
+    for (auto &[id, count] : ids) {
+      if (count != 1) {
+        status &= false;
+        ss << "ID: " << id << " is present " << count << " times.\n";
+      }
+    }
+  }
+
+  void CollectIDs(Operation *op,
+                  std::unordered_set<Operation *> &seen,
+                  std::unordered_map<uint64_t, uint64_t> &ids) {
+    if (seen.count(op)) {
+      return;
+    }
+    seen.insert(op);
+    if (ids.count(op->id())) {
+      ids[op->id()] += 1;
+    } else {
+      ids[op->id()] = 1;
+    }
+    for (auto o : op->operands) {
+      CollectIDs(o, seen, ids);
+    }
+  }
+
 };
 
 // Check if circuit has some really basic structural integrity, and return
@@ -171,6 +201,7 @@ static inline std::pair<bool, std::string> VerifyCircuit(Circuit *circuit) {
   Verifier verifier;
   verifier.Verify(circuit);
   verifier.VerifyHints(circuit);
+  verifier.VerifyIDs(circuit);
   return {verifier.status, verifier.Report()};
 }
 
