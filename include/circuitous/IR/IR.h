@@ -683,15 +683,25 @@ class Circuit : public Condition, AllAttributes {
   using AllAttributes::ForEachOperation;
 
   uint64_t ids = 0;
+  static constexpr inline uint64_t max_id = (1ull >> 60);
 
   template<typename T> auto &Attr() {
     static_assert(std::is_base_of_v<Operation, T>);
     return this->AllAttributes::Attr<T>();
   }
 
-  template<typename T, typename ...Args> T* Create(Args &&...args) {
+  template<typename T, typename ...Args>
+  T* Create(Args &&...args) {
     auto op = Attr<T>().Create(std::forward<Args>(args)...);
     op->_id = ++ids;
+    return op;
+  }
+
+  template<typename T, typename ...Args>
+  T* Adopt(uint64_t id, Args &&...args) {
+    auto op = Attr<T>().Create(std::forward<Args>(args)...);
+    op->_id = id;
+    ids = std::max(ids, id);
     return op;
   }
 
