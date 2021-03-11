@@ -16,11 +16,11 @@ void PrintPython(std::ostream &os, Circuit *circuit) {
      << "  operations[result] = []\n";
 
   circuit->ForEachOperation([&](circuitous::Operation *op) {
-    os << "  operations['v" << reinterpret_cast<uintptr_t>(op) << "'] = []\n";
+    os << "  operations['v" << op->id() << "'] = []\n";
   });
 
   auto do_op = [&](circuitous::Operation *op) {
-    const auto id = reinterpret_cast<uintptr_t>(op);
+    const auto id = op->id();
     os << "  operations['v" << std::hex << id << "'].append(\"" << op->Name()
        << "\")\n"
        << "  operations['v" << std::hex << id << "'].append(" << std::dec
@@ -44,7 +44,7 @@ void PrintPython(std::ostream &os, Circuit *circuit) {
 
     for (auto sub_op : op->operands) {
       os << "  operations['v" << std::hex << id << "'].append('v"
-         << reinterpret_cast<uintptr_t>(sub_op) << std::dec << "')\n";
+         << sub_op->id() << std::dec << "')\n";
     }
   };
 

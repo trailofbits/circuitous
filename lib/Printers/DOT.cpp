@@ -25,21 +25,18 @@ class DOTPrinter : public UniqueVisitor<DOTPrinter> {
       os << "</TR><TR>";
       for (auto sub_op : op->operands) {
         os << "<TD port=\"s";
-        os << reinterpret_cast<uintptr_t>(sub_op);
+        os << sub_op->id();
         os << "\"> &nbsp; </TD>";
       }
     }
     os << kEndDOTNode;
-    const auto id = reinterpret_cast<uintptr_t>(op);
     for (auto sub_op : op->operands) {
-      const auto sub_id = reinterpret_cast<uintptr_t>(sub_op);
-      os << 'o' << id << ":s" << sub_id << " -> o" << sub_id << ":id;\n";
+      os << 'o' << op->id() << ":s" << sub_op->id() << " -> o" << sub_op->id() << ":id;\n";
     }
   }
 
   void PrintNodeName(Operation *op) {
-    const auto id = reinterpret_cast<uintptr_t>(op);
-    os << "o" << id << " " << kBeginDOTNode << "<TD port=\"id\"";
+    os << "o" << op->id() << " " << kBeginDOTNode << "<TD port=\"id\"";
     if (!op->operands.Empty()) {
       os << " colspan=\"" << op->operands.Size() << "\"";
     }
