@@ -111,4 +111,6 @@ void HashVisitor::Reset(void) {
   impl->op_hash.clear();
 }
 
+uint64_t IdentityHasher::operator[](Operation *op) { return op->id(); }
+
 }  // namespace circuitous
