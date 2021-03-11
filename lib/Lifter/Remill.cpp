@@ -461,9 +461,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     if (op0->op_code == Operation::kUndefined) {
       const auto num_bits = dl.getTypeSizeInBits(val->getType());
-      op = impl->undefs.Create(static_cast<unsigned>(num_bits));
+      op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
     } else {
-      op = impl->llvm_insts.Create(val);
+      op = impl->Create<LLVMOperation>(val);
       op->operands.AddUse(op0);
     }
   }
