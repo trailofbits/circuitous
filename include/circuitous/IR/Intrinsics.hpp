@@ -177,9 +177,8 @@ namespace impl {
 
     static llvm::Function *CreateFn(llvm::Module *module, uint64_t size) {
       llvm::IRBuilder<> ir(module->getContext());
-      auto r_ty = ir.getIntNTy(static_cast<uint32_t>(size));
-      auto arg_ty = ir.getIntNTy(static_cast<uint32_t>(size));
-      auto fn_t = llvm::FunctionType::get(r_ty, {arg_ty, arg_ty}, false);
+      auto self_ty = ir.getIntNTy(static_cast<uint32_t>(size));
+      auto fn_t = llvm::FunctionType::get(self_ty, {self_ty}, false);
       auto callee = module->getOrInsertFunction(Name(size), fn_t);
       return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
     }
