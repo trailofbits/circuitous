@@ -164,9 +164,12 @@ bool Constant::Equals(const Operation *that_) const {
   }
 }
 
-std::string BitOperation::Name() const {
-  CHECK(operands.Size() != 0);
-  return StreamName(to_string(op_code), "_", operands[0]->size);
+std::string BitOperation::Name(void) const {
+  if (this->operands.Size() == 0) {
+    LOG(ERROR) << this->id() << ": " << to_string(this->op_code) << " has no operands!";
+    return StreamName(to_string(this->op_code), "_", "IS_INVALID");
+  }
+  return StreamName(to_string(op_code), "_", this->operands[0]->size);
 }
 
 Operation *Constant::CloneWithoutOperands(Circuit *circuit) const {
