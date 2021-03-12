@@ -36,49 +36,82 @@
       } \
     } while (false)
 #else
-#  define DEBUG_READ(...)
-#  define DEBUG_WRITE(...)
+#  define DEBUG_READ(...) std::cerr << __VA_ARGS__;
+#  define DEBUG_WRITE(...) std::cerr << __VA_ARGS__;
 #endif
 
 namespace circuitous {
 namespace {
 
-class SerializeVisitor : public Visitor<SerializeVisitor> {
+struct FileConfig {
+  enum class Selector : uint8_t {
+    Operation = 0x0,
+    Invalid = 0x1,
+    Reference = 0xff
+  };
+
+  using raw_op_code_t = uint64_t;
+  using raw_id_t = uint64_t;
+
+  std::string to_string(const Selector &sel) {
+    switch(sel) {
+      case Selector::Operation : return "Operation";
+      case Selector::Invalid : return "Invalid";
+      case Selector::Reference : return "Reference";
+    }
+  }
+
+};
+
+/* Format in the ir file is following
+ * 8: selector, 64: id, 64: opcode, ... rest of the data dependeing on opcode
+ * 8: selector, 64: id it references
+ * NOTE(lukas): In attempt to make this deterministic I have chosen to replace
+ *              pointer hashes with deterministic ids. If you want, feel free to
+ *              tweak it, but please make sure `x == store(load(x))` -- with respect
+ *              to semantics (not neccessary ids or other internals).
+ */
+class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
+ using Selector = FileConfig::Selector;
+
  public:
   ~SerializeVisitor(void) {
     os.flush();
   }
 
-  explicit SerializeVisitor(std::ostream &os_) : os(os_), hasher() {}
+  explicit SerializeVisitor(std::ostream &os_) : os(os_) {}
+
+  void Write(Selector sel) {
+    Write(static_cast<std::underlying_type_t<Selector>>(sel));
+  }
 
   void Write(Operation *op) {
-    auto offset_it = offset.find(op);
-    if (offset_it == offset.end()) {
-      Write(static_cast<uint8_t>(0));
+    if (!written.count(op->id())) {
+      Write(Selector::Operation);
       DEBUG_WRITE("OP:");
-      Write(hasher[op]);
+      raw_id_t id = hasher[op];
+      Write(id);
       CHECK_LE(0u, op->op_code);
       CHECK_LT(op->op_code, Operation::kOnlyOneCondition);
-      Write(static_cast<uint8_t>(op->op_code));
-      offset.emplace(op, curr_offset);
+      raw_op_code_t op_code = op->op_code;
+      Write(op_code);
+      written.insert(op->id());
       this->Visit(op);
       DEBUG_WRITE(";");
     } else {
-      Write(static_cast<uint8_t>(0xff));
+      Write(Selector::Reference);
       DEBUG_WRITE("XR:");
-      Write<int32_t>(curr_offset - offset_it->second);
+      Write<raw_id_t>(op->id());
       DEBUG_WRITE(";");
     }
   }
 
   void Write(uint8_t byte) {
     os << byte;
-    curr_offset += 1;
   }
 
   void Write(int8_t byte) {
     os << static_cast<uint8_t>(byte);
-    curr_offset += 1;
   }
 
   template <typename T>
@@ -143,6 +176,14 @@ class SerializeVisitor : public Visitor<SerializeVisitor> {
     DEBUG_WRITE("}");
   }
 
+  void VisitInputImmediate(InputImmediate *op) {
+    DEBUG_WRITE("{INIMM:");
+    Write(op->size);
+    DEBUG_WRITE(";operands")
+    Write(op->operands);
+    DEBUG_WRITE("}");
+  }
+
   void VisitOutputRegister(OutputRegister *op) {
     DEBUG_WRITE("{OUTREG:");
     Write(op->size);
@@ -169,22 +210,22 @@ class SerializeVisitor : public Visitor<SerializeVisitor> {
 
  private:
   std::ostream &os;
-  int32_t curr_offset{0};
-  std::unordered_map<Operation *, int32_t> offset;
-  HashVisitor hasher;
+  IdentityHasher hasher;
+  std::unordered_set<uint64_t> written;
 };
 
-class DeserializeVisitor {
+class DeserializeVisitor : FileConfig {
+  using Selector = FileConfig::Selector;
  public:
   explicit DeserializeVisitor(std::istream &is_, Circuit *circuit_)
       : is(is_),
-        circuit(circuit_),
-        hasher() {}
+        circuit(circuit_)
+  {}
 
-  Operation *Decode(unsigned op_code) {
+  Operation *Decode(raw_id_t id, raw_op_code_t op_code) {
     switch (op_code) {
-#define GOTO_VISITOR(type, field) \
-  case Operation::k##type: return this->Decode##type();
+#define GOTO_VISITOR(type) \
+  case Operation::k##type: return this->Decode##type(id);
 
       FOR_EACH_OPERATION(GOTO_VISITOR)
 #undef GOTO_VISITOR
@@ -196,56 +237,40 @@ class DeserializeVisitor {
   }
 
   void Read(Operation *&op) {
-    uint8_t sel = 0;
+    Selector sel = Selector::Invalid;
     Read(sel);
-    if (sel == 0u) {
-      uint64_t hash = 0;
+    if (sel == Selector::Operation) {
+      raw_id_t hash = 0;
       DEBUG_READ("OP:");
       Read(hash);
-      uint8_t op_code = 0;
+      raw_op_code_t op_code = 0;
       Read(op_code);
-      auto prev_offset = curr_offset;
 
-      op = Decode(op_code);
+      op = Decode(hash, op_code);
+      id_to_op[hash] = op;
 
       DEBUG_READ(";");
-
-      auto range = hash_to_ops.equal_range(hash);
-      Operation *found_op = nullptr;
-      if (!dynamic_cast<Hint *>(op)) {
-        for (auto it = range.first; it != range.second; ++it) {
-          if (op->Equals(it->second)) {
-            found_op = it->second;
-            break;
-          }
-        }
-      }
-
-      if (!found_op) {
-        hash_to_ops.emplace(hash, op);
-      } else if (found_op != op) {
-        op->ReplaceAllUsesWith(found_op);
-        op = found_op;
-      }
-      offset_to_op.emplace(prev_offset, op);
-
-    } else if (sel == 0xffu) {
+    } else if (sel == Selector::Reference) {
       DEBUG_READ("XR:");
-      int32_t disp = 0;
-      auto prev_offset = curr_offset;
-      Read(disp);
+      raw_id_t hash = 0;
+      Read(hash);
       DEBUG_READ(";");
-      auto op_offset = prev_offset - disp;
-      auto op_it = offset_to_op.find(op_offset);
-      if (op_it == offset_to_op.end()) {
-        LOG(FATAL) << "Could not find node at offset " << op_offset;
+      auto op_it = id_to_op.find(hash);
+      if (op_it == id_to_op.end()) {
+        LOG(FATAL) << "Could not reference with id: " << hash;
       } else {
         op = op_it->second;
       }
 
     } else {
-      LOG(FATAL) << "Unexpected tag for an operation reference: " << sel;
+      LOG(FATAL) << "Unexpected tag for an operation reference: " << this->to_string(sel);
     }
+  }
+
+  void Read(Selector &sel) {
+    std::underlying_type_t<Selector> out;
+    Read(out);
+    sel = static_cast<Selector>(out);
   }
 
   void Read(uint8_t &byte) {
@@ -256,20 +281,12 @@ class DeserializeVisitor {
     if (!is.eof()) {
       CHECK_EQ(old_offset + 1, static_cast<long long>(is.tellg()));
     }
-    curr_offset += 1;
   }
 
   void Read(int8_t &byte) {
     uint8_t b;
-    CHECK(!is.eof());
-    CHECK(is.good());
-    const auto old_offset = static_cast<long long>(is.tellg());
-    is >> b;
-    if (!is.eof()) {
-      CHECK_EQ(old_offset + 1, static_cast<long long>(is.tellg()));
-    }
+    Read(b);
     byte = static_cast<int8_t>(b);
-    curr_offset += 1;
   }
 
   template <typename T>
@@ -319,37 +336,48 @@ class DeserializeVisitor {
     }
   }
 
-  InputRegister *DecodeInputRegister(void) {
+  InputRegister *DecodeInputRegister(uint64_t id) {
     unsigned size = 0;
     std::string reg_name;
     DEBUG_READ("{INREG:");
     Read(size);
     Read(reg_name);
     DEBUG_READ("}");
-    return circuit->input_regs.Create(size, std::move(reg_name));
+    return circuit->Adopt<InputRegister>(id, size, std::move(reg_name));
   }
 
-  Constant *DecodeConstant(void) {
+  InputImmediate *DecodeInputImmediate(uint64_t id) {
+    unsigned size = 0;
+    DEBUG_READ("{INIMM:");
+    Read(size);
+    auto self = circuit->Adopt<InputImmediate>(id, size);
+    Read(self->operands);
+    CHECK(self->operands.Size() == 1);
+    DEBUG_READ("}");
+    return self;
+  }
+
+  Constant *DecodeConstant(uint64_t id) {
     unsigned size = 0;
     std::string bits;
     DEBUG_READ("{CONST:");
     Read(size);
     Read(bits);
     DEBUG_READ("}");
-    return circuit->constants.Create(std::move(bits), size);
+    return circuit->Adopt<Constant>(id, std::move(bits), size);
   }
 
-  OutputRegister *DecodeOutputRegister(void) {
+  OutputRegister *DecodeOutputRegister(uint64_t id) {
     unsigned size = 0;
     std::string reg_name;
     DEBUG_READ("{OUTREG:");
     Read(size);
     Read(reg_name);
     DEBUG_READ("}");
-    return circuit->output_regs.Create(size, std::move(reg_name));
+    return circuit->Adopt<OutputRegister>(id, size, std::move(reg_name));
   }
 
-  Extract *DecodeExtract(void) {
+  Extract *DecodeExtract(uint64_t id) {
     unsigned high_bit_exc = 0;
     unsigned low_bit_inc = 0;
     Operation *value = nullptr;
@@ -358,12 +386,12 @@ class DeserializeVisitor {
     Read(low_bit_inc);
     Read(value);
     DEBUG_READ("}");
-    auto op = circuit->extracts.Create(low_bit_inc, high_bit_exc);
+    auto op = circuit->Adopt<Extract>(id, low_bit_inc, high_bit_exc);
     op->operands.AddUse(value);
     return op;
   }
 
-  LLVMOperation *DecodeLLVMOperation(void) {
+  LLVMOperation *DecodeLLVMOperation(uint64_t id) {
     unsigned size;
     unsigned llvm_op_code;
     unsigned llvm_predicate;
@@ -371,74 +399,69 @@ class DeserializeVisitor {
     Read(size);
     Read(llvm_op_code);
     Read(llvm_predicate);
-    auto op = circuit->llvm_insts.Create(llvm_op_code, llvm_predicate, size);
+    auto op = circuit->Adopt<LLVMOperation>(id, llvm_op_code, llvm_predicate, size);
     Read(op->operands);
     DEBUG_READ("}");
     return op;
   }
 
-#define DECODE_GENERIC(cls, field) \
-  cls *Decode##cls(void) { \
+#define DECODE_GENERIC(cls) \
+  cls *Decode##cls(uint64_t id) { \
     unsigned size = 0; \
     DEBUG_READ("{size="); \
     Read(size); \
-    auto op = circuit->field.Create(size); \
+    auto op = circuit->Adopt<cls>(id, size); \
     DEBUG_READ(";operands="); \
     Read(op->operands); \
     DEBUG_READ("}"); \
     return op; \
   }
 
-#define DECODE_CONDITION(cls, field) \
-  cls *Decode##cls(void) { \
+#define DECODE_CONDITION(cls) \
+  cls *Decode##cls(uint64_t id) { \
     unsigned size = 0; \
     DEBUG_READ("{size="); \
     Read(size); \
     CHECK_EQ(size, 1); \
-    auto op = circuit->field.Create(); \
+    auto op = circuit->Adopt<cls>(id); \
     DEBUG_READ(";operands="); \
     Read(op->operands); \
     DEBUG_READ("}"); \
     return op; \
   }
 
-  DECODE_GENERIC(Undefined, undefs)
-  DECODE_GENERIC(Not, nots)
-  DECODE_GENERIC(Concat, concats)
-  DECODE_GENERIC(PopulationCount, popcounts)
-  DECODE_CONDITION(Parity, parities)
-  DECODE_GENERIC(CountLeadingZeroes, clzs)
-  DECODE_GENERIC(CountTrailingZeroes, ctzs)
-  DECODE_CONDITION(ReadMemoryCondition, memory_reads)
-  DECODE_CONDITION(HintCondition, hint_conds)
-  DECODE_CONDITION(RegisterCondition, transitions)
-  DECODE_CONDITION(PreservedCondition, preserved_regs)
-  DECODE_CONDITION(CopyCondition, copied_regs)
-  DECODE_GENERIC(InputInstructionBits, inst_bits)
-  DECODE_CONDITION(DecodeCondition, decode_conditions)
-  DECODE_GENERIC(Hint, hints)
-  DECODE_CONDITION(VerifyInstruction, verifications)
+  DECODE_GENERIC(Undefined)
+  DECODE_GENERIC(Not)
+  DECODE_GENERIC(Concat)
+  DECODE_GENERIC(PopulationCount)
+  DECODE_CONDITION(Parity)
+  DECODE_GENERIC(CountLeadingZeroes)
+  DECODE_GENERIC(CountTrailingZeroes)
+  DECODE_CONDITION(ReadMemoryCondition)
+  DECODE_CONDITION(HintCondition)
+  DECODE_CONDITION(RegisterCondition)
+  DECODE_CONDITION(PreservedCondition)
+  DECODE_CONDITION(CopyCondition)
+  DECODE_GENERIC(InputInstructionBits)
+  DECODE_CONDITION(DecodeCondition)
+  DECODE_GENERIC(Hint)
+  DECODE_CONDITION(VerifyInstruction)
 
-  Operation *DecodeOnlyOneCondition(void) {
+  Operation *DecodeOnlyOneCondition(uint64_t) {
     LOG(FATAL) << "OnlyOneCondition nodes should not appear in serialized file";
     return nullptr;
   }
 
   std::istream &is;
   Circuit *const circuit;
-  int32_t curr_offset{0};
-  std::unordered_map<int32_t, Operation *> offset_to_op;
-  std::unordered_multimap<uint64_t, Operation *> hash_to_ops;
-  HashVisitor hasher;
-  std::vector<Operation *> ops;
-  std::vector<Undefined *> undefs;
+  std::unordered_map<uint64_t, Operation *> id_to_op;
 };
 
 }  // namespace
 
 void Circuit::Serialize(std::ostream &os) {
   SerializeVisitor vis(os);
-  for (auto xor_all_op : xor_all) {
+  for (auto xor_all_op : Attr<OnlyOneCondition>()) {
     for (auto op : xor_all_op->operands) {
       vis.Write(op);
     }
@@ -452,7 +475,7 @@ void Circuit::Serialize(
   std::unordered_map<std::string, SerializeVisitor> visitors;
 
   std::string topology;
-  for (auto xor_all_op : xor_all) {
+  for (auto xor_all_op : Attr<OnlyOneCondition>()) {
 
     // Each of `op` should be a single `VerifyInstruction` operation.
     for (auto op : xor_all_op->operands) {
@@ -492,29 +515,29 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   std::unordered_map<std::string, OutputRegister *> out_regs;
   std::unordered_map<std::string, InputRegister *> in_regs;
   std::unordered_set<std::string> seen_reg_names;
-  for (auto in_reg : circuit->input_regs) {
+  for (auto in_reg : circuit->Attr<InputRegister>()) {
     in_regs.emplace(in_reg->reg_name, in_reg);
   }
 
-  for (auto out_reg : circuit->output_regs) {
+  for (auto out_reg : circuit->Attr<OutputRegister>()) {
     out_regs.emplace(out_reg->reg_name, out_reg);
   }
 
   for (const auto &[name, op] : in_regs) {
     if (!out_regs.count(name)) {
       out_regs.emplace(name,
-                       circuit->output_regs.Create(op->size, op->reg_name));
+                       circuit->Create<OutputRegister>(op->size, op->reg_name));
     }
   }
 
   for (const auto &[name, op] : out_regs) {
     if (!in_regs.count(name)) {
-      in_regs.emplace(name, circuit->input_regs.Create(op->size, op->reg_name));
+      in_regs.emplace(name, circuit->Create<InputRegister>(op->size, op->reg_name));
     }
   }
 
   std::unordered_map<std::string, PreservedCondition *> preserved_regs;
-  for (auto cond : circuit->preserved_regs) {
+  for (auto cond : circuit->Attr<PreservedCondition>()) {
     auto lhs = dynamic_cast<InputRegister *>(cond->operands[0]);
     auto rhs = dynamic_cast<OutputRegister *>(cond->operands[1]);
     CHECK_NOTNULL(lhs);
@@ -523,11 +546,10 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
     preserved_regs.emplace(lhs->reg_name, cond);
   }
 
-  auto xor_all = circuit->xor_all.Create();
+  auto xor_all = circuit->Create<OnlyOneCondition>();
   circuit->operands.AddUse(xor_all);
 
-  for (auto [offset, op] : vis.offset_to_op) {
-    (void) offset;
+  for (auto [_, op] : vis.id_to_op) {
     auto verify = dynamic_cast<VerifyInstruction *>(op);
     if (!verify) {
       continue;
@@ -563,7 +585,7 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
       if (!seen_reg_names.count(name)) {
         auto &cond = preserved_regs[name];
         if (!cond) {
-          cond = circuit->preserved_regs.Create();
+          cond = circuit->Create<PreservedCondition>();
           cond->operands.AddUse(in_regs[name]);
           cond->operands.AddUse(out_regs[name]);
         }
@@ -572,18 +594,21 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
     }
   }
 
+  // TODO(lukas): I think this is not supposed to be here.
   circuit->RemoveUnused();
 
   return circuit;
 }
 
 void Circuit::RemoveUnused(void) {
-#define CLEAR_UNUSED(cls, field) num_removed += field.RemoveUnused();
-  for (auto num_removed = 1ull; num_removed;) {
+  uint64_t num_removed = 0;
+  auto clear = [&](auto &field) {
+    num_removed += field.RemoveUnused();
+  };
+  while (num_removed) {
     num_removed = 0;
-    FOR_EACH_OPERATION(CLEAR_UNUSED)
+    this->ForEachField(clear);
   }
-#undef CLEAR_UNUSED
 }
 
 }  // namespace circuitous

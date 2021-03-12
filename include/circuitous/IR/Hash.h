@@ -2,6 +2,9 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
+#pragma once
+
+#include <cassert>
 #include <cstdint>
 #include <memory>
 
@@ -28,6 +31,13 @@ class HashVisitor {
   class Impl;
 
   std::unique_ptr<Impl> impl;
+};
+
+// Hash of `op` is `op->id()`
+struct IdentityHasher {
+  uint64_t operator[](Operation *op);
+  void Force(Operation *, uint64_t) { assert(0 && "Not implemented."); }
+  void Reset() {}
 };
 
 }  // namespace circuitous

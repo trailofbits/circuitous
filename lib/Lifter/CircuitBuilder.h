@@ -37,29 +37,20 @@ struct InstructionSelection {
   using imm_meta_list_t = std::map<remill::Operand *, imm_meta_t>;
   std::vector<imm_meta_list_t> imms;
 
-  // Each `1` bit in this bitset represents a bit that is always zero or always
-  // one at the same position across all of the encodings in `encodings`.
-  // InstructionEncoding known_bits;
+  std::vector<llvm::Function *> lifted_fns;
 };
 
-// struct EncodedInstructionPart {
+struct ISEL_view {
+  const remill::Instruction &instruction;
+  const InstructionEncoding &encoding;
+  const InstructionSelection::imm_meta_list_t &imms;
+  llvm::Function *lifted;
 
-//   // A bit offset in an `InstructionEncoding`.
-//   unsigned offset{0};
-
-//   // The number of bits spanned by this part in an `InstructionEncoding`.
-//   unsigned num_bits{0};
-
-//   // Which instruction semantics know the values of these bits. Maps the
-//   // function name to the value of the bits.
-//   std::map<std::string, std::bitset<64>> known_by;
-
-//   // Which instruction semantics don't know the values of these bits.
-//   std::set<std::string> unknown_by;
-// };
-
-// Represents the components of an instruction decoding.
-// using EncodedInstructionParts = std::vector<EncodedInstructionPart>;
+  ISEL_view(const InstructionSelection &isel, uint64_t i)
+    : instruction(isel.instructions[i]), encoding(isel.encodings[i]),
+      imms(isel.imms[i]), lifted(isel.lifted_fns[i])
+  {}
+};
 
 enum : unsigned { kMaxNumBytesRead = 16u };
 
@@ -72,13 +63,36 @@ class CircuitBuilder {
   struct Circuit0 {
     static constexpr const char *name = "circuit_0";
 
-    Circuit0(CircuitBuilder &parent_) : parent(parent_) {}
+    Circuit0(CircuitBuilder &parent_)
+      : parent(parent_)
+    {}
 
     llvm::FunctionType *FnT();
     llvm::Function *GetFn();
     llvm::Function *Create();
 
-    CircuitBuilder &parent;
+    // Helper functions to decouple a lot of stuff that was originally in
+    // one huge function.
+    void InjectISELs(std::vector<InstructionSelection> isels);
+    llvm::BasicBlock *InjectISEL(const InstructionSelection &isel,
+                    llvm::BasicBlock *prev,
+                    llvm::BasicBlock *exit);
+
+    // Inject ISEL into block `into`. Into `exit` a verify call is emitted.
+    void InjectSemantic(llvm::BasicBlock *into, llvm::BasicBlock *exit, ISEL_view isel);
+
+    void CallSemantic(llvm::IRBuilder<> &ir, llvm::Function *fn,
+                      llvm::Value *state, llvm::Value *pc, llvm::Value *memory) {
+      llvm::Value *inst_func_args[remill::kNumBlockArgs] = {};
+      inst_func_args[remill::kPCArgNum] = pc;
+      inst_func_args[remill::kMemoryPointerArgNum] = memory;
+      inst_func_args[remill::kStatePointerArgNum] = state;
+      ir.CreateCall(fn, inst_func_args);
+    }
+
+    // For given ISEL return back list of byte checks that should be included in
+    // the final verify.
+    std::vector<llvm::Value *> ByteFragments(llvm::IRBuilder<> &ir, ISEL_view isel);
 
     using remill_reg = const remill::Register *;
     // register - input - output
@@ -87,6 +101,17 @@ class CircuitBuilder {
     //              ordered hence vector and not map.
     std::vector<Arg> reg_to_args;
     std::vector<llvm::Argument *> inst_bytes;
+    llvm::Value *pc = nullptr;
+
+    // Vector of return values, one for each result of doing a
+    // `__circuitous_verify_decode`.
+    std::vector<llvm::Value *> verified_insts;
+
+    llvm::Function *circuit_fn = nullptr;
+
+    // TODO(lukas): Eventually transform into lift context after all lift methods
+    //              are refactored out.
+    CircuitBuilder &parent;
   };
 
   template <typename T>

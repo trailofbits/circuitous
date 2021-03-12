@@ -5,28 +5,28 @@
 #include <circuitous/IR/IR.h>
 
 #include <ostream>
+#include <iostream>
 
 namespace circuitous {
 
 void PrintJSON(std::ostream &os, Circuit *circuit) {
-  os << "[\"v" << std::hex << reinterpret_cast<uintptr_t>(circuit) << "\",\n";
+  os << "[\"v" << std::hex << circuit->id() << "\",\n";
   os << "{\n";
   auto sep = "";
   auto do_op = [&](circuitous::Operation *op) {
     os << sep;
-    os << "\"v" << std::hex << reinterpret_cast<uintptr_t>(op) << "\":{";
+    os << "\"v" << std::hex << op->id() << "\":{";
     os << "\"op_name\":\"" << op->Name() << "\",";
     os << "\"op_size\":" << std::dec << op->size << ",";
     os << "\"op_code\":" << std::dec << static_cast<unsigned>(op->op_code)
        << ",";
 
-    if (auto llvm_op = dynamic_cast<circuitous::LLVMOperation *>(op); llvm_op) {
+    if (auto llvm_op = dynamic_cast<circuitous::LLVMOperation *>(op)) {
       os << "\"node_type\":{\"LLVMOp\":{";
       os << "\"llvm_opcode\":" << std::dec << llvm_op->llvm_op_code;
       os << ",\"llvm_pred\":" << std::dec << llvm_op->llvm_predicate << "}},";
 
-    } else if (auto extract_op = dynamic_cast<circuitous::Extract *>(op);
-               extract_op) {
+    } else if (auto extract_op = dynamic_cast<circuitous::Extract *>(op)) {
       os << "\"node_type\":{\"ExtractOp\":{";
       os << "\"high\":" << std::dec << extract_op->high_bit_exc;
       os << ",\"low\":" << std::dec << extract_op->low_bit_inc << "}},";
@@ -38,7 +38,7 @@ void PrintJSON(std::ostream &os, Circuit *circuit) {
     sep = "";
     for (auto sub_op : op->operands) {
       os << sep;
-      os << "\"v" << std::hex << reinterpret_cast<uintptr_t>(sub_op) << "\"";
+      os << "\"v" << std::hex << sub_op->id() << "\"";
       sep = ",";
     }
     os << "]}";

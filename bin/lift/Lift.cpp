@@ -3,6 +3,7 @@
  */
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/IR/Verify.hpp>
 #include <circuitous/Printers.h>
 #include <circuitous/Transforms.h>
 #pragma clang diagnostic push
@@ -66,6 +67,13 @@ void TopologySpecificIRPrinter(circuitous::Circuit *circuit) {
   });
 }
 
+void VerifyIR(circuitous::Circuit *circuit) {
+  const auto &[status, msg] = circuitous::Verify(circuit);
+  if (!status) {
+    LOG(FATAL) << "IR is not valid -- Aborting!\n" << msg
+  }
+}
+
 }  // namespace
 
 int main(int argc, char *argv[]) {
@@ -120,7 +128,7 @@ int main(int argc, char *argv[]) {
     std::cerr << "Failed to get circuit IR" << std::endl;
     return EXIT_FAILURE;
   }
-
+  VerifyIR(circuit.get());
 
   std::unordered_map<std::string, bool (*)(circuitous::Circuit *)> optimizers;
   optimizers.emplace("popcount2parity", circuitous::ConvertPopCountToParity);
@@ -141,8 +149,9 @@ int main(int argc, char *argv[]) {
       }
     }
   }
-
   circuit->RemoveUnused();
+
+  VerifyIR(circuit.get());
 
   if (!FLAGS_ir_out.empty()) {
     if (FLAGS_ir_out == "-") {

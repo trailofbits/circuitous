@@ -18,7 +18,34 @@
 
 namespace circuitous {
 
-Operation::~Operation(void) {}
+namespace {
+
+static unsigned SizeOfValue(llvm::Instruction *inst) {
+  auto module = inst->getParent()->getParent()->getParent();
+  const auto &dl = module->getDataLayout();
+  return static_cast<unsigned>(dl.getTypeSizeInBits(inst->getType()));
+}
+
+static unsigned Predicate(llvm::Instruction *inst) {
+  if (auto cmp = llvm::dyn_cast<llvm::CmpInst>(inst); cmp) {
+    return cmp->getPredicate();
+  } else {
+    return LLVMOperation::kInvalidLLVMPredicate;
+  }
+}
+
+template<typename ...Args>
+std::string StreamName(Args &&... args) {
+  std::stringstream ss;
+  (ss << ... << args);
+  return ss.str();
+}
+
+}  // namespace
+
+
+const uint32_t LLVMOperation::kInvalidLLVMPredicate =
+    static_cast<uint32_t>(llvm::CmpInst::BAD_ICMP_PREDICATE);
 
 Operation::Operation(unsigned op_code_, unsigned size_)
     : User(this),
@@ -47,26 +74,9 @@ bool Operation::Equals(const Operation *that) const {
   return true;
 }
 
-const unsigned LLVMOperation::kInvalidLLVMPredicate =
-    static_cast<unsigned>(llvm::CmpInst::BAD_ICMP_PREDICATE);
-
-namespace {
-
-static unsigned SizeOfValue(llvm::Instruction *inst) {
-  auto module = inst->getParent()->getParent()->getParent();
-  const auto &dl = module->getDataLayout();
-  return static_cast<unsigned>(dl.getTypeSizeInBits(inst->getType()));
+std::string Operation::Name(void) const {
+  return to_string(op_code);
 }
-
-static unsigned Predicate(llvm::Instruction *inst) {
-  if (auto cmp = llvm::dyn_cast<llvm::CmpInst>(inst); cmp) {
-    return cmp->getPredicate();
-  } else {
-    return LLVMOperation::kInvalidLLVMPredicate;
-  }
-}
-
-}  // namespace
 
 LLVMOperation::LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
                              unsigned size_)
@@ -77,9 +87,6 @@ LLVMOperation::LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
 LLVMOperation::LLVMOperation(llvm::Instruction *inst)
     : LLVMOperation(inst->getOpcode(), Predicate(inst), SizeOfValue(inst)) {}
 
-#define COMMON_METHODS(cls) \
-  cls::~cls(void) {}
-
 #define STREAM_NAME(cls, ...) \
   std::string cls::Name(void) const { \
     std::stringstream ss; \
@@ -87,15 +94,9 @@ LLVMOperation::LLVMOperation(llvm::Instruction *inst)
     return ss.str(); \
   }
 
-#define RETURN_NAME(cls, ...) \
-  std::string cls::Name(void) const { \
-    return __VA_ARGS__; \
-  }
-
-COMMON_METHODS(LLVMOperation)
 
 Operation *LLVMOperation::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->llvm_insts.Create(llvm_op_code, llvm_predicate, size);
+  return circuit->Create<LLVMOperation>(llvm_op_code, llvm_predicate, size);
 }
 
 std::string LLVMOperation::Name(void) const {
@@ -140,13 +141,11 @@ bool LLVMOperation::Equals(const Operation *that_) const {
   return this->Operation::Equals(that_);
 }
 
-COMMON_METHODS(Undefined)
 STREAM_NAME(Undefined, "UNDEF_" << size)
 Operation *Undefined::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->undefs.Create(size);
+  return circuit->Create<Undefined>(size);
 }
 
-COMMON_METHODS(Constant)
 
 std::string Constant::Name(void) const {
   std::stringstream ss;
@@ -165,20 +164,22 @@ bool Constant::Equals(const Operation *that_) const {
   }
 }
 
-Operation *Constant::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->constants.Create(bits, size);
+std::string BitOperation::Name(void) const {
+  if (this->operands.Size() == 0) {
+    LOG(ERROR) << this->id() << ": " << to_string(this->op_code) << " has no operands!";
+    return StreamName(to_string(this->op_code), "_", "IS_INVALID");
+  }
+  return StreamName(to_string(op_code), "_", this->operands[0]->size);
 }
 
-BitOperation::~BitOperation(void) {}
-
-COMMON_METHODS(Not)
-RETURN_NAME(Not, "NOT")
+Operation *Constant::CloneWithoutOperands(Circuit *circuit) const {
+  return circuit->Create<Constant>(bits, size);
+}
 
 Operation *Not::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->nots.Create(size);
+  return circuit->Create<Not>(size);
 }
 
-COMMON_METHODS(Extract)
 STREAM_NAME(Extract, "EXTRACT_" << high_bit_exc << "_" << low_bit_inc)
 
 bool Extract::Equals(const Operation *that_) const {
@@ -194,54 +195,40 @@ bool Extract::Equals(const Operation *that_) const {
 }
 
 Operation *Extract::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->extracts.Create(low_bit_inc, high_bit_exc);
+  return circuit->Create<Extract>(low_bit_inc, high_bit_exc);
 }
-
-COMMON_METHODS(Concat)
-RETURN_NAME(Concat, "CONCAT")
 
 Operation *Concat::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->concats.Create(size);
+  return circuit->Create<Concat>(size);
 }
-
-COMMON_METHODS(PopulationCount)
-STREAM_NAME(PopulationCount, "POPULATION_COUNT_" << operands[0]->size)
 
 Operation *PopulationCount::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->popcounts.Create(size);
+  return circuit->Create<PopulationCount>(size);
 }
-
-COMMON_METHODS(CountLeadingZeroes)
-STREAM_NAME(CountLeadingZeroes, "COUNT_LEADING_ZEROES_" << operands[0]->size)
 
 Operation *CountLeadingZeroes::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->clzs.Create(size);
+  return circuit->Create<CountLeadingZeroes>(size);
 }
-
-COMMON_METHODS(CountTrailingZeroes)
-STREAM_NAME(CountTrailingZeroes, "COUNT_TRAILING_ZEROES_" << operands[0]->size)
 
 Operation *CountTrailingZeroes::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->ctzs.Create(size);
+  return circuit->Create<CountTrailingZeroes>(size);
 }
-
-Condition::~Condition(void) {}
-
-COMMON_METHODS(Parity)
-STREAM_NAME(Parity, "PARITY_" << operands[0]->size)
 
 Operation *Parity::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->parities.Create();
+  return circuit->Create<Parity>();
 }
 
-COMMON_METHODS(ReadMemoryCondition)
+std::string Parity::Name() const {
+  CHECK(operands.Size() != 0);
+  return StreamName(to_string(this->op_code), "_", operands[0]-size);
+}
+
 STREAM_NAME(ReadMemoryCondition, "CHECK_MEM_READ_ADDR_" << operands[0]->size)
 
 Operation *ReadMemoryCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->memory_reads.Create();
+  return circuit->Create<ReadMemoryCondition>();
 }
 
-COMMON_METHODS(InputRegister)
 STREAM_NAME(InputRegister, "INPUT_REGISTER_" << reg_name << "_" << size)
 
 bool InputRegister::Equals(const Operation *that_) const {
@@ -258,7 +245,15 @@ Operation *InputRegister::CloneWithoutOperands(Circuit *) const {
   return const_cast<InputRegister *>(this);
 }
 
-COMMON_METHODS(OutputRegister)
+STREAM_NAME(InputImmediate, "INPUT_IMMEDIATE_" << size)
+bool InputImmediate::Equals(const Operation *other) const {
+  return this->Operation::Equals(other);
+}
+
+Operation *InputImmediate::CloneWithoutOperands(Circuit *) const {
+  return const_cast<InputImmediate *>(this);
+}
+
 STREAM_NAME(OutputRegister, "OUTPUT_REGISTER_" << reg_name << "_" << size)
 
 bool OutputRegister::Equals(const Operation *that_) const {
@@ -275,7 +270,6 @@ Operation *OutputRegister::CloneWithoutOperands(Circuit *) const {
   return const_cast<OutputRegister *>(this);
 }
 
-COMMON_METHODS(RegisterCondition)
 STREAM_NAME(
     RegisterCondition,
     "OUTPUT_REGISTER_CHECK_"
@@ -283,17 +277,15 @@ STREAM_NAME(
         << "_" << operands[kOutputRegister]->size)
 
 Operation *RegisterCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->transitions.Create();
+  return circuit->Create<RegisterCondition>();
 }
 
-COMMON_METHODS(HintCondition)
 STREAM_NAME(HintCondition, "HINT_CHECK_" << operands[kHint]->size)
 
 Operation *HintCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->hint_conds.Create();
+  return circuit->Create<HintCondition>();
 }
 
-COMMON_METHODS(PreservedCondition)
 STREAM_NAME(
     PreservedCondition,
     "PRESERVED_REGISTER_CHECK_"
@@ -301,10 +293,11 @@ STREAM_NAME(
         << "_" << operands[kOutputRegister]->size)
 
 Operation *PreservedCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->transitions.Create();
+  // TOOD(lukas): Was originally, is it correct?
+  // return circuit->transitions.Create();
+  return circuit->Create<RegisterCondition>();
 }
 
-COMMON_METHODS(CopyCondition)
 STREAM_NAME(
     CopyCondition,
     "COPIED_REGISTER_CHECK_"
@@ -312,67 +305,51 @@ STREAM_NAME(
         << "_" << operands[kOutputRegister]->size)
 
 Operation *CopyCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->transitions.Create();
+  // TODO(lukas): Same as above
+  return circuit->Create<RegisterCondition>();
 }
 
-COMMON_METHODS(Hint)
 STREAM_NAME(Hint, "HINT_" << size)
 
 Operation *Hint::CloneWithoutOperands(Circuit *) const {
   return const_cast<Hint *>(this);
 }
 
-COMMON_METHODS(InputInstructionBits)
 STREAM_NAME(InputInstructionBits, "INSTRUCTION_BITS_" << size)
 
 Operation *InputInstructionBits::CloneWithoutOperands(Circuit *) const {
   return const_cast<InputInstructionBits *>(this);
 }
 
-COMMON_METHODS(DecodeCondition)
 STREAM_NAME(DecodeCondition, "INSTRUCTION_BITS_CHECK_" << operands[0]->size)
 
 Operation *DecodeCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->decode_conditions.Create();
+  return circuit->Create<DecodeCondition>();
 }
 
-COMMON_METHODS(VerifyInstruction)
 STREAM_NAME(VerifyInstruction, "ALL_OF_" << operands.Size())
 
 Operation *VerifyInstruction::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->verifications.Create();
+  return circuit->Create<VerifyInstruction>();
 }
 
-COMMON_METHODS(OnlyOneCondition)
 STREAM_NAME(OnlyOneCondition, "ONE_OF_" << operands.Size())
 
 Operation *OnlyOneCondition::CloneWithoutOperands(Circuit *circuit) const {
-  return circuit->xor_all.Create();
+  return circuit->Create<OnlyOneCondition>();
 }
 
 Circuit::~Circuit(void) {
   operands.ClearWithoutErasure();
-#define CLEAR_FIELD(type, field) \
-  for (auto op : field) { \
-    op->operands.ClearWithoutErasure(); \
-  }
-
-  FOR_EACH_OPERATION(CLEAR_FIELD)
-#undef CLEAR_FIELD
+  AllAttributes::ClearWithoutErasure();
 }
-
-RETURN_NAME(Circuit, "RESULT")
 
 Operation *Circuit::CloneWithoutOperands(Circuit *) const {
   LOG(FATAL) << "Not allowed to clone the circuit";
   return nullptr;
 }
 
-#define INIT_FIELD(type, field) , field(this)
-
 Circuit::Circuit(void)
-    : Condition(Operation::kCircuit) FOR_EACH_OPERATION(INIT_FIELD) {}
-
-#undef INIT_FIELD
+    : Condition(Operation::kCircuit), AllAttributes(this) {}
 
 }  // namespace circuitous

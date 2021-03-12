@@ -19,7 +19,7 @@ bool MergeHints(Circuit *circuit) {
 
   // Create a mapping of instructions to the hints that they use.
   std::unordered_map<VerifyInstruction *, std::vector<Hint *>> used_hints;
-  for (auto inst_check : circuit->verifications) {
+  for (auto inst_check : circuit->Attr<VerifyInstruction>()) {
     auto &inst_hints = used_hints[inst_check];
 
     std::function<void(Operation *)> visit;
@@ -67,7 +67,7 @@ bool MergeHints(Circuit *circuit) {
   std::unordered_map<Hint *, Extract *> prev_extract;
   std::vector<bool> used_bits;
 
-  const auto wide_hint = circuit->hints.Create(max_size);
+  const auto wide_hint = circuit->Create<Hint>(max_size);
   for (auto &[inst_check, hints] : used_hints) {
 
     used_bits.clear();
@@ -104,7 +104,7 @@ bool MergeHints(Circuit *circuit) {
 
         // We've found an allocation.
         if (!failed) {
-          extract = circuit->extracts.Create(i, i + hint->size);
+          extract = circuit->Create<Extract>(i, i + hint->size);
           extract->operands.AddUse(wide_hint);
           hint->ReplaceAllUsesWith(extract);
 
