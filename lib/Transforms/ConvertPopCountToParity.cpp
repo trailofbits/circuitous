@@ -36,20 +36,20 @@ bool ConvertPopCountToParity(Circuit *circuit) {
       return;
     }
 
-    auto new_parity = circuit->Create<Parity>();
-    auto new_zext = circuit->Create<LLVMOperation>(
+    Parity *new_parity = circuit->Create<Parity>();
+    LLVMOperation *new_zext = circuit->Create<LLVMOperation>(
         llvm::Instruction::ZExt, LLVMOperation::kInvalidLLVMPredicate,
         and_inst->size);
 
     and_inst->ReplaceAllUsesWith(new_zext);
 
-    new_zext->operands.AddUse(new_parity);
-    new_parity->operands.AddUse(pop_count->operands[0]);
+    new_zext->AddUse(new_parity);
+    new_parity->AddUse(pop_count->operands[0]);
   };
 
   // Go find uses of the popcount IR node, and then find uses that mask the
   // result with an `AND`.
-  circuit->Attr<PopulationCount>().RemoveUnused();
+  circuit->RemoveUnused<PopulationCount>();
   for (auto i = 0u; i < num_pop_counts; ++i) {
     const auto inst = circuit->Attr<PopulationCount>()[i];
     inst->ForEachUse<LLVMOperation>([=](LLVMOperation *user) {
@@ -64,7 +64,7 @@ bool ConvertPopCountToParity(Circuit *circuit) {
     });
   }
 
-  return 0u < circuit->Attr<LLVMOperation>().RemoveUnused();
+  return 0u < circuit->RemoveUnused<LLVMOperation>();
 }
 
 }  // namespace circuitous
