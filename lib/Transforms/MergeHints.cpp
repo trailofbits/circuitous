@@ -105,7 +105,7 @@ bool MergeHints(Circuit *circuit) {
         // We've found an allocation.
         if (!failed) {
           extract = circuit->Create<Extract>(i, i + hint->size);
-          extract->operands.AddUse(wide_hint);
+          extract->AddUse(wide_hint);
           hint->ReplaceAllUsesWith(extract);
 
           for (auto j = 0u; j < hint->size; ++j, ++i) {
