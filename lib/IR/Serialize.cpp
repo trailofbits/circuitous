@@ -127,7 +127,7 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
   template <typename T>
   void Write(const UseList<T> &elems) {
     DEBUG_WRITE("[");
-    Write<uint32_t>(static_cast<uint32_t>(elems.Size()));
+    Write<uint32_t>(static_cast<uint32_t>(elems.size()));
     auto sep = "";
     for (const auto elem : elems) {
       DEBUG_WRITE(sep);
@@ -301,17 +301,16 @@ class DeserializeVisitor : FileConfig {
     DEBUG_READ("]");
   }
 
-  template <typename T>
-  void Read(UseList<T> &elems) {
+  void ReadOps(Operation *elems) {
     DEBUG_READ("[");
     uint32_t size = 0u;
     Read(size);
     auto sep = "";
     for (auto i = 0u; i < size; ++i) {
-      T *ref = nullptr;
+      Operation *ref = nullptr;
       DEBUG_READ(sep);
       Read(ref);
-      elems.AddUse(ref);
+      elems->AddUse(ref);
       sep = "|";
     }
     DEBUG_READ("]");
@@ -351,8 +350,7 @@ class DeserializeVisitor : FileConfig {
     DEBUG_READ("{INIMM:");
     Read(size);
     auto self = circuit->Adopt<InputImmediate>(id, size);
-    Read(self->operands);
-    CHECK(self->operands.Size() == 1);
+    ReadOps(self);
     DEBUG_READ("}");
     return self;
   }
@@ -387,7 +385,7 @@ class DeserializeVisitor : FileConfig {
     Read(value);
     DEBUG_READ("}");
     auto op = circuit->Adopt<Extract>(id, low_bit_inc, high_bit_exc);
-    op->operands.AddUse(value);
+    op->AddUse(value);
     return op;
   }
 
@@ -400,7 +398,7 @@ class DeserializeVisitor : FileConfig {
     Read(llvm_op_code);
     Read(llvm_predicate);
     auto op = circuit->Adopt<LLVMOperation>(id, llvm_op_code, llvm_predicate, size);
-    Read(op->operands);
+    ReadOps(op);
     DEBUG_READ("}");
     return op;
   }
@@ -412,7 +410,7 @@ class DeserializeVisitor : FileConfig {
     Read(size); \
     auto op = circuit->Adopt<cls>(id, size); \
     DEBUG_READ(";operands="); \
-    Read(op->operands); \
+    ReadOps(op); \
     DEBUG_READ("}"); \
     return op; \
   }
@@ -425,7 +423,7 @@ class DeserializeVisitor : FileConfig {
     CHECK_EQ(size, 1); \
     auto op = circuit->Adopt<cls>(id); \
     DEBUG_READ(";operands="); \
-    Read(op->operands); \
+    ReadOps(op); \
     DEBUG_READ("}"); \
     return op; \
   }
@@ -547,7 +545,7 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   }
 
   auto xor_all = circuit->Create<OnlyOneCondition>();
-  circuit->operands.AddUse(xor_all);
+  circuit->AddUse(xor_all);
 
   for (auto [_, op] : vis.id_to_op) {
     auto verify = dynamic_cast<VerifyInstruction *>(op);
@@ -555,7 +553,7 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
       continue;
     }
 
-    xor_all->operands.AddUse(verify);
+    xor_all->AddUse(verify);
 
     seen_reg_names.clear();
     for (auto op : verify->operands) {
@@ -586,10 +584,10 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
         auto &cond = preserved_regs[name];
         if (!cond) {
           cond = circuit->Create<PreservedCondition>();
-          cond->operands.AddUse(in_regs[name]);
-          cond->operands.AddUse(out_regs[name]);
+          cond->AddUse(in_regs[name]);
+          cond->AddUse(out_regs[name]);
         }
-        verify->operands.AddUse(cond);
+        verify->AddUse(cond);
       }
     }
   }
@@ -598,17 +596,6 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   circuit->RemoveUnused();
 
   return circuit;
-}
-
-void Circuit::RemoveUnused(void) {
-  uint64_t num_removed = 0;
-  auto clear = [&](auto &field) {
-    num_removed += field.RemoveUnused();
-  };
-  while (num_removed) {
-    num_removed = 0;
-    this->ForEachField(clear);
-  }
 }
 
 }  // namespace circuitous
