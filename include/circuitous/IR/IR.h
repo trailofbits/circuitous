@@ -38,7 +38,7 @@ class Visitor;
 class Circuit;
 
 // A general instruction.
-class Operation : public User, public Def<Operation> {
+class Operation : public Node<Operation> {
  public:
   virtual ~Operation(void) = default;
 
@@ -184,11 +184,6 @@ class Operation : public User, public Def<Operation> {
   // Size in bits of this instruction's "result" value. For example, a zero-
   // extension will represent the size of the output value.
   const unsigned size{0};
-
-  // Ordered list of operands. For example, if we had `add a, b`, then
-  // likely what we have is really an equivalence class pointing to two
-  // instructions: `add a, b` and `add b, a`.
-  UseList<Operation> operands;
 
   template <typename Vis>
   void Traverse(Vis &vis) {
