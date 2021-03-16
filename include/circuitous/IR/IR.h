@@ -566,7 +566,14 @@ template<typename OP>
 struct MaterializedDefList {
   DefList<OP> data;
 
-  MaterializedDefList(User *owner) : data(owner) {}
+  std::size_t RemoveUnused() {
+    auto notify_operands = [](auto &&x) {
+      for (auto op : x->operands) {
+        op->RemoveUser(x.get());
+      }
+    };
+    return data.RemoveUnused(notify_operands);
+  }
 
   template<typename CB>
   void ForEachOperation(CB &&cb) {
@@ -590,8 +597,6 @@ struct Attributes : MaterializedDefList<Ops> ... {
   template<typename T>
   using parent = MaterializedDefList<T>;
 
-  Attributes(User *owner) : parent<Ops>(owner)... {}
-
   template<typename T>
   auto &Attr() {
     return this->parent<T>::Attr();
@@ -614,6 +619,10 @@ struct Attributes : MaterializedDefList<Ops> ... {
   template<typename CB>
   void ForEachField(CB cb) {
     (parent<Ops>::Apply(cb), ...);
+  }
+
+  std::size_t RemoveUnused() {
+    return (parent<Ops>::RemoveUnused() + ...);
   }
 };
 
@@ -683,8 +692,14 @@ class Circuit : public Condition, AllAttributes {
 
   static std::unique_ptr<Circuit> Deserialize(std::istream &is);
 
-  void RemoveUnused(void);
+  void RemoveUnused(void) {
+    while (this->AllAttributes::RemoveUnused()) {}
+  }
 
+  template<typename T>
+  std::size_t RemoveUnused(void) {
+    return this->AllAttributes::parent<T>::RemoveUnused();
+  }
   // clang-format off
 
   using AllAttributes::ForEachOperation;
