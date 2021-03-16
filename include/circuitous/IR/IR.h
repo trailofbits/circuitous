@@ -175,7 +175,7 @@ class Operation : public Node<Operation> {
     kInvalid = 0xff
   };
 
-  uint64_t id() { return _id; }
+  uint64_t id() const { return _id; }
 
   // The "opcode" of this.
   const unsigned op_code{0};
@@ -239,6 +239,71 @@ static inline std::string to_string(Kind kind) {
   inline explicit derived_class(void) \
       : Condition(derived_class::kind) {}
 
+// Some bitwise operation; must be extended.
+class BitOperation : public Operation {
+  static constexpr inline uint32_t kind = kInvalid;
+
+ public:
+  std::string Name(void) const override;
+
+ protected:
+  using Operation::Operation;
+};
+
+template<typename T>
+struct ValueLeaf : public Operation {
+  static constexpr inline uint32_t kind = kInvalid;
+
+  std::string Name(void) const override;
+  using Operation::Operation;
+
+  T value;
+};
+
+// An input register.
+class InputRegister : public Operation {
+  static constexpr inline uint32_t kind = kInputRegister;
+ public:
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+  std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
+
+  inline explicit InputRegister(unsigned size_, std::string reg_name_)
+      : Operation(Operation::kInputRegister, size_),
+        reg_name(std::move(reg_name_)) {}
+
+  const std::string reg_name;
+};
+
+class InputImmediate : public Operation {
+  static constexpr inline uint32_t kind = kInputImmediate;
+ public:
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+  std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
+
+  explicit InputImmediate(unsigned size_)
+      : Operation(Operation::kInputImmediate, size_) {}
+};
+
+// An output register.
+class OutputRegister : public Operation {
+  static constexpr inline uint32_t kind = kOutputRegister;
+ public:
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+  std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
+
+  inline explicit OutputRegister(unsigned size_, std::string reg_name_)
+      : Operation(Operation::kOutputRegister, size_),
+        reg_name(std::move(reg_name_)) {}
+
+  const std::string reg_name;
+};
+
 
 // Mirrors an instruction from LLVM. `op_code` is `inst->getOpcode()`.
 class LLVMOperation final : public Operation {
@@ -274,8 +339,9 @@ class Undefined final : public Operation {
 };
 
 class Constant final : public Operation {
-  static constexpr inline uint32_t kind = kConstant;
  public:
+  static constexpr inline uint32_t kind = kConstant;
+
   inline explicit Constant(std::string bits_, unsigned size_)
       : Operation(Operation::kConstant, size_),
         bits(bits_) {}
@@ -288,17 +354,6 @@ class Constant final : public Operation {
   // Value of this constant. The least significant bit is stored in `bits[0]`,
   // and the most significant bit is stored in `bits[size - 1u]`.
   const std::string bits;
-};
-
-// Some bitwise operation; must be extended.
-class BitOperation : public Operation {
-  static constexpr inline uint32_t kind = kInvalid;
-
- public:
-  std::string Name() const override;
-
- protected:
-  using Operation::Operation;
 };
 
 // Flip all bits in a bitvector.
@@ -397,50 +452,6 @@ class ReadMemoryCondition final : public Condition {
   std::string Name(void) const override;
 };
 
-// An input register.
-class InputRegister : public Operation {
-  static constexpr inline uint32_t kind = kInputRegister;
- public:
-
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
-  bool Equals(const Operation *that) const override;
-
-  inline explicit InputRegister(unsigned size_, std::string reg_name_)
-      : Operation(Operation::kInputRegister, size_),
-        reg_name(std::move(reg_name_)) {}
-
-  const std::string reg_name;
-};
-
-class InputImmediate : public Operation {
-  static constexpr inline uint32_t kind = kInputImmediate;
- public:
-
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
-  bool Equals(const Operation *that) const override;
-
-  explicit InputImmediate(unsigned size_)
-      : Operation(Operation::kInputImmediate, size_) {}
-};
-
-// An output register.
-class OutputRegister : public Operation {
-  static constexpr inline uint32_t kind = kOutputRegister;
- public:
-
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
-  bool Equals(const Operation *that) const override;
-
-  inline explicit OutputRegister(unsigned size_, std::string reg_name_)
-      : Operation(Operation::kOutputRegister, size_),
-        reg_name(std::move(reg_name_)) {}
-
-  const std::string reg_name;
-};
-
 // A comparison between the proposed output value of a register, and the
 // output register itself.
 class RegisterCondition final : public Condition {
@@ -519,15 +530,15 @@ class Hint final : public Operation {
  public:
 
   inline explicit Hint(unsigned size_)
-      : Operation(Operation::kHint, size_),
-        weak_conditions(this, true) {}
+      : Operation(Operation::kHint, size_) {}
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 
   // Weak list of conditions that compare this hint value against what it is
   // hinting.
-  UseList<Operation> weak_conditions;
+  // TODO(lukas): ???
+  //UseList<Operation> weak_conditions;
 };
 
 class VerifyInstruction final : public Condition {
@@ -555,7 +566,14 @@ template<typename OP>
 struct MaterializedDefList {
   DefList<OP> data;
 
-  MaterializedDefList(User *owner) : data(owner) {}
+  std::size_t RemoveUnused() {
+    auto notify_operands = [](auto &&x) {
+      for (auto op : x->operands) {
+        op->RemoveUser(x.get());
+      }
+    };
+    return data.RemoveUnused(notify_operands);
+  }
 
   template<typename CB>
   void ForEachOperation(CB &&cb) {
@@ -579,8 +597,6 @@ struct Attributes : MaterializedDefList<Ops> ... {
   template<typename T>
   using parent = MaterializedDefList<T>;
 
-  Attributes(User *owner) : parent<Ops>(owner)... {}
-
   template<typename T>
   auto &Attr() {
     return this->parent<T>::Attr();
@@ -603,6 +619,10 @@ struct Attributes : MaterializedDefList<Ops> ... {
   template<typename CB>
   void ForEachField(CB cb) {
     (parent<Ops>::Apply(cb), ...);
+  }
+
+  std::size_t RemoveUnused() {
+    return (parent<Ops>::RemoveUnused() + ...);
   }
 };
 
@@ -672,8 +692,14 @@ class Circuit : public Condition, AllAttributes {
 
   static std::unique_ptr<Circuit> Deserialize(std::istream &is);
 
-  void RemoveUnused(void);
+  void RemoveUnused(void) {
+    while (this->AllAttributes::RemoveUnused()) {}
+  }
 
+  template<typename T>
+  std::size_t RemoveUnused(void) {
+    return this->AllAttributes::parent<T>::RemoveUnused();
+  }
   // clang-format off
 
   using AllAttributes::ForEachOperation;
