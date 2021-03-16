@@ -48,13 +48,6 @@ target_compile_options(circuitous_settings INTERFACE
 # library targets
 #
 
-add_library(circuitous_util STATIC
-  lib/Util/UseDef.cpp
-)
-
-target_include_directories(circuitous_util PUBLIC circuitous_settings)
-target_link_libraries(circuitous_util PUBLIC circuitous_settings)
-
 add_library(circuitous_ir STATIC
   lib/IR/Hash.cpp
   lib/IR/IR.cpp
@@ -89,6 +82,7 @@ add_library(circuitous_transforms STATIC
   lib/Transforms/ExtractCommonTopologies.cpp
   lib/Transforms/MergeHints.cpp
   lib/Transforms/StrengthReducePopulationCount.cpp
+  lib/Transforms/MergeByBytes.cpp
 )
 
 target_include_directories(circuitous_transforms PUBLIC circuitous_settings)
@@ -107,7 +101,6 @@ target_link_libraries(circuitous-lift PUBLIC
   circuitous_lifter
   circuitous_ir
   circuitous_printers
-  circuitous_util
   circuitous_transforms
 )
 
@@ -121,7 +114,6 @@ add_executable(circuitous-run
 target_link_libraries(circuitous-run PUBLIC
   gflags
   circuitous_ir
-  circuitous_util
   circuitous_printers
 )
 
