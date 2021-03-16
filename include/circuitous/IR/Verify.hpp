@@ -51,6 +51,7 @@ struct Verifier {
 
 
   bool VerifyArity(Operation *op) {
+    CHECK(op);
     switch (op->op_code) {
       case Operation::kConstant:
       case Operation::kUndefined:
@@ -91,6 +92,7 @@ struct Verifier {
   }
 
   bool Verify(Operation *op) {
+    CHECK(op);
     status &= VerifyArity(op);
     for (auto o : op->operands) {
       status &= Verify(o);
@@ -205,4 +207,16 @@ static inline std::pair<bool, std::string> VerifyCircuit(Circuit *circuit) {
   return {verifier.status, verifier.Report()};
 }
 
- } // namespave circuitous
+static inline void VerifyCircuit(const std::string &prefix,
+                                 Circuit *circuit,
+                                 const std::string &suffix="Done.") {
+  LOG(INFO) << prefix;
+  const auto &[status, msg] = VerifyCircuit(circuit);
+  if (!status) {
+    LOG(ERROR) << msg;
+    LOG(FATAL) << "Circuit is invalid";
+  }
+  LOG(INFO) << suffix;
+}
+
+} // namespave circuitous
