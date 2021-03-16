@@ -142,13 +142,14 @@ struct Node : Value<T>, User<T> {
           return i;
         }
       }
+      LOG(FATAL) << "User and uses are out of sync.";
     };
 
     for (auto user : this->users) {
       // NOTE(lukas): I actually do not expect these vectors to grow much.
       //              And given the cache friendliness of vector this should
       //              not be a bottle-neck.
-      auto idx = fetch(user->operands,user);
+      auto idx = fetch(user->operands);
       user->operands[idx] = other;
 
       other->users.push_back(user);
