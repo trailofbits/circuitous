@@ -63,8 +63,8 @@ MergeLeaves(Circuit *circuit, const OpUseList &op_uses,
       check = last_check;
     } else {
       check = circuit->Create<HintCondition>();
-      check->operands.AddUse(op);
-      check->operands.AddUse(hint);
+      check->AddUse(op);
+      check->AddUse(hint);
       last_check = check;
       last_op = op;
     }
@@ -72,7 +72,7 @@ MergeLeaves(Circuit *circuit, const OpUseList &op_uses,
     // Wire it in so that the verification that transitively needs to use
     // `hint` also checks that `hint` has the expected value.
     for (VerifyInstruction *verify : (*verifications)) {
-      verify->operands.AddUse(check);
+      verify->AddUse(check);
     }
   }
 
@@ -188,7 +188,7 @@ static Operation *Merge(Circuit *circuit, const OpUseList &op_uses,
       return nullptr;
     }
 
-    merged_op->operands.AddUse(sub_op);
+    merged_op->AddUse(sub_op);
   }
 
   return merged_op;
@@ -222,7 +222,7 @@ ExtractCommonTopologies(Circuit *circuit, const OpUseList &op_uses,
 // shared by multiple different expressions.
 bool ExtractCommonTopologies(Circuit *circuit) {
 
-  circuit->Attr<RegisterCondition>().RemoveUnused();
+  circuit->RemoveUnused<RegisterCondition>();
 
   std::unordered_map<Operation *, VerifyList> values_by_inst;
 

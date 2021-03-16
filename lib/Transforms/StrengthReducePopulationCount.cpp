@@ -14,7 +14,7 @@ namespace circuitous {
 // Look for uses of population count that operates on a zero-extended value, and
 // change it to operate on the original value.
 bool StrengthReducePopulationCount(Circuit *circuit) {
-  circuit->Attr<PopulationCount>().RemoveUnused();
+  circuit->RemoveUnused<PopulationCount>();
   const auto num_pop_counts = circuit->Attr<PopulationCount>().Size();
   for (auto i = 0u; i < num_pop_counts; ++i) {
     const auto inst = circuit->Attr<PopulationCount>()[i];
@@ -32,11 +32,11 @@ bool StrengthReducePopulationCount(Circuit *circuit) {
         inst->size);
 
     inst->ReplaceAllUsesWith(new_zext);
-    new_zext->operands.AddUse(new_popcount);
-    new_popcount->operands.AddUse(real_val);
+    new_zext->AddUse(new_popcount);
+    new_popcount->AddUse(real_val);
   }
 
-  return 0u < circuit->Attr<PopulationCount>().RemoveUnused();
+  return 0u < circuit->RemoveUnused<PopulationCount>();
 }
 
 }  // namespace circuitous
