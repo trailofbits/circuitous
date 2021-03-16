@@ -175,7 +175,7 @@ class Operation : public Node<Operation> {
     kInvalid = 0xff
   };
 
-  uint64_t id() { return _id; }
+  uint64_t id() const { return _id; }
 
   // The "opcode" of this.
   const unsigned op_code{0};
