@@ -158,21 +158,21 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       value_read = impl->concats.Create(size);
       if (arch->MemoryAccessIsLittleEndian()) {
         for (auto i = 0u, j = num_bytes; i < num_bytes; ++i) {
-          value_read->operands.AddUse(bytes[--j]);
+          value_read->AddUse(bytes[--j]);
         }
       } else {
         for (auto i = 0u; i < num_bytes; ++i) {
-          value_read->operands.AddUse(bytes[i]);
+          value_read->AddUse(bytes[i]);
         }
       }
     }
 
     read = impl->memory_reads.Create();
-    read->operands.AddUse(val_to_op[read_call->getArgOperand(1u)]);
-    read->operands.AddUse(expected_addr);
-    read->operands.AddUse(value_read);
+    read->AddUse(val_to_op[read_call->getArgOperand(1u)]);
+    read->AddUse(expected_addr);
+    read->AddUse(value_read);
 
-    verifier->operands.AddUse(read);
+    verifier->AddUse(read);
 
     for (auto byte : bytes) {
       if (byte) {
@@ -229,7 +229,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     std::deque<Operation *> partials;
     for (unsigned i = static_cast<unsigned>(from); i < from + size; i += step) {
       auto op = impl->Create<Extract>(i, i + step);
-      op->operands.AddUse(inst_bytes);
+      op->AddUse(inst_bytes);
       partials.push_front(op);
     }
 
@@ -244,7 +244,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     // expect `00000012` therefore we must reorder them and then concat.
     auto full = impl->Create<Concat>(static_cast<unsigned>(size));
     for (auto x : partials) {
-      full->operands.AddUse(x);
+      full->AddUse(x);
     }
     return full;
   }
@@ -259,7 +259,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     auto full = val_to_op[arg_i];
     CHECK(full);
     auto as_input_imm = impl->Create<InputImmediate>(static_cast<uint32_t>(size));
-    as_input_imm->operands.AddUse(full);
+    as_input_imm->AddUse(full);
     return as_input_imm;
   }
 
@@ -279,7 +279,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
         static_cast<unsigned>(from),
         static_cast<unsigned>(from + size));
     LOG(INFO) << from << ", " << size;
-    op->operands.AddUse(inst_bytes);
+    op->AddUse(inst_bytes);
     return op;
   }
 
@@ -304,7 +304,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
           op = impl->Create<Undefined>(res_size);
         } else {
           op = impl->Create<PopulationCount>(res_size);
-          op->operands.AddUse(op0);
+          op->AddUse(op0);
         }
         return;
       }
@@ -314,7 +314,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
           op = impl->Create<Undefined>(res_size);
         } else {
           op = impl->Create<CountLeadingZeroes>(res_size);
-          op->operands.AddUse(op0);
+          op->AddUse(op0);
         }
         return;
       }
@@ -324,7 +324,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
           op = impl->Create<Undefined>(res_size);
         } else {
           op = impl->Create<CountTrailingZeroes>(res_size);
-          op->operands.AddUse(op0);
+          op->AddUse(op0);
         }
         return;
       }
@@ -393,30 +393,30 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       }
 
       op = impl->Create<LLVMOperation>(val);
-      op->operands.AddUse(cond_op);
+      op->AddUse(cond_op);
 
       // True side is undefined; convert it into a defined value that is not
       // the same as the False side.
       if (true_op->op_code == Operation::kUndefined) {
         auto not_false_op = impl->Create<Not>(num_bits);
-        not_false_op->operands.AddUse(false_op);
+        not_false_op->AddUse(false_op);
 
-        op->operands.AddUse(not_false_op);
-        op->operands.AddUse(false_op);
+        op->AddUse(not_false_op);
+        op->AddUse(false_op);
 
       // False side is undefined; convert it into a defined value that is not
       // the same as the True side.
       } else if (false_op->op_code == Operation::kUndefined) {
         auto not_true_op = impl->Create<Not>(num_bits);
-        not_true_op->operands.AddUse(true_op);
+        not_true_op->AddUse(true_op);
 
-        op->operands.AddUse(true_op);
-        op->operands.AddUse(not_true_op);
+        op->AddUse(true_op);
+        op->AddUse(not_true_op);
 
       // Neither is undefined, yay!
       } else {
-        op->operands.AddUse(true_op);
-        op->operands.AddUse(false_op);
+        op->AddUse(true_op);
+        op->AddUse(false_op);
       }
     }
   }
@@ -443,8 +443,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     } else {
       op = impl->Create<LLVMOperation>(val);
-      op->operands.AddUse(lhs_op);
-      op->operands.AddUse(rhs_op);
+      op->AddUse(lhs_op);
+      op->AddUse(rhs_op);
     }
   }
 
@@ -642,7 +642,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
       CHECK(!num_output_regs);
 
       op = impl->Create<Extract>(num_inst_bits - arg_size, num_inst_bits);
-      op->operands.AddUse(inst_bits);
+      op->AddUse(inst_bits);
 
       ++num_inst_parts;
       num_inst_bits -= arg_size;
@@ -658,13 +658,13 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
 
   auto verify_inst_func = intrinsics::VerifyInst::CreateFn(module);
   auto all_verifications = impl->Create<OnlyOneCondition>();
-  impl->operands.AddUse(all_verifications);
+  impl->AddUse(all_verifications);
 
   ForEachCallTo(
       circuit_func, verify_inst_func, [&](llvm::CallInst *verify_isnt_call) {
         const auto verify_inst = impl->Create<VerifyInstruction>();
         importer.verifier = verify_inst;
-        all_verifications->operands.AddUse(verify_inst);
+        all_verifications->AddUse(verify_inst);
 
         seen.clear();
 
@@ -676,7 +676,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
               continue;
             }
             seen.insert(op);
-            verify_inst->operands.AddUse(op);
+            verify_inst->AddUse(op);
             continue;
           }
 
@@ -736,9 +736,9 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
                        << remill::LLVMThingToString(expected_val);
           }
 
-          op->operands.AddUse(lhs_op);
-          op->operands.AddUse(rhs_op);
-          verify_inst->operands.AddUse(op);
+          op->AddUse(lhs_op);
+          op->AddUse(rhs_op);
+          verify_inst->AddUse(op);
           seen.insert(op);
         }
       });
