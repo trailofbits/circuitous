@@ -239,6 +239,71 @@ static inline std::string to_string(Kind kind) {
   inline explicit derived_class(void) \
       : Condition(derived_class::kind) {}
 
+// Some bitwise operation; must be extended.
+class BitOperation : public Operation {
+  static constexpr inline uint32_t kind = kInvalid;
+
+ public:
+  std::string Name(void) const override;
+
+ protected:
+  using Operation::Operation;
+};
+
+template<typename T>
+struct ValueLeaf : public Operation {
+  static constexpr inline uint32_t kind = kInvalid;
+
+  std::string Name(void) const override;
+  using Operation::Operation;
+
+  T value;
+};
+
+// An input register.
+class InputRegister : public Operation {
+  static constexpr inline uint32_t kind = kInputRegister;
+ public:
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+  std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
+
+  inline explicit InputRegister(unsigned size_, std::string reg_name_)
+      : Operation(Operation::kInputRegister, size_),
+        reg_name(std::move(reg_name_)) {}
+
+  const std::string reg_name;
+};
+
+class InputImmediate : public Operation {
+  static constexpr inline uint32_t kind = kInputImmediate;
+ public:
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+  std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
+
+  explicit InputImmediate(unsigned size_)
+      : Operation(Operation::kInputImmediate, size_) {}
+};
+
+// An output register.
+class OutputRegister : public Operation {
+  static constexpr inline uint32_t kind = kOutputRegister;
+ public:
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+  std::string Name(void) const override;
+  bool Equals(const Operation *that) const override;
+
+  inline explicit OutputRegister(unsigned size_, std::string reg_name_)
+      : Operation(Operation::kOutputRegister, size_),
+        reg_name(std::move(reg_name_)) {}
+
+  const std::string reg_name;
+};
+
 
 // Mirrors an instruction from LLVM. `op_code` is `inst->getOpcode()`.
 class LLVMOperation final : public Operation {
@@ -274,8 +339,9 @@ class Undefined final : public Operation {
 };
 
 class Constant final : public Operation {
-  static constexpr inline uint32_t kind = kConstant;
  public:
+  static constexpr inline uint32_t kind = kConstant;
+
   inline explicit Constant(std::string bits_, unsigned size_)
       : Operation(Operation::kConstant, size_),
         bits(bits_) {}
@@ -288,17 +354,6 @@ class Constant final : public Operation {
   // Value of this constant. The least significant bit is stored in `bits[0]`,
   // and the most significant bit is stored in `bits[size - 1u]`.
   const std::string bits;
-};
-
-// Some bitwise operation; must be extended.
-class BitOperation : public Operation {
-  static constexpr inline uint32_t kind = kInvalid;
-
- public:
-  std::string Name() const override;
-
- protected:
-  using Operation::Operation;
 };
 
 // Flip all bits in a bitvector.
@@ -397,50 +452,6 @@ class ReadMemoryCondition final : public Condition {
   std::string Name(void) const override;
 };
 
-// An input register.
-class InputRegister : public Operation {
-  static constexpr inline uint32_t kind = kInputRegister;
- public:
-
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
-  bool Equals(const Operation *that) const override;
-
-  inline explicit InputRegister(unsigned size_, std::string reg_name_)
-      : Operation(Operation::kInputRegister, size_),
-        reg_name(std::move(reg_name_)) {}
-
-  const std::string reg_name;
-};
-
-class InputImmediate : public Operation {
-  static constexpr inline uint32_t kind = kInputImmediate;
- public:
-
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
-  bool Equals(const Operation *that) const override;
-
-  explicit InputImmediate(unsigned size_)
-      : Operation(Operation::kInputImmediate, size_) {}
-};
-
-// An output register.
-class OutputRegister : public Operation {
-  static constexpr inline uint32_t kind = kOutputRegister;
- public:
-
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
-  std::string Name(void) const override;
-  bool Equals(const Operation *that) const override;
-
-  inline explicit OutputRegister(unsigned size_, std::string reg_name_)
-      : Operation(Operation::kOutputRegister, size_),
-        reg_name(std::move(reg_name_)) {}
-
-  const std::string reg_name;
-};
-
 // A comparison between the proposed output value of a register, and the
 // output register itself.
 class RegisterCondition final : public Condition {
@@ -519,15 +530,15 @@ class Hint final : public Operation {
  public:
 
   inline explicit Hint(unsigned size_)
-      : Operation(Operation::kHint, size_),
-        weak_conditions(this, true) {}
+      : Operation(Operation::kHint, size_) {}
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 
   // Weak list of conditions that compare this hint value against what it is
   // hinting.
-  UseList<Operation> weak_conditions;
+  // TODO(lukas): ???
+  //UseList<Operation> weak_conditions;
 };
 
 class VerifyInstruction final : public Condition {
