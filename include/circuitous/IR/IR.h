@@ -50,38 +50,38 @@ class Operation : public User, public Def<Operation> {
   enum : unsigned {
 
     // Some sequence of bits.
-    kConstant,
+    kConstant = 0,
 
     // An undefined value, either an `llvm::Undef` or a `__remill_undefined_*`
     // value.
-    kUndefined,
+    kUndefined = 1,
 
     // Every LLVM instruction kind. Things like Add, Sub, etc.
-    kLLVMOperation,
+    kLLVMOperation = 2,
 
     // Flip all bits.
-    kNot,
+    kNot = 3,
 
     // Extract some selection of bits [low_inc, high_exc) from an operand.
     //
     // NOTE(pag): `low_inc` is the lowest order bit, `high_exc` is the highest
     //             order bit.
-    kExtract,
+    kExtract = 4,
 
     // Concatenate an N and an M bit value, producing an (N+M)-bit value.
-    kConcat,
+    kConcat = 5,
 
     // Compute the population count of some bit string.
-    kPopulationCount,
+    kPopulationCount = 6,
 
     // Compute the parity of some bit string. This produces a single bit result.
-    kParity,
+    kParity = 7,
 
     // Count the leading zeroes of a bit string.
-    kCountLeadingZeroes,
+    kCountLeadingZeroes = 8,
 
     // Count the trailing zeros of a bit string.
-    kCountTrailingZeroes,
+    kCountTrailingZeroes = 9,
 
     // Memory read condition. In bitcode, we might have the following:
     //
@@ -97,39 +97,39 @@ class Operation : public User, public Def<Operation> {
     // right thing to read from `addr`.
     //
     // Produces a single bit as output.
-    kReadMemoryCondition,
+    kReadMemoryCondition = 10,
 
     // Named register that is an input to the circuit, representing the value
     // of the register before the instruction "executes".
-    kInputRegister,
+    kInputRegister = 11,
 
-    kInputImmediate,
+    kInputImmediate = 12,
 
     // Named register that is a hint input to teh circuit, representing the
     // value of the register after the instruction "executes". We need to verify
     // that the computed value of the register after the instruction matches
     // this value, which is what `kRegisterCondition` is for.
-    kOutputRegister,
+    kOutputRegister = 13,
 
     // Input to the circuit representing the bits of the instruction.
-    kInputInstructionBits,
+    kInputInstructionBits = 14,
 
     // A condition generated as part of optimizations, where a hint is generated.
-    kHintCondition,
+    kHintCondition = 15,
 
     // Checks that a computed register's value matches some output value, e.g.:
     //
     //      new_EAX == OutputRegister(EAX)
     //
     // Produces a single bit as output.
-    kRegisterCondition,
+    kRegisterCondition = 16,
 
     // Checks that a register's value is preserved, e.g.:
     //
     //      InputRegister(EAX) == OutputRegister(EAX)
     //
     // Produces a single bit as output.
-    kPreservedCondition,
+    kPreservedCondition = 17,
 
     // Checks that a register's value is actually a copy of another register,
     // e.g.:
@@ -137,13 +137,13 @@ class Operation : public User, public Def<Operation> {
     //      InputRegister(EBX) == OutputRegister(EAX)
     //
     // Produces a single bit as output.
-    kCopyCondition,
+    kCopyCondition = 18,
 
     // Condition that checks if a proposed encoding matches some input
     // instruction bits.
     //
     // Produces a single bit as output.
-    kDecodeCondition,
+    kDecodeCondition = 19,
 
     // A condition representing the result of verifying one or more instruction
     // transitions. Initially, there is one verification per unique instruction
@@ -156,23 +156,23 @@ class Operation : public User, public Def<Operation> {
     // function to have "verified" some instruction.
     //
     // Produces a single bit as output.
-    kVerifyInstruction,
+    kVerifyInstruction = 20,
 
     // An input hint value of some size.
-    kHint,
+    kHint = 21,
 
     // A XOR of N bits, i.e. `b1 ^ ... ^ bN`. We construct the circuit such
     // that we know that only one of the bits will ever be `1`, and all others
     // will be zero.
-    kOnlyOneCondition,
+    kOnlyOneCondition = 22,
 
     // Output value (0 or 1) of the circuit. This is really just a specialized
     // equivalence class, where all the inputs are equivalent ways of expressing
     // the circuit, of which the minimum cost one is chosen.
-    kCircuit,
+    kCircuit = 23,
 
     // Invalid -- you cannot have this tag present in you tree.
-    kInvalid
+    kInvalid = 0xff
   };
 
   uint64_t id() { return _id; }
@@ -219,6 +219,7 @@ static inline std::string to_string(Kind kind) {
     case Operation::kReadMemoryCondition: return "READ_MEMORY_CONDITION";
     case Operation::kInputRegister: return "INPUT_REGISTER";
     case Operation::kInputImmediate : return "INPUT_IMMEDIATE";
+    case Operation::kOutputRegister : return "OUTPUT_REGISTER";
     case Operation::kInputInstructionBits : return "INSTRUNCTION_BITS";
     case Operation::kHintCondition : return "HINT_CONDITION";
     case Operation::kRegisterCondition : return "OUTPUT_REGISTER_CHECK";
