@@ -48,20 +48,17 @@ const uint32_t LLVMOperation::kInvalidLLVMPredicate =
     static_cast<uint32_t>(llvm::CmpInst::BAD_ICMP_PREDICATE);
 
 Operation::Operation(unsigned op_code_, unsigned size_)
-    : User(this),
-      Def<Operation>(this),
-      op_code(op_code_),
-      size(size_),
-      operands(this) {}
+    : op_code(op_code_),
+      size(size_) {}
 
 bool Operation::Equals(const Operation *that) const {
   if (this == that) {
     return true;
   }
 
-  const auto num_ops = operands.Size();
+  const auto num_ops = operands.size();
   if (op_code != that->op_code || size != that->size ||
-      num_ops != that->operands.Size()) {
+      num_ops != that->operands.size()) {
     return false;
   }
 
@@ -119,7 +116,7 @@ bool LLVMOperation::Equals(const Operation *that_) const {
       return false;
     }
 
-    const auto num_ops = operands.Size();
+    const auto num_ops = operands.size();
     if (2u == num_ops) {
       const auto this_lhs = operands[0];
       const auto that_lhs = that->operands[0];
@@ -165,7 +162,7 @@ bool Constant::Equals(const Operation *that_) const {
 }
 
 std::string BitOperation::Name(void) const {
-  if (this->operands.Size() == 0) {
+  if (this->operands.size() == 0) {
     LOG(ERROR) << this->id() << ": " << to_string(this->op_code) << " has no operands!";
     return StreamName(to_string(this->op_code), "_", "IS_INVALID");
   }
@@ -219,7 +216,7 @@ Operation *Parity::CloneWithoutOperands(Circuit *circuit) const {
 }
 
 std::string Parity::Name() const {
-  CHECK(operands.Size() != 0);
+  CHECK(operands.size() != 0);
   return StreamName(to_string(this->op_code), "_", operands[0]-size);
 }
 
@@ -267,14 +264,16 @@ bool OutputRegister::Equals(const Operation *that_) const {
 }
 
 Operation *OutputRegister::CloneWithoutOperands(Circuit *) const {
+  LOG(FATAL) << "Not implemented";
   return const_cast<OutputRegister *>(this);
 }
 
-STREAM_NAME(
-    RegisterCondition,
-    "OUTPUT_REGISTER_CHECK_"
-        << dynamic_cast<OutputRegister *>(operands[kOutputRegister])->reg_name
-        << "_" << operands[kOutputRegister]->size)
+std::string RegisterCondition::Name() const {
+  CHECK(operands.size() == 2);
+  auto out_reg = dynamic_cast<OutputRegister *>(operands[kOutputRegister]);
+  CHECK(out_reg) << (operands[kOutputRegister]->op_code);
+  return StreamName(to_string(this->op_code), "_", out_reg->reg_name, "_", out_reg->size);
+}
 
 Operation *RegisterCondition::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<RegisterCondition>();
@@ -327,21 +326,20 @@ Operation *DecodeCondition::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<DecodeCondition>();
 }
 
-STREAM_NAME(VerifyInstruction, "ALL_OF_" << operands.Size())
+STREAM_NAME(VerifyInstruction, "ALL_OF_" << operands.size())
 
 Operation *VerifyInstruction::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<VerifyInstruction>();
 }
 
-STREAM_NAME(OnlyOneCondition, "ONE_OF_" << operands.Size())
+STREAM_NAME(OnlyOneCondition, "ONE_OF_" << operands.size())
 
 Operation *OnlyOneCondition::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<OnlyOneCondition>();
 }
 
 Circuit::~Circuit(void) {
-  operands.ClearWithoutErasure();
-  AllAttributes::ClearWithoutErasure();
+  // TODO(lukas): Maybe somethign is needed here?
 }
 
 Operation *Circuit::CloneWithoutOperands(Circuit *) const {
@@ -350,6 +348,6 @@ Operation *Circuit::CloneWithoutOperands(Circuit *) const {
 }
 
 Circuit::Circuit(void)
-    : Condition(Operation::kCircuit), AllAttributes(this) {}
+    : Condition(Operation::kCircuit) {}
 
 }  // namespace circuitous
