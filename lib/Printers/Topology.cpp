@@ -27,6 +27,7 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
     case Operation::kUndefined:
     case Operation::kOutputRegister:
     case Operation::kInputInstructionBits:
+    case Operation::kInputImmediate:
     case Operation::kHint:
       os << 'V' << op->size;
       break;
