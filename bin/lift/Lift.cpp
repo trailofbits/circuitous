@@ -6,6 +6,8 @@
 #include <circuitous/IR/Verify.hpp>
 #include <circuitous/Printers.h>
 #include <circuitous/Transforms.h>
+#include <circuitous/IR/Cost.hpp>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
@@ -27,7 +29,7 @@ DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "Path to the output Python file.");
 DEFINE_string(smt_out, "", "Path to the output SMT-LIB2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
-DEFINE_string(optimizations, "popcount2parity,reducepopcount",
+DEFINE_string(optimizations, "",
               "Comma-separated list of optimizations to run");
 DEFINE_bool(append, false,
             "Append to output IR files, rather than overwriting.");
@@ -36,12 +38,17 @@ DEFINE_bool(reduce_imms, false,
 
 DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 
+DEFINE_bool(dbg, false, "Enable various debug dumps");
+
 namespace {
 
 static const std::hash<std::string> kStringHasher;
 
 void TopologySpecificIRPrinter(circuitous::Circuit *circuit) {
   std::unordered_map<uint64_t, std::ofstream> streams;
+  LOG(INFO) << "Veryfing before serialization";
+  VerifyCircuit(circuit);
+  LOG(INFO) << "Valid";
   circuit->Serialize([&](const std::string &topology) -> std::ostream & {
     const auto hash = kStringHasher(topology);
     auto it = streams.find(hash);
@@ -67,19 +74,26 @@ void TopologySpecificIRPrinter(circuitous::Circuit *circuit) {
   });
 }
 
-void VerifyIR(circuitous::Circuit *circuit) {
-  const auto &[status, msg] = circuitous::Verify(circuit);
-  if (!status) {
-    LOG(FATAL) << "IR is not valid -- Aborting!\n" << msg
+struct DefaultLog {
+
+  // TOOD(lukas): Make it work.
+  //static inline const constexpr char separator = ' ';
+
+  template<typename ...Args>
+  static void log(Args &&...args) {
+    (LOG(INFO) << ... << args);
   }
-}
 
-}  // namespace
+  template<typename ...Args>
+  static void fail(Args &&...args) {
+    (LOG(ERROR) << ... << args);
+  }
 
-int main(int argc, char *argv[]) {
-  google::ParseCommandLineFlags(&argc, &argv, true);
-  google::InitGoogleLogging(argv[0]);
+  static void kill() { LOG(FATAL) << "Aborted"; }
 
+};
+
+std::unique_ptr<circuitous::Circuit> LoadCircuit() {
   auto choose_optimizations = [&](){
     circuitous::Optimizations out;
     out.reduce_imms = FLAGS_reduce_imms;
@@ -91,67 +105,90 @@ int main(int argc, char *argv[]) {
       FLAGS_arch, FLAGS_os, buf, choose_optimizations());
   };
 
-  auto circuit = [&]() -> std::unique_ptr<circuitous::Circuit> {
-    if (!FLAGS_binary_in.empty()) {
-      return make_circuit(FLAGS_binary_in);
+  if (!FLAGS_binary_in.empty()) {
+    return make_circuit(FLAGS_binary_in);
+  }
+
+  if (!FLAGS_bytes_in.empty()) {
+    std::vector<uint8_t> buf;
+    for (auto i = 0U; i < FLAGS_bytes_in.size(); i += 2) {
+      std::string aux = {FLAGS_bytes_in[i], FLAGS_bytes_in[i + 1]};
+      auto casted = static_cast<uint8_t>(std::strtoul(aux.data(), nullptr, 16));
+      buf.push_back(casted);
+    }
+    auto as_sv = std::string_view( reinterpret_cast<char *>(buf.data()), buf.size());
+    return make_circuit(as_sv);
+  }
+
+  if (!FLAGS_ir_in.empty()) {
+    if (FLAGS_ir_in == "-") {
+      FLAGS_ir_in = "/dev/stdin";
     }
 
-    if (!FLAGS_bytes_in.empty()) {
-      std::vector<uint8_t> buf;
-      for (auto i = 0U; i < FLAGS_bytes_in.size(); i += 2) {
-        std::string aux = {FLAGS_bytes_in[i], FLAGS_bytes_in[i + 1]};
-        auto casted = static_cast<uint8_t>(std::strtoul(aux.data(), nullptr, 16));
-        buf.push_back(casted);
-      }
-      auto as_sv = std::string_view( reinterpret_cast<char *>(buf.data()), buf.size());
-      return make_circuit(as_sv);
+    std::ifstream is(FLAGS_ir_in, std::ios::binary);
+    if (!is.good()) {
+      LOG(ERROR) << "Error while opening input IR file.";
+      return {};
     }
+    return circuitous::Circuit::Deserialize(is);
 
-    if (!FLAGS_ir_in.empty()) {
-      if (FLAGS_ir_in == "-") {
-        FLAGS_ir_in = "/dev/stdin";
-      }
+  }
+  std::cerr << "Expected one of `--binary_in` or `--ir_in`" << std::endl;
+  return {};
+}
 
-      std::ifstream is(FLAGS_ir_in, std::ios::binary);
-      if (!is.good()) {
-        LOG(ERROR) << "Error while opening input IR file.";
-        return {};
-      }
-      return circuitous::Circuit::Deserialize(is);
+// Optimize the circuit.
+template<typename Optimizer>
+void Optimize(circuitous::Circuit *circuit) {
+  Optimizer opt_manager;
 
-    }
-    std::cerr << "Expected one of `--binary_in` or `--ir_in`" << std::endl;
-    return {};
-  }();
+  // Populate by default passes we want to always run
+  opt_manager.AddPass("dagify");
+  opt_manager.AddPass("popcount2parity");
+  opt_manager.AddPass("reducepopcount");
 
+  std::stringstream ss;
+  ss << FLAGS_optimizations;
+  for (std::string opt_name; std::getline(ss, opt_name, ',');) {
+    opt_manager.AddPass(opt_name);
+  }
+  opt_manager.Run(circuit);
+  LOG(INFO) << "Optimizations done.";
+}
+
+}  // namespace
+
+
+int main(int argc, char *argv[]) {
+  google::ParseCommandLineFlags(&argc, &argv, true);
+  google::InitGoogleLogging(argv[0]);
+
+  auto circuit = LoadCircuit();
   if (!circuit) {
     std::cerr << "Failed to get circuit IR" << std::endl;
     return EXIT_FAILURE;
   }
-  VerifyIR(circuit.get());
 
-  std::unordered_map<std::string, bool (*)(circuitous::Circuit *)> optimizers;
-  optimizers.emplace("popcount2parity", circuitous::ConvertPopCountToParity);
-  optimizers.emplace("reducepopcount",
-                     circuitous::StrengthReducePopulationCount);
-  optimizers.emplace("extractcommon", circuitous::ExtractCommonTopologies);
-  optimizers.emplace("mergehints", circuitous::MergeHints);
+  VerifyCircuit("Verifying loaded circuit.", circuit.get(), "Circuit is valid.");
 
-  // Optimize the circuit.
-  std::stringstream ss;
-  ss << FLAGS_optimizations;
-  const auto opt_end = optimizers.end();
-  for (std::string opt_name; std::getline(ss, opt_name, ',');) {
-    auto opt_it = optimizers.find(opt_name);
-    if (opt_it != opt_end) {
-      if (opt_it->second(circuit.get())) {
-        circuit->RemoveUnused();
-      }
-    }
+  if (FLAGS_dbg) {
+    LOG(INFO) << "Debug dumping before optimizations -- debug.* family.";
+    VerifyCircuit("Verifying.", circuit.get());
+    std::ofstream os("debug.json");
+    circuitous::PrintJSON(os, circuit.get());
+    os.flush();
+
+    std::ofstream dos("debug.dot");
+    circuitous::PrintDOT(dos, circuit.get());
+    dos.flush();
+    LOG(INFO) << "Debug dumping finished.";
   }
-  circuit->RemoveUnused();
 
-  VerifyIR(circuit.get());
+  if (FLAGS_dbg) {
+    Optimize<circuitous::DebugOptimizer<DefaultLog>>(circuit.get());
+  } else {
+    Optimize<circuitous::DefaultOptimizer<DefaultLog>>(circuit.get());
+  }
 
   if (!FLAGS_ir_out.empty()) {
     if (FLAGS_ir_out == "-") {
@@ -169,7 +206,26 @@ int main(int argc, char *argv[]) {
           FLAGS_ir_out,
           std::ios::binary | (FLAGS_append ? std::ios::app : std::ios::trunc));
       circuit->Serialize(os);
+      if (FLAGS_dbg){
+        LOG(INFO) << "Proceeding to reload test";
+        std::ifstream is(FLAGS_ir_out, std::ios::binary);
+        if (!is.good()) {
+          LOG(FATAL) << "Error while re-checking.";
+        }
+        auto x = circuitous::Circuit::Deserialize(is);
+        VerifyCircuit("Verifyinh loaded.", x.get(), "Reload test successful.");
+      }
     }
+  }
+
+  if (!FLAGS_json_out.empty()) {
+    if (FLAGS_json_out == "-") {
+      FLAGS_json_out = "/dev/stderr";
+    }
+    LOG(INFO) << "Printing JSON";
+    std::ofstream os(FLAGS_json_out);
+    circuitous::PrintJSON(os, circuit.get());
+    LOG(INFO) << "Done";
   }
 
   if (!FLAGS_dot_out.empty()) {
@@ -177,8 +233,10 @@ int main(int argc, char *argv[]) {
       FLAGS_dot_out = "/dev/stderr";
     }
 
+    LOG(INFO) << "Printing dot";
     std::ofstream os(FLAGS_dot_out);
     circuitous::PrintDOT(os, circuit.get());
+    LOG(INFO) << "Done";
   }
 
   if (!FLAGS_python_out.empty()) {
@@ -186,26 +244,21 @@ int main(int argc, char *argv[]) {
       FLAGS_python_out = "/dev/stderr";
     }
 
+    LOG(INFO) << "Printing python";
     std::ofstream os(FLAGS_python_out);
     circuitous::PrintPython(os, circuit.get());
+    LOG(INFO) << "Done";
   }
 
   if (!FLAGS_smt_out.empty()) {
     if (FLAGS_smt_out == "-") {
       FLAGS_smt_out = "/dev/stderr";
     }
-
+    LOG(INFO) << "Printing smt";
     std::ofstream os(FLAGS_smt_out);
     circuitous::PrintSMT(os, circuit.get(), false);
+    LOG(INFO) << "Done.";
   }
 
-  if (!FLAGS_json_out.empty()) {
-    if (FLAGS_json_out == "-") {
-      FLAGS_json_out = "/dev/stderr";
-    }
-
-    std::ofstream os(FLAGS_json_out);
-    circuitous::PrintJSON(os, circuit.get());
-  }
   return EXIT_SUCCESS;
 }
