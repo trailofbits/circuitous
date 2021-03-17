@@ -4,11 +4,15 @@
 
 #pragma once
 
+#include <map>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 
 #include <circuitous/IR/Verify.hpp>
+#include <circuitous/IR/Cost.hpp>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
@@ -39,57 +43,104 @@ bool ExtractCommonTopologies(Circuit *circuit);
 bool MergeHints(Circuit *circuit);
 
 bool MergeByBytes(Circuit *circuit);
+bool DAGify(Circuit *circuit);
 
 struct KnownPasses {
   using pass_t = bool(*)(Circuit *);
-  using storage_t  = std::unordered_map<std::string, bool(*)(Circuit *)>;
+  using transformation_t = std::pair<uint8_t, pass_t>;
+  using storage_t  = std::unordered_map<std::string, transformation_t>;
 
   static const inline storage_t passes = {
-    {"popcount2parity", ConvertPopCountToParity},
-    {"reducepopcount", StrengthReducePopulationCount},
-    {"extractcommon", ExtractCommonTopologies},
-    {"mergehints", MergeHints},
-    {"mergebybytes", MergeByBytes}
+    {"dagify", { 0, &DAGify } },
+    {"popcount2parity", { 2, &ConvertPopCountToParity } },
+    {"reducepopcount", { 1, &StrengthReducePopulationCount } },
+    {"extractcommon", { 3, &ExtractCommonTopologies } },
+    {"mergehints", { 4, &MergeHints } }
   };
 
-  static pass_t Get(const std::string &name) {
+  static std::string PassName(pass_t pass) {
+    for (auto &[name, entry] : passes) {
+      if (entry.second == pass) {
+        return name;
+      }
+    }
+    LOG(FATAL) << "Pass is not known";
+  }
+
+  static transformation_t Get(const std::string &name) {
     auto it = passes.find(name);
     CHECK(it != passes.end());
     return it->second;
   }
-
-  static void Run(Circuit *circuit, const std::string &name) {
-    Get(name)(circuit);
-  }
 };
 
-
-struct OptManager : KnownPasses {
-  using KnownPasses::Run;
-
-  std::unordered_set<pass_t> selected;
+struct Manager : KnownPasses {
+  std::map<uint8_t, pass_t> selected;
 
   void AddPass(const std::string &name) {
-    selected.insert(Get(name));
+    const auto &[priority, pass] = Get(name);
+    LOG(INFO) << "Adding pass" << name;
+    selected[priority] = pass;
   }
 
-  std::vector<pass_t> Order() {
-    LOG(FATAL) << "Implement ordering!";
+  void RunPass(Circuit *circuit, pass_t pass) {
+    pass(circuit);
+    circuit->RemoveUnused();
   }
 
-  void Run(Circuit *circuit) {
-    for (auto pass : selected) {
-      pass(circuit);
+};
+
+template<typename Next>
+struct WithHistory : Next {
+  using pass_t = typename Next::pass_t;
+  using entry_t = std::pair<std::string, RawNodesCounter>;
+
+  std::vector<entry_t> history;
+
+  void RunPass(Circuit *circuit, pass_t pass) {
+    auto collect = [&](auto name) {
+      LOG(INFO) << "Capturing stats";
+      RawNodesCounter collector;
+      collector.Run(circuit);
+      history.emplace_back(name, std::move(collector));
+      LOG(INFO) << "Done.";
+    };
+
+    if (history.size() == 0) {
+      collect("Before");
     }
+    this->Next::RunPass(circuit, pass);
+    collect("After " + this->PassName(pass));
+  }
+
+  std::string Stats() {
+    using printer_t = Printer<RawNodesCounter>;
+
+    std::stringstream ss;
+    auto &[name, def] = history[0];
+    ss << name << ":" << std::endl;
+    printer_t::Print(ss, def);
+    for (std::size_t i = 1; i < history.size(); ++i) {
+      auto &[name, def] = history[i];
+      ss << name << ":" << std::endl;
+      printer_t::Diff(ss, history[i - 1].second, def);
+    }
+
+    ss << std::endl << "In the end:" << std::endl;
+    printer_t::Print(ss, history.back().second);
+    ss << std::endl;
+    return ss.str();
   }
 };
 
-template<typename Logger>
-struct DefensiveOptManger : OptManager {
+template<typename Logger, typename Next>
+struct Defensive : Next {
+  using pass_t = typename Next::pass_t;
 
-  void Run(Circuit *circuit, const std::string &name) {
+  void RunPass(Circuit *circuit, pass_t pass) {
+    auto name = this->PassName(pass);
     Logger::log("Going to run transformation", name);
-    this->OptManager::Run(circuit, name);
+    this->Next::RunPass(circuit, pass);
     Logger::log("Done. Running verify pass:");
     const auto &[status, msg] = VerifyCircuit(circuit);
     if (!status) {
@@ -101,6 +152,26 @@ struct DefensiveOptManger : OptManager {
   }
 };
 
+template<typename Next>
+struct ManagerAPI : Next {
+  using pass_t = typename Next::pass_t;
 
+  void RunPass(Circuit *circuit, pass_t pass) {
+    this->Next::RunPass(circuit, pass);
+  }
+
+  void Run(Circuit *circuit) {
+    for (auto &[_, pass] : this->selected) {
+      RunPass(circuit, pass);
+    }
+  }
+
+  void AddPass(const std::string &name) {
+    this->Next::AddPass(name);
+  }
+};
+
+template<typename Logger>
+using OptManager = ManagerAPI<Defensive<Logger, WithHistory<Manager>>>;
 
 }  // namespace circuitous
