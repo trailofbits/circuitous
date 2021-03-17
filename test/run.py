@@ -119,6 +119,7 @@ class Lifter(SimulateCWDMixin):
 
   def lift(self, bytes, extra_args):
     args = [self.binary,
+            "--log_dir", self.test_dir,
             "--bytes_in", bytes,
             "--json_out", self.locate("out.json"),
             "--ir_out", self.locate(self.circuit_name(bytes))]
@@ -147,6 +148,7 @@ class Interpret(SimulateCWDMixin):
 
   def run_case(self, case, ir, parent):
     args = [self.binary,
+            "--log_dir", self.test_dir,
             "--json_in", case.input.as_json_file(case.name, self.test_dir),
             "--json_out", self.locate(case.name + ".result.json"),
             "--ir_in", ir]
