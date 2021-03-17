@@ -36,8 +36,8 @@
       } \
     } while (false)
 #else
-#  define DEBUG_READ(...) std::cerr << __VA_ARGS__;
-#  define DEBUG_WRITE(...) std::cerr << __VA_ARGS__;
+  #define DEBUG_READ(...)
+  #define DEBUG_WRITE(...)
 #endif
 
 namespace circuitous {
