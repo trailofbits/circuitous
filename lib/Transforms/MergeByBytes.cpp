@@ -82,4 +82,87 @@ bool MergeByBytes(Circuit *circuit) {
   return false;
 }
 
+template<typename Hasher>
+struct DAGifier : UniqueVisitor<DAGifier<Hasher>> {
+  using hash_t = std::string;
+
+  // The "location" that represents the hash -- each
+  // value with the same one should be replaced by this.
+  std::unordered_map<hash_t, Operation *> locations;
+  // TODO(lukas): Cache, so the hashing does not get too expensive.
+  std::unordered_map<Operation *, hash_t> hashes;
+
+  std::unordered_set<Operation *> seen;
+  std::deque<Operation *> todo;
+
+  bool Update(hash_t key, Operation *op) {
+    LOG(INFO) << key << "\n\n";
+    hashes[op] = key;
+    const auto &[it, status] = locations.try_emplace(key, op);
+    if (!status) {
+      op->ReplaceAllUsesWith(it->second);
+      // TODO(lukas): Remove op
+    }
+    return status;
+  }
+
+  bool Update(Operation *op) {
+    return Update(Hasher().Hash(op), op);
+  }
+
+  void Push(Operation *op) {
+    for (auto user : op->users) {
+      if (seen.count(user)) {
+        continue;
+      }
+      seen.insert(user);
+      todo.push_back(user);
+    }
+  }
+
+  Operation *Pop() {
+    auto x = todo.front();
+    todo.pop_front();
+    return x;
+  }
+
+  void Process(Operation *op) {
+    if (Update(op)) {
+      Push(op);
+    }
+  }
+
+  template<typename Head, typename ... Tail>
+  void LocateLeaves(Circuit *circuit) {
+    for (auto x : circuit->Attr<Head>()) {
+      Process(x);
+    }
+    if constexpr (sizeof ... (Tail) != 0)
+      return LocateLeaves<Tail ...>(circuit);
+  }
+
+  void LocateLeaves(Circuit *circuit) {
+    return LocateLeaves<
+      InputRegister,
+      OutputRegister,
+      Constant,
+      Hint,
+      InputInstructionBits
+     >(circuit);
+  }
+
+  void Run(Circuit *circuit) {
+    LocateLeaves(circuit);
+    while (!todo.empty()) {
+      Process(Pop());
+    }
+  }
+
+};
+
+bool DAGify(Circuit *circuit) {
+  DAGifier<print::FullNames>().Run(circuit);
+  return true;
+}
+
 } // namespace circuitous
