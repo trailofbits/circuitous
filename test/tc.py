@@ -5,7 +5,7 @@ import json
 import os
 
 # Add methods same as register names to the State to make configuration easier
-_regs = [ "RIP",
+_regs = [ "RIP", "RSP", "RBP",
           "RAX", "RBX", "RCX", "RDX", "RSI", "RDI",
           "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
 _e_regs = ["EAX, EBX", "ECX", "EDX"]
@@ -52,7 +52,8 @@ class State:
     out = {"instruction_bits" : self.bytes,
            "input_regs" : {}}
     for reg, val in self.registers.items():
-      out["input_regs"][reg] = str(val)
+      if val is not None:
+        out["input_regs"][reg] = str(val)
     return out
 
   def as_json_file(self, prefix="def.", dir=None):
@@ -86,8 +87,8 @@ class Mutator:
 def MS():
   return Mutator()
 
-def S():
-  return State()
+def S(x = None):
+  return State(x)
 
 for reg in _regs + _aflags:
   setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))

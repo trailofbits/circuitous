@@ -119,6 +119,7 @@ class Lifter(SimulateCWDMixin):
 
   def lift(self, bytes, extra_args):
     args = [self.binary,
+            "--log_dir", self.test_dir,
             "--bytes_in", bytes,
             "--json_out", self.locate("out.json"),
             "--ir_out", self.locate(self.circuit_name(bytes))]
@@ -147,17 +148,25 @@ class Interpret(SimulateCWDMixin):
 
   def run_case(self, case, ir, parent):
     args = [self.binary,
+            "--log_dir", self.test_dir,
             "--json_in", case.input.as_json_file(case.name, self.test_dir),
             "--json_out", self.locate(case.name + ".result.json"),
             "--ir_in", ir]
     if dbg_verbose:
       args += ["--dot_out", self.locate(case.name + ".result.dot")]
+      args += ["--logtostderr"]
       parent.metafiles[case.name + ".result.dot"] = self.locate(case.name + ".result.dot")
     log_info("Running: " + '.' * 16 + " " + parent.name + " -> " + case.name)
     pipes = subprocess.Popen(args,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              text=True)
-    check_retcode(pipes, self.component)
+    try:
+      check_retcode(pipes, self.component)
+    except PipelineFail as e:
+      if dbg_verbose:
+        e._cause += "\n" + " ".join(args)
+      raise e
+
     parent.metafiles[case.name + ".result.json"] = self.locate(case.name + ".result.json")
 
     self.update_state(case, self.locate(case.name + ".result.json"))
@@ -204,6 +213,8 @@ class Comparator(SimulateCWDMixin):
         msg += "\n\tRun bytes: " + case.input.bytes
         # TODO(lukas): Not sure how to fix cleanly (threads broke it)
         if dbg_verbose:
+          msg += "\n\t" + case.bytes
+          msg += "\n\t" + case.input.bytes
           msg += "\n\t" + tc.metafiles[case.name + ".circuit"]
           msg += "\n\t" + tc.metafiles[case.name + ".result.json"]
           msg += "\n\t" + tc.metafiles[case.name + ".result.dot"]
@@ -220,7 +231,7 @@ class Comparator(SimulateCWDMixin):
       if e_val != int(val):
         accept = False
         message += "Register " + reg + " (expected != actual): " + \
-                   str(e_val) + " != " + str(val) + "\n"
+                   hex(e_val) + " != " + hex(val) + "\n"
 
     skipped = []
     for reg in expected.registers.keys():
@@ -359,8 +370,6 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
 # TODO(lukas): Mocking this one for now
 def fetch_test(sets):
   result = set()
-  x = mp.ModelTest("mov imm rdx").bytes("ba12000000").case(I = State(), R = True )
-  result.add(x)
   for x in simple.circuitous_tests:
     result.update(x)
   for x in basic.circuitous_tests:
@@ -369,14 +378,26 @@ def fetch_test(sets):
 
 
 def filter_by_tag(sets, tags):
+  include_todo = "todo" in tags
+  skipped_todos = 0
+
   log_info("Filtering " + str(len(sets)) + " tests by " + str(tags))
-  if 'all' in tags:
-    return sets
+
+  positive_tags = [x for x in tags if not x.startswith('not_')]
+  negative_tags = [x[4:] for x in tags if x.startswith('not_')]
+  log_info("Include: " + str(positive_tags))
+  log_info("Exclude: " + str(negative_tags))
 
   result = set()
   for test in sets:
-    if test._tags.intersection(tags):
+    if test._tags.intersection(negative_tags):
+      continue
+    if not include_todo and "todo" in test._tags:
+      skipped_todos += len(test.cases)
+      continue
+    if 'all' in tags or test._tags.intersection(positive_tags):
       result.add(test)
+  log_info("Skipped " + str(skipped_todos) + " todo tests")
   return result
 
 def main():
@@ -418,6 +439,9 @@ def main():
   args.jobs = int(args.jobs)
 
   tests = filter_by_tag(fetch_test(args.sets), args.tags)
+  if not tests:
+    log_error("No tests selected")
+    return
   log_info("Filtered " + str(len(tests)) + " tests.")
   if args.persist:
     log_info("Creating persistent directory")
