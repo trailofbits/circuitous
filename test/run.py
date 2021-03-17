@@ -154,6 +154,7 @@ class Interpret(SimulateCWDMixin):
             "--ir_in", ir]
     if dbg_verbose:
       args += ["--dot_out", self.locate(case.name + ".result.dot")]
+      args += ["--logtostderr"]
       parent.metafiles[case.name + ".result.dot"] = self.locate(case.name + ".result.dot")
     log_info("Running: " + '.' * 16 + " " + parent.name + " -> " + case.name)
     pipes = subprocess.Popen(args,
@@ -206,6 +207,8 @@ class Comparator(SimulateCWDMixin):
         msg += "\n\tRun bytes: " + case.input.bytes
         # TODO(lukas): Not sure how to fix cleanly (threads broke it)
         if dbg_verbose:
+          msg += "\n\t" + case.bytes
+          msg += "\n\t" + case.input.bytes
           msg += "\n\t" + tc.metafiles[case.name + ".circuit"]
           msg += "\n\t" + tc.metafiles[case.name + ".result.json"]
           msg += "\n\t" + tc.metafiles[case.name + ".result.dot"]
