@@ -241,9 +241,9 @@ static inline std::string to_string(Kind kind) {
 
 // Some bitwise operation; must be extended.
 class BitOperation : public Operation {
+ public:
   static constexpr inline uint32_t kind = kInvalid;
 
- public:
   std::string Name(void) const override;
 
  protected:
@@ -262,8 +262,8 @@ struct ValueLeaf : public Operation {
 
 // An input register.
 class InputRegister : public Operation {
-  static constexpr inline uint32_t kind = kInputRegister;
  public:
+  static constexpr inline uint32_t kind = kInputRegister;
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -277,8 +277,8 @@ class InputRegister : public Operation {
 };
 
 class InputImmediate : public Operation {
-  static constexpr inline uint32_t kind = kInputImmediate;
  public:
+  static constexpr inline uint32_t kind = kInputImmediate;
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -290,8 +290,8 @@ class InputImmediate : public Operation {
 
 // An output register.
 class OutputRegister : public Operation {
-  static constexpr inline uint32_t kind = kOutputRegister;
  public:
+  static constexpr inline uint32_t kind = kOutputRegister;
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -307,8 +307,8 @@ class OutputRegister : public Operation {
 
 // Mirrors an instruction from LLVM. `op_code` is `inst->getOpcode()`.
 class LLVMOperation final : public Operation {
-  static constexpr inline uint32_t kind = kLLVMOperation;
  public:
+  static constexpr inline uint32_t kind = kLLVMOperation;
   explicit LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
                          unsigned size_);
 
@@ -326,8 +326,8 @@ class LLVMOperation final : public Operation {
 
 // An undefined value.
 class Undefined final : public Operation {
-  static constexpr inline uint32_t kind = kUndefined;
  public:
+  static constexpr inline uint32_t kind = kUndefined;
   inline explicit Undefined(unsigned size_)
       : Operation(Operation::kUndefined, size_) {}
 
@@ -358,8 +358,8 @@ class Constant final : public Operation {
 
 // Flip all bits in a bitvector.
 class Not final : public BitOperation {
-  static constexpr inline uint32_t kind = kNot;
  public:
+  static constexpr inline uint32_t kind = kNot;
   FORWARD_CONSTRUCTOR(BitOperation, Not)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -367,8 +367,8 @@ class Not final : public BitOperation {
 
 // Extract bits.
 class Extract final : public BitOperation {
-  static constexpr inline uint32_t kind = kExtract;
  public:
+  static constexpr inline uint32_t kind = kExtract;
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
@@ -385,8 +385,8 @@ class Extract final : public BitOperation {
 
 // Concatenate two bitvectors.
 class Concat final : public BitOperation {
-  static constexpr inline uint32_t kind = kConcat;
  public:
+  static constexpr inline uint32_t kind = kConcat;
   FORWARD_CONSTRUCTOR(BitOperation, Concat)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -395,8 +395,8 @@ class Concat final : public BitOperation {
 // Population count of some bits. Needed for things like parity count
 // calculation.
 class PopulationCount final : public BitOperation {
-  static constexpr inline uint32_t kind = kPopulationCount;
  public:
+  static constexpr inline uint32_t kind = kPopulationCount;
   FORWARD_CONSTRUCTOR(BitOperation, PopulationCount)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -412,8 +412,8 @@ class CountLeadingZeroes final : public BitOperation {
 };
 
 class CountTrailingZeroes final : public BitOperation {
-  static constexpr inline uint32_t kind = kCountTrailingZeroes;
  public:
+  static constexpr inline uint32_t kind = kCountTrailingZeroes;
   FORWARD_CONSTRUCTOR(BitOperation, CountTrailingZeroes)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -430,8 +430,8 @@ class Condition : public Operation {
 // if there are an odd number of bits in a bit string.
 // TODO(lukas): Should this not inherit from BitOperation?
 class Parity final : public Condition {
-  static constexpr inline uint32_t kind = kParity;
  public:
+  static constexpr inline uint32_t kind = kParity;
   CONDITION_CONSTRUCTOR(Parity)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -440,8 +440,8 @@ class Parity final : public Condition {
 
 // Condition that verifies that some computed address matches a hint address.
 class ReadMemoryCondition final : public Condition {
-  static constexpr inline uint32_t kind = kReadMemoryCondition;
  public:
+  static constexpr inline uint32_t kind = kReadMemoryCondition;
   enum : unsigned {
     kDynamicAddress = 0u,
     kHintedAddress = 1u,
@@ -455,8 +455,8 @@ class ReadMemoryCondition final : public Condition {
 // A comparison between the proposed output value of a register, and the
 // output register itself.
 class RegisterCondition final : public Condition {
-  static constexpr inline uint32_t kind = kRegisterCondition;
  public:
+  static constexpr inline uint32_t kind = kRegisterCondition;
   enum : unsigned { kDynamicRegisterValue = 0u, kOutputRegister = 1u };
 
   CONDITION_CONSTRUCTOR(RegisterCondition)
@@ -468,8 +468,8 @@ class RegisterCondition final : public Condition {
 // A comparison between the proposed output value of a register, and the
 // output register itself.
 class HintCondition final : public Condition {
-  static constexpr inline uint32_t kind = kHintCondition;
  public:
+  static constexpr inline uint32_t kind = kHintCondition;
   enum : unsigned { kDynamicValue = 0u, kHint = 1u };
 
   CONDITION_CONSTRUCTOR(HintCondition)
@@ -480,8 +480,8 @@ class HintCondition final : public Condition {
 
 // Says that we are preserving the value of a register.
 class PreservedCondition final : public Condition {
-  static constexpr inline uint32_t kind = kPreservedCondition;
  public:
+  static constexpr inline uint32_t kind = kPreservedCondition;
   enum : unsigned { kInputRegister = 0u, kOutputRegister = 1u };
 
   CONDITION_CONSTRUCTOR(PreservedCondition)
@@ -492,8 +492,8 @@ class PreservedCondition final : public Condition {
 
 // Says that we are moving one register to a different register.
 class CopyCondition final : public Condition {
-  static constexpr inline uint32_t kind = kCopyCondition;
  public:
+  static constexpr inline uint32_t kind = kCopyCondition;
   enum : unsigned { kOtherInputRegister = 0u, kOutputRegister = 1u };
 
   CONDITION_CONSTRUCTOR(CopyCondition)
@@ -504,8 +504,8 @@ class CopyCondition final : public Condition {
 
 // Input bits that
 class InputInstructionBits : public Operation {
-  static constexpr inline uint32_t kind = kInputInstructionBits;
  public:
+  static constexpr inline uint32_t kind = kInputInstructionBits;
   FORWARD_CONSTRUCTOR(Operation, InputInstructionBits)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -515,8 +515,8 @@ class InputInstructionBits : public Operation {
 // Checks whether or not some instruction bits (second operand) equals some
 // proposed values.
 class DecodeCondition final : public Condition {
-  static constexpr inline uint32_t kind = kDecodeCondition;
  public:
+  static constexpr inline uint32_t kind = kDecodeCondition;
   CONDITION_CONSTRUCTOR(DecodeCondition)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -526,8 +526,8 @@ class DecodeCondition final : public Condition {
 // A hint value is an input to the circuit. It can serve several purposes,
 // e.g.
 class Hint final : public Operation {
-  static constexpr inline uint32_t kind = kHint;
  public:
+  static constexpr inline uint32_t kind = kHint;
 
   inline explicit Hint(unsigned size_)
       : Operation(Operation::kHint, size_) {}
@@ -542,8 +542,8 @@ class Hint final : public Operation {
 };
 
 class VerifyInstruction final : public Condition {
-  static constexpr inline uint32_t kind = kVerifyInstruction;
  public:
+  static constexpr inline uint32_t kind = kVerifyInstruction;
   CONDITION_CONSTRUCTOR(VerifyInstruction)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
@@ -551,8 +551,8 @@ class VerifyInstruction final : public Condition {
 };
 
 class OnlyOneCondition final : public Condition {
-  static constexpr inline uint32_t kind = kOnlyOneCondition;
  public:
+  static constexpr inline uint32_t kind = kOnlyOneCondition;
   CONDITION_CONSTRUCTOR(OnlyOneCondition)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
