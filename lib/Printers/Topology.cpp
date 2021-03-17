@@ -18,9 +18,13 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
 
   max_depth -= 1u;
   switch (op->op_code) {
+    case Operation::kInputRegister : {
+      if (auto x = dynamic_cast<InputRegister *>(op); x->reg_name == "RIP") {
+        os << "I_RIP"; break;
+      }
+    }
     case Operation::kConstant:
     case Operation::kUndefined:
-    case Operation::kInputRegister:
     case Operation::kOutputRegister:
     case Operation::kInputInstructionBits:
     case Operation::kHint:
