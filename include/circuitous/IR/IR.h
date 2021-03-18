@@ -230,6 +230,36 @@ static inline std::string to_string(Kind kind) {
   }
 }
 
+template<typename Kind>
+static inline Kind from_string(const std::string &name) {
+  if (name == "CONSTANT") return Operation::kConstant;
+  if (name == "UNDEFINED") return Operation::kUndefined;
+  if (name == "LLVMOPERATION") return Operation::kLLVMOperation;
+  if (name == "NOT") return Operation::kNot;
+  if (name == "EXTRACT") return Operation::kExtract;
+  if (name == "CONCAT") return Operation::kConcat;
+  if (name == "POPULATION_COUNT") return Operation::kPopulationCount;
+  if (name == "PARITY") return Operation::kParity;
+  if (name == "COUNT_LEADING_ZEROES") return Operation::kCountLeadingZeroes;
+  if (name == "COUNT_TRAILING_ZEROES") return Operation::kCountTrailingZeroes;
+  if (name == "READ_MEMORY_CONDITION") return Operation::kReadMemoryCondition;
+  if (name == "INPUT_REFGISTER") return Operation::kInputRegister;
+  if (name == "OUTPOUT_REGISTER") return Operation::kOutputRegister;
+  if (name == "INSTRUNCTION_BITS") return Operation::kInputInstructionBits;
+  if (name == "HINT_CONDITION") return Operation::kHintCondition;
+  if (name == "OUTPUT_REGISTER_CHECK") return Operation::kRegisterCondition;
+  if (name == "PRESERVED_REGISTER_CHECK") return Operation::kPreservedCondition;
+  if (name == "COPIED_REGISTER_CHECK") return Operation::kCopyCondition;
+  if (name == "INSTRUCTION_BITS_CHECK") return Operation::kDecodeCondition;
+  if (name == "ALL_OF") return Operation::kVerifyInstruction;
+  if (name == "HINT") return Operation::kHint;
+  if (name == "ONE_OF") return Operation::kOnlyOneCondition;
+  if (name == "RESULT") return Operation::kCircuit;
+  if (name == "INVALID") return Operation::kInvalid;
+  LOG(FATAL) << "Unknown name " << name;
+  return "";
+}
+
 #define FORWARD_CONSTRUCTOR(base_class, derived_class) \
   inline explicit derived_class(unsigned size_) \
       : base_class(derived_class::kind, size_) {}
