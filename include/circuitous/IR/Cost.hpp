@@ -14,12 +14,13 @@
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
 #include <llvm/IR/Instruction.h>
+#include <llvm/IR/Instructions.h>
 #pragma clang diagnostic pop
 
 namespace circuitous {
 
-struct RawNodesCounter : UniqueVisitor<RawNodesCounter> {
-  using parent = UniqueVisitor<RawNodesCounter>;
+struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
+  using parent = UniqueVisitor<RawNodesCounter_>;
 
   // We want it ordered, so we can do diff effectively
   // The key type is important! We use it later as
@@ -27,14 +28,19 @@ struct RawNodesCounter : UniqueVisitor<RawNodesCounter> {
   std::map<uint64_t, uint64_t> nodes;
   std::map<uint32_t, uint64_t> llvm_ops;
 
-  void Visit(Operation *op) {
+  void Process(Operation *op) {
     const auto &[it, _] = nodes.try_emplace(op->op_code, 0);
     ++it->second;
+  }
+
+  void VisitOperation(Operation *op) {
+    Process(op);
     op->Traverse(*this);
   }
 
-  void VisitLLVMOperation(LLVMOperation *op) {
-    const auto &[it, _] = llvm_ops.try_emplace(op->op_code, 0);
+  void VisitOperation(LLVMOperation *op) {
+    Process(op);
+    const auto &[it, _] = llvm_ops.try_emplace(op->llvm_op_code, 0);
     ++it->second;
     op->Traverse(*this);
   }
@@ -46,7 +52,7 @@ struct RawNodesCounter : UniqueVisitor<RawNodesCounter> {
   auto Export() { return *this; }
 
   template<typename CB>
-  void Diff(RawNodesCounter &o, CB cb) {
+  void Diff(RawNodesCounter_ &o, CB cb) {
     auto diff = [&cb](auto self_, auto other_) {
       auto self = self_.begin();
       auto other = other_.begin();
@@ -76,6 +82,8 @@ struct RawNodesCounter : UniqueVisitor<RawNodesCounter> {
     diff(llvm_ops, o.llvm_ops);
   }
 };
+
+using RawNodesCounter = RawNodesCounter_;
 
 template<typename Collector>
 struct Printer {
