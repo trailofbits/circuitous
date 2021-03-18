@@ -434,8 +434,8 @@ class PopulationCount final : public BitOperation {
 
 // Count the leading zeroes of some bits.
 class CountLeadingZeroes final : public BitOperation {
-  static constexpr inline uint32_t kind = kCountLeadingZeroes;
  public:
+  static constexpr inline uint32_t kind = kCountLeadingZeroes;
   FORWARD_CONSTRUCTOR(BitOperation, CountLeadingZeroes)
 
   Operation *CloneWithoutOperands(Circuit *circuit) const override;
