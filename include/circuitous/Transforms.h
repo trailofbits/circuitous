@@ -172,6 +172,8 @@ struct ManagerAPI : Next {
 };
 
 template<typename Logger>
-using OptManager = ManagerAPI<Defensive<Logger, WithHistory<Manager>>>;
+using DebugOptimizer = ManagerAPI<Defensive<Logger, WithHistory<Manager>>>;
+template<typename Logger>
+using DefaultOptimizer = ManagerAPI<Defensive<Logger, Manager>>;
 
 }  // namespace circuitous
