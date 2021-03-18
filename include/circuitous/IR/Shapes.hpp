@@ -14,12 +14,26 @@
 
 namespace circuitous {
 
-bool IsLeaf(Operation *op) {
+template<typename T, typename ...Ts>
+bool IsOneOf(Operation *op) {
+  if (op->op_code == T::kind) {
+    return true;
+  }
+
+  if constexpr (sizeof...(Ts) == 0) {
+    return false;
+  } else {
+    return IsOneOf<Ts...>(op);
+  }
+}
+
+static inline bool IsLeaf(Operation *op) {
   switch(op->op_code) {
     case Operation::kInputRegister:
     case Operation::kOutputRegister:
     case Operation::kConstant:
     case Operation::kHint:
+    case Operation::kUndefined:
     case Operation::kInputInstructionBits:
       return true;
     default:
@@ -143,7 +157,7 @@ struct StrictComparator {
   bool Compare(Extract *a, Extract *b) { return false; }
 };
 
-bool StrictStructural(Operation *rhs, Operation *lhs) {
+static inline bool StrictStructural(Operation *rhs, Operation *lhs) {
   return false;
 }
 
@@ -165,6 +179,11 @@ struct Topology {
     return Get();
   }
 
+  std::string Hash(Operation *op) {
+    Run(op);
+    return Get();
+  }
+
   void Print(Operation *op, uint8_t depth) {
     auto indent = Self().Indent(depth);
     ss << indent << Self().Op(op);
@@ -182,7 +201,6 @@ struct Topology {
   }
 
   std::string Get() { return ss.str(); }
-
   std::string Indent(uint8_t) { return {}; }
 };
 
