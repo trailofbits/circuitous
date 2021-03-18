@@ -35,10 +35,9 @@ bool MergeByBytes(Circuit *circuit) {
   // Check if contexts are not overlaping
   auto ctxs = CtxCollector().Run(circuit).Get();
   for (auto &[op, ctx] : ctxs) {
-    LOG(INFO) << "CHECKING " << op->Name() << " " << op->id();
     if (!IsLeaf(op)) {
-      //CHECK(ctx.size() == 1) << op->Name() << " " << op->id() << " " << ctx.size();
       LOG(WARNING) << op->Name() << " " << op->id() << " shares more contexts";
+      return true;
     }
   }
 
@@ -162,6 +161,7 @@ struct DAGifier : UniqueVisitor<DAGifier<Hasher>> {
 
 bool DAGify(Circuit *circuit) {
   DAGifier<print::FullNames>().Run(circuit);
+  circuit->RemoveUnused();
   return true;
 }
 
