@@ -471,7 +471,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
     } else {
       op = impl->Create<LLVMOperation>(val);
-      op->operands.AddUse(op0);
+      op->AddUse(op0);
     }
   }
 
