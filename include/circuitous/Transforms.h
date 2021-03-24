@@ -142,11 +142,15 @@ struct Defensive : Next {
     Logger::log("Going to run transformation", name);
     this->Next::RunPass(circuit, pass);
     Logger::log("Done. Running verify pass:");
-    const auto &[status, msg] = VerifyCircuit(circuit);
+    const auto &[status, msg, warnings] = VerifyCircuit(circuit);
     if (!status) {
       Logger::fail("Verify failed");
+      Logger::fail(warnings);
       Logger::fail(msg);
       Logger::kill();
+    }
+    if (!warnings.empty()) {
+      Logger::log(warnings);
     }
     Logger::log("Circuit is okay.");
   }
@@ -169,6 +173,7 @@ struct ManagerAPI : Next {
   void AddPass(const std::string &name) {
     this->Next::AddPass(name);
   }
+
 };
 
 template<typename Logger>
