@@ -75,7 +75,7 @@ struct ECT {
       // Wire it in so that the verification that transitively needs to use
       // `hint` also checks that `hint` has the expected value.
       for (VerifyInstruction *verify : *verifications) {
-        CHECK(saturated_ctxs.count(verify));
+        CHECK(!saturated_ctxs.count(verify));
         saturated_ctxs.insert(verify);
         verify->AddUse(check);
       }
