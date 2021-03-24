@@ -3,7 +3,6 @@
  */
 
 #include <circuitous/Transforms.h>
-#include <circuitous/IR/Shapes.hpp>
 
 #include <set>
 #include <unordered_map>
