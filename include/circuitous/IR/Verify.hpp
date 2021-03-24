@@ -10,7 +10,7 @@
 #include <unordered_set>
 
 #include <circuitous/IR/IR.h>
-
+#include <circuitous/IR/Shapes.hpp>
 
 namespace circuitous {
 
@@ -105,6 +105,21 @@ struct Verifier {
   void VerifyHints(Circuit *circuit) {
     status &= VerifyHintChecks(circuit);
     status &= VerifyHintUsers(circuit);
+    status &= VerifyHintCtxs(circuit);
+  }
+
+  bool VerifyHintCtxs(Circuit *circuit) {
+    CtxCollector collector;
+    collector.Run(circuit);
+
+    bool out = true;
+    for (auto hint_check : circuit->Attr<HintCondition>()) {
+      if (collector.op_to_ctxs[hint_check].size() != 1) {
+        _warnings << "HINT_CHECK is member of multiple contexts.\n";
+        out &= true;
+      }
+    }
+    return out;
   }
 
   // We try to check if there is not a HINT with more than one HINT_CHECK
