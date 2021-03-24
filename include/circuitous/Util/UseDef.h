@@ -125,10 +125,22 @@ struct User {
 // `y in yx.users`.
 template<typename T>
 struct Node : Value<T>, User<T> {
+
+  T *Raw() { return static_cast<T *>(this); }
+
   void AddUse(T *other) {
     this->operands.push_back(other);
-    other->users.push_back(static_cast<T *>(this));
+    other->users.push_back(Raw());
   }
+
+  void ReplaceUse(T *other, std::size_t at) {
+    CHECK(this->operands.size() > at);
+    this->operands[at]->RemoveUser(Raw());
+
+    this->operands[at] = other;
+    other->users.push_back(Raw());
+  }
+
 
   void ReplaceAllUsesWith(T *other) {
     if (other == this) {
