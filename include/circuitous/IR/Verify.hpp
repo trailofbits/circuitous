@@ -17,6 +17,8 @@ namespace circuitous {
 // Really simple structural verifier
 struct Verifier {
   std::stringstream ss;
+  std::stringstream _warnings;
+
   bool status = true;
 
   std::string Report() { return ss.str(); }
@@ -120,8 +122,7 @@ struct Verifier {
           for (auto hint : op->operands) {
             if (hint->op_code == Operation::kHint) {
               if (found_hint) {
-                ss << "HINT_CHECK has at least two direct HINT operands!\n";
-                status = false;
+                _warnings << "HINT_CHECK has at least two direct HINT operands!\n";
               }
               found_hint = true;
               if (hint_to_ctxs[hint].count(verif)) {
@@ -199,22 +200,27 @@ struct Verifier {
 
 // Check if circuit has some really basic structural integrity, and return
 // a `( result, error messages )`.
-static inline std::pair<bool, std::string> VerifyCircuit(Circuit *circuit) {
+static inline std::tuple<bool, std::string, std::string> VerifyCircuit(Circuit *circuit) {
   Verifier verifier;
   verifier.Verify(circuit);
   verifier.VerifyHints(circuit);
   verifier.VerifyIDs(circuit);
-  return {verifier.status, verifier.Report()};
+  return {verifier.status, verifier.Report(), verifier._warnings.str() };
 }
 
+template<bool PrintWarnings=false>
 static inline void VerifyCircuit(const std::string &prefix,
                                  Circuit *circuit,
                                  const std::string &suffix="Done.") {
   LOG(INFO) << prefix;
-  const auto &[status, msg] = VerifyCircuit(circuit);
+  const auto &[status, msg, warnings] = VerifyCircuit(circuit);
   if (!status) {
+    LOG(ERROR) << warnings;
     LOG(ERROR) << msg;
     LOG(FATAL) << "Circuit is invalid";
+  }
+  if (PrintWarnings) {
+    LOG(WARNING) << warnings;;
   }
   LOG(INFO) << suffix;
 }
