@@ -774,7 +774,7 @@ class Visitor {
     switch (const auto op_code = op->op_code; op_code) {
 #define VISITOR_CASE(type) \
   case Operation::k##type: \
-    if (auto typed_op = dynamic_cast<type *>(op); typed_op) { \
+    if (auto typed_op = dynamic_cast<type *>(op)) { \
       self->Visit##type(typed_op); \
     } else { \
       LOG(FATAL) << "Node with op_code=" << op_code << " (k" << #type \
@@ -801,20 +801,21 @@ class Visitor {
 };
 
 template <typename Derived>
-class UniqueVisitor : public Visitor<Derived> {
- public:
+struct UniqueVisitor : public Visitor<Derived> {
+  using parent = Visitor<Derived>;
+
   void Visit(Operation *op) {
     if (seen_ops.count(op)) {
       return;
     }
     seen_ops.insert(op);
-    this->Visitor<Derived>::Visit(op);
+    this->parent::Visit(op);
   }
+
   void Reset(void) {
     seen_ops.clear();
   }
 
- private:
   std::unordered_set<Operation *> seen_ops;
 };
 
