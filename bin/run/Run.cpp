@@ -110,9 +110,13 @@ int main(int argc, char *argv[]) {
   // Deserialize circuit from binary IR file
   auto circuit{circuitous::Circuit::Deserialize(ir)};
 
-  const auto &[status, msg] = circuitous::VerifyCircuit(circuit.get());
+  const auto &[status, msg, warnings] = circuitous::VerifyCircuit(circuit.get());
   if (!status) {
     LOG(FATAL) << "Loaded IR is not valid -- Aborting.\n" << msg;
+  }
+  if (!warnings.empty()) {
+    LOG(WARNING) << "Warnings produced while loading IR.";
+    LOG(WARNING) << warnings;
   }
 
   circuitous::Interpreter run(circuit.get());
