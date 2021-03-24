@@ -216,10 +216,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     const auto &[from, size] = intrinsics::Extract::ParseArgs(fn);
 
-    // TODO(lukas): For now we can only lower some specialized cases
     CHECK(impl->Attr<InputInstructionBits>().Size() == 1);
-    CHECK(from % 8 == 0 && size % 8 == 0);
-
     const auto &inst_bytes = *impl->Attr<InputInstructionBits>().begin();
 
     // We split extract to sepratate bytes. This is so we can reorder them,
@@ -227,11 +224,21 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     // (endiannity for example).
     const unsigned step = 8;
     std::deque<Operation *> partials;
-    for (unsigned i = static_cast<unsigned>(from); i < from + size; i += step) {
-      auto op = impl->Create<Extract>(i, i + step);
-      op->AddUse(inst_bytes);
-      partials.push_front(op);
-    }
+    auto generate_fragments = [&](uint32_t from, uint32_t to) {
+      std::deque<Operation *> partials;
+      while (true) {
+        uint32_t y = std::min(from + (step - from % step), to);
+        auto op = impl->Create<Extract>(from, y);
+        op->AddUse(inst_bytes);
+        partials.push_front(op);
+        if (y == to) {
+          return partials;
+        }
+        from = y;
+      }
+    };
+    partials =  generate_fragments(static_cast<uint32_t>(from),
+                                   static_cast<uint32_t>(from + size));
 
     if (partials.size() == 1) {
       return partials.front();
