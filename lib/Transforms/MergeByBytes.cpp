@@ -32,7 +32,7 @@ void ProcessBucket(const decode_bucket_t &bucket) {
 
 bool MergeByBytes(Circuit *circuit) {
   // Check if contexts are not overlaping
-  auto ctxs = CtxCollector().Run(circuit).Get();
+  auto ctxs = std::move(CtxCollector().Run(circuit).op_to_ctxs);
   for (auto &[op, ctx] : ctxs) {
     if (!IsLeaf(op)) {
       LOG(WARNING) << op->Name() << " " << op->id() << " shares more contexts";
@@ -94,7 +94,6 @@ struct DAGifier : UniqueVisitor<DAGifier<Hasher>> {
   std::deque<Operation *> todo;
 
   bool Update(hash_t key, Operation *op) {
-    LOG(INFO) << key << "\n\n";
     hashes[op] = key;
     const auto &[it, status] = locations.try_emplace(key, op);
     if (!status) {
