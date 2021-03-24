@@ -10,13 +10,15 @@
 #include <unordered_set>
 
 #include <circuitous/IR/IR.h>
-
+#include <circuitous/IR/Shapes.hpp>
 
 namespace circuitous {
 
 // Really simple structural verifier
 struct Verifier {
   std::stringstream ss;
+  std::stringstream _warnings;
+
   bool status = true;
 
   std::string Report() { return ss.str(); }
@@ -103,6 +105,21 @@ struct Verifier {
   void VerifyHints(Circuit *circuit) {
     status &= VerifyHintChecks(circuit);
     status &= VerifyHintUsers(circuit);
+    status &= VerifyHintCtxs(circuit);
+  }
+
+  bool VerifyHintCtxs(Circuit *circuit) {
+    CtxCollector collector;
+    collector.Run(circuit);
+
+    bool out = true;
+    for (auto hint_check : circuit->Attr<HintCondition>()) {
+      if (collector.op_to_ctxs[hint_check].size() != 1) {
+        _warnings << "HINT_CHECK is member of multiple contexts.\n";
+        out &= true;
+      }
+    }
+    return out;
   }
 
   // We try to check if there is not a HINT with more than one HINT_CHECK
@@ -120,8 +137,7 @@ struct Verifier {
           for (auto hint : op->operands) {
             if (hint->op_code == Operation::kHint) {
               if (found_hint) {
-                ss << "HINT_CHECK has at least two direct HINT operands!\n";
-                status = false;
+                _warnings << "HINT_CHECK has at least two direct HINT operands!\n";
               }
               found_hint = true;
               if (hint_to_ctxs[hint].count(verif)) {
@@ -199,22 +215,27 @@ struct Verifier {
 
 // Check if circuit has some really basic structural integrity, and return
 // a `( result, error messages )`.
-static inline std::pair<bool, std::string> VerifyCircuit(Circuit *circuit) {
+static inline std::tuple<bool, std::string, std::string> VerifyCircuit(Circuit *circuit) {
   Verifier verifier;
   verifier.Verify(circuit);
   verifier.VerifyHints(circuit);
   verifier.VerifyIDs(circuit);
-  return {verifier.status, verifier.Report()};
+  return {verifier.status, verifier.Report(), verifier._warnings.str() };
 }
 
+template<bool PrintWarnings=false>
 static inline void VerifyCircuit(const std::string &prefix,
                                  Circuit *circuit,
                                  const std::string &suffix="Done.") {
   LOG(INFO) << prefix;
-  const auto &[status, msg] = VerifyCircuit(circuit);
+  const auto &[status, msg, warnings] = VerifyCircuit(circuit);
   if (!status) {
+    LOG(ERROR) << warnings;
     LOG(ERROR) << msg;
     LOG(FATAL) << "Circuit is invalid";
+  }
+  if (PrintWarnings) {
+    LOG(WARNING) << warnings;;
   }
   LOG(INFO) << suffix;
 }
