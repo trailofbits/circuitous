@@ -3,7 +3,6 @@
  */
 
 #include <circuitous/IR/IR.h>
-#include <circuitous/IR/Shapes.hpp>
 
 #include <circuitous/Printers.h>
 #include <circuitous/Transforms.h>
@@ -16,7 +15,7 @@
 #include <unordered_map>
 
 namespace circuitous {
-namespace {
+namespace impl {
 
 struct ECT {
   struct IDHash {
@@ -285,12 +284,227 @@ struct ECT {
   }
 };
 
-}  // namespace
+struct DependencyBreaker {
+  using collector_t = Collector<collect::Ctxs, collect::Hashes>;
+  collector_t info;
+
+  template<typename C>
+  void Status(std::size_t total, const C& ctxs) {
+    LOG(INFO) << "Ctx requirements:";
+    for (auto &[ctx, ops] : ctxs) {
+      LOG(INFO) << " " << ctx->id() << " " << ops.size();
+    }
+    LOG(INFO) << "Total op count " << total;
+  }
+
+  struct AllocationMap {
+    std::unordered_map<Operation *, std::vector<Operation *>> table;
+    uint64_t current_size = 0;
+
+    AllocationMap(uint64_t expected_size) : current_size(expected_size) {
+      LOG(INFO) << "Creating table with " << expected_size;
+    }
+
+    void Allocate(Operation *inst, const std::unordered_set<Operation *> &ctxs) {
+      std::map<uint64_t, uint64_t> holes;
+      for (auto ctx : ctxs) {
+        if (!table.count(ctx)) {
+          AddRow(ctx);
+        }
+        auto &row = table[ctx];
+        for (std::size_t i = 0; i < row.size(); ++i) {
+          if (!row[i]) {
+            auto [it, _] = holes.emplace(i, 0);
+            ++(it->second);
+          }
+        }
+      }
+      std::optional<uint64_t> trg;
+      LOG(INFO) << inst->id() << " searching for a allocation spot " << ctxs.size();
+      for (auto &[idx, count]: holes) {
+        LOG(INFO) << idx << " : " << count;
+        if (count == ctxs.size()) {
+
+          trg = idx;
+          break;
+        }
+      }
+
+      if (!trg) {
+        Enlarge();
+        trg = current_size - 1;
+      }
+
+      for (auto ctx : ctxs) {
+        table[ctx][*trg] = inst;
+      }
+    }
+
+
+    void AddRow(Operation *op) {
+      table[op] = std::vector<Operation *>(current_size, nullptr);
+    }
+
+    void Enlarge() {
+      ++current_size;
+      for (auto &[_, vec] : table) {
+        vec.resize(vec.size() + 1);
+      }
+    }
+
+    std::string Results() {
+      std::stringstream ss;
+      ss << std::endl;
+      for (auto &[ctx, row] : table) {
+        ss << ctx->id() << " : ";
+        for (auto i : row) {
+          if (i) {
+            ss << i->id() << "  ";
+          } else {
+            ss << " __ ";
+          }
+          ss << " | ";
+        }
+        ss << std::endl;
+      }
+      return ss.str();
+    }
+  };
+
+  void Extract(Circuit *circuit, uint32_t llvm_op) {
+    using operations_t = std::unordered_set<LLVMOperation *>;
+
+    std::unordered_map<Operation *, operations_t> ctx_requirements;
+    std::size_t total = 0;
+    std::size_t required = 0;
+    std::unordered_set<LLVMOperation *> candidates;
+    for (LLVMOperation *op : circuit->Attr<LLVMOperation>()) {
+      if (op->llvm_op_code != llvm_op) {
+        continue;
+      }
+      ++total;
+      candidates.insert(op);
+      for (auto ctx : info.op_to_ctxs[op]) {
+        auto [it, _] = ctx_requirements.try_emplace(ctx, operations_t{});
+        it->second.insert(op);
+        required = std::max(it->second.size(), required);
+      }
+    }
+    Status(total, ctx_requirements);
+
+    AllocationMap allocations(required);
+    for (auto inst : candidates) {
+      allocations.Allocate(inst, info.op_to_ctxs[inst]);
+    }
+    LOG(INFO) << allocations.Results();
+
+    std::vector<Operation *> models;
+    for (uint64_t i = 0; i < allocations.current_size; ++i) {
+      auto orig = *candidates.begin();
+      auto model = orig->CloneWithoutOperands(circuit);
+      auto lhs = circuit->Create<Hint>(orig->operands[0]->size);
+      auto rhs = circuit->Create<Hint>(orig->operands[1]->size);
+      model->AddUse(lhs);
+      model->AddUse(rhs);
+      models.push_back(model);
+    }
+    LOG(INFO) << "Created models";
+
+    auto bind_hints = [&](auto ctx, auto model, auto op) {
+      for (std::size_t i = 0; i < op->operands.size(); ++i) {
+        auto condition = circuit->Create<HintCondition>();
+        condition->AddUse(op->operands[i]);
+        condition->AddUse(model->operands[i]);
+        ctx->AddUse(condition);
+      }
+    };
+
+    LOG(INFO) << "Going to bind them";
+    std::unordered_set<Operation *> transfered;
+    for (auto &[ctx, row] : allocations.table) {
+      LOG(INFO) << "Handling: " << ctx->id();
+      for (std::size_t i = 0; i < row.size(); ++i) {
+        CHECK(row.size() == allocations.current_size);
+        if (!row[i]) {
+          continue;
+        }
+        LOG(INFO) << " " << row[i]->id();
+        if (!transfered.count(row[i])) {
+          transfered.insert(row[i]);
+          row[i]->ReplaceAllUsesWith(models[i]);
+        }
+        LOG(INFO) << "Binding: " << models[i]->id() << " " << row[i]->id();
+        bind_hints(ctx, models[i], row[i]);
+      }
+    }
+  }
+
+
+
+  void Run(Circuit *circuit) {
+    // Collect context information together with hashes
+    info.Run(circuit);
+    Extract(circuit, llvm::BinaryOperator::Add);
+  }
+
+};
+
+
+// If we have hints: H, I and X( H, A ) and HINT_CHECK( H, J ), HINT_CHECK( J, B )
+// we can simplify the first check to HINT_CHECK( H, B )
+// This can occure if we run several optimizations after each other.
+struct HintCheckReduce {
+  // Given chain of hint checks **in the same context**
+  // `HINT_CHECK( H0, H1 ), HINT_CHECK( H1, H2 ), ... HINT_CHECK( Hn, A )`
+  // return `A`.
+  Operation *Traverse(Operation *hint_check, Operation *ctx) {
+      auto dyn_val = hint_check->operands[HintCondition::kDynamicValue];
+      if (!Is<Hint>(dyn_val)) {
+        return dyn_val;
+      }
+
+      for (auto user : dyn_val->users) {
+        if (Is<HintCondition>(user) || GetContext(user) == ctx) {
+          return Traverse(user, ctx);
+        }
+      }
+      return nullptr;
+    };
+
+
+  Operation *HintCheckEnd(Operation *hint) {
+    for (auto user : hint->users) {
+      LOG(INFO) << print::FullNames().Hash(user);
+      if (user->op_code == Operation::kHintCondition &&
+          Is<Hint>(user->operands[HintCondition::kDynamicValue])) {
+        CHECK(user->users.size() == 1);
+        if (auto dyn_val = Traverse(user, user->users[0])) {
+          LOG(INFO) << "Actually setting something";
+          user->ReplaceUse(dyn_val, HintCondition::kDynamicValue);
+        }
+      }
+    }
+    return nullptr;
+  }
+
+  void Run(Circuit *circuit) {
+    for (auto x : circuit->Attr<Hint>()) {
+      HintCheckEnd(x);
+    }
+  }
+};
+
+}  // namespace impl
 
 // Look for common topological structures and extract them so that they are
 // shared by multiple different expressions.
 bool ExtractCommonTopologies(Circuit *circuit) {
-  return ECT().ExtractCommonTopologies(circuit);
+  return impl::ECT().ExtractCommonTopologies(circuit);
+}
+
+bool DependencyBreaker(Circuit *circuit) {
+  impl::DependencyBreaker().Run(circuit);
+  return true;
 }
 
 }  // namespace circuitous
