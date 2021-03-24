@@ -37,6 +37,8 @@ bool ConvertPopCountToParity(Circuit *circuit);
 // shared by multiple different expressions.
 bool ExtractCommonTopologies(Circuit *circuit);
 
+bool DependencyBreaker(Circuit *circuit);
+
 // Merge all of the hint inputs into a single "wide" input hint that is of
 // sufficient size to support all verifiers. In place of the individual hints,
 // the verifiers pull out slices of wide hint value with an EXTRACT.
@@ -55,7 +57,8 @@ struct KnownPasses {
     {"popcount2parity", { 2, &ConvertPopCountToParity } },
     {"reducepopcount", { 1, &StrengthReducePopulationCount } },
     {"extractcommon", { 3, &ExtractCommonTopologies } },
-    {"mergehints", { 4, &MergeHints } }
+    {"depbreaker", { 4, &DependencyBreaker } },
+    {"mergehints", { 99, &MergeHints } }
   };
 
   static std::string PassName(pass_t pass) {
@@ -79,7 +82,13 @@ struct Manager : KnownPasses {
 
   void AddPass(const std::string &name) {
     const auto &[priority, pass] = Get(name);
-    LOG(INFO) << "Adding pass" << name;
+    LOG(INFO) << "Adding pass: " << priority << " " << name;
+    selected[priority] = pass;
+  }
+
+  void AddPass(const std::string &name, uint8_t priority) {
+    const auto &[_, pass] = Get(name);
+    LOG(INFO) << "Adding pass: " << priority << " " << name;
     selected[priority] = pass;
   }
 
@@ -88,6 +97,7 @@ struct Manager : KnownPasses {
     circuit->RemoveUnused();
   }
 
+  std::string Stats() { return "No stats recorded."; }
 };
 
 template<typename Next>
