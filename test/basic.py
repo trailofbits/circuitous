@@ -318,7 +318,16 @@ test_all = {
   .case(run_bytes = 15, R=True)
   .case(run_bytes = 16, DE = MS().aflags(0), R=True)
   .case(run_bytes = 17, DE = MS().aflags(0), R=True)
-  .case(run_bytes = 18, DE = MS().aflags(0), R=True)
+  .case(run_bytes = 18, DE = MS().aflags(0), R=True),
+
+  # If in reduce_imms we do not check that opcodes (as well as operands)
+  # must be equal, this should fire
+  ModelTest("encoding adc, sbb").tags({"min", "reduce"})
+  .bytes(intel(["adc rax, 0x12",
+                "sbb rax, 0x12"]))
+  .DI(S().RAX(0x12).RCX(0x45).aflags(0))
+  .case(run_bytes = 0, R=True)
+  .case(run_bytes = 1, R=True)
 }
 
 # TODO(lukas): Division by zero
