@@ -113,7 +113,7 @@ namespace impl {
     static llvm::Function *CreateFn(llvm::Module *module) {
       llvm::IRBuilder<> ir(module->getContext());
       auto r_ty = ir.getInt1Ty();
-      auto fn_t = llvm::FunctionType::get(r_ty, {}, false);
+      auto fn_t = llvm::FunctionType::get(r_ty, {}, true);
       auto callee = module->getOrInsertFunction(Name(), fn_t);
       return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
     }
