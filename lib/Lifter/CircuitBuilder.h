@@ -85,13 +85,14 @@ class CircuitBuilder {
     // Inject ISEL into block `into`. Into `exit` a verify call is emitted.
     void InjectSemantic(llvm::BasicBlock *into, llvm::BasicBlock *exit, ISEL_view isel);
 
-    void CallSemantic(llvm::IRBuilder<> &ir, llvm::Function *fn,
-                      llvm::Value *state, llvm::Value *pc, llvm::Value *memory) {
+    llvm::CallInst *CallSemantic(
+        llvm::IRBuilder<> &ir, llvm::Function *fn,
+        llvm::Value *state, llvm::Value *pc, llvm::Value *memory) {
       llvm::Value *inst_func_args[remill::kNumBlockArgs] = {};
       inst_func_args[remill::kPCArgNum] = pc;
       inst_func_args[remill::kMemoryPointerArgNum] = memory;
       inst_func_args[remill::kStatePointerArgNum] = state;
-      ir.CreateCall(fn, inst_func_args);
+      return ir.CreateCall(fn, inst_func_args);
     }
 
     // For given ISEL return back list of byte checks that should be included in
