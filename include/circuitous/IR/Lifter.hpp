@@ -6,6 +6,7 @@
 
 #include <circuitous/Util/LLVMUtil.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
+#include <circuitous/Lifter/Shadows.hpp>
 
 #include <remill/Arch/Instruction.h>
 #include <remill/BC/Lifter.h>
@@ -56,11 +57,47 @@ struct ImmAsIntrinsics : public intrinsics::Extract {
   }
 };
 
-struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics {
+struct WithShadow : public intrinsics::Extract {
+  // TODO(lukas): We do not have it at the time of the construction (yet at least)
+  //              so we cannot take it by `const &`.
+  shadowinst::Instruction *shadow = nullptr;
+  // TODO(lukas): Synchronizes the operands to be lifted with the shadow instruction.
+  //              It is not the best solution, but it is not invasive with respect
+  //              to the parent class.
+  uint8_t current_op = 0;
+
+  auto &CurrentShade() { return shadow->operands[current_op]; }
+
+  auto ImmediateOperand(llvm::Module *module) {
+    auto &current = CurrentShade();
+    CHECK(current.immediate);
+    CHECK(current.immediate->size() >= 1);
+
+    std::vector<llvm::Function *> out;
+    for (auto [from, to] : *current.immediate) {
+      out.push_back(CreateFn(module, from, to));
+    }
+    return out;
+  }
+
+  auto RegisterOperand(llvm::Module *module) {
+    auto &current = CurrentShade();
+    CHECK(current.reg);
+    CHECK(current.reg->regions.size() == 1);
+  }
+};
+
+struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics, WithShadow {
   using parent = remill::InstructionLifter;
   using parent::parent;
 
   using parent::LiftIntoBlock;
+
+
+  void SupplyShadow(shadowinst::Instruction *shadow_) {
+    CHECK(!shadow) << "Shadow is already set, possible error";
+    shadow = shadow_;
+  }
 
   auto LiftIntoBlock(remill::Instruction &inst, llvm::BasicBlock *block,
                      bool is_delayed, const op_imm_regions_t &imm_regions) {
