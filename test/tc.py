@@ -86,8 +86,8 @@ class Mutator:
 def MS():
   return Mutator()
 
-def S():
-  return State()
+def S(x = None):
+  return State(x)
 
 for reg in _regs + _aflags:
   setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))
