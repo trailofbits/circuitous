@@ -282,4 +282,10 @@ struct AllocateDst : impl::Allocator<AllocateDst> {
   static constexpr const char *separator = ".";
 };
 
+template<typename C>
+auto make_xor(llvm::IRBuilder<> &ir, const C &args) {
+  auto xor_fn = OneOf::CreateFn(ir.GetInsertBlock()->getModule());
+  return ir.CreateCall(xor_fn, args);
+}
+
 } // namespace circuitous::intrinsics
