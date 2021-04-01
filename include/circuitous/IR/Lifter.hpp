@@ -169,14 +169,20 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics, WithShado
     auto module = bb->getModule();
 
     auto constant_imm = this->parent::LiftImmediateOperand(inst, bb, arg, arch_op);
-    auto imm_getters = GetImmediates(module, &inst, &arch_op);
 
     auto size = llvm::cast<llvm::IntegerType>(constant_imm->getType())->getScalarSizeInBits();
-    if (imm_getters.size() == 0) {
+    // If there is no shadow - or there is a shadow but it does not have size,
+    // just return the original value hidden behind intrinsic
+    if (!CurrentShade().immediate || CurrentShade().immediate->size() == 0) {
       return HideValue(constant_imm, bb, size);
     }
 
+    auto imm_getters = ImmediateOperand(module);
     auto inst_fn = ChooseImm(arch_op, imm_getters);
+    // Similar situation as with empty map
+    if (!inst_fn) {
+      return HideValue(constant_imm, bb, size);
+    }
     llvm::Value * hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
 
     if (hidden_imm->getType() != constant_imm->getType()) {
