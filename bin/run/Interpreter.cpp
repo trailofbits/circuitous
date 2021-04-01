@@ -342,9 +342,11 @@ void Interpreter::VisitVerifyInstruction(VerifyInstruction *op) {
 }
 
 void Interpreter::VisitOnlyOneCondition(OnlyOneCondition *op) {
-  DLOG(INFO) << "VisitOnlyOneCondition: " << op->Name();
-  auto val{GetNodeVal(op)};
-  SetNodeVal(op, val.countPopulation() == 1U ? TrueVal() : FalseVal());
+  auto result = 0u;
+  for (std::size_t i = 0; i < op->operands.Size(); ++i) {
+    result += (GetNodeVal(op->operands[i]) == TrueVal()) ? 1 : 0;
+  }
+  SetNodeVal(op, result == 1U ? TrueVal() : FalseVal());
 }
 
 void Interpreter::VisitCircuit(Circuit *op) {
