@@ -14,7 +14,11 @@
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <llvm/ADT/PostOrderIterator.h>
+#include <llvm/IR/CallSite.h>
 #include <llvm/IR/CFG.h>
+#include <llvm/IR/Verifier.h>
+#include <llvm/Codegen/IntrinsicLowering.h>
+#include <llvm/Transforms/Utils/Cloning.h>
 #pragma clang diagnostic pop
 
 #include <sstream>
@@ -231,9 +235,12 @@ void CircuitBuilder::IdentifyImms(CircuitBuilder::InstSelections &insts) {
       if (reduce_imms) {
         LOG(INFO) << "Searching for immediate operands regions in:";
         LOG(INFO) << inst.instructions[i].Serialize();
-        inst.imms.push_back(InstructionFuzzer{arch}.FuzzOps(inst.instructions[i]));
+        auto s_inst = InstructionFuzzer{arch}.FuzzOps(inst.instructions[i]);
+        inst.imms.emplace_back();
+        inst.shadows.push_back(std::move(s_inst));
       } else {
         inst.imms.emplace_back();
+        inst.shadows.emplace_back();
       }
     }
   }
@@ -327,7 +334,6 @@ void CircuitBuilder::FlattenControlFlow(
 void CircuitBuilder::LiftInstructions(
     std::vector<InstructionSelection> &isels) {
   remill::IntrinsicTable intrinsics(module);
-  InstructionLifter lifter(arch, intrinsics);
   std::vector<llvm::Function *> inst_funcs;
 
   for (auto &group : isels) {
@@ -344,6 +350,8 @@ void CircuitBuilder::LiftInstructions(
       remill::CloneBlockFunctionInto(func);
       auto block = &func->getEntryBlock();
 
+      InstructionLifter lifter(arch, intrinsics);
+      lifter.SupplyShadow(&group.shadows[i]);
       switch (lifter.LiftIntoBlock(inst, block, false, group.imms[i])) {
         case remill::LiftStatus::kLiftedInstruction:
           (void) llvm::ReturnInst::Create(
@@ -908,16 +916,108 @@ void CircuitBuilder::Circuit0::InjectSemantic(
     store_to_reg(reg, arg);
   }
 
-  CallSemantic(ir, isel.lifted, state_ptr, pc, llvm::UndefValue::get(parent.mem_ptr_type));
+  auto fn_t = llvm::FunctionType::get(ir.getVoidTy(), {});
+  auto breakpoint_begin_fn =
+    llvm::cast<llvm::Function>(parent.module->getOrInsertFunction(
+      "__circ.break.begin", fn_t).getCallee());
+  auto breakpoint_end_fn =
+    llvm::cast<llvm::Function>(parent.module->getOrInsertFunction(
+      "__circ.end.begin", fn_t).getCallee());
+
+  auto begin = ir.CreateCall(breakpoint_begin_fn, {});
+  auto sem_call = CallSemantic(
+    ir, isel.lifted, state_ptr, pc, llvm::UndefValue::get(parent.mem_ptr_type));
+  auto end = ir.CreateCall(breakpoint_end_fn, {});
+  llvm::InlineFunctionInfo info;
+  llvm::InlineFunction(sem_call, info);
 
   auto params = ByteFragments(ir, isel);
   auto fragments_size = params.size();
+
+  LOG(INFO) << "Collecting dst regs";
+  std::vector<llvm::Value *> dst_regs;
+  for (auto it = llvm::BasicBlock::iterator(begin); it != begin->getParent()->end(); ++it) {
+    auto &inst = *it;
+    if (auto dst_alloca = GetMetadata(&inst, "circuitous.dst.reg")) {
+      dst_regs.push_back(&inst);
+    }
+    if (auto verify_arg = GetMetadata(&inst, "circuitous.verify_fn_args")) {
+      params.push_back(&inst);
+    }
+  }
+  begin->eraseFromParent();
+  end->eraseFromParent();
+
+  for (std::size_t i = 0; i < dst_regs.size(); ++i) {
+    CHECK(llvm::isa<llvm::PointerType>(dst_regs[i]->getType()));
+    auto p_type = llvm::cast<llvm::PointerType>(dst_regs[i]->getType());
+    ir.SetInsertPoint(llvm::dyn_cast<llvm::Instruction>(dst_regs[i]));
+    auto as_alloca = ir.CreateAlloca(p_type->getPointerElementType());
+    dst_regs[i]->replaceAllUsesWith(as_alloca);
+    dst_regs[i] = as_alloca;
+  }
+  ir.SetInsertPoint(inst_block);
+
+  auto as_string = [](auto full, auto from, auto size) {
+    std::string out;
+    for (uint64_t i = 0; i < size; ++i) {
+      out += (full[from + i]) ? '1' : '0';
+    }
+    return out;
+  };
 
   // Final set of parameters are comparisons on whether or not the resulting
   // register after the semantic has executed matches the next state of that
   // register.
   for (auto [reg, _, expected_reg_val] : reg_to_args) {
-    auto reg_val = load_from_reg(reg);
+    LOG(INFO) << "Processing " << reg->name;
+    llvm::Value *reg_val = load_from_reg(reg);
+    uint64_t proccessed = 0;
+
+    for (std::size_t i = 0; i < isel.instruction.operands.size(); ++i) {
+      if (isel.instruction.operands[i].action != remill::Operand::Action::kActionWrite) {
+        continue;
+      }
+      auto &s_op = isel.shadow.operands[i];
+
+      if (!s_op.reg) {
+        continue;
+      }
+      ++proccessed;
+      auto &table = s_op.reg->translation_map;
+      LOG(INFO) << reg->name;
+      LOG(INFO) << table.count(reg->name);
+      if (!table.count(reg->name)) {
+        continue;
+      }
+      auto &all_mats = table.find(reg->name)->second;
+      CHECK(all_mats.size() == 1);
+      const auto &mats = *(all_mats.begin());
+
+      std::size_t current = 0;
+      std::vector<llvm::Value *> reg_checks;
+      for (auto &[from, size] : s_op.reg->regions) {
+        auto extract_fn = intrinsics::Extract::CreateFn(parent.module.get(), from, size);
+        auto fragments = ir.CreateCall(extract_fn, {});
+        auto constant = ir.getInt(
+          llvm::APInt(static_cast<uint32_t>(size), as_string(mats, current, size), 2));
+        auto eq = ir.CreateICmpEQ(fragments, constant);
+
+        reg_checks.push_back(eq);
+        // After we use `locate_reg` we need to update the builder since some extra
+        // instrucitons may have been inserted.
+
+        current += size;
+      }
+
+      // TODO(lukas): Generalize.
+      CHECK(reg_checks.size() == 2);
+      CHECK(proccessed - 1 < dst_regs.size());
+      auto eq = ir.CreateAnd(reg_checks[0], reg_checks[1]);
+      auto dst_load = ir.CreateLoad(dst_regs[proccessed - 1]);
+      reg_val = ir.CreateSelect(eq, dst_load, reg_val);
+    }
+
 
     auto eq_func = intrinsics::Eq::CreateFn(parent.module.get(), reg_val->getType());
     llvm::Value *eq_args[] = {reg_val, expected_reg_val};
@@ -980,25 +1080,10 @@ std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
     return y;
   };
 
-  // Flatten the data structure that holds information about imm regions.
-  std::map<uint64_t, uint64_t> flattened_imm_regions;
-  for (auto &[_, data] : isel.imms) {
-    for(auto &[from, size] : data) {
-      flattened_imm_regions.emplace(from, from + size);
-    }
-  }
-
-  // For each chunk that is *not* an immediate region create a bitcheck.
-  uint64_t current = 0;
-  for (auto &[from, to] : flattened_imm_regions) {
-    if (current != from) {
-      out.push_back(create_bit_check(current, from));
-    }
-    current = to;
-  }
-  // If there is some chunk left we need to include it as well.
-  if (current != rinst_size) {
-    out.push_back(create_bit_check(current, rinst_size));
+  auto unknown_regions = isel.shadow.UnknownRegions(rinst_size);
+  for (auto [from, to] : shadowinst::FromToFormat(unknown_regions)) {
+    LOG(INFO) << "[ " << from << " , " << to << " ]";
+    out.push_back(create_bit_check(from, to));
   }
   return out;
 }
