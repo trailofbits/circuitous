@@ -444,11 +444,7 @@ class DeserializeVisitor : FileConfig {
   DECODE_CONDITION(DecodeCondition)
   DECODE_GENERIC(Hint)
   DECODE_CONDITION(VerifyInstruction)
-
-  Operation *DecodeOnlyOneCondition(uint64_t) {
-    LOG(FATAL) << "OnlyOneCondition nodes should not appear in serialized file";
-    return nullptr;
-  }
+  DECODE_CONDITION(OnlyOneCondition)
 
   std::istream &is;
   Circuit *const circuit;
