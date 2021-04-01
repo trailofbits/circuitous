@@ -199,6 +199,32 @@ namespace impl {
       return out;
     }
   };
+
+  template <typename Self_t>
+  struct Allocator : Base<Self_t> {
+    using Parent = Base<Self_t>;
+
+    static std::string Name(llvm::Type *type) {
+      auto name = [](auto rec, auto type) -> std::string {
+        if (auto p_type = llvm::dyn_cast<llvm::PointerType>(type)) {
+          return "p." + rec(rec, p_type->getPointerElementType());
+        }
+        auto size = llvm::cast<llvm::IntegerType>(type)->getScalarSizeInBits();
+        return std::to_string(size);
+      };
+
+      std::stringstream ss;
+      ss << Self_t::fn_prefix << Self_t::separator << name(name, type);
+      return ss.str();
+    }
+
+    static llvm::Function *CreateFn(llvm::Module *module, llvm::Type *type) {
+      llvm::IRBuilder<> ir(module->getContext());
+      auto fn_t = llvm::FunctionType::get(type, {}, false);
+      auto callee = module->getOrInsertFunction(Name(type), fn_t);
+      return llvm::cast<llvm::Function>(callee.getCallee());
+    }
+  };
 } // namesapce impl
 
 // TODO(lukas): We want to check that `fn_prefix` is never prefix of some
@@ -248,6 +274,11 @@ struct Eq : impl::BinaryPredicate<Eq> {
 
 struct InputImmediate : impl::Identity<InputImmediate> {
   static constexpr const char *fn_prefix = "__circuitous.input_imm";
+  static constexpr const char *separator = ".";
+};
+
+struct AllocateDst : impl::Allocator<AllocateDst> {
+  static constexpr const char *fn_prefix = "__circuitous.allocate_dst";
   static constexpr const char *separator = ".";
 };
 
