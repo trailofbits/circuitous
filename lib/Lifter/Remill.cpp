@@ -38,29 +38,31 @@ namespace {
 template <typename T>
 class BottomUpDependencyVisitor {
  public:
-  void VisitArgument(llvm::Function *, llvm::Use &, llvm::Argument *) {}
-  void VisitFunctionCall(llvm::Function *, llvm::Use &, llvm::CallInst *) {}
-  void VisitBinaryOperator(llvm::Function *, llvm::Use &, llvm::Instruction *) {
+  void VisitArgument(llvm::Function *, llvm::Argument *) {}
+  void VisitFunctionCall(llvm::Function *, llvm::CallInst *) {}
+  void VisitBinaryOperator(llvm::Function *, llvm::Instruction *) {}
+  void VisitSelect(llvm::Function *, llvm::Instruction *);
+  void VisitUnaryOperator(llvm::Function *, llvm::Instruction *) {}
+  void VisitUndefined(llvm::Function *, llvm::UndefValue *) {}
+  void VisitConstantInt(llvm::Function *, llvm::ConstantInt *) {}
+  void VisitConstantFP(llvm::Function *, llvm::ConstantFP *) {}
+  void Visit(llvm::Function *context, llvm::Use &use_) {
+    return Visit(context, use_.get());
   }
-  void VisitSelect(llvm::Function *, llvm::Use &, llvm::Instruction *);
-  void VisitUnaryOperator(llvm::Function *, llvm::Use &, llvm::Instruction *) {}
-  void VisitUndefined(llvm::Function *, llvm::Use &, llvm::UndefValue *) {}
-  void VisitConstantInt(llvm::Function *, llvm::Use &, llvm::ConstantInt *) {}
-  void VisitConstantFP(llvm::Function *, llvm::Use &, llvm::ConstantFP *) {}
-  void Visit(llvm::Function *context, llvm::Use &use_);
+  void Visit(llvm::Function *context, llvm::Value *val);
 };
 
 // Analyze how `use_` is produced.
 template <typename T>
 void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
-                                         llvm::Use &use) {
+                                         llvm::Value *val) {
   auto self = static_cast<T *>(this);
 
-  const auto val = use.get();
+  //const auto val = use.get();
 
   // Bottom out at an argument; it should be an input register.
   if (auto arg_val = llvm::dyn_cast<llvm::Argument>(val); arg_val) {
-    self->VisitArgument(context, use, arg_val);
+    self->VisitArgument(context, arg_val);
 
   // Instruction; follow the dependency chain.
   } else if (auto inst_val = llvm::dyn_cast<llvm::Instruction>(val); inst_val) {
@@ -69,7 +71,7 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
         self->Visit(context, op_use);
       }
 
-      self->VisitFunctionCall(context, use, call_val);
+      self->VisitFunctionCall(context, call_val);
 
     } else {
       for (auto &op_use : inst_val->operands()) {
@@ -78,13 +80,13 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
 
       if (llvm::isa<llvm::BinaryOperator>(inst_val) ||
           llvm::isa<llvm::CmpInst>(inst_val)) {
-        self->VisitBinaryOperator(context, use, inst_val);
+        self->VisitBinaryOperator(context, inst_val);
 
       } else if (llvm::isa<llvm::UnaryInstruction>(inst_val)) {
-        self->VisitUnaryOperator(context, use, inst_val);
+        self->VisitUnaryOperator(context, inst_val);
 
       } else if (llvm::isa<llvm::SelectInst>(inst_val)) {
-        self->VisitSelect(context, use, inst_val);
+        self->VisitSelect(context, inst_val);
 
       } else {
         LOG(FATAL) << "Unexpected value during visit: "
@@ -95,21 +97,21 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
   // Bottom out at a constant, ignore for now.
   } else if (auto const_val = llvm::dyn_cast<llvm::Constant>(val); const_val) {
     if (auto undef = llvm::dyn_cast<llvm::UndefValue>(const_val); undef) {
-      self->VisitUndefined(context, use, undef);
+      self->VisitUndefined(context, undef);
 
     } else if (auto ce = llvm::dyn_cast<llvm::ConstantExpr>(const_val); ce) {
       auto ce_inst = ce->getAsInstruction();
       auto &entry_block = context->getEntryBlock();
       ce_inst->insertBefore(&*entry_block.getFirstInsertionPt());
       ce->replaceAllUsesWith(ce_inst);
-      CHECK_EQ(use.get(), ce_inst);
-      self->Visit(context, use);  // Revisit.
+      CHECK_EQ(val, ce_inst);
+      self->Visit(context, val);  // Revisit.
 
     } else if (auto ci = llvm::dyn_cast<llvm::ConstantInt>(val); ci) {
-      self->VisitConstantInt(context, use, ci);
+      self->VisitConstantInt(context, ci);
 
     } else if (auto cf = llvm::dyn_cast<llvm::ConstantFP>(val); cf) {
-      self->VisitConstantFP(context, use, cf);
+      self->VisitConstantFP(context, cf);
 
     } else {
       LOG(FATAL)
@@ -130,7 +132,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
         dl(dl_),
         impl(impl_) {}
 
-  void VisitArgument(llvm::Function *, llvm::Use &, llvm::Argument *val) {
+  void VisitArgument(llvm::Function *, llvm::Argument *val) {
     CHECK(val_to_op.count(val));
   }
 
@@ -290,7 +292,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     return op;
   }
 
-  void VisitFunctionCall(llvm::Function *, llvm::Use &, llvm::CallInst *val) {
+  void VisitFunctionCall(llvm::Function *, llvm::CallInst *val) {
     auto &op = val_to_op[val];
     if (op) {
       return;
@@ -356,12 +358,14 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       op = VisitExtractRawIntrinsic(func);
     } else if (intrinsics::InputImmediate::IsIntrinsic(func)) {
       op = VisitInputImmediate(val, func);
+    } else if (intrinsics::OneOf::IsIntrinsic(func)) {
+      op = VisitOneOf(val, func);
     } else {
       LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(val);
     }
   }
 
-  void VisitSelect(llvm::Function *func, llvm::Use &, llvm::Instruction *val) {
+  void VisitSelect(llvm::Function *func, llvm::Instruction *val) {
     auto &op = val_to_op[val];
     if (op) {
       return;
@@ -428,7 +432,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
   }
 
-  void VisitBinaryOperator(llvm::Function *func, llvm::Use &,
+  void VisitBinaryOperator(llvm::Function *func,
                            llvm::Instruction *val) {
     auto &op = val_to_op[val];
     if (op) {
@@ -455,7 +459,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
   }
 
-  void VisitUnaryOperator(llvm::Function *func, llvm::Use &,
+  void VisitUnaryOperator(llvm::Function *func,
                           llvm::Instruction *val) {
     auto &op = val_to_op[val];
     if (op) {
@@ -505,7 +509,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     op = bits_op;
   }
 
-  void VisitUndefined(llvm::Function *, llvm::Use &, llvm::UndefValue *val) {
+  void VisitUndefined(llvm::Function *, llvm::UndefValue *val) {
     auto &op = val_to_op[val];
     if (op) {
       return;
@@ -515,11 +519,11 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
   }
 
-  void VisitConstantInt(llvm::Function *, llvm::Use &, llvm::ConstantInt *val) {
+  void VisitConstantInt(llvm::Function *, llvm::ConstantInt *val) {
     VisitAPInt(val, val->getValue());
   }
 
-  void VisitConstantFP(llvm::Function *, llvm::Use &, llvm::ConstantFP *val) {
+  void VisitConstantFP(llvm::Function *, llvm::ConstantFP *val) {
     VisitAPInt(val, val->getValueAPF().bitcastToAPInt());
   }
 
