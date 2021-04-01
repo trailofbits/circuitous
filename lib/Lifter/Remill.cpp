@@ -263,7 +263,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     auto arg_i = call->getOperand(0);
     if (val_to_op.count(arg_i) != 1) {
       LOG(FATAL) << "Something went wrong and argument"
-                 << "of InputImmediate instrinsic was not visited";
+                 << "of InputImmediate intrinsic was not visited";
     }
     auto full = val_to_op[arg_i];
     CHECK(full);
