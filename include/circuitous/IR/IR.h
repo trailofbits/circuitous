@@ -171,6 +171,7 @@ class Operation : public Node<Operation> {
     // the circuit, of which the minimum cost one is chosen.
     kCircuit = 23,
 
+    kLast = 24,
     // Invalid -- you cannot have this tag present in you tree.
     kInvalid = 0xff
   };
