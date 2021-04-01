@@ -5,7 +5,7 @@ import json
 import os
 
 # Add methods same as register names to the State to make configuration easier
-_regs = [ "RIP",
+_regs = [ "RIP", "RSP", "RBP",
           "RAX", "RBX", "RCX", "RDX", "RSI", "RDI",
           "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
 _e_regs = ["EAX, EBX", "ECX", "EDX"]
