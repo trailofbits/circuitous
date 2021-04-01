@@ -5,6 +5,8 @@
 #pragma once
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/Lifter/Shadows.hpp>
+
 #include <remill/Arch/Arch.h>
 #include <remill/BC/IntrinsicTable.h>
 #include <remill/BC/Lifter.h>
@@ -36,6 +38,7 @@ struct InstructionSelection {
   using imm_meta_t = std::map<uint64_t, uint64_t>;
   using imm_meta_list_t = std::map<remill::Operand *, imm_meta_t>;
   std::vector<imm_meta_list_t> imms;
+  std::vector<shadowinst::Instruction> shadows;
 
   std::vector<llvm::Function *> lifted_fns;
 };
@@ -44,11 +47,12 @@ struct ISEL_view {
   const remill::Instruction &instruction;
   const InstructionEncoding &encoding;
   const InstructionSelection::imm_meta_list_t &imms;
+  const shadowinst::Instruction &shadow;
   llvm::Function *lifted;
 
   ISEL_view(const InstructionSelection &isel, uint64_t i)
     : instruction(isel.instructions[i]), encoding(isel.encodings[i]),
-      imms(isel.imms[i]), lifted(isel.lifted_fns[i])
+      imms(isel.imms[i]), shadow(isel.shadows[i]), lifted(isel.lifted_fns[i])
   {}
 };
 
@@ -81,13 +85,14 @@ class CircuitBuilder {
     // Inject ISEL into block `into`. Into `exit` a verify call is emitted.
     void InjectSemantic(llvm::BasicBlock *into, llvm::BasicBlock *exit, ISEL_view isel);
 
-    void CallSemantic(llvm::IRBuilder<> &ir, llvm::Function *fn,
-                      llvm::Value *state, llvm::Value *pc, llvm::Value *memory) {
+    llvm::CallInst *CallSemantic(
+        llvm::IRBuilder<> &ir, llvm::Function *fn,
+        llvm::Value *state, llvm::Value *pc, llvm::Value *memory) {
       llvm::Value *inst_func_args[remill::kNumBlockArgs] = {};
       inst_func_args[remill::kPCArgNum] = pc;
       inst_func_args[remill::kMemoryPointerArgNum] = memory;
       inst_func_args[remill::kStatePointerArgNum] = state;
-      ir.CreateCall(fn, inst_func_args);
+      return ir.CreateCall(fn, inst_func_args);
     }
 
     // For given ISEL return back list of byte checks that should be included in
