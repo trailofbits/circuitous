@@ -5,6 +5,8 @@
 #pragma once
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/Lifter/Shadows.hpp>
+
 #include <remill/Arch/Arch.h>
 #include <remill/BC/IntrinsicTable.h>
 #include <remill/BC/Lifter.h>
@@ -36,6 +38,7 @@ struct InstructionSelection {
   using imm_meta_t = std::map<uint64_t, uint64_t>;
   using imm_meta_list_t = std::map<remill::Operand *, imm_meta_t>;
   std::vector<imm_meta_list_t> imms;
+  std::vector<shadowinst::Instruction> shadows;
 
   std::vector<llvm::Function *> lifted_fns;
 };
@@ -44,11 +47,12 @@ struct ISEL_view {
   const remill::Instruction &instruction;
   const InstructionEncoding &encoding;
   const InstructionSelection::imm_meta_list_t &imms;
+  const shadowinst::Instruction &shadow;
   llvm::Function *lifted;
 
   ISEL_view(const InstructionSelection &isel, uint64_t i)
     : instruction(isel.instructions[i]), encoding(isel.encodings[i]),
-      imms(isel.imms[i]), lifted(isel.lifted_fns[i])
+      imms(isel.imms[i]), shadow(isel.shadows[i]), lifted(isel.lifted_fns[i])
   {}
 };
 
