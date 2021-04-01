@@ -196,6 +196,117 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics, WithShado
     }
     return HideValue(hidden_imm, bb, size);
   }
+
+  llvm::Value *LiftRegisterOperand(remill::Instruction &inst,
+                                   llvm::BasicBlock *bb,
+                                   llvm::Value *state_ptr,
+                                   llvm::Argument *arg,
+                                   remill::Operand &op) override {
+    if (!CurrentShade().reg) {
+      return this->parent::LiftRegisterOperand(inst, bb, state_ptr, arg, op);
+    }
+
+    // We need to convert the hardcoded values of our translation table into
+    // `llvm::APInt` and to do that we need to have them as `std::string`.
+    auto as_string = [](auto full, auto from, auto size) {
+      std::string out;
+      for (uint64_t i = 0; i < size; ++i) {
+        out += (full[from + i]) ? '1' : '0';
+      }
+      return out;
+    };
+
+    auto module = bb->getModule();
+
+    // We decoded exactly one form
+    // NOTE(lukas): This may be redundat - not sure yet
+    std::vector<llvm::Value *> xor_ops;
+
+    const auto &s_reg = CurrentShade().reg;
+    auto concrete = this->parent::LiftRegisterOperand(inst, bb, state_ptr, arg, op);
+
+    if (s_reg->size() == 0) {
+      return concrete;
+    }
+    // Load register value -- even for pointer types! Since we are not really
+    // storing anything anywhere we do not care about pointers - we care about
+    // the value inside though.
+    // Allow only some types now.
+    auto locate_reg = [&](auto name) {
+      if (llvm::isa<llvm::PointerType>(concrete->getType())) {
+        return this->parent::LoadRegValue(bb, state_ptr, name);
+      }
+      if (llvm::isa<llvm::IntegerType>(concrete->getType())) {
+        return this->parent::LoadRegValue(bb, state_ptr, name);
+      }
+      LOG(FATAL) << "Cannot locate " << name << " with type "
+                 << remill::LLVMThingToString(concrete->getType());
+    };
+
+    llvm::IRBuilder<> ir(bb);
+    llvm::Value *prev_select = llvm::UndefValue::get(concrete->getType());
+
+    std::vector<llvm::Value *> fragment_checks;
+    for (auto &[reg, all_mats] : s_reg->translation_map) {
+      // TODO(lukas): To make our lived easier for now
+      CHECK(all_mats.size() == 1);
+      const auto &mats = *(all_mats.begin());
+
+      std::size_t current = 0;
+      std::vector<llvm::Value *> reg_checks;
+      for (auto &[from, size] : s_reg->regions) {
+        auto extract_fn = intrinsics::Extract::CreateFn(module, from, size);
+        auto fragments = ir.CreateCall(extract_fn, {}, "fragments");
+        auto constant = ir.getInt(
+          llvm::APInt(static_cast<uint32_t>(size), as_string(mats, current, size), 2));
+        auto eq = ir.CreateICmpEQ(fragments, constant, "frag_check");
+
+        reg_checks.push_back(eq);
+        // After we use `locate_reg` we need to update the builder since some extra
+        // instrucitons may have been inserted.
+
+        current += size;
+      }
+
+      auto reg_var = locate_reg(reg);
+      ir.SetInsertPoint(bb);
+
+      // NOTE(lukas): I am avoiding introducing extra intrinsics that does
+      //              n-ary `and` on purpose - I would prefer to keep number
+      //              of intrinsics to minimum.
+      CHECK(reg_checks.size() > 0);
+      llvm::Value *eq = ir.getTrue();
+      for (auto fragment : reg_checks) {
+        eq = ir.CreateAnd(eq, fragment);
+      }
+
+      prev_select = ir.CreateSelect(eq, reg_var, prev_select);
+      fragment_checks.push_back(eq);
+    }
+    auto xor_all = intrinsics::make_xor(ir, fragment_checks);
+    AddMetadata(xor_all, "circuitous.verify_fn_args", current_op);
+
+
+    auto dst = [&]() -> llvm::Value *{
+      if (llvm::isa<llvm::PointerType>(concrete->getType())) {
+        auto alloca_fn = intrinsics::AllocateDst::CreateFn(
+          module,
+          llvm::PointerType::getUnqual(prev_select->getType()));
+        auto dst = ir.CreateCall(alloca_fn, {}, "DST_" + std::to_string(current_op));
+
+        // Add metadata so someone down the line can identify the alloca (and its
+        // mapping to the operand if needed).
+        AddMetadata(dst, "circuitous.dst.reg", current_op);
+        ir.CreateStore(prev_select, dst);
+        return dst;
+      }
+      return prev_select;
+    }();
+
+    LOG(INFO) << remill::LLVMThingToString(dst);
+    return dst;
+  }
+
 };
 
 } // namespace circuitous
