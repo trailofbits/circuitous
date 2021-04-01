@@ -11,6 +11,7 @@
 #include <glog/logging.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/IR/BasicBlock.h>
+#include <llvm/IR/CallSite.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Function.h>
@@ -290,6 +291,20 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     LOG(INFO) << from << ", " << size;
     op->AddUse(inst_bytes);
     return op;
+  }
+
+  Operation *VisitOneOf(llvm::CallInst *call, llvm::Function *fn) {
+    auto one_of = impl->Create<OnlyOneCondition>();
+    for (auto &arg : llvm::CallSite{call}.args()) {
+      arg.get()->print(llvm::errs());
+      llvm::errs().flush();
+      if (!val_to_op.count(arg.get())) {
+        Visit(call->getParent()->getParent(), arg.get());
+      }
+      auto op = val_to_op[arg.get()];
+      one_of->AddUse(op);
+    }
+    return one_of;
   }
 
   void VisitFunctionCall(llvm::Function *, llvm::CallInst *val) {
