@@ -152,6 +152,15 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics, WithShado
     return ir.CreateCall(intrinsics::InputImmediate::CreateFn(bb->getModule(), size), val);
   }
 
+  llvm::Value *LiftOperand(remill::Instruction &inst, llvm::BasicBlock *bb,
+                           llvm::Value *state_ptr, llvm::Argument *arg,
+                           remill::Operand &op) override {
+    LOG(INFO) << "LiftOperand: " << static_cast<uint16_t>(current_op);
+    auto out = this->parent::LiftOperand(inst, bb, state_ptr, arg, op);
+    current_op += 1;
+    return out;
+  }
+
   llvm::Value *LiftImmediateOperand(remill::Instruction &inst, llvm::BasicBlock *bb,
                                     llvm::Argument *arg,
                                     remill::Operand &arch_op) override {
