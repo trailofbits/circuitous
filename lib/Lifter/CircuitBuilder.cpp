@@ -554,6 +554,17 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
         continue;
       }
 
+      const auto call_inst = llvm::dyn_cast<llvm::CallInst>(arg);
+      CHECK(call_inst) << "Expected argument of verify_inst to be calls";
+
+      const auto icmp_eq = call_inst->getCalledFunction();
+      CHECK_NOTNULL(icmp_eq);
+      if (intrinsics::OneOf::IsIntrinsic(icmp_eq)) {
+        ++arg_num;
+        continue;
+      }
+      CHECK(intrinsics::Eq::IsIntrinsic(icmp_eq)) << LLVMName(icmp_eq);
+
       // Figure out the input and output registers to the circuit function.
       // const auto reg_id = arg_num - num_instruction_parts;
       // const auto in_reg_arg_index = num_instruction_parts + (2u * reg_id);
@@ -570,15 +581,6 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
       const auto in_reg_name = in_reg_arg->getName().str();
       const auto out_reg_name = out_reg_arg->getName().str();
       ++arg_num; ++reg_idx;
-
-      const auto call_inst = llvm::dyn_cast<llvm::CallInst>(arg);
-      CHECK(call_inst != nullptr)
-          << "Unexpected argument value for " << in_reg_name << ": "
-          << remill::LLVMThingToString(arg);
-
-      const auto icmp_eq = call_inst->getCalledFunction();
-      CHECK_NOTNULL(icmp_eq);
-      CHECK(intrinsics::Eq::IsIntrinsic(icmp_eq)) << LLVMName(icmp_eq);
 
       const auto lhs = call_inst->getArgOperand(0);
       const auto rhs = call_inst->getArgOperand(1);
