@@ -92,7 +92,7 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
       raw_id_t id = hasher[op];
       Write(id);
       CHECK_LE(0u, op->op_code);
-      CHECK_LT(op->op_code, Operation::kOnlyOneCondition);
+      CHECK_LT(op->op_code, Operation::kLast);
       raw_op_code_t op_code = op->op_code;
       Write(op_code);
       written.insert(op->id());
@@ -444,11 +444,7 @@ class DeserializeVisitor : FileConfig {
   DECODE_CONDITION(DecodeCondition)
   DECODE_GENERIC(Hint)
   DECODE_CONDITION(VerifyInstruction)
-
-  Operation *DecodeOnlyOneCondition(uint64_t) {
-    LOG(FATAL) << "OnlyOneCondition nodes should not appear in serialized file";
-    return nullptr;
-  }
+  DECODE_CONDITION(OnlyOneCondition)
 
   std::istream &is;
   Circuit *const circuit;
