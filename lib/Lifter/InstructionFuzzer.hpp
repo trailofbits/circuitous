@@ -252,36 +252,43 @@ struct InstructionFuzzer {
   auto FuzzOps() {
     shadowinst::Instruction shadow_inst;
     std::vector<std::vector<bool>> op_bits =
-      { 3, std::vector<bool>(rinst.bytes.size() * 8, false) };
+      { rinst.operands.size(), std::vector<bool>(rinst.bytes.size() * 8, false) };
 
-    auto permutations = permutate::Flip(rinst, arch);
     for (std::size_t i = 0; i < permutations.size(); ++i) {
       for (std::size_t op_i = 0; op_i < rinst.operands.size(); ++op_i) {
-        LOG(INFO) << op_i;
         if (!permutations[i]) {
           continue;
         }
         using C = permutate::Comparator;
-        op_bits[op_i][i] = C::Compare(rinst, *permutations[i], rinst.operands[op_i]);
+        op_bits[op_i][i] = C::Compare(rinst,
+                                      *permutations[i],
+                                      { { op_i, &rinst.operands[op_i] } });
       }
     }
 
     for (std::size_t i = 0; i < rinst.operands.size(); ++i) {
       auto &r_op = rinst.operands[i];
       switch(r_op.type) {
-        case OpType::kTypeRegister:
+        case OpType::kTypeRegister : {
           std::reverse(op_bits[i].begin(), op_bits[i].end());
           shadow_inst.Add<shadowinst::Reg>(op_bits[i]);
-          PopulateTranslationTable(rinst, *(shadow_inst.operands.back().reg), i);
+          auto &s_op = shadow_inst.operands.back();
+          PopulateTranslationTable(*s_op.reg, i);
           break;
-        case OpType::kTypeImmediate:
+        }
+        case OpType::kTypeImmediate : {
           std::reverse(op_bits[i].begin(), op_bits[i].end());
           shadow_inst.Add<shadowinst::Immediate>(op_bits[i]);
           break;
+        }
         default:
+          shadow_inst.operands.emplace_back();
           break;
       }
     }
+
+    ResolveHusks(shadow_inst);
+    LOG(INFO) << shadow_inst.to_string();
     return shadow_inst;
   }
 
