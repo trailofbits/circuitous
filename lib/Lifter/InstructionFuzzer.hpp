@@ -215,8 +215,16 @@ struct InstructionFuzzer {
   using Operand = remill::Operand;
   using Kind = remill::Operand::Address::Kind;
   using OpType = remill::Operand::Type;
+  using Arch_ref = remill::Arch::ArchPtr;
 
   const remill::Arch::ArchPtr &arch;
+  const remill::Instruction &rinst;
+
+  permutate::permutations_t permutations;
+
+  InstructionFuzzer(const Arch_ref &arch_, const remill::Instruction &rinst_)
+    : arch(arch_), rinst(rinst_), permutations(permutate::Flip(rinst, arch))
+  {}
 
   // TODO(lukas): Move this to remill.
   std::string ToString(remill::Operand::Type type) {
@@ -241,7 +249,7 @@ struct InstructionFuzzer {
     }
   }
 
-  auto FuzzOps(remill::Instruction &rinst) {
+  auto FuzzOps() {
     shadowinst::Instruction shadow_inst;
     std::vector<std::vector<bool>> op_bits =
       { 3, std::vector<bool>(rinst.bytes.size() * 8, false) };
