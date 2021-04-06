@@ -5,6 +5,7 @@
 #pragma once
 
 // TODO(lukas): Fill llvm headers
+#include <fstream>
 #include <optional>
 #include <string>
 
@@ -16,6 +17,7 @@
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+#include <llvm/Support/raw_os_ostream.h>
 #pragma clang diagnostic pop
 
 namespace circuitous {
@@ -47,6 +49,25 @@ namespace circuitous {
     CHECK(node->getNumOperands() == 1);
     auto op = llvm::dyn_cast<llvm::MDString>(node->getOperand(0));
     return std::strtoull(op->getString().data(), nullptr, 10);
+  }
+
+  static inline void DumpFns(
+      const std::string &filename, const std::vector<llvm::Function *> &fns) {
+    std::ofstream file(filename);
+    llvm::raw_os_ostream out(file);
+    for (auto fn : fns) {
+      fn->print(out);
+    }
+    out.flush();
+  }
+
+  template<typename C>
+  auto make_and(llvm::IRBuilder<> &ir, const C &vals) {
+    llvm::Value *acc = ir.getTrue();
+    for (auto val : vals) {
+      acc = ir.CreateAnd(acc, val);
+    }
+    return acc;
   }
 
 } // namespace circuitous
