@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -159,11 +160,34 @@ namespace circuitous::shadowinst {
   };
 
   struct Instruction {
-    std::vector<Operand> operands;
+    // We need to fullfil that is pointers to operands are never invalidated!
+    // TODO(lukas): See if ^ cannot be relaxed, as it is a propbable source of errors.
+    std::deque<Operand> operands;
+
+    auto size() const { return operands.size(); }
+    const auto &operator[](std::size_t idx) const { return operands[idx]; }
+    auto &operator[](std::size_t idx) { return operands[idx]; }
 
     template<typename T, typename ...Args>
-    void Add(Args && ... args) {
-      operands.push_back(Operand::As<T>(std::forward<Args>(args)...));
+    auto &Add(Args && ... args) {
+      return operands.emplace_back(Operand::As<T>(std::forward<Args>(args)...));
+    }
+
+    template<typename ...Args>
+    void Replace(std::size_t idx, remill::Operand::Type type, Args && ...args) {
+      switch(type) {
+        case remill::Operand::Type::kTypeRegister: {
+          operands[idx] = Operand::As<Reg>(std::forward<Args>(args)...);
+          break;
+        }
+        case remill::Operand::Type::kTypeImmediate : {
+          operands[idx] = Operand::As<Immediate>(std::forward<Args>(args)...);
+          break;
+        }
+        default :
+          LOG(FATAL)
+            << "Cannot replace shadow operand with type that is neither reg nor imm.";
+      }
     }
 
     region_t IdentifiedRegions() const {
