@@ -364,8 +364,6 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
 # TODO(lukas): Mocking this one for now
 def fetch_test(sets):
   result = set()
-  x = mp.ModelTest("mov imm rdx").bytes("ba12000000").case(I = State(), R = True )
-  result.add(x)
   for x in simple.circuitous_tests:
     result.update(x)
   for x in basic.circuitous_tests:
