@@ -22,7 +22,7 @@ namespace permutate {
   using permutations_t = std::vector<std::optional<remill::Instruction>>;
 
   static inline permutations_t Flip(
-    remill::Instruction &rinst, const remill::Arch::ArchPtr &arch)
+    const remill::Instruction &rinst, const remill::Arch::ArchPtr &arch)
   {
     permutations_t out;
     out.resize(rinst.bytes.size() * 8);
