@@ -292,9 +292,86 @@ struct InstructionFuzzer {
     return shadow_inst;
   }
 
-  void PopulateTranslationTable(
-    remill::Instruction &rinst, shadowinst::Reg &shadow_reg,
-    std::size_t op_idx)
+  using rops_map_t = std::map<std::size_t, const remill::Operand *>;
+  using rops_maps_t = std::vector<rops_map_t>;
+
+  // TODO(lukas): This is heurisitc. Later we are most likely going to need
+  //              support multiple strategies. Also the selected heuristic
+  //              implies the permutate::Comparator stack configuration.
+  rops_maps_t GroupHusks(const rops_map_t &ops) {
+    // TODO(lukas): First we need to sort by type
+    using entry_t = std::pair<std::size_t, const remill::Operand *>;
+    using OPT = remill::Operand::Type;
+
+    //Sorts<remill::Operand::Type, entry_t> by_type;
+    std::unordered_map<OPT, rops_map_t> by_type;
+    for (auto &x : ops) {
+      by_type[x.second->type].emplace(x.first, x.second);
+    }
+
+    auto str_hash = [](auto op) -> std::string {
+      switch(op->type) {
+        case OPT::kTypeImmediate: return std::to_string(op->imm.val);
+        case OPT::kTypeRegister: return op->reg.name + std::to_string(op->size);
+        default: LOG(FATAL) << "Cannot hash operand";
+      }
+    };
+
+    std::unordered_map<std::string, rops_map_t> by_hash;
+    for (auto &[_, g_by_type] : by_type) {
+      for (auto &[idx, op] : g_by_type) {
+        by_hash[str_hash(op)].emplace(idx, op);
+      }
+    }
+
+    rops_maps_t out;
+    for (auto &[_, maps] : by_hash) {
+      out.push_back(std::move(maps));
+    }
+    return out;
+  }
+
+  void ResolveHusks(shadowinst::Instruction &s_inst) {
+    std::map<std::size_t, shadowinst::Operand *> husks;
+    std::map<std::size_t, const remill::Operand *> r_husks;
+
+    // TODO(lukas): Filter husks
+    for (std::size_t i = 0; i < rinst.operands.size(); ++i) {
+      if (s_inst[i].IsHusk()) {
+        husks[i] = &s_inst[i];
+        r_husks[i] = &rinst.operands[i];
+      }
+    }
+
+    // Cannot work with only one husks nor with none
+    if (husks.size() <= 1) {
+      return;
+    }
+
+    for (auto &group : GroupHusks(r_husks)) {
+      // There is no point working with smaller than 2 group
+      if (group.size() <= 1) {
+        continue;
+      }
+      std::vector<bool> husk_bits(rinst.bytes.size() * 8, false);
+      for (std::size_t i = 0; i < permutations.size(); ++i) {
+        if (!permutations[i]) {
+          continue;
+        }
+        husk_bits[i] = permutate::HuskComparator::Compare(rinst, *permutations[i], group);
+      }
+      std::reverse(husk_bits.begin(), husk_bits.end());
+      for (auto &[i, op] : group) {
+        s_inst.Replace(i, op->type, husk_bits);
+        //s_op->reg = std::make_optional<shadowinst::Reg>(husk_bits);
+        if (op->type == OpType::kTypeRegister) {
+          PopulateTranslationTable(*s_inst[i].reg, i);
+        }
+      }
+    }
+  }
+
+  void PopulateTranslationTable(shadowinst::Reg &shadow_reg, std::size_t op_idx)
   {
     LOG(INFO) << "\t\t\t" << shadow_reg.region_bitsize();
     // TODO(lukas): This is 100% arbitrary check, I am curious
