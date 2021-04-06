@@ -235,7 +235,7 @@ void CircuitBuilder::IdentifyImms(CircuitBuilder::InstSelections &insts) {
       if (reduce_imms) {
         LOG(INFO) << "Searching for immediate operands regions in:";
         LOG(INFO) << inst.instructions[i].Serialize();
-        auto s_inst = InstructionFuzzer{arch}.FuzzOps(inst.instructions[i]);
+        auto s_inst = InstructionFuzzer{arch, inst.instructions[i]}.FuzzOps();
         inst.imms.emplace_back();
         inst.shadows.push_back(std::move(s_inst));
       } else {
