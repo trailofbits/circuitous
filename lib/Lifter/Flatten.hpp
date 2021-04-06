@@ -181,15 +181,11 @@ struct Flattener {
           // We need to wrap SF <- 0 as:
           //   SF <- select(path_condition, 0, Load(SF))
           // Otherwise the SF would always be `0` no matter the `x`
+          llvm::IRBuilder<> ir(new_block);
           auto ptr_op = store->getPointerOperand();
-          auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(ptr_op);
-          auto state = remill::NthArgument(func, remill::kStatePointerArgNum);
-          if (gep && gep->getPointerOperand() == state) {
-            llvm::IRBuilder<> ir(new_block);
-            auto original = ir.CreateLoad(gep);
-            auto guarded = ir.CreateSelect(reaching_cond[block], store->getOperand(0), original);
-            ir.CreateStore(guarded, gep);
-          }
+          auto original = ir.CreateLoad(ptr_op);
+          auto guarded = ir.CreateSelect(reaching_cond[block], store->getOperand(0), original);
+          ir.CreateStore(guarded, ptr_op);
         } else if (!inst->isTerminator()) {
           inst->removeFromParent();
           new_block->getInstList().insert(new_block->end(), inst);
