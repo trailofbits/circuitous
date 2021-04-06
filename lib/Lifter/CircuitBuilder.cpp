@@ -952,8 +952,10 @@ void CircuitBuilder::Circuit0::InjectSemantic(
     CHECK(llvm::isa<llvm::PointerType>(dst_regs[i]->getType()));
     auto p_type = llvm::cast<llvm::PointerType>(dst_regs[i]->getType());
     ir.SetInsertPoint(llvm::dyn_cast<llvm::Instruction>(dst_regs[i]));
-    auto as_alloca = ir.CreateAlloca(p_type->getPointerElementType());
+    auto as_alloca = ir.CreateAlloca(p_type->getPointerElementType(), nullptr,
+                                     "DSTA_" + std::to_string(i));
     dst_regs[i]->replaceAllUsesWith(as_alloca);
+    llvm::cast<llvm::Instruction>(dst_regs[i])->eraseFromParent();
     dst_regs[i] = as_alloca;
   }
   ir.SetInsertPoint(inst_block);
