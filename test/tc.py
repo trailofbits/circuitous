@@ -52,7 +52,8 @@ class State:
     out = {"instruction_bits" : self.bytes,
            "input_regs" : {}}
     for reg, val in self.registers.items():
-      out["input_regs"][reg] = str(val)
+      if val is not None:
+        out["input_regs"][reg] = str(val)
     return out
 
   def as_json_file(self, prefix="def.", dir=None):
