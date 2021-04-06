@@ -74,8 +74,8 @@ namespace circuitous::shadowinst {
     region_t regions;
 
     has_regions() = default;
-    has_regions(const region_t &others) : regions(others) {}
-    has_regions(std::vector<bool> &bits) {
+
+    has_regions(const std::vector<bool> &bits) {
       for (std::size_t i = 0; i < bits.size(); ++i) {
         if (!bits[i]) {
           continue;
@@ -123,10 +123,38 @@ namespace circuitous::shadowinst {
     using has_regions::has_regions;
 
     std::unordered_map<reg_t, materializations_t> translation_map;
+
+    std::string to_string(uint8_t indent=0) const {
+      std::stringstream ss;
+      std::string _indent(indent * 2, ' ');
+      ss << _indent << "Regions:" << std::endl;
+      ss << this->has_regions::to_string(indent + 1);
+      ss << _indent << "Translation map:" << std::endl;
+      for (auto &[reg, all_mats] : translation_map) {
+        ss << std::string((indent + 1) * 2, ' ' ) << reg << std::endl;
+        for (auto &mat : all_mats) {
+          ss << std::string((indent + 2) * 2, ' ');
+          if (mat.empty()) {
+            ss << "( none )";
+          } else {
+            for (auto b : mat) {
+              ss << b;
+            }
+          }
+          ss << std::endl;
+        }
+      }
+      return ss.str();
+    }
   };
 
   struct Immediate : has_regions {
     using has_regions::has_regions;
+
+    Immediate &operator=(Immediate other) {
+      std::swap(regions, other.regions);
+      return *this;
+    }
   };
 
   struct Shift : has_regions {
