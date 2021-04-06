@@ -29,8 +29,8 @@ class MicroxGen:
     pass
 
   def get(self, input):
-    # So far we don't care about memory ops anyway
-    assert "RSP" not in input.registers
+    # TODO(lukas): We need to handle RSP once we support memory ops.
+    # assert "RSP" not in input.registers
 
     rip = input.registers.get("RIP", 0x1000)
     size = 0x1000
