@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
 #include <map>
 #include <optional>
 #include <sstream>
@@ -73,8 +74,8 @@ namespace circuitous::shadowinst {
     region_t regions;
 
     has_regions() = default;
-    has_regions(const region_t &others) : regions(others) {}
-    has_regions(std::vector<bool> &bits) {
+
+    has_regions(const std::vector<bool> &bits) {
       for (std::size_t i = 0; i < bits.size(); ++i) {
         if (!bits[i]) {
           continue;
@@ -92,7 +93,6 @@ namespace circuitous::shadowinst {
     std::size_t region_bitsize() const {
       std::size_t acc = 0;
       for (auto &[from, size] : regions) {
-        LOG(INFO) << "ADDING: " << from << " " << size;
         acc += size;
       }
       return acc;
@@ -111,6 +111,15 @@ namespace circuitous::shadowinst {
     auto begin() const { return regions.begin(); }
     auto end() const { return regions.end(); }
     auto size() const { return regions.size(); }
+    auto empty() const { return size() == 0; }
+
+    std::string to_string(uint8_t indent=0) const {
+      std::stringstream ss;
+      for (auto [from, size] : regions) {
+        ss << std::string(indent * 2, ' ') << from << " , " << size << std::endl;
+      }
+      return ss.str();
+    }
   };
 
   struct Reg : has_regions {
@@ -122,10 +131,38 @@ namespace circuitous::shadowinst {
     using has_regions::has_regions;
 
     std::unordered_map<reg_t, materializations_t> translation_map;
+
+    std::string to_string(uint8_t indent=0) const {
+      std::stringstream ss;
+      std::string _indent(indent * 2, ' ');
+      ss << _indent << "Regions:" << std::endl;
+      ss << this->has_regions::to_string(indent + 1);
+      ss << _indent << "Translation map:" << std::endl;
+      for (auto &[reg, all_mats] : translation_map) {
+        ss << std::string((indent + 1) * 2, ' ' ) << reg << std::endl;
+        for (auto &mat : all_mats) {
+          ss << std::string((indent + 2) * 2, ' ');
+          if (mat.empty()) {
+            ss << "( none )";
+          } else {
+            for (auto b : mat) {
+              ss << b;
+            }
+          }
+          ss << std::endl;
+        }
+      }
+      return ss.str();
+    }
   };
 
   struct Immediate : has_regions {
     using has_regions::has_regions;
+
+    Immediate &operator=(Immediate other) {
+      std::swap(regions, other.regions);
+      return *this;
+    }
   };
 
   struct Shift : has_regions {
@@ -156,14 +193,61 @@ namespace circuitous::shadowinst {
       }
       return op;
     }
+
+    bool IsHusk() const {
+      // No operand is specified, therefore this is not a husk but a hardcoded op
+      if (!reg && !immediate && !shift && !address) {
+        return false;
+      }
+      CHECK(!address.has_value()) << "Cannot handle address";
+      CHECK(!shift.has_value()) << "Cannot handle shift";
+      CHECK(  static_cast<uint8_t>(reg.has_value())
+            + static_cast<uint8_t>(immediate.has_value())
+            + static_cast<uint8_t>(address.has_value())
+            + static_cast<uint8_t>(shift.has_value())
+      ) << "shadowinst::operand is of multiple types!";
+
+      return (reg && reg->empty())     || (immediate && immediate->empty()) ||
+             (shift && shift->empty()) || (address && address->empty());
+    }
+
+    bool empty() const {
+      auto is_empty = [](const auto &op) {
+        return op && op->size();
+      };
+      return is_empty(immediate) && is_empty(reg);
+    }
   };
 
   struct Instruction {
-    std::vector<Operand> operands;
+    // We need to fullfil that is pointers to operands are never invalidated!
+    // TODO(lukas): See if ^ cannot be relaxed, as it is a propbable source of errors.
+    std::deque<Operand> operands;
+
+    auto size() const { return operands.size(); }
+    const auto &operator[](std::size_t idx) const { return operands[idx]; }
+    auto &operator[](std::size_t idx) { return operands[idx]; }
 
     template<typename T, typename ...Args>
-    void Add(Args && ... args) {
-      operands.push_back(Operand::As<T>(std::forward<Args>(args)...));
+    auto &Add(Args && ... args) {
+      return operands.emplace_back(Operand::As<T>(std::forward<Args>(args)...));
+    }
+
+    template<typename ...Args>
+    void Replace(std::size_t idx, remill::Operand::Type type, Args && ...args) {
+      switch(type) {
+        case remill::Operand::Type::kTypeRegister: {
+          operands[idx] = Operand::As<Reg>(std::forward<Args>(args)...);
+          break;
+        }
+        case remill::Operand::Type::kTypeImmediate : {
+          operands[idx] = Operand::As<Immediate>(std::forward<Args>(args)...);
+          break;
+        }
+        default :
+          LOG(FATAL)
+            << "Cannot replace shadow operand with type that is neither reg nor imm.";
+      }
     }
 
     region_t IdentifiedRegions() const {
@@ -218,9 +302,7 @@ namespace circuitous::shadowinst {
         //              attributes will have different structure
         if (op.reg) {
           ss << "  Reg:" << std::endl;
-          for (auto [from, size] : op.reg->regions) {
-            ss << "    " << from << " , " << size << std::endl;
-          }
+          ss << op.reg->to_string(2);
         }
         if (op.shift) {
           ss << "  Shift:" << std::endl;
