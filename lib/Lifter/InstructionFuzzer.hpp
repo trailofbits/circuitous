@@ -44,25 +44,40 @@ namespace permutate {
     return out;
   }
 
-  struct Comparator {
-    using OpType = remill::Operand::Type;
+  struct OperandRef {
+    using value_type = remill::Operand;
+    using reference = remill::Operand &;
+    using pointer = remill::Operand *;
 
-    static bool Compare(const remill::Instruction &original,
-                        const remill::Instruction &permutation,
-                        const remill::Operand &op)
-    {
-      switch(op.type) {
-        case OpType::kTypeImmediate: return Immediate(original, permutation, op);
-        case OpType::kTypeRegister : return Register (original, permutation, op);
-        default                    : return false;
-      }
+    remill::Operand *op = nullptr;
+    std::size_t idx = 0;
+
+    pointer operator->() { return op; }
+  };
+
+
+  // Everything equals to everything
+  struct TrueBase {
+    using OpType = remill::Operand::Type;
+    using operands_t = std::vector<const remill::Operand *>;
+
+    static auto identity_imm() { return [](auto &, auto &) { return true; }; }
+    static auto identity_reg() { return [](auto &, auto &) { return true; }; }
+
+    static bool full_compare(const remill::Operand &lhs, const remill::Operand &rhs) {
+      return lhs.Serialize() == rhs.Serialize();
     }
 
-    using cri = const remill::Instruction &;
-    using cro = const remill::Operand &;
+    static bool Depends(const operands_t &) { return true; }
+    // TODO(lukas): Dependency verifier
+  };
 
-    static bool Immediate(cri original, cri permutation, cro op) {
-      auto compare_self = [](auto &self, auto &flipped) {
+  template<typename Next>
+  struct UnitCompares : Next {
+    using OpType = typename Next::OpType;
+
+    static auto identity_imm() {
+      return [](auto &self, auto &flipped) {
         // TODO(lukas): Check in remill that is_signed is always properly
         //              (and consistently) set.
         // This may seem counterintuitive, but two immediates are equal
@@ -71,34 +86,47 @@ namespace permutate {
         return flipped.type == remill::Operand::kTypeImmediate
               && self.size == flipped.size;
       };
-      return Check(original, permutation, op, compare_self);
     }
 
-    static bool Register(cri original, cri permutation, cro op) {
-      auto compare_self = [](auto &self, auto &flipped) {
+    static auto identity_reg() {
+      return [](auto &self, auto &flipped) {
         return flipped.type == OpType::kTypeRegister &&
               self.size == flipped.size;
       };
-      return Check(original, permutation, op, compare_self);
     }
+  };
 
-    template<typename Fn>
-    static bool Check(cri original, cri permutation, cro op, Fn &&on_self) {
-      auto [structural, exact] = CheckStructure(original, permutation, op, on_self);
-      return structural && !exact;
+  template<typename Next>
+  struct EqDependency : Next {
+    using OpType = typename Next::OpType;
+
+    static bool Depends(const std::vector<const remill::Operand *> &ops) {
+      for (auto op : ops) {
+        CHECK(op->type == OpType::kTypeRegister)
+          << "Cannot check EqDependency on non-register operands.";
+      }
+      auto compare = [](auto a, auto b) {
+        return a.name == b.name && a.size == b.size;
+      };
+
+      auto &fst = *(ops.begin());
+      for (auto op : ops) {
+        if (!compare(fst->reg, op->reg)) {
+          return false;
+        }
+      }
+      return true;
     }
+  };
 
+  template<typename Next>
+  struct DependencyComparator : Next {
+    using Item_t = std::map<std::size_t, const remill::Operand *>;
+    using cri = const remill::Instruction &;
 
-
-    // Custom comparator of two instructions
-    // Two instructions `original` and `flipped` are equal if following holds:
-    //  * their operands with exception of `skip` are equal
-    //  * on_self returns true for the `skip` and its flipped counterpart
-    // Return value consists of two result
-    // { are instruction equivalent?, is the `skip` identical to `flipped`? }
     template<typename Fn>
     static std::tuple<bool, bool> CheckStructure(
-      cri original, cri permutation, cro skip, Fn &&on_self)
+      cri original, cri permutation, const Item_t &items, Fn &&on_self)
     {
       if (original.function != permutation.function) {
         return { false, false };
@@ -108,30 +136,73 @@ namespace permutate {
         return { false, false };
       }
 
-      auto compare = [](auto &lhs, auto &rhs) {
-        return lhs.Serialize() == rhs.Serialize();
-      };
+      bool exact_check = true;
+      bool on_self_check = true;
+      for (auto [i, op] : items) {
+        exact_check &= Next::full_compare(*op, permutation.operands[i]);
+        on_self_check &= on_self(*op, permutation.operands[i]);
+      }
 
-      auto structural_check = true;
-      auto exact_check = true;
-      for (auto i = 0U; i < permutation.operands.size(); ++i) {
-        if (&original.operands[i] == &skip) {
-          exact_check = compare(skip, permutation.operands[i]);
-          if (!on_self(skip, permutation.operands[i])) {
-            return { false, exact_check };
-          }
+      if (!on_self_check) {
+        return { false, exact_check };
+      }
+
+      // Check if there is the assumed relationship.
+      // Often, it can be the same as the `exact_check`, but not always.
+      std::vector<const remill::Operand *> raw_items;
+      for (auto [_, op] : items) raw_items.push_back(op);
+      if (!Next::Depends(raw_items)) {
+        return { false, exact_check };
+      }
+
+      for (std::size_t i = 0U; i < permutation.operands.size(); ++i) {
+        // Was already checked
+        if (items.count(i)) {
           continue;
         }
 
-        if (!compare(original.operands[i], permutation.operands[i])) {
-          structural_check &= false;
+        if (!Next::full_compare(original.operands[i], permutation.operands[i])) {
+          return { false, exact_check };
         }
       }
-      return {structural_check, exact_check};
+      return { true, exact_check };
     }
   };
-} // namespace permutate
 
+  template<typename Next>
+  struct Dispatch : Next {
+    using OpType = typename Next::OpType;
+    using Item_t = typename Next::Item_t;
+
+    static bool Compare(const remill::Instruction &original,
+                        const remill::Instruction &permutation,
+                        const Item_t &items)
+    {
+      CHECK(items.size() >= 1) << "Cannot compare " << items.size() << " items.";
+      OpType type = items.begin()->second->type;
+      for (auto [_, op] : items) {
+        CHECK (op->type == type) << "Cannot compare as group operands of different types!";
+      }
+      switch(type) {
+        case OpType::kTypeImmediate: return Check(original, permutation, items, Next::identity_imm());
+        case OpType::kTypeRegister : return Check(original, permutation, items, Next::identity_reg());
+        default                    : return false;
+      }
+    }
+
+    using cri = const remill::Instruction &;
+    using citem_ref = const Item_t &;
+
+    template<typename Fn>
+    static bool Check(cri original, cri permutation, citem_ref op, Fn &&on_self) {
+      auto [structural, exact] = Next::CheckStructure(original, permutation, op, on_self);
+      return structural && !exact;
+    }
+  };
+
+  using Comparator = Dispatch<DependencyComparator<UnitCompares<TrueBase>>>;
+  using HuskComparator = Dispatch<DependencyComparator<EqDependency<UnitCompares<TrueBase>>>>;
+} // namespace permutate
 
 
 struct InstructionFuzzer {
