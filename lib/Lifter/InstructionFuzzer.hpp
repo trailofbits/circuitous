@@ -394,6 +394,11 @@ struct InstructionFuzzer {
         LOG(WARNING) << "Was not able to decode guaranteed permutation";
         return;
       }
+      if (tmp.function != rinst.function) {
+        LOG(WARNING) << "Guaranteed permutation generated different instruction.";
+        return;
+      }
+
       if (tmp.operands.size() != rinst.operands.size()) {
         LOG(WARNING) << "Permutation has different number of operands.";
         LOG(WARNING) << tmp.function;
