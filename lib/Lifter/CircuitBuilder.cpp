@@ -933,63 +933,65 @@ void CircuitBuilder::Circuit0::InjectSemantic(
     }
     return out;
   };
-
+**/
   // Final set of parameters are comparisons on whether or not the resulting
   // register after the semantic has executed matches the next state of that
   // register.
   for (auto [reg, _, expected_reg_val] : reg_to_args) {
     LOG(INFO) << "Processing " << reg->name;
-    llvm::Value *reg_val = load_from_reg(reg);
+    //llvm::Value *original_val = load_from_reg(reg);
+    llvm::Value *original_val = state.load(ir, reg);
+    llvm::Value *reg_val = original_val;
     uint64_t proccessed = 0;
 
+    LOG(INFO) << isel.instruction.function;
     for (std::size_t i = 0; i < isel.instruction.operands.size(); ++i) {
+      // We care only for write operands
       if (isel.instruction.operands[i].action != remill::Operand::Action::kActionWrite) {
         continue;
       }
-      auto &s_op = isel.shadow.operands[i];
+      // Everything destination is "hardcoded", we do not need to take care
+      // of anything.
+      if (dst_regs.size() == 0) {
+        continue;
+      }
 
+      auto &s_op = isel.shadow.operands[i];
       if (!s_op.reg) {
         continue;
       }
+
       ++proccessed;
       auto &table = s_op.reg->translation_map;
-      LOG(INFO) << reg->name;
-      LOG(INFO) << table.count(reg->name);
-      if (!table.count(reg->name)) {
-        continue;
+      for (auto reg_part : EnclosedClosure(reg)) {
+        if (!table.count(reg_part->name)) {
+          continue;
+        }
+
+        // Someone before us may have written something - we need to reset the value.
+        state.store(ir, reg, original_val);
+        auto reg_checks = shadowinst::decoder_conditions(*s_op.reg, reg_part->name, ir);
+
+
+        CHECK(proccessed - 1 < dst_regs.size()) << proccessed - 1 << " >= " << dst_regs.size();
+        auto eq = make_and(ir, reg_checks);
+        auto dst_load = ir.CreateLoad(dst_regs[proccessed - 1]);
+        auto reg_addr = reg_part->AddressOf(state_ptr, ir);
+
+        auto store_ty = llvm::cast<llvm::PointerType>(reg_addr->getType())->getElementType();
+
+        auto store = ir.CreateStore(ir.CreateSExtOrTrunc(dst_load, store_ty), reg_addr);
+        LOG(INFO) << remill::LLVMThingToString(store);
+        //auto full_val = load_from_reg(reg);
+        auto full_val = state.load(ir, reg);
+        reg_val = ir.CreateSelect(eq, full_val, reg_val);
       }
-      auto &all_mats = table.find(reg->name)->second;
-      CHECK(all_mats.size() == 1);
-      const auto &mats = *(all_mats.begin());
-
-      std::size_t current = 0;
-      std::vector<llvm::Value *> reg_checks;
-      for (auto &[from, size] : s_op.reg->regions) {
-        auto extract_fn = intrinsics::Extract::CreateFn(parent.module.get(), from, size);
-        auto fragments = ir.CreateCall(extract_fn, {});
-        auto constant = ir.getInt(
-          llvm::APInt(static_cast<uint32_t>(size), as_string(mats, current, size), 2));
-        auto eq = ir.CreateICmpEQ(fragments, constant);
-
-        reg_checks.push_back(eq);
-        // After we use `locate_reg` we need to update the builder since some extra
-        // instrucitons may have been inserted.
-
-        current += size;
-      }
-
-      // TODO(lukas): Generalize.
-      CHECK(reg_checks.size() == 2);
-      CHECK(proccessed - 1 < dst_regs.size());
-      auto eq = ir.CreateAnd(reg_checks[0], reg_checks[1]);
-      auto dst_load = ir.CreateLoad(dst_regs[proccessed - 1]);
-      reg_val = ir.CreateSelect(eq, dst_load, reg_val);
     }
-
 
     auto eq_func = intrinsics::Eq::CreateFn(parent.module.get(), reg_val->getType());
     llvm::Value *eq_args[] = {reg_val, expected_reg_val};
     params.push_back(ir.CreateCall(eq_func, eq_args));
+    LOG(INFO) << remill::LLVMThingToString(params.back());
   }
 
   // Call the instruction verification function. This returns `1` iff we
