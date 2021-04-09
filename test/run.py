@@ -372,14 +372,19 @@ def fetch_test(sets):
 
 
 def filter_by_tag(sets, tags):
+  include_todo = "todo" in tags
+  skipped_todos = 0
+
   log_info("Filtering " + str(len(sets)) + " tests by " + str(tags))
-  if 'all' in tags:
-    return sets
 
   result = set()
   for test in sets:
-    if test._tags.intersection(tags):
+    if not include_todo and "todo" in test._tags:
+      skipped_todos += len(test.cases)
+      continue
+    if 'all' in tags or test._tags.intersection(tags):
       result.add(test)
+  log_info("Skipped " + str(skipped_todos) + " todo tests")
   return result
 
 def main():
