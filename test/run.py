@@ -225,7 +225,7 @@ class Comparator(SimulateCWDMixin):
       if e_val != int(val):
         accept = False
         message += "Register " + reg + " (expected != actual): " + \
-                   str(e_val) + " != " + str(val) + "\n"
+                   hex(e_val) + " != " + hex(val) + "\n"
 
     skipped = []
     for reg in expected.registers.keys():
