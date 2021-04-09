@@ -882,35 +882,22 @@ void CircuitBuilder::Circuit0::InjectSemantic(
     store_to_reg(reg, arg);
   }
 
-  auto fn_t = llvm::FunctionType::get(ir.getVoidTy(), {});
-  auto breakpoint_begin_fn =
-    llvm::cast<llvm::Function>(parent.module->getOrInsertFunction(
-      "__circ.break.begin", fn_t).getCallee());
-  auto breakpoint_end_fn =
-    llvm::cast<llvm::Function>(parent.module->getOrInsertFunction(
-      "__circ.end.begin", fn_t).getCallee());
 
-  auto begin = ir.CreateCall(breakpoint_begin_fn, {});
+  auto begin = intrinsics::make_breakpoint(ir);
   auto sem_call = CallSemantic(
     ir, isel.lifted, state_ptr, pc, llvm::UndefValue::get(parent.mem_ptr_type));
-  auto end = ir.CreateCall(breakpoint_end_fn, {});
+  auto end = intrinsics::make_breakpoint(ir);
   llvm::InlineFunctionInfo info;
   llvm::InlineFunction(sem_call, info);
 
   auto params = ByteFragments(ir, isel);
   auto fragments_size = params.size();
 
-  LOG(INFO) << "Collecting dst regs";
-  std::vector<llvm::Value *> dst_regs;
-  for (auto it = llvm::BasicBlock::iterator(begin); it != begin->getParent()->end(); ++it) {
-    auto &inst = *it;
-    if (auto dst_alloca = GetMetadata(&inst, "circuitous.dst.reg")) {
-      dst_regs.push_back(&inst);
-    }
-    if (auto verify_arg = GetMetadata(&inst, "circuitous.verify_fn_args")) {
-      params.push_back(&inst);
-    }
-  }
+  auto collected = shadowinst::collect_annotated(begin, end);
+  auto dst_regs = std::move(collected["circuitous.dst.reg"]);
+  auto &extra_params = collected["circuitous.verify_fn_args"];
+  params.insert(params.end(), extra_params.begin(), extra_params.end());
+
   begin->eraseFromParent();
   end->eraseFromParent();
 
