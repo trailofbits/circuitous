@@ -1042,6 +1042,19 @@ std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
     LOG(INFO) << "[ " << from << " , " << to << " ]";
     out.push_back(create_bit_check(from, to));
   }
+
+  // TODO(lukas): Now we need to check the tail.
+  //              Try to lift `6689d8` and `89d8` to demonstrate the issue.
+  // TODO(lukas): For now we assume it is padded with 0s.
+  auto tail_size = static_cast<uint32_t>(kMaxNumInstBits - rinst_size);
+  auto tail = ir.getInt(llvm::APInt(tail_size, 0, false));
+  auto extract_fn =
+      intrinsics::ExtractRaw::CreateFn(parent.module.get(), rinst_size, tail_size);
+  auto compare_fn =
+      intrinsics::BitCompare::CreateFn(parent.module.get(), tail_size);
+  auto extracted = ir.CreateCall(extract_fn, {remill::NthArgument(circuit_fn, 0)});
+  auto compare = ir.CreateCall(compare_fn, {tail, extracted});
+  out.push_back(compare);
   return out;
 }
 
