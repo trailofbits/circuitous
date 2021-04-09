@@ -131,6 +131,7 @@ static void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
   auto saved_threshold = module->getContext().getDiagnosticsHotnessThreshold();
   module->getContext().setDiagnosticsHotnessThreshold(1);
   remill::OptimizeModule(arch, module, fns);
+  // Set the logging back to the original values.
   module->getContext().setDiagnosticsHotnessThreshold(saved_threshold);
 
   // TOOD(lukas): This most likely wants its own class
@@ -140,6 +141,8 @@ static void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
   for (auto fn : fns) {
     for (auto &bb : *fn) {
       for (auto &inst : bb) {
+        // NOTE(lukas): I opted to go inst by inst to avoid accidentaly
+        //              modifying semantic functions we do not use.
         if (auto cs = llvm::CallSite(&inst)) {
           if (cs.isCall() &&
               cs.getCalledFunction()->getIntrinsicID() == llvm::Intrinsic::usub_sat)
@@ -154,10 +157,13 @@ static void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
     auto a = call->getOperand(0);
     auto b = call->getOperand(1);
     auto size = static_cast<uint32_t>(inst->getType()->getPrimitiveSizeInBits());
+    // sub = a - b
     auto sub = ir.CreateSub(a, b);
+    // select  = (a < b) ? 0 : a - b;
     auto flag = ir.CreateICmpULT(a, b);
     auto zero = ir.getIntN(size, 0);
     auto select = ir.CreateSelect(flag, zero, sub);
+    // replace & erase
     call->replaceAllUsesWith(select);
     call->eraseFromParent();
   }
