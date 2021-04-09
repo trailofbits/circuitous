@@ -168,6 +168,46 @@ static void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
 
 }  // namespace
 
+void CircuitBuilder::State::store(
+  llvm::IRBuilder<> &ir, const reg_ptr_t reg, llvm::Value *val)
+{
+  auto bb = ir.GetInsertBlock();
+  const auto &dl = bb->getModule()->getDataLayout();
+  auto gep = reg->AddressOf(state, bb);
+  ir.SetInsertPoint(bb);
+
+  // How much space does register occupy in form iN. There is an
+  // optimization for flag registers.
+  auto reg_type = IntegralRegisterType(*bb->getModule(), reg);
+  auto store_type = ir.getIntNTy(static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
+  auto coerced_type = ir.CreateBitCast(gep, llvm::PointerType::getUnqual(store_type));
+
+  if (reg_type != store_type) {
+    val = ir.CreateZExt(val, store_type);
+  }
+  ir.CreateStore(val, coerced_type);
+
+}
+
+llvm::Value *CircuitBuilder::State::load(llvm::IRBuilder<> &ir, const reg_ptr_t reg) {
+  auto bb = ir.GetInsertBlock();
+  const auto &dl = bb->getModule()->getDataLayout();
+  auto gep = reg->AddressOf(state, bb);
+  ir.SetInsertPoint(bb);
+
+  // How much space does register occupy in form iN. There is an
+  // optimization for flag registers.
+  auto reg_type = IntegralRegisterType(*bb->getModule(), reg);
+  auto store_type = ir.getIntNTy(static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
+  auto coerced_type = ir.CreateBitCast(gep, llvm::PointerType::getUnqual(store_type));
+
+  auto loaded = ir.CreateLoad(coerced_type);
+  if (reg_type != store_type) {
+    return ir.CreateTrunc(loaded, reg_type);
+  }
+  return loaded;
+}
+
 llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
   if (auto used = module->getGlobalVariable("llvm.used"); used) {
     used->eraseFromParent();
