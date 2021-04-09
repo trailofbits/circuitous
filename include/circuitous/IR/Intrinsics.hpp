@@ -282,6 +282,15 @@ struct AllocateDst : impl::Allocator<AllocateDst> {
   static constexpr const char *separator = ".";
 };
 
+// NOTE(lukas): Sometimes it is handy to fix some location in the
+//              bb/function. This called should be removed manually
+//              by the caller and it is undefined what happens
+//              if optimizer is called (may merge multiple instances).
+struct BreakPoint : impl::Predicate<BreakPoint> {
+  static constexpr const char *fn_prefix = "__circuitous.breakpoint";
+  static constexpr const char *separator = ".";
+};
+
 template<typename C>
 auto make_xor(llvm::IRBuilder<> &ir, const C &args) {
   auto xor_fn = OneOf::CreateFn(ir.GetInsertBlock()->getModule());
