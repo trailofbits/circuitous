@@ -89,7 +89,6 @@ static const std::string kFlagRegisters =
 static llvm::IntegerType *IntegralRegisterType(llvm::Module &module,
                                                const remill::Register *reg) {
   if (reg->type->isIntegerTy()) {
-
     // Optimization for flag registers, which should only occupy a single
     // bit. We look to see if it's in the set of
     if (auto found_at = kFlagRegisters.find(reg->name);
@@ -99,15 +98,13 @@ static llvm::IntegerType *IntegralRegisterType(llvm::Module &module,
         kFlagRegisters[found_at + reg->name.size()] == ',') {
 
       return llvm::Type::getInt1Ty(module.getContext());
-    } else {
-      return llvm::dyn_cast<llvm::IntegerType>(reg->type);
     }
-  } else {
-    return llvm::Type::getIntNTy(
-        module.getContext(),
-        static_cast<unsigned>(
-            module.getDataLayout().getTypeAllocSize(reg->type) * 8u));
+    return llvm::dyn_cast<llvm::IntegerType>(reg->type);
   }
+  return llvm::Type::getIntNTy(
+      module.getContext(),
+      static_cast<unsigned>(
+          module.getDataLayout().getTypeAllocSize(reg->type) * 8u));
 }
 
 // Looks for calls to a function like `__remill_error`, and
