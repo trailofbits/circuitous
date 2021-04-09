@@ -167,6 +167,25 @@ static void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
     call->replaceAllUsesWith(select);
     call->eraseFromParent();
   }
+  // Verify we did not broke anything
+  remill::VerifyModule(module);
+}
+
+using reg_ptr_t = const remill::Register *;
+std::vector<reg_ptr_t> EnclosedClosure(reg_ptr_t ptr) {
+  std::vector<reg_ptr_t> out;
+  std::vector<reg_ptr_t> todo{ ptr };
+  // Note(lukas): I assume that registers are a tree like structure!
+  while (!todo.empty()) {
+    out.push_back(todo.back());
+    todo.pop_back();
+    for (auto x : out.back()->EnclosedRegisters()) {
+      todo.push_back(x);
+    }
+  }
+  // Just a sanity check
+  CHECK(std::unordered_set<reg_ptr_t>(out.begin(), out.end()).size() == out.size());
+  return out;
 }
 
 }  // namespace
