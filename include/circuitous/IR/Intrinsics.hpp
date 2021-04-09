@@ -225,6 +225,14 @@ namespace impl {
       return llvm::cast<llvm::Function>(callee.getCallee());
     }
   };
+
+
+  template<typename I, typename C = std::vector< llvm::Value * >, typename ...Args>
+  auto implement_call(llvm::IRBuilder<> &ir, const C &c_args, Args &&...args) {
+    auto fn = I::CreateFn(ir.GetInsertBlock()->getModule(), std::forward<Args>(args)...);
+    return ir.CreateCall(fn, c_args);
+  }
+
 } // namesapce impl
 
 // TODO(lukas): We want to check that `fn_prefix` is never prefix of some
@@ -295,6 +303,20 @@ template<typename C>
 auto make_xor(llvm::IRBuilder<> &ir, const C &args) {
   auto xor_fn = OneOf::CreateFn(ir.GetInsertBlock()->getModule());
   return ir.CreateCall(xor_fn, args);
+}
+
+template<typename ...Args>
+auto make_extract(llvm::IRBuilder<> &ir, Args &&...args) {
+  return impl::implement_call<Extract>(ir, {}, std::forward<Args>(args)...);
+}
+
+template<typename ...Args>
+auto make_alloca(llvm::IRBuilder<> &ir, Args &&...args) {
+  return impl::implement_call<AllocateDst>(ir, {}, std::forward<Args>(args)...);
+}
+
+static inline auto make_breakpoint(llvm::IRBuilder<> &ir) {
+  return impl::implement_call<BreakPoint>(ir, {});
 }
 
 } // namespace circuitous::intrinsics
