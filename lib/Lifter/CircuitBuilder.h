@@ -119,6 +119,22 @@ class CircuitBuilder {
     CircuitBuilder &parent;
   };
 
+  struct State {
+    using reg_ptr_t = const remill::Register *;
+
+    llvm::Value *state = nullptr;
+
+    State(llvm::BasicBlock *where, llvm::Type *type)
+        : state(llvm::IRBuilder<>(where).CreateAlloca(type))
+    {}
+
+    auto raw() { return state; }
+    auto type() { return state->getType(); }
+
+    void store(llvm::IRBuilder<> &ir, const reg_ptr_t where, llvm::Value *what);
+    llvm::Value *load(llvm::IRBuilder<> &ir, const reg_ptr_t where);
+  };
+
   template <typename T>
   explicit CircuitBuilder(T initialize_arch)
       : arch(initialize_arch(context)),
