@@ -411,20 +411,161 @@ test_identity_ops = {
 }
 
 test_reg_parts = {
-  ModelTest("mov reg16, reg16").tags({"reduce_regs", "wip"})
+  ModelTest("mov reg16, reg16").tags({"reduce_regs"})
   .bytes(intel(["mov ax, bx"]))
   .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
   .case(run_bytes = intel(["mov cx, dx"]), R=True),
 
-  ModelTest("mov reg16/32, reg16/32").tags({"reduce_regs", "wip"})
+  ModelTest("mov reg16/32, reg16/32").tags({"reduce_regs"})
   .bytes(intel(["mov ax, bx", "mov eax, ebx"]))
   .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
   .case(run_bytes = intel(["mov cx, dx"]), R=True)
   .case(run_bytes = intel(["mov ecx, edx"]), R=True),
 
-  ModelTest("mov reg64/32/16 reg64/32/16/imm64/32/16").tags({"reduce_regs"})
+  # TODO(lukas): So look at the following encodings:
+  #              89 d8           mov eax, ebx
+  #              44 89 c0        mov eax, r8d
+  # Eventually we want to be able to derive one from the other but
+  # we cannot atm; test is marked as todo.
+  ModelTest("mov reg32/r8d reg32/r8d - partial").tags({"reduce_regs", "todo"})
+  .bytes(intel(["mov eax, ebx"]))
+  .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
+  .case(run_bytes = intel(["mov ecx, edx"]), R=True)
+  .case(run_bytes = intel(["mov edx, r8d"]), R=True)
+  .case(run_bytes = intel(["mov r8d, ecx"]), R=True)
+  .case(run_bytes = intel(["mov r8d, r9d"]), R=True),
+
+  # TODO(lukas): Same as above
+  ModelTest("mov reg64/32/16 reg64/32/16/imm64/32/16 - partial").tags({"reduce_regs", "todo"})
   .bytes(intel(["mov rax, rbx", "mov eax, ebx", "mov ax, bx",
                 "mov rax, 0x12", "mov eax, 0x12", "mov ax, 0x12"]))
+  .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
+  .case(run_bytes = intel(["mov cx, dx"]), R=True)
+  .case(run_bytes = intel(["mov cx, r8w"]), R=False)
+  .case(run_bytes = intel(["mov r9w, bx"]), R=False)
+  .case(run_bytes = intel(["mov ecx, edx"]), R=True)
+  .case(run_bytes = intel(["mov ecx, r8d"]), R=True)
+  .case(run_bytes = intel(["mov r9d, ebx"]), R=True)
+  .case(run_bytes = intel(["mov cx, 0x7fff"]), R=True)
+  .case(run_bytes = intel(["mov r8w, 0xffff"]), R=True)
+  .case(run_bytes = intel(["mov r9w, 0xab"]), R=True)
+  .case(run_bytes = intel(["mov ecx, 0x7fffffff"]), R=True)
+  .case(run_bytes = intel(["mov r8d, 0xffffffff"]), R=True)
+  .case(run_bytes = intel(["mov r9d, 0xab"]), R=True),
+
+  ModelTest("mov reg32/r8d reg32/r8d - full").tags({"reduce_regs"})
+  .bytes(intel(["mov eax, ebx", "mov r10d, ebx"]))
+  .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
+  .case(run_bytes = intel(["mov ecx, edx"]), R=True)
+  .case(run_bytes = intel(["mov edx, r8d"]), R=True)
+  .case(run_bytes = intel(["mov r8d, ecx"]), R=True)
+  .case(run_bytes = intel(["mov r8d, r9d"]), R=True),
+
+  ModelTest("mov rnd rnd - full").tags({"reduce_regs"})
+  .bytes(intel(["mov r10d, ebx"]))
+  .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
+  .case(run_bytes = intel(["mov edx, r8d"]), R=True)
+  .case(run_bytes = intel(["mov r8d, ecx"]), R=True)
+  .case(run_bytes = intel(["mov r8d, r9d"]), R=True),
+
+  ModelTest("mov rnw rnw - full").tags({"reduce_regs"})
+  .bytes(intel(["mov r10w, ax"]))
+  .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
+  .case(run_bytes = intel(["mov dx, r8w"]), R=True)
+  .case(run_bytes = intel(["mov r8w, cx"]), R=True)
+  .case(run_bytes = intel(["mov r8w, r9w"]), R=True),
+
+  ModelTest("mov rnb rnb - full").tags({"reduce_regs"})
+  .bytes(intel(["mov r10b, bl"]))
+  .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
+  .case(run_bytes = intel(["mov al, r8b"]), R=True)
+  .case(run_bytes = intel(["mov r8b, cl"]), R=True)
+  .case(run_bytes = intel(["mov r8b, r9b"]), R=True),
+
+  ModelTest("xor rnw rnw - full").tags({"reduce_regs", "wip2"})
+  .bytes(intel(["xor r10w, ax"]))
+  .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
+  .case(run_bytes = intel(["xor dx, r8w"]), R=True)
+  .case(run_bytes = intel(["xor r8w, cx"]), R=True)
+  .case(run_bytes = intel(["xor r8w, r9w"]), R=True),
+
+  ModelTest("xor rnb rnb - full").tags({"reduce_regs", "wip2"})
+  .bytes(intel(["xor r10b, bl"]))
+  .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
+  .case(run_bytes = intel(["xor al, r8b"]), R=True)
+  .case(run_bytes = intel(["xor r8b, cl"]), R=True)
+  .case(run_bytes = intel(["xor r8b, r9b"]), R=True),
+
+
+  ModelTest("mov rnd rnd - full").tags({"reduce_regs"})
+  .bytes(intel(["mov eax, ebx"]))
+  .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
+  .case(run_bytes = intel(["mov edx, eax"]), R=True)
+  .case(DI=MS().RAX(0xffffffffffff), run_bytes = intel(["mov edx, eax"]), R=True)
+  .case(run_bytes = intel(["mov ecx, ecx"]), R=True)
+  .case(DI=MS().RCX(0xffffffffffff), run_bytes = intel(["mov ecx, ecx"]), R=True)
+  .case(run_bytes = intel(["mov eax, ebx"]), R=True),
+
+  ModelTest("mov al/ah versions").tags({"reduce_regs"})
+  .bytes(intel(["mov ah, al"]))
+  .DI(S(0x200).RAX(0xffee). RBX(0xccbb).RCX(0xaa99))
+  .case(run_bytes = intel(["mov bh, al"]), R=True)
+  .case(run_bytes = intel(["mov ch, bh"]), R=True)
+  .case(run_bytes = intel(["mov cl, bh"]), R=True)
+  .case(run_bytes = intel(["mov cl, bl"]), R=True),
+
+  ModelTest("xor 16 lift").tags({"reduce_regs", "wip3"})
+  .DI(S(0x250))
+  .bytes(intel(["xor al, r8b"])).case(run_bytes = 0, R=True),
+
+  ModelTest("xor 32 lift").tags({"reduce_regs", "wip3"})
+  .DI(S(0x250))
+  .bytes(intel(["xor eax, ebx"])).case(run_bytes = 0, R=True),
+
+  ModelTest("adc al 0x0").tags({"reduce_regs", "todo"})
+  .DI(S(0x250))
+  .bytes(intel(["adc al, 0x0"]))
+  .case(run_bytes = intel(["adc ah, 0xf"]), R=True),
+
+
+  ModelTest("xor/adc fractions").tags({"reduce_args", "wip"})
+  .bytes(intel(["xor al, ah", "xor al, 0xa", "xor ax, bx", "xor ax, 0x1",
+                "xor ah, al", "xor ah, 0xb",
+                "adc r8b, al", "adc r8b, 0xe", "adc ax, bx", "adc ax, 0x2",
+                "adc al, 0x0", "adc ah, 0x5",
+                "xor al, r8b", "xor al, 0x4", "xor r8w, bx", "xor r9w, 0x0",
+                "adc r8b, al", "adc r8b, 0x5", "adc r8w, bx", "adc r10w, 0x1"]))
+  .DI(S(0x200).RAX(0xffee).RBX(0xddcc).RCX(0xbbaa).RDX(0x9988).R8(0x7766)
+              .R9(0x5544).R10(0x3322).aflags(1))
+  .case(run_bytes = intel(["xor cx, r8w"]), R=True)
+  .case(run_bytes = intel(["xor al, r8b"]), R=True)
+  .case(run_bytes = intel(["xor r9b, cl"]), R=True)
+  .case(run_bytes = intel(["xor eax, ebx"]), R=False)
+  .case(run_bytes = intel(["xor r10w, r8w"]), R=True)
+  .case(run_bytes = intel(["xor r9b, r8b"]), R=True)
+  .case(run_bytes = intel(["xor r9b, 0xf"]), R=False)
+  .case(run_bytes = intel(["xor ch, 0xf"]), R=True)
+  .case(run_bytes = intel(["xor r9w, 0xf"]), R=True)
+  .case(run_bytes = intel(["xor cl, 0xf"]), R=True)
+  .case(run_bytes = intel(["xor cx, 0xf"]), R=True)
+  .case(run_bytes = intel(["adc cx, r8w"]), R=True)
+  .case(run_bytes = intel(["adc al, r8b"]), R=True)
+  .case(run_bytes = intel(["adc r9b, cl"]), R=True)
+  .case(run_bytes = intel(["adc eax, ebx"]), R=False)
+  .case(run_bytes = intel(["adc r10w, r8w"]), R=True)
+  .case(run_bytes = intel(["adc r9b, r8b"]), R=True)
+  .case(run_bytes = intel(["adc r9b, 0xf"]), R=True)
+  .case(run_bytes = intel(["adc ch, 0xf"]), R=True)
+  .case(run_bytes = intel(["adc r9w, 0xf"]), R=True)
+  .case(run_bytes = intel(["adc cl, 0xf"]), R=True)
+  .case(run_bytes = intel(["adc cx, 0xf"]), R=True),
+
+
+  ModelTest("mov reg64/32/16 reg64/32/16/imm64/32/16 - full").tags({"reduce_regs"})
+  .bytes(intel(["mov rax, rbx", "mov eax, ebx", "mov ax, bx",
+                "mov rax, 0x12", "mov eax, 0x12", "mov ax, 0x12",
+                "mov r8d, 0x12", "mov r8d, eax", "mov r8w, 0x12",
+                "mov r8w, ax"]))
   .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
   .case(run_bytes = intel(["mov cx, dx"]), R=True)
   .case(run_bytes = intel(["mov cx, r8w"]), R=True)
