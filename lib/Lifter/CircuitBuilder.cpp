@@ -89,7 +89,6 @@ static const std::string kFlagRegisters =
 static llvm::IntegerType *IntegralRegisterType(llvm::Module &module,
                                                const remill::Register *reg) {
   if (reg->type->isIntegerTy()) {
-
     // Optimization for flag registers, which should only occupy a single
     // bit. We look to see if it's in the set of
     if (auto found_at = kFlagRegisters.find(reg->name);
@@ -99,15 +98,13 @@ static llvm::IntegerType *IntegralRegisterType(llvm::Module &module,
         kFlagRegisters[found_at + reg->name.size()] == ',') {
 
       return llvm::Type::getInt1Ty(module.getContext());
-    } else {
-      return llvm::dyn_cast<llvm::IntegerType>(reg->type);
     }
-  } else {
-    return llvm::Type::getIntNTy(
-        module.getContext(),
-        static_cast<unsigned>(
-            module.getDataLayout().getTypeAllocSize(reg->type) * 8u));
+    return llvm::dyn_cast<llvm::IntegerType>(reg->type);
   }
+  return llvm::Type::getIntNTy(
+      module.getContext(),
+      static_cast<unsigned>(
+          module.getDataLayout().getTypeAllocSize(reg->type) * 8u));
 }
 
 // Looks for calls to a function like `__remill_error`, and
@@ -134,6 +131,7 @@ static void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
   auto saved_threshold = module->getContext().getDiagnosticsHotnessThreshold();
   module->getContext().setDiagnosticsHotnessThreshold(1);
   remill::OptimizeModule(arch, module, fns);
+  // Set the logging back to the original values.
   module->getContext().setDiagnosticsHotnessThreshold(saved_threshold);
 
   // TOOD(lukas): This most likely wants its own class
@@ -143,6 +141,8 @@ static void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
   for (auto fn : fns) {
     for (auto &bb : *fn) {
       for (auto &inst : bb) {
+        // NOTE(lukas): I opted to go inst by inst to avoid accidentaly
+        //              modifying semantic functions we do not use.
         if (auto cs = llvm::CallSite(&inst)) {
           if (cs.isCall() &&
               cs.getCalledFunction()->getIntrinsicID() == llvm::Intrinsic::usub_sat)
@@ -157,16 +157,78 @@ static void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
     auto a = call->getOperand(0);
     auto b = call->getOperand(1);
     auto size = static_cast<uint32_t>(inst->getType()->getPrimitiveSizeInBits());
+    // sub = a - b
     auto sub = ir.CreateSub(a, b);
+    // select  = (a < b) ? 0 : a - b;
     auto flag = ir.CreateICmpULT(a, b);
     auto zero = ir.getIntN(size, 0);
     auto select = ir.CreateSelect(flag, zero, sub);
+    // replace & erase
     call->replaceAllUsesWith(select);
     call->eraseFromParent();
   }
+  // Verify we did not broke anything
+  remill::VerifyModule(module);
+}
+
+using reg_ptr_t = const remill::Register *;
+std::vector<reg_ptr_t> EnclosedClosure(reg_ptr_t ptr) {
+  std::vector<reg_ptr_t> out;
+  std::vector<reg_ptr_t> todo{ ptr };
+  // Note(lukas): I assume that registers are a tree like structure!
+  while (!todo.empty()) {
+    out.push_back(todo.back());
+    todo.pop_back();
+    for (auto x : out.back()->EnclosedRegisters()) {
+      todo.push_back(x);
+    }
+  }
+  // Just a sanity check
+  CHECK(std::unordered_set<reg_ptr_t>(out.begin(), out.end()).size() == out.size());
+  return out;
 }
 
 }  // namespace
+
+void CircuitBuilder::State::store(
+  llvm::IRBuilder<> &ir, const reg_ptr_t reg, llvm::Value *val)
+{
+  auto bb = ir.GetInsertBlock();
+  const auto &dl = bb->getModule()->getDataLayout();
+  auto gep = reg->AddressOf(state, bb);
+  ir.SetInsertPoint(bb);
+
+  // How much space does register occupy in form iN. There is an
+  // optimization for flag registers.
+  auto reg_type = IntegralRegisterType(*bb->getModule(), reg);
+  auto store_type = ir.getIntNTy(static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
+  auto coerced_type = ir.CreateBitCast(gep, llvm::PointerType::getUnqual(store_type));
+
+  if (reg_type != store_type) {
+    val = ir.CreateZExt(val, store_type);
+  }
+  ir.CreateStore(val, coerced_type);
+
+}
+
+llvm::Value *CircuitBuilder::State::load(llvm::IRBuilder<> &ir, const reg_ptr_t reg) {
+  auto bb = ir.GetInsertBlock();
+  const auto &dl = bb->getModule()->getDataLayout();
+  auto gep = reg->AddressOf(state, bb);
+  ir.SetInsertPoint(bb);
+
+  // How much space does register occupy in form iN. There is an
+  // optimization for flag registers.
+  auto reg_type = IntegralRegisterType(*bb->getModule(), reg);
+  auto store_type = ir.getIntNTy(static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
+  auto coerced_type = ir.CreateBitCast(gep, llvm::PointerType::getUnqual(store_type));
+
+  auto loaded = ir.CreateLoad(coerced_type);
+  if (reg_type != store_type) {
+    return ir.CreateTrunc(loaded, reg_type);
+  }
+  return loaded;
+}
 
 llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
   if (auto used = module->getGlobalVariable("llvm.used"); used) {
@@ -587,7 +649,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   // analysis determined to be used, and pass in null values (zeroes) for the
   // rest. We'll be able to observe calls like the following:
   //
-  //    %34 = tail call i1 (i8, i8, ...) @instrinsics::Eq(i8 0, i8 0)
+  //    %34 = tail call i1 (i8, i8, ...) @intrinsics::Eq(i8 0, i8 0)
   //
   // Removing uses of these redundant comparisons will let us shrink down the
   // verification call arg lists to only verify used registers.
