@@ -649,7 +649,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   // analysis determined to be used, and pass in null values (zeroes) for the
   // rest. We'll be able to observe calls like the following:
   //
-  //    %34 = tail call i1 (i8, i8, ...) @instrinsics::Eq(i8 0, i8 0)
+  //    %34 = tail call i1 (i8, i8, ...) @intrinsics::Eq(i8 0, i8 0)
   //
   // Removing uses of these redundant comparisons will let us shrink down the
   // verification call arg lists to only verify used registers.
