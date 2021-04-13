@@ -4,10 +4,12 @@
 
 #include "CircuitBuilder.h"
 #include "DependencyVisitor.hpp"
-#include "circuitous/IR/Lifter.hpp"
 #include "InstructionFuzzer.hpp"
 
 #include "Flatten.hpp"
+
+#include <circuitous/Lifter/BaseLifter.hpp>
+#include <circuitous/IR/Lifter.hpp>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
@@ -26,55 +28,6 @@
 
 namespace circuitous {
 namespace {
-
-// Get the semantic name for an instruction encoding. We attach on the size of
-// the instruction in bytes as on x86, the iforms from XED don't guarantee us
-// the same size of bits.
-static std::string IselName(const remill::Instruction &inst) {
-  CHECK_GE(15, inst.bytes.size());
-  return inst.function + ("123456789abcdef"[inst.bytes.size()]);
-}
-
-// Apply a callback `cb` to every instruction in the buffer `buff`.
-template <typename CB>
-static void ForEachInstructionInBuffer(const remill::Arch::ArchPtr &arch,
-                                       llvm::StringRef buff, CB cb) {
-  const auto max_inst_size = arch->MaxInstructionSize();
-
-  remill::Instruction inst;
-  for (size_t i = 0u, max_i = buff.size(); i < max_i; inst.Reset()) {
-    auto next_i = std::min<size_t>(max_i, i + max_inst_size);
-    std::string_view bytes(&(buff.data()[i]), next_i - i);
-
-    if (!arch->DecodeInstruction(0, bytes, inst) || !inst.IsValid()) {
-      LOG(ERROR) << "Unable to decode instruction at byte offset " << i;
-      ++i;
-    } else {
-      cb(inst);
-      i += inst.bytes.size();
-    }
-  }
-}
-
-// Check that the decoding of a particular instruction results in position-
-// independent operands. It's possible that some operands have PC-relative
-// operands and have pre-calculated those values.
-static bool IsDecodePositionIndependent(const remill::Arch::ArchPtr &arch,
-                                        const remill::Instruction &inst) {
-  remill::Instruction copy;
-  if (!arch->DecodeInstruction(inst.pc + 32, inst.bytes, copy) ||
-      inst.operands.size() != copy.operands.size()) {
-    return false;
-  }
-
-  for (auto i = 0u; i < inst.operands.size(); ++i) {
-    if (inst.operands[i].Serialize() != copy.operands[i].Serialize()) {
-      return false;
-    }
-  }
-
-  return true;
-}
 
 // TODO(pag): Add other architecture flag names here.
 static const std::string kFlagRegisters =
@@ -125,52 +78,6 @@ static void MuteStateEscape(llvm::Module &module, const char *func_name) {
   }
 }
 
-
-static void OptimizeSilently(const remill::Arch *arch, llvm::Module *module,
-                      const std::vector<llvm::Function *> &fns) {
-  auto saved_threshold = module->getContext().getDiagnosticsHotnessThreshold();
-  module->getContext().setDiagnosticsHotnessThreshold(1);
-  remill::OptimizeModule(arch, module, fns);
-  // Set the logging back to the original values.
-  module->getContext().setDiagnosticsHotnessThreshold(saved_threshold);
-
-  // TOOD(lukas): This most likely wants its own class
-  // We want to lower some intrinsics that llvm optimizations introduced
-  // `usub.sat` is a result of InstCombining.
-  std::vector<llvm::Instruction *> calls;
-  for (auto fn : fns) {
-    for (auto &bb : *fn) {
-      for (auto &inst : bb) {
-        // NOTE(lukas): I opted to go inst by inst to avoid accidentaly
-        //              modifying semantic functions we do not use.
-        if (auto cs = llvm::CallSite(&inst)) {
-          if (cs.isCall() &&
-              cs.getCalledFunction()->getIntrinsicID() == llvm::Intrinsic::usub_sat)
-              calls.push_back(cs.getInstruction());
-        }
-      }
-    }
-  }
-  for (auto inst : calls) {
-    llvm::IRBuilder<> ir(inst);
-    auto call = llvm::cast<llvm::CallInst>(inst);
-    auto a = call->getOperand(0);
-    auto b = call->getOperand(1);
-    auto size = static_cast<uint32_t>(inst->getType()->getPrimitiveSizeInBits());
-    // sub = a - b
-    auto sub = ir.CreateSub(a, b);
-    // select  = (a < b) ? 0 : a - b;
-    auto flag = ir.CreateICmpULT(a, b);
-    auto zero = ir.getIntN(size, 0);
-    auto select = ir.CreateSelect(flag, zero, sub);
-    // replace & erase
-    call->replaceAllUsesWith(select);
-    call->eraseFromParent();
-  }
-  // Verify we did not broke anything
-  remill::VerifyModule(module);
-}
-
 using reg_ptr_t = const remill::Register *;
 std::vector<reg_ptr_t> EnclosedClosure(reg_ptr_t ptr) {
   std::vector<reg_ptr_t> out;
@@ -188,9 +95,17 @@ std::vector<reg_ptr_t> EnclosedClosure(reg_ptr_t ptr) {
   return out;
 }
 
+template<typename T = uint64_t>
+T inst_fragments_count(llvm::CallInst *inst) {
+  auto maybe_count = GetMetadata(inst, CircuitBuilder::bytes_fragments_count_kind);
+  CHECK(maybe_count) << "Byte fragments size not set for"
+                     << remill::LLVMThingToString(inst);
+  return static_cast<T>(*maybe_count);
+}
+
 }  // namespace
 
-void CircuitBuilder::State::store(
+void State::store(
   llvm::IRBuilder<> &ir, const reg_ptr_t reg, llvm::Value *val)
 {
   auto bb = ir.GetInsertBlock();
@@ -211,7 +126,7 @@ void CircuitBuilder::State::store(
 
 }
 
-llvm::Value *CircuitBuilder::State::load(llvm::IRBuilder<> &ir, const reg_ptr_t reg) {
+llvm::Value *State::load(llvm::IRBuilder<> &ir, const reg_ptr_t reg) {
   auto bb = ir.GetInsertBlock();
   const auto &dl = bb->getModule()->getDataLayout();
   auto gep = reg->AddressOf(state, bb);
@@ -231,7 +146,7 @@ llvm::Value *CircuitBuilder::State::load(llvm::IRBuilder<> &ir, const reg_ptr_t 
 }
 
 llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
-  if (auto used = module->getGlobalVariable("llvm.used"); used) {
+  if (auto used = ctx.module()->getGlobalVariable("llvm.used"); used) {
     used->eraseFromParent();
   }
 
@@ -251,255 +166,28 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
   //            the sign bit, getting the low N bits of an instruction (i.e.
   //            convert the AND into a function call.
 
-  auto isels = DecodeInstructions(buff);
-  IdentifyImms(isels);
-  LiftInstructions(isels);
-
-  // Delete the `__remill_intrinsics` so that we can get rid of more
-  // functions.
-  if (auto intrinsics = module->getFunction("__remill_intrinsics");
-      intrinsics) {
-    intrinsics->eraseFromParent();
-  }
-
-  if (auto mark_as_used = module->getFunction("__remill_mark_as_used");
-      mark_as_used) {
-    mark_as_used->eraseFromParent();
-  }
-
-  // TODO(lukas): Move to ctor
-  one_of_func = intrinsics::OneOf::CreateFn(module.get());
-  verify_inst_func = intrinsics::VerifyInst::CreateFn(module.get());
-
-  // Mark these functions as not touching memory; this will help LLVM to
-  // better optimize code that calls these functions.
-  one_of_func->addFnAttr(llvm::Attribute::ReadNone);
-  verify_inst_func->addFnAttr(llvm::Attribute::ReadNone);
+  auto isels = BaseLifter<InstructionLifter>(ctx).Run(buff);
+  EraseFns(ctx.module(), { "__remill_intrinsics", "__remill_mark_as_used" });
 
   // These improve optimizability.
-  MuteStateEscape(*module, "__remill_function_return");
-  MuteStateEscape(*module, "__remill_error");
-  MuteStateEscape(*module, "__remill_missing_block");
+  MuteStateEscape(*ctx.module(), "__remill_function_return");
+  MuteStateEscape(*ctx.module(), "__remill_error");
+  MuteStateEscape(*ctx.module(), "__remill_missing_block");
 
   return BuildCircuit1(BuildCircuit0(std::move(isels)));
 }
 
-template<typename T = uint64_t>
-T CircuitBuilder::inst_fragments_count(llvm::CallInst *inst) const {
-  auto maybe_count = GetMetadata(inst, bytes_fragments_count_kind);
-  CHECK(maybe_count) << "Byte fragments size not set for"
-                     << remill::LLVMThingToString(inst);
-  return static_cast<T>(*maybe_count);
-}
-
-void CircuitBuilder::IdentifyImms(CircuitBuilder::InstSelections &insts) {
-  for (auto &inst : insts) {
-    for (auto i = 0U; i < inst.instructions.size(); ++i) {
-      if (reduce_imms) {
-        LOG(INFO) << "Searching for immediate operands regions in:";
-        LOG(INFO) << inst.instructions[i].Serialize();
-        auto s_inst = InstructionFuzzer{arch, inst.instructions[i]}.FuzzOps();
-        inst.imms.emplace_back();
-        inst.shadows.push_back(std::move(s_inst));
-      } else {
-        inst.imms.emplace_back();
-        inst.shadows.emplace_back();
-      }
-    }
-  }
-}
-
-// Decode all instructions in `buff` using `arch`. Group the instructions in
-// terms of a general semantic category/class.
-std::vector<InstructionSelection>
-CircuitBuilder::DecodeInstructions(llvm::StringRef buff) {
-  std::vector<InstructionSelection> grouped_insts;
-  std::set<std::string> inst_bytes;
-  std::unordered_map<std::string, size_t> isel_index;
-
-  ForEachInstructionInBuffer(arch, buff, [&](remill::Instruction &inst) {
-    auto all_zeroes = true;
-    for (auto b : inst.bytes) {
-      if (b) {
-        all_zeroes = false;
-        break;
-      }
-    }
-
-    CHECK(!all_zeroes)
-        << "Instructions whose machine code representation is all zeroes are "
-        << "not permitted as they would invalidate the XOR-based checking of "
-        << "encode verification checks";
-
-    // It's likely that some of Remill's decoders implicitly put position-
-    // dependent operands into the operands list, so try to catch that, warn
-    // about them, and skip them.
-    if (!IsDecodePositionIndependent(arch, inst)) {
-      LOG(ERROR) << "Skipping position-dependent instruction: "
-                 << inst.Serialize();
-      return;
-    }
-
-    if (auto num_bits = static_cast<unsigned>(inst.bytes.size() * 8u);
-        num_bits > encoded_inst_size) {
-      encoded_inst_size = num_bits;
-      CHECK_LE(encoded_inst_size, kMaxNumInstBits);
-    }
-
-    // Group the unique decoded instructions in terms of their ISELs, i.e. the
-    // general semantic category of those instructions.
-    if (auto [it, inserted] = inst_bytes.insert(inst.bytes);
-        (void) it, inserted) {
-
-      InstructionSelection *iclass = nullptr;
-
-      // Make the isel specific to the `inst.function` and its size.
-      const auto isel = IselName(inst);
-      if (auto index_it = isel_index.find(isel); index_it != isel_index.end()) {
-        iclass = &(grouped_insts[index_it->second]);
-        CHECK_EQ(inst.bytes.size(), iclass->instructions.back().bytes.size());
-
-      } else {
-        isel_index.emplace(isel, grouped_insts.size());
-        grouped_insts.emplace_back();
-        iclass = &(grouped_insts.back());
-
-        // iclass->known_bits.set();
-      }
-
-      iclass->encodings.emplace_back();
-
-      auto &encoding = iclass->encodings.back();
-      size_t i = 0u;
-      for (char byte_ : std::string(inst.bytes.rbegin(), inst.bytes.rend())) {
-        const auto byte = static_cast<uint8_t>(byte_);
-        for (auto b = 0u; b < 8u; ++b, ++i) {
-          if ((byte >> b) & 1u) {
-            encoding.set(i);
-          }
-        }
-      }
-
-      iclass->instructions.emplace_back(std::move(inst));
-    }
-  });
-
-  return grouped_insts;
-}
-
-// Flatten all control flow into pure data-flow inside of a function.
-void CircuitBuilder::FlattenControlFlow(
-    llvm::Function *func, const remill::IntrinsicTable &intrinsics) {
-  Flattener(func, intrinsics.error).Run();
-}
-
-// Decode all instructions in `buff` using `arch` and fill up `inst_funcs`.
-void CircuitBuilder::LiftInstructions(
-    std::vector<InstructionSelection> &isels) {
-  remill::IntrinsicTable intrinsics(module);
-  std::vector<llvm::Function *> inst_funcs;
-
-  for (auto &group : isels) {
-      CHECK(group.instructions.size() == group.encodings.size());
-
-    for (auto i = 0ull; i < group.instructions.size(); ++i) {
-      auto &inst = group.instructions[i];
-      std::stringstream ss;
-      ss << "inst_" << inst.bytes;
-
-      auto func = remill::DeclareLiftedFunction(module.get(), ss.str());
-      group.lifted_fns.push_back(func);
-
-      remill::CloneBlockFunctionInto(func);
-      auto block = &func->getEntryBlock();
-
-      InstructionLifter lifter(arch, intrinsics);
-      lifter.SupplyShadow(&group.shadows[i]);
-      switch (lifter.LiftIntoBlock(inst, block, false, group.imms[i])) {
-        case remill::LiftStatus::kLiftedInstruction:
-          (void) llvm::ReturnInst::Create(
-              context, remill::LoadMemoryPointer(block), block);
-
-          // Make sure these functions stick around.
-          func->removeFnAttr(llvm::Attribute::InlineHint);
-          func->removeFnAttr(llvm::Attribute::AlwaysInline);
-          func->setLinkage(llvm::GlobalValue::ExternalLinkage);
-          func->addFnAttr(llvm::Attribute::NoInline);
-
-          inst_funcs.push_back(func);
-          continue;
-
-        case remill::LiftStatus::kLiftedUnsupportedInstruction:
-          LOG(ERROR) << "Missing semantics for instruction: "
-                     << inst.Serialize();
-          func->eraseFromParent();
-          continue;
-
-        case remill::LiftStatus::kLiftedInvalidInstruction:
-          LOG(ERROR) << "Invalid instruction: " << inst.Serialize();
-          func->eraseFromParent();
-          continue;
-        default:
-          break;
-      }
-    }
-    CHECK(group.instructions.size() == group.lifted_fns.size());
-  }
-
-  OptimizeSilently(arch.get(), module.get(), inst_funcs);
-
-  std::vector<llvm::Function *> reopt_funcs;
-  for (auto func : inst_funcs) {
-    if (func->size() == 1) {
-      continue;  // Pure data-flow; doesn't need to be re-optimized.
-    }
-
-    reopt_funcs.push_back(func);
-    FlattenControlFlow(func, intrinsics);
-  }
-
-  if (!reopt_funcs.empty()) {
-    OptimizeSilently(arch.get(), module.get(), reopt_funcs);
-  }
-
-  // We're done; make the instruction functions more amenable for inlining
-  // and elimination.
-  for (auto func : inst_funcs) {
-    func->setLinkage(llvm::GlobalValue::PrivateLinkage);
-    func->removeFnAttr(llvm::Attribute::NoInline);
-    func->addFnAttr(llvm::Attribute::InlineHint);
-    func->addFnAttr(llvm::Attribute::AlwaysInline);
-  }
-}
-
-// Apply a callback `cb(unsgined, const remill::Instruction &, llvm::CallInst *)`
-// to each call of `__circuitous.verify_inst` in `circuit_func`.
-template <typename T>
-void CircuitBuilder::ForEachVerification(llvm::Function *circuit_func, T cb) {
-  std::vector<llvm::CallInst *> verify_calls;
-  for (auto user : verify_inst_func->users()) {
-    if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(user);
-        call_inst && call_inst->getParent()->getParent() == circuit_func) {
-      verify_calls.push_back(call_inst);
-    }
-  }
-  for (auto call_inst : verify_calls) {
-    cb(call_inst);
-  }
-}
-
 // Build the first level circuit. We will analyze this function later to
 // get an accurate picture of instruction dependencies.
-auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels)
--> Circuit0 {
+auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) -> Circuit0 {
 
-  auto circuit0 = Circuit0(*this);
+  auto circuit0 = Circuit0(ctx);
   auto circuit0_func = circuit0.Create();
-
   circuit0.InjectISELs(std::move(isels));
 
-  OptimizeSilently(arch.get(), module.get(), {circuit0_func});
-
+  remill::VerifyModule(ctx.module());
+  OptimizeSilently(ctx.arch(), ctx.module(), {circuit0_func});
+  remill::VerifyModule(ctx.module());
   return circuit0;
 }
 
@@ -508,7 +196,7 @@ auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels)
 // argument list.
 llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   auto circuit0_func = circuit0.GetFn();
-  RegisterDependencyCollector deps(arch.get());
+  RegisterDependencyCollector deps(ctx.arch());
 
   // Look at all calls to instruction verifiers. These function calls take as
   // input the integer index (into `insts`) of the instruction being verified,
@@ -516,10 +204,11 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   // should be the results of ICmp instructions, each testing whether or not
   // the current value of a register matches the next expected value of the
   // register.
-  ForEachVerification(circuit0_func, [&](llvm::CallInst *verify_call_inst) {
+  intrinsics::VerifyInst::ForAllIn(circuit0_func, [&](llvm::CallInst *verify_call_inst) {
     auto arg_num = 0u;
     auto reg_idx = 0u;
     auto inst_fragments_prefix = inst_fragments_count(verify_call_inst);
+    // TODO(lukas): Refactor, this is clunky at best and very error prone.
     for (auto &arg_use : verify_call_inst->arg_operands()) {
       llvm::Value *arg = arg_use.get();
       CHECK(inst_fragments_prefix > 0);
@@ -598,17 +287,11 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   std::vector<const remill::Register *> new_regs;
   auto i = 0u;
 
-  // Start with the bits associated with the parts of an encoded instruction.
-  // for (i = 0u; i < num_instruction_parts; ++i) {
-  //   circuit1_arg_types.push_back(
-  //       remill::NthArgument(circuit0_func, i)->getType());
-  // }
-
   circuit1_arg_types.push_back(
       remill::NthArgument(circuit0_func, 0)->getType());
 
   for (auto in_reg : deps.read_registers) {
-    new_regs.push_back(arch->RegisterByName(in_reg->getName().str()));
+    new_regs.push_back(ctx.arch()->RegisterByName(in_reg->getName().str()));
     circuit1_arg_types.push_back(in_reg->getType());
   }
 
@@ -619,9 +302,10 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   // The read set should be a subset of the written set.
   CHECK_LE(deps.read_registers.size(), deps.written_registers.size());
 
+  llvm::IRBuilder<> ir(*ctx.llvm_ctx());
   auto circuit1_func = llvm::Function::Create(
-      llvm::FunctionType::get(bool_type, circuit1_arg_types, false),
-      llvm::GlobalValue::ExternalLinkage, "circuit1_func", module.get());
+      llvm::FunctionType::get(ir.getInt1Ty(), circuit1_arg_types, false),
+      llvm::GlobalValue::ExternalLinkage, "circuit1_func", ctx.module());
   circuit1_func->addFnAttr(llvm::Attribute::ReadNone);
 
   // Rename the parameters to correspond with our input/output registers.
@@ -653,7 +337,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   //
   // Removing uses of these redundant comparisons will let us shrink down the
   // verification call arg lists to only verify used registers.
-  for (auto reg : regs) {
+  for (auto reg : ctx.regs()) {
     const auto orig_reg = remill::FindVarInFunction(circuit0_func, reg->name);
     if (auto in_reg = remill::FindVarInFunction(circuit1_func, reg->name, true);
         in_reg) {
@@ -671,19 +355,19 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
     }
   }
 
-  auto entry = llvm::BasicBlock::Create(context, "", circuit1_func);
+  auto entry = llvm::BasicBlock::Create(*ctx.llvm_ctx(), "", circuit1_func);
   auto res = llvm::CallInst::Create(circuit0_func, args, "", entry);
-  (void) llvm::ReturnInst::Create(context, res, entry);
+  (void) llvm::ReturnInst::Create(*ctx.llvm_ctx(), res, entry);
 
   // Optimizing the module again will inline circuit0_func into circuit1_func
   // and propagate the null (i.e. zero) values for all unused registers down
   // through the inlined body of circuit0_func.
-  OptimizeSilently(arch.get(), module.get(), {circuit1_func});
+  OptimizeSilently(ctx.arch(), ctx.module(), {circuit1_func});
 
   // "Constant fold" the uses of `__circuitous.icmp_eq.8`.
   std::vector<llvm::CallInst *> to_fold;
 
-  for (auto matcher : intrinsics::Eq::All(module.get())) {
+  for (auto matcher : intrinsics::Eq::All(ctx.module())) {
     if (!matcher) {
       continue;
     }
@@ -697,7 +381,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   }
 
   for (auto call_inst : to_fold) {
-    call_inst->replaceAllUsesWith(true_value);
+    call_inst->replaceAllUsesWith(llvm::IRBuilder<>(call_inst).getTrue());
     call_inst->eraseFromParent();
   }
 
@@ -705,14 +389,23 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
 
   // Now go through an change the arguments to `__circuitous.verify_inst` to
   // to reflect the new register transfer comparisons.
-  ForEachVerification(circuit1_func, [&](llvm::CallInst *call_inst) {
+  intrinsics::VerifyInst::ForAllIn(circuit1_func, [&](llvm::CallInst *call_inst) {
     args.clear();
     auto inst_fragments_prefix = inst_fragments_count<uint32_t>(call_inst);
     for (auto j = 0u; j < inst_fragments_prefix; ++j) {
       args.push_back(call_inst->getArgOperand(j));
     }
-    for (i = 0u; i < regs.size(); ++i) {
-      const auto reg = regs[i];
+    // TODO(lukas): This is hack, rework.
+    while (true) {
+      auto cs = llvm::CallSite(call_inst->getArgOperand(inst_fragments_prefix));
+      if (!cs || intrinsics::Eq::IsIntrinsic(cs.getCalledFunction())) {
+        break;
+      }
+      args.push_back(call_inst->getArgOperand(inst_fragments_prefix));
+      ++inst_fragments_prefix;
+    }
+    for (i = 0u; i < ctx.regs().size(); ++i) {
+      const auto reg = ctx.regs()[i];
 
       // const auto arg = call_inst->getArgOperand(i + num_instruction_parts);
       const auto arg = call_inst->getArgOperand(i + inst_fragments_prefix);
@@ -722,8 +415,9 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
       }
     }
 
-    auto new_call =
-        llvm::CallInst::Create(verify_inst_func, args, "", call_inst);
+    // TODO(lukas): Make sure we can use `ir` here.
+    llvm::IRBuilder<> tir(call_inst);
+    auto new_call = intrinsics::make_verify(tir, args);
     to_replace.emplace_back(call_inst, new_call);
   });
 
@@ -732,23 +426,19 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
     old_call->eraseFromParent();
   }
 
-  // Make sure `regs` represents the new and reduced set of registers that
-  // we're going to be verifying.
-  regs.swap(new_regs);
-
   return circuit1_func;
 }
 
-llvm::FunctionType *CircuitBuilder::Circuit0::FnT() {
-  llvm::IRBuilder<> ir(parent.context);
+llvm::FunctionType *Circuit0::FnT() {
+  llvm::IRBuilder<> ir(*ctx.llvm_ctx());
   std::vector<llvm::Type *> param_types;
 
   // First parameter is the bit enconding of the instruction being verified
   param_types.push_back(ir.getIntNTy(kMaxNumInstBits));
 
     // The remaining parameters will be input/output registers for verification.
-  for (auto reg : parent.regs) {
-    const auto reg_type = IntegralRegisterType(*parent.module, reg);
+  for (auto reg : ctx.regs()) {
+    const auto reg_type = IntegralRegisterType(*ctx.module(), reg);
     param_types.push_back(reg_type);
     param_types.push_back(reg_type);
   }
@@ -756,12 +446,12 @@ llvm::FunctionType *CircuitBuilder::Circuit0::FnT() {
   return llvm::FunctionType::get(ir.getInt1Ty(), param_types, false);
 }
 
-llvm::Function *CircuitBuilder::Circuit0::GetFn() {
-  return parent.module->getFunction(name);
+llvm::Function *Circuit0::GetFn() {
+  return ctx.module()->getFunction(name);
 }
 
-llvm::Function *CircuitBuilder::Circuit0::Create() {
-  llvm::IRBuilder<> ir(parent.context);
+llvm::Function *Circuit0::Create() {
+  llvm::IRBuilder<> ir(*ctx.llvm_ctx());
   if (circuit_fn) {
     LOG(FATAL) << "Circuit already has an associated llvm function";
     return circuit_fn;
@@ -773,7 +463,7 @@ llvm::Function *CircuitBuilder::Circuit0::Create() {
   }
 
   circuit_fn =
-    llvm::Function::Create(FnT(), llvm::GlobalValue::ExternalLinkage, name, parent.module.get());
+    llvm::Function::Create(FnT(), llvm::GlobalValue::ExternalLinkage, name, ctx.module());
   circuit_fn->addFnAttr(llvm::Attribute::ReadNone);
 
   CHECK(circuit_fn->arg_size() > 0);
@@ -783,7 +473,7 @@ llvm::Function *CircuitBuilder::Circuit0::Create() {
   for (auto i = inst_bytes.size(); i < circuit_fn->arg_size(); i += 2) {
     // This "order" can be flexible, but better let it go in order
     // of regs.
-    auto reg = parent.regs[(i - inst_bytes.size()) / 2];
+    auto reg = ctx.regs()[(i - inst_bytes.size()) / 2];
 
     auto input_reg = remill::NthArgument(circuit_fn, i);
     auto output_reg = remill::NthArgument(circuit_fn, i + 1);
@@ -793,24 +483,24 @@ llvm::Function *CircuitBuilder::Circuit0::Create() {
 
     reg_to_args.emplace_back(reg, input_reg, output_reg);
 
-    if (reg->name == parent.arch->ProgramCounterRegisterName()) {
+    if (reg->name == ctx.arch()->ProgramCounterRegisterName()) {
       pc = input_reg;
     }
   }
 
   // Sanity check, we are going to need pc later on.
   CHECK(pc != nullptr) << "Couldn't find program counter register "
-                      << parent.arch->ProgramCounterRegisterName();
+                      << ctx.arch()->ProgramCounterRegisterName();
   return circuit_fn;
 }
 
-void CircuitBuilder::Circuit0::InjectISELs(std::vector<InstructionSelection> isels) {
+void Circuit0::InjectISELs(std::vector<InstructionSelection> isels) {
   CHECK(circuit_fn);
 
   auto circuit0_func = circuit_fn;
 
-  auto entry_block = llvm::BasicBlock::Create(parent.context, "", circuit0_func);
-  auto exit_block = llvm::BasicBlock::Create(parent.context, "", circuit0_func);
+  auto entry_block = llvm::BasicBlock::Create(*ctx.llvm_ctx(), "", circuit0_func);
+  auto exit_block = llvm::BasicBlock::Create(*ctx.llvm_ctx(), "", circuit0_func);
   auto prev_block = entry_block;
 
   for (const auto &isel : isels) {
@@ -820,17 +510,17 @@ void CircuitBuilder::Circuit0::InjectISELs(std::vector<InstructionSelection> ise
   llvm::BranchInst::Create(exit_block, prev_block);
 
   llvm::IRBuilder<> ir(exit_block);
-  ir.CreateRet(ir.CreateCall(parent.one_of_func, verified_insts));
+  ir.CreateRet(intrinsics::make_xor(ir, verified_insts));
 }
 
-llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
+llvm::BasicBlock *Circuit0::InjectISEL(
     const InstructionSelection &isel,
     llvm::BasicBlock *prev_block,
     llvm::BasicBlock *exit_block) {
   // Add one basic block per lifted instruction. Each block allocates a
   // separate state structure.
   for (auto i = 0u; i < isel.instructions.size(); ++i) {
-    auto inst_block = llvm::BasicBlock::Create(parent.context, "", circuit_fn);
+    auto inst_block = llvm::BasicBlock::Create(*ctx.llvm_ctx(), "", circuit_fn);
     llvm::BranchInst::Create(inst_block, prev_block);
     prev_block = inst_block;
 
@@ -839,99 +529,36 @@ llvm::BasicBlock *CircuitBuilder::Circuit0::InjectISEL(
   return prev_block;
 }
 
-void CircuitBuilder::Circuit0::InjectSemantic(
-    llvm::BasicBlock *inst_block, llvm::BasicBlock *exit_block, ISEL_view isel) {
+std::vector<llvm::Instruction *> Circuit0::LowerDstRegs(std::vector<llvm::Value *> &dsts) {
+  std::vector<llvm::Instruction *> out;
 
-  const auto &dl = parent.module->getDataLayout();
-  CHECK_NOTNULL(isel.lifted);
+  for (auto dst : dsts) {
+    CHECK(llvm::isa<llvm::PointerType>(dst->getType()))
+        << "Dst reg type before lowering is not pointer";
 
-  llvm::IRBuilder<> ir(inst_block);
-  auto state_ptr = ir.CreateAlloca(parent.state_ptr_type->getElementType());
-
-  // All of the following lambdas capture `ir` and `state_ptr`.
-  auto access_reg = [&](const auto &reg) {
-    const auto reg_type = IntegralRegisterType(*parent.module, reg);
-    const auto reg_store_type = ir.getIntNTy(
-        static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
-    auto reg_addr = reg->AddressOf(state_ptr, inst_block);
-    auto reg_addr_type = llvm::PointerType::get(reg_store_type, 0);
-    if (reg_addr->getType() != reg_addr_type) {
-      reg_addr = ir.CreateBitCast(reg_addr, reg_addr_type);
-    }
-    return std::make_tuple(reg_type, reg_addr_type, reg_store_type, reg_addr);
-  };
-
-  auto store_to_reg = [&](const auto &reg, llvm::Value *val) {
-    const auto &[reg_type, reg_addr_type, reg_store_type, reg_addr] = access_reg(reg);
-    if (reg_type != reg_store_type) {
-      val = ir.CreateZExt(val, reg_store_type);
-    }
-    ir.CreateStore(val, reg_addr);
-  };
-
-  auto load_from_reg = [&](const auto &reg) -> llvm::Value * {
-    const auto &[reg_type, reg_addr_type, reg_store_type, reg_addr] = access_reg(reg);
-    llvm::Value *val = ir.CreateLoad(reg_addr);
-    if (reg_type != reg_store_type) {
-      val = ir.CreateTrunc(val, reg_type);
-    }
-    return val;
-  };
-
-  for (auto [reg, arg, _] : reg_to_args) {
-    store_to_reg(reg, arg);
+    auto p_type = llvm::cast<llvm::PointerType>(dst->getType());
+    llvm::IRBuilder<> ir(llvm::cast<llvm::Instruction>(dst));
+    out.push_back(ir.CreateAlloca(p_type->getPointerElementType(), nullptr, "DSTA_"));
+    dst->replaceAllUsesWith(out.back());
   }
+  return out;
+}
 
-
-  auto begin = intrinsics::make_breakpoint(ir);
-  auto sem_call = CallSemantic(
-    ir, isel.lifted, state_ptr, pc, llvm::UndefValue::get(parent.mem_ptr_type));
-  auto end = intrinsics::make_breakpoint(ir);
-  llvm::InlineFunctionInfo info;
-  llvm::InlineFunction(sem_call, info);
-
-  auto params = ByteFragments(ir, isel);
-  auto fragments_size = params.size();
-
-  auto collected = shadowinst::collect_annotated(begin, end);
-  auto dst_regs = std::move(collected["circuitous.dst.reg"]);
-  auto &extra_params = collected["circuitous.verify_fn_args"];
-  params.insert(params.end(), extra_params.begin(), extra_params.end());
-
-  begin->eraseFromParent();
-  end->eraseFromParent();
-
-  for (std::size_t i = 0; i < dst_regs.size(); ++i) {
-    CHECK(llvm::isa<llvm::PointerType>(dst_regs[i]->getType()));
-    auto p_type = llvm::cast<llvm::PointerType>(dst_regs[i]->getType());
-    ir.SetInsertPoint(llvm::dyn_cast<llvm::Instruction>(dst_regs[i]));
-    auto as_alloca = ir.CreateAlloca(p_type->getPointerElementType(), nullptr,
-                                     "DSTA_" + std::to_string(i));
-    dst_regs[i]->replaceAllUsesWith(as_alloca);
-    llvm::cast<llvm::Instruction>(dst_regs[i])->eraseFromParent();
-    dst_regs[i] = as_alloca;
-  }
-  ir.SetInsertPoint(inst_block);
-
-  auto as_string = [](auto full, auto from, auto size) {
-    std::string out;
-    for (uint64_t i = 0; i < size; ++i) {
-      out += (full[from + i]) ? '1' : '0';
-    }
-    return out;
-  };
-**/
-  // Final set of parameters are comparisons on whether or not the resulting
+std::vector<llvm::Value *> Circuit0::HandleDstRegs(
+    llvm::IRBuilder<> &ir,
+    std::vector<llvm::Instruction *> &dst_regs, ISEL_view isel, State &state)
+{
+  // Comparisons on whether or not the resulting
   // register after the semantic has executed matches the next state of that
   // register.
+  std::vector<llvm::Value *> params;
   for (auto [reg, _, expected_reg_val] : reg_to_args) {
-    LOG(INFO) << "Processing " << reg->name;
-    //llvm::Value *original_val = load_from_reg(reg);
     llvm::Value *original_val = state.load(ir, reg);
     llvm::Value *reg_val = original_val;
+    // We need to keep track which operand we are about to handle so we can index into
+    // `dst_regs`.
     uint64_t proccessed = 0;
 
-    LOG(INFO) << isel.instruction.function;
     for (std::size_t i = 0; i < isel.instruction.operands.size(); ++i) {
       // We care only for write operands
       if (isel.instruction.operands[i].action != remill::Operand::Action::kActionWrite) {
@@ -954,43 +581,92 @@ void CircuitBuilder::Circuit0::InjectSemantic(
         if (!table.count(reg_part->name)) {
           continue;
         }
+        // The basic idea here (we need to handle partial registers)
+        // is that we first "refresh" the top-level with originally loaded value.
+        // That is needed because in previous iteration something else may have been
+        // store there.
+        // Then we write the value into the partial register and we again load from
+        // the top-level to retrieve the value (with correctly stored value).
+        // This is a lot of memory operations and we rely heavily on llvm
+        // `mm2reg` pass to help us out.
 
         // Someone before us may have written something - we need to reset the value.
         state.store(ir, reg, original_val);
         auto reg_checks = shadowinst::decoder_conditions(*s_op.reg, reg_part->name, ir);
 
-
+        // Check if everything is still valid.
         CHECK(proccessed - 1 < dst_regs.size()) << proccessed - 1 << " >= " << dst_regs.size();
         auto eq = make_and(ir, reg_checks);
         auto dst_load = ir.CreateLoad(dst_regs[proccessed - 1]);
-        auto reg_addr = reg_part->AddressOf(state_ptr, ir);
+        auto reg_addr = reg_part->AddressOf(state.raw(), ir);
 
         auto store_ty = llvm::cast<llvm::PointerType>(reg_addr->getType())->getElementType();
 
-        auto store = ir.CreateStore(ir.CreateSExtOrTrunc(dst_load, store_ty), reg_addr);
-        LOG(INFO) << remill::LLVMThingToString(store);
-        //auto full_val = load_from_reg(reg);
+        ir.CreateStore(ir.CreateSExtOrTrunc(dst_load, store_ty), reg_addr);
         auto full_val = state.load(ir, reg);
         reg_val = ir.CreateSelect(eq, full_val, reg_val);
       }
     }
 
-    auto eq_func = intrinsics::Eq::CreateFn(parent.module.get(), reg_val->getType());
-    llvm::Value *eq_args[] = {reg_val, expected_reg_val};
-    params.push_back(ir.CreateCall(eq_func, eq_args));
-    LOG(INFO) << remill::LLVMThingToString(params.back());
+    auto eq_func = intrinsics::Eq::CreateFn(ctx.module(), reg_val->getType());
+    params.push_back(ir.CreateCall(eq_func, {reg_val, expected_reg_val}));
   }
+  return params;
+}
+
+
+void Circuit0::InjectSemantic(
+    llvm::BasicBlock *inst_block, llvm::BasicBlock *exit_block, ISEL_view isel) {
+
+  CHECK_NOTNULL(isel.lifted);
+
+  // Initialize the state.
+  auto state = State{inst_block, ctx.state_ptr_type()->getElementType()};
+  auto state_ptr = state.raw();
+  llvm::IRBuilder<> ir(inst_block);
+
+  for (auto [reg, arg, _] : reg_to_args) {
+    state.store(ir, reg, arg);
+  }
+
+  auto begin = intrinsics::make_breakpoint(ir);
+  auto sem_call = CallSemantic(
+    ir, isel.lifted, state_ptr, pc, llvm::UndefValue::get(ctx.memory_ptr_type()));
+  auto end = intrinsics::make_breakpoint(ir);
+
+  llvm::InlineFunctionInfo info;
+  llvm::InlineFunction(sem_call, info);
+
+  // Create encoding comparisons
+  auto params = ByteFragments(ir, isel);
+  auto fragments_size = params.size();
+
+  // Collect annotated instructions - this is the way separate components
+  // of the lfiting pipleline communicate
+  auto collected = shadowinst::collect_annotated(begin, end);
+  auto dst_intrinsics = std::move(collected["circuitous.dst.reg"]);
+  auto &extra_params = collected["circuitous.verify_fn_args"];
+  params.insert(params.end(), extra_params.begin(), extra_params.end());
+
+  begin->eraseFromParent();
+  end->eraseFromParent();
+
+  auto dst_regs = LowerDstRegs(dst_intrinsics);
+  // LowerDstRegs may have added some instructions.
+  ir.SetInsertPoint(inst_block);
+  auto additional_checks = HandleDstRegs(ir, dst_regs, isel, state);
+  params.insert(params.end(), additional_checks.begin(), additional_checks.end());
 
   // Call the instruction verification function. This returns `1` iff we
   // verified the isel decoding (first argument) and if all other arguments
   // (register comparisons) are true.
   ir.SetInsertPoint(exit_block);
-  auto call = ir.CreateCall(parent.verify_inst_func, params);
-  AddMetadata(call, bytes_fragments_count_kind, fragments_size);
+  auto call = intrinsics::make_verify(ir, params);
+  AddMetadata(call, CircuitBuilder::bytes_fragments_count_kind, fragments_size);
   verified_insts.push_back(call);
 }
 
-std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
+std::vector<llvm::Value *> Circuit0::ByteFragments(
     llvm::IRBuilder<> &ir, ISEL_view isel) {
 
   // Reorders bytes so that they can be matched to extract from instruction
@@ -998,6 +674,7 @@ std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
   auto generate_raw_bytes = [](auto full, uint64_t from, uint64_t to) {
     std::string out;
     while(true) {
+      // NOTE(lukas): To handle un-aligned values.
       uint64_t y = std::min(from + (8 - from % 8), to);
       std::string partial = full.substr(from, y - from);
       std::reverse(partial.begin(), partial.end());
@@ -1013,7 +690,7 @@ std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
   auto rinst_size = isel.instruction.bytes.size() * 8;
 
   auto create_bit_check = [&](auto from, auto to) {
-    auto fn = intrinsics::ExtractRaw::CreateFn(parent.module.get(), from, to - from );
+    auto fn = intrinsics::ExtractRaw::CreateFn(ctx.module(), from, to - from );
 
     std::string full_inst;
     // Encoding check needed since `x` is unsigned.
@@ -1032,14 +709,12 @@ std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
     auto expected_v = ir.getInt(llvm::APInt(size, expected, 2));
     const auto rhs = remill::NthArgument(circuit_fn, 0);
     auto x = ir.CreateCall(fn, {rhs});
-    auto y = ir.CreateCall(
-      intrinsics::BitCompare::CreateFn(parent.module.get(), size), {expected_v, x});
-    return y;
+    return intrinsics::make_bitcompare(ir, {expected_v, x}, size);
   };
 
   auto unknown_regions = isel.shadow.UnknownRegions(rinst_size);
+  // `unknown_regions` are in `[ from, size ]` format.
   for (auto [from, to] : shadowinst::FromToFormat(unknown_regions)) {
-    LOG(INFO) << "[ " << from << " , " << to << " ]";
     out.push_back(create_bit_check(from, to));
   }
 
@@ -1048,12 +723,9 @@ std::vector<llvm::Value *> CircuitBuilder::Circuit0::ByteFragments(
   // TODO(lukas): For now we assume it is padded with 0s.
   auto tail_size = static_cast<uint32_t>(kMaxNumInstBits - rinst_size);
   auto tail = ir.getInt(llvm::APInt(tail_size, 0, false));
-  auto extract_fn =
-      intrinsics::ExtractRaw::CreateFn(parent.module.get(), rinst_size, tail_size);
-  auto compare_fn =
-      intrinsics::BitCompare::CreateFn(parent.module.get(), tail_size);
-  auto extracted = ir.CreateCall(extract_fn, {remill::NthArgument(circuit_fn, 0)});
-  auto compare = ir.CreateCall(compare_fn, {tail, extracted});
+
+  auto extracted = intrinsics::make_raw_extract(ir, rinst_size, tail_size);
+  auto compare = intrinsics::make_bitcompare(ir, {tail, extracted}, tail_size);
   out.push_back(compare);
   return out;
 }
