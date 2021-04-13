@@ -91,7 +91,7 @@ namespace permutate {
     static auto identity_reg() {
       return [](auto &self, auto &flipped) {
         return flipped.type == OpType::kTypeRegister &&
-              self.size == flipped.size;
+               self.reg.size == flipped.reg.size;
       };
     }
   };
