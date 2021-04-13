@@ -612,13 +612,11 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
                                 const llvm::StringRef &buff,
                                 const Optimizations &opts) {
 
-  circuitous::CircuitBuilder builder([&](llvm::LLVMContext &context) {
-    return remill::Arch::Build(&context, remill::GetOSName(os_name),
-                               remill::GetArchName(arch_name));
-  });
+  circuitous::Ctx ctx{ os_name, arch_name };
+  circuitous::CircuitBuilder builder(ctx);
   builder.reduce_imms = opts.reduce_imms;
 
-  const auto arch = builder.arch.get();
+  const auto arch = builder.ctx.arch();
   const auto circuit_func = builder.Build(buff);
 
   const auto module = circuit_func->getParent();
@@ -707,8 +705,16 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
           }
 
           const auto arg_cmp = llvm::cast<llvm::CallInst>(arg_use.get());
+
+          if (intrinsics::OneOf::IsIntrinsic(arg_cmp->getCalledFunction())) {
+            importer.Visit(circuit_func, arg_cmp);
+            verify_inst->AddUse(importer.val_to_op[arg_cmp]);
+            continue;
+          }
+
           CHECK(intrinsics::Eq::IsIntrinsic(arg_cmp->getCalledFunction()) ||
-                intrinsics::BitCompare::IsIntrinsic(arg_cmp->getCalledFunction()));
+                intrinsics::BitCompare::IsIntrinsic(arg_cmp->getCalledFunction()) ||
+                intrinsics::OneOf::IsIntrinsic(arg_cmp->getCalledFunction()));
 
           const auto proposed_val = arg_cmp->getArgOperand(0u);
           const auto expected_val = arg_cmp->getArgOperand(1u);
@@ -756,9 +762,8 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
             }
 
             op = impl->Create<DecodeCondition>();
-
           } else {
-            LOG(FATAL) << "Unexpected argument: "
+            LOG(WARNING) << "Unexpected argument: "
                        << remill::LLVMThingToString(expected_val);
           }
 
