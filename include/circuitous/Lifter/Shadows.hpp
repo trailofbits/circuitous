@@ -13,6 +13,12 @@
 #include <unordered_set>
 #include <vector>
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-conversion"
+#pragma clang diagnostic ignored "-Wconversion"
+#include <glog/logging.h>
+#pragma clang diagnostic pop
+
 #include <remill/Arch/Instruction.h>
 
 namespace circuitous::shadowinst {
