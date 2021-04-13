@@ -27,37 +27,6 @@
 
 namespace circuitous {
 
-struct ImmAsIntrinsics : public intrinsics::Extract {
-  // [from, size], regions cannot overlap!
-  using imm_regions_t = std::map<uint64_t, uint64_t>;
-  using op_imm_regions_t = std::map<remill::Operand *, imm_regions_t>;
-  std::unordered_map<remill::Instruction *, op_imm_regions_t> regions = {};
-
-  void AddImmRegions(remill::Instruction *ptr, op_imm_regions_t value) {
-    // We already have some immediate regions associated with this instruction
-    // - while adding the new ones can be a valid use case it is not atm.
-    // Also it is not clear what the effect on the existing should be
-    // union, replace, something else?
-    if (regions.count(ptr)) {
-      LOG(FATAL) << "Inserting new imm region map for present instruction";
-    }
-    regions[ptr] = std::move(value);
-  }
-
-  using functions_t = std::vector<llvm::Function *>;
-  // NOTE(lukas): Technically We probably do not need the `remill::Instruction *`
-  //              since every instruction has unique Operands; therefore having
-  //              just remill::Operand * as keys should be enough.
-  functions_t GetImmediates(llvm::Module *module, remill::Instruction *inst,
-                            remill::Operand *op) {
-    functions_t out;
-    for (auto &[from, to] : regions[inst][op]) {
-      out.push_back(CreateFn(module, from, to));
-    }
-    return out;
-  }
-};
-
 struct WithShadow : public intrinsics::Extract {
   // TODO(lukas): We do not have it at the time of the construction (yet at least)
   //              so we cannot take it by `const &`.
@@ -88,10 +57,11 @@ struct WithShadow : public intrinsics::Extract {
   }
 };
 
-struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics, WithShadow {
+struct InstructionLifter : remill::InstructionLifter, WithShadow {
   using parent = remill::InstructionLifter;
-  using parent::parent;
+  using functions_t = std::vector<llvm::Function *>;
 
+  using parent::parent;
   using parent::LiftIntoBlock;
 
 
@@ -101,8 +71,7 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics, WithShado
   }
 
   auto LiftIntoBlock(remill::Instruction &inst, llvm::BasicBlock *block,
-                     bool is_delayed, const op_imm_regions_t &imm_regions) {
-      this->AddImmRegions(&inst, imm_regions);
+                     bool is_delayed) {
       auto lift_status = this->parent::LiftIntoBlock(inst, block, is_delayed);
 
       // If the instruction was not lifted correctly we do not wanna do anything
@@ -156,7 +125,6 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics, WithShado
   llvm::Value *LiftOperand(remill::Instruction &inst, llvm::BasicBlock *bb,
                            llvm::Value *state_ptr, llvm::Argument *arg,
                            remill::Operand &op) override {
-    LOG(INFO) << "LiftOperand: " << static_cast<uint16_t>(current_op);
     auto out = this->parent::LiftOperand(inst, bb, state_ptr, arg, op);
     current_op += 1;
     return out;
@@ -178,8 +146,7 @@ struct InstructionLifter : remill::InstructionLifter, ImmAsIntrinsics, WithShado
       return HideValue(constant_imm, bb, size);
     }
 
-    auto imm_getters = ImmediateOperand(module);
-    auto inst_fn = ChooseImm(arch_op, imm_getters);
+    auto inst_fn = ChooseImm(arch_op, ImmediateOperand(module));
     // Similar situation as with empty map
     if (!inst_fn) {
       return HideValue(constant_imm, bb, size);
