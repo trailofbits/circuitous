@@ -60,6 +60,23 @@ namespace impl {
       }
       return out;
     }
+
+    template<typename CB>
+    static void ForAllIn(llvm::Function *trg, CB &&cb) {
+      auto module = trg->getParent();
+      std::vector<llvm::CallInst *> call_insts;
+      for (auto fn : All(module)) {
+        for (auto user : fn->users()) {
+          if (auto call = llvm::dyn_cast<llvm::CallInst>(user);
+              call && call->getParent()->getParent() == trg) {
+            call_insts.push_back(call);
+          }
+        }
+      }
+      for (auto call: call_insts) {
+        cb(call);
+      }
+    }
   };
 
   template<typename Self_t>
