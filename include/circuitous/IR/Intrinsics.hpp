@@ -322,14 +322,29 @@ auto make_xor(llvm::IRBuilder<> &ir, const C &args) {
   return ir.CreateCall(xor_fn, args);
 }
 
+template<typename C>
+auto make_verify(llvm::IRBuilder<> &ir, const C &args) {
+  return impl::implement_call<VerifyInst>(ir, args);
+}
+
 template<typename ...Args>
 auto make_extract(llvm::IRBuilder<> &ir, Args &&...args) {
   return impl::implement_call<Extract>(ir, {}, std::forward<Args>(args)...);
 }
 
 template<typename ...Args>
+auto make_raw_extract(llvm::IRBuilder<> &ir, Args &&...args) {
+  return impl::implement_call<ExtractRaw>(ir, {}, std::forward<Args>(args)...);
+}
+
+template<typename ...Args>
 auto make_alloca(llvm::IRBuilder<> &ir, Args &&...args) {
   return impl::implement_call<AllocateDst>(ir, {}, std::forward<Args>(args)...);
+}
+
+template<typename C = std::vector<llvm::Value *>, typename ...Args>
+auto make_bitcompare(llvm::IRBuilder<> &ir, const C &c_args, Args &&...args) {
+  return impl::implement_call<BitCompare>(ir, c_args, std::forward<Args>(args)...);
 }
 
 static inline auto make_breakpoint(llvm::IRBuilder<> &ir) {
