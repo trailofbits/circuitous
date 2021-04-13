@@ -21,6 +21,19 @@
 #pragma clang diagnostic pop
 
 namespace circuitous {
+
+  static inline void EraseFn(llvm::Module *module, const std::string &fn_name) {
+    if (auto fn = module->getFunction(fn_name)) {
+      fn->eraseFromParent();
+    }
+  }
+
+  static inline void EraseFns(llvm::Module *module, const std::vector<std::string> &fns) {
+    for (auto &fn : fns) {
+      EraseFn(module, fn);
+    }
+  }
+
   static inline std::string LLVMName(llvm::Value *val,
                                      const std::string &def = "(name not set)") {
     if (!val->hasName()) {
