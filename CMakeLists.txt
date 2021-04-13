@@ -61,6 +61,7 @@ target_link_libraries(circuitous_ir PUBLIC circuitous_settings)
 add_library(circuitous_lifter STATIC
   lib/Lifter/CircuitBuilder.cpp
   lib/Lifter/Remill.cpp
+  lib/Lifter/BaseLifter.cpp
 )
 
 target_include_directories(circuitous_lifter PUBLIC circuitous_settings)
