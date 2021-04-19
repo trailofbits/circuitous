@@ -9,7 +9,9 @@
 #include <circuitous/Lifter/Shadows.hpp>
 #include <circuitous/Lifter/ShadowMat.hpp>
 
+#include <remill/Arch/Arch.h>
 #include <remill/Arch/Instruction.h>
+#include <remill/BC/IntrinsicTable.h>
 #include <remill/BC/Lifter.h>
 #include <remill/BC/Util.h>
 
@@ -38,13 +40,12 @@ struct WithShadow : public intrinsics::Extract {
 
   auto &CurrentShade() { return shadow->operands[current_op]; }
 
-  auto ImmediateOperand(llvm::Module *module) {
-    auto &current = CurrentShade();
-    CHECK(current.immediate);
-    CHECK(current.immediate->size() >= 1);
+  auto ImmediateOperand(llvm::Module *module, const shadowinst::Immediate &s_imm) {
+    auto &current = s_imm;
+    CHECK(current.size() >= 1);
 
     std::vector<llvm::Function *> out;
-    for (auto [from, to] : *current.immediate) {
+    for (auto [from, to] : current) {
       out.push_back(CreateFn(module, from, to));
     }
     return out;
@@ -105,7 +106,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
       return lift_status;
   }
 
-  llvm::Function *ChooseImm(remill::Operand &arch_op, const functions_t &funcs) {
+  llvm::Function *ChooseImm(uint64_t arch_op_size, const functions_t &funcs) {
     CHECK(funcs.size());
     if (funcs.size() == 1) {
       return funcs[0];
@@ -123,7 +124,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
 
     for (auto fn : funcs) {
       const auto &[from, size] = this->ParseArgs(fn);
-      if (size == arch_op.size || (arch_op.size % size == 0 && size % 8 == 0 ) ) {
+      if (size == arch_op_size || (arch_op_size % size == 0 && size % 8 == 0 ) ) {
         set_candidate(fn);
       }
     }
@@ -133,6 +134,16 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
   llvm::Value *HideValue(llvm::Value *val, llvm::BasicBlock *bb, uint64_t size) {
     llvm::IRBuilder<> ir(bb);
     return ir.CreateCall(intrinsics::InputImmediate::CreateFn(bb->getModule(), size), val);
+  }
+
+  template<typename I>
+  llvm::Value *HideValue(llvm::BasicBlock *bb, I val) {
+    llvm::IRBuilder<> ir(bb);
+    auto as_constant = llvm::ConstantInt::get(word_type,
+                                              static_cast<uint64_t>(val),
+                                              std::is_signed_v<I>);
+    auto intrinsic = intrinsics::InputImmediate::CreateFn(bb->getModule(), word_type);
+    return ir.CreateCall(intrinsic, { as_constant });
   }
 
   llvm::Value *LiftOperand(remill::Instruction &inst, llvm::BasicBlock *bb,
@@ -159,7 +170,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
       return HideValue(constant_imm, bb, size);
     }
 
-    auto inst_fn = ChooseImm(arch_op, ImmediateOperand(module));
+    auto inst_fn = ChooseImm(arch_op.size, ImmediateOperand(module, *CurrentShade().immediate));
     // Similar situation as with empty map
     if (!inst_fn) {
       return HideValue(constant_imm, bb, size);
@@ -242,6 +253,124 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     return ir.CreateSExtOrTrunc(dst(selected), concrete->getType());
   }
 
+  llvm::Value *LiftSReg(llvm::BasicBlock *block,
+                        llvm::Value *state_ptr,
+                        const shadowinst::Reg &s_reg)
+  {
+    llvm::IRBuilder<> ir(block);
+    auto zero = llvm::ConstantInt::get(word_type, 0, false);
+
+    auto locate_reg = [&](auto name) {
+      return this->parent::LoadWordRegValOrZero(block, state_ptr, name, zero);
+    };
+
+
+    // We need to bump the ir builder after the instructions injected
+    // by `locate_reg`.
+    auto safe_locate_reg = [&](auto name, auto &ir) {
+      auto retrieved = locate_reg(name);
+      ir.SetInsertPoint(block);
+      return retrieved;
+    };
+
+    auto [xor_all, selected] = shadowinst::make_decoder_selects(s_reg, ir, safe_locate_reg);
+    // Nothing was there to be chained together!
+    if (!selected) {
+      return this->parent::LoadWordRegValOrZero(block, state_ptr, "", zero);
+    }
+
+    AddMetadata(xor_all, "circuitous.verify_fn_args", current_op);
+    return selected;
+  }
+
+
+  llvm::Value *LiftSReg(
+      llvm::BasicBlock *block, llvm::Value *state_ptr,
+      const std::optional<shadowinst::Reg> &maybe_s_reg,
+      const remill::Operand &r_op)
+  {
+    auto zero = llvm::ConstantInt::get(word_type, 0, false);
+    if (!maybe_s_reg) {
+      return this->LoadWordRegValOrZero(block, state_ptr, r_op.reg.name, zero);
+    }
+    return LiftSReg(block, state_ptr, *maybe_s_reg);
+  }
+
+  template<typename I>
+  llvm::Value *LiftSImmediate(
+      llvm::BasicBlock *block, const std::optional<shadowinst::Immediate> &maybe_s_imm,
+      I concrete_val)
+  {
+    if (!maybe_s_imm || maybe_s_imm->size() == 0) {
+      return HideValue(block, concrete_val);
+    }
+    auto &s_imm = *maybe_s_imm;
+
+    auto arch_op_size = sizeof(I) * 8;
+    auto inst_fn = ChooseImm(arch_op_size, ImmediateOperand(module, s_imm));
+    // Similar situation as with empty map
+    if (!inst_fn) {
+      return HideValue(block, concrete_val);
+    }
+    llvm::IRBuilder<> ir(block);
+    llvm::Value * hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
+
+    auto expected_type = llvm::IntegerType::get(*llvm_ctx, static_cast<uint32_t>(arch_op_size));
+    if (hidden_imm->getType() != expected_type) {
+      LOG(INFO) << "Coercing immediate operand of type"
+                << remill::LLVMThingToString(hidden_imm->getType())
+                << "to type"
+                << remill::LLVMThingToString(expected_type);
+      // NOTE(lukas): SExt used as it should be generally safer (we want to preserve)
+      //              the sign bit.
+      if constexpr (std::is_signed_v< I >) {
+        hidden_imm = ir.CreateSExtOrTrunc(hidden_imm, expected_type);
+      } else {
+        hidden_imm = ir.CreateZExtOrTrunc(hidden_imm, expected_type);
+      }
+    }
+    auto x = HideValue(hidden_imm, block, arch_op_size);
+    return x;
+  }
+
+  llvm::Value *LiftAddressOperand(
+      remill::Instruction &rinst, llvm::BasicBlock *block, llvm::Value *state_ptr,
+      llvm::Argument *arg, remill::Operand &r_op) override
+  {
+    auto concrete = this->parent::LiftAddressOperand(rinst, block, state_ptr, arg, r_op);
+    if (!CurrentShade().address) {
+      return concrete;
+    }
+    auto &s_base_reg = CurrentShade().address->base_reg;
+    auto base_reg = LiftSReg(block, state_ptr, s_base_reg, r_op);
+    auto index_reg = LiftSReg(block, state_ptr, CurrentShade().address->index_reg, r_op);
+    CHECK(index_reg);
+
+    auto scale = LiftSImmediate(
+        block,
+        CurrentShade().address->scale,
+        static_cast<uint64_t>(r_op.addr.scale));
+    CHECK(scale);
+    auto displacement = LiftSImmediate(block, CurrentShade().address->displacement, r_op.addr.displacement);
+
+    auto zero = llvm::ConstantInt::get(word_type, 0, false);
+    auto segment_reg = this->parent::LoadWordRegValOrZero(
+        block, state_ptr, r_op.addr.segment_base_reg.name, zero);
+
+    llvm::IRBuilder<> ir(block);
+
+    llvm::Value *out = ir.CreateAdd(segment_reg, base_reg);
+    auto scale_shift = ir.CreateShl(ir.getIntN(static_cast<uint32_t>(word_size), 1), scale);
+    auto scale_factor = ir.CreateMul(scale_shift, index_reg);
+    out = ir.CreateAdd(out, scale_factor);
+    out = ir.CreateAdd(out, displacement);
+
+    if (r_op.addr.address_size < word_size) {
+      auto new_t = llvm::Type::getIntNTy(*llvm_ctx, static_cast<uint32_t>(r_op.addr.address_size));
+      return ir.CreateZExt(ir.CreateTrunc(out, new_t), word_type);
+    }
+    return out;
+  }
 };
 
 } // namespace circuitous
