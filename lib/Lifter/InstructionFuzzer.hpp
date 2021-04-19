@@ -273,7 +273,11 @@ struct InstructionFuzzer {
           std::reverse(op_bits[i].begin(), op_bits[i].end());
           shadow_inst.Add<shadowinst::Reg>(op_bits[i]);
           auto &s_op = shadow_inst.operands.back();
-          PopulateTranslationTable(*s_op.reg, i);
+          auto get_reg = [&](auto &from) -> remill::Operand::Register & {
+            CHECK(from.operands[i].type == OpType::kTypeRegister);
+            return from.operands[i].reg;
+          };
+          PopulateTranslationTable(*s_op.reg, get_reg);
           break;
         }
         case OpType::kTypeImmediate : {
@@ -288,7 +292,6 @@ struct InstructionFuzzer {
     }
 
     ResolveHusks(shadow_inst);
-    LOG(INFO) << shadow_inst.to_string();
     return shadow_inst;
   }
 
@@ -363,20 +366,27 @@ struct InstructionFuzzer {
       std::reverse(husk_bits.begin(), husk_bits.end());
       for (auto &[i, op] : group) {
         s_inst.Replace(i, op->type, husk_bits);
-        //s_op->reg = std::make_optional<shadowinst::Reg>(husk_bits);
+        auto x = i;
+        auto get_reg = [=](auto &from) -> remill::Operand::Register & {
+          CHECK(from.operands[x].type == OpType::kTypeRegister);
+          return from.operands[x].reg;
+        };
+
         if (op->type == OpType::kTypeRegister) {
-          PopulateTranslationTable(*s_inst[i].reg, i);
+          PopulateTranslationTable(*s_inst[i].reg, get_reg);
         }
       }
     }
   }
 
-  void PopulateTranslationTable(shadowinst::Reg &shadow_reg, std::size_t op_idx)
+  // `Getter` takes an remill::Operand and returns the register we to compare against.
+  // This is so we can get nested registers as well (for example in `Address`)
+  template<typename Getter>
+  void PopulateTranslationTable(shadowinst::Reg &shadow_reg, Getter &&get_reg)
   {
-    LOG(INFO) << "\t\t\t" << shadow_reg.region_bitsize();
     // TODO(lukas): This is 100% arbitrary check, I am curious
     //              if it fires (and how often)
-    CHECK(shadow_reg.region_bitsize() <= 6);
+    LOG_IF(WARNING, shadow_reg.region_bitsize() <= 6);
 
     //auto idxs = shadow_reg.region_idxs();
     std::vector<uint64_t> idxs;
@@ -385,7 +395,6 @@ struct InstructionFuzzer {
       for (uint64_t i = 0; i < size; ++i) {
         idxs.push_back(afrom);
         ++afrom;
-        LOG(INFO) << "Adjusted idx: " << afrom;
       }
     }
     auto yield = [&](auto bytes) {
@@ -405,7 +414,7 @@ struct InstructionFuzzer {
         LOG(WARNING) << rinst.function;
         return;
       }
-      auto &reg = tmp.operands[op_idx];
+      const auto &reg = get_reg(tmp);
 
       std::vector<bool> out;
       std::stringstream ss;
@@ -415,10 +424,12 @@ struct InstructionFuzzer {
         out.push_back((byte >> (7 - (idx % 8))) & 1u);
         ss << out.back();
       }
-      LOG(INFO) << shadowinst::to_binary(bytes);
-      LOG(INFO) << shadowinst::to_hex(bytes);
-      LOG(INFO) << "\t\t" << reg.reg.name << " " << ss.str();
-      shadow_reg.translation_map[reg.reg.name].insert(std::move(out));
+
+      // Register name is empty -- therefore it is most likely not a decoded register
+      if (reg.name.empty()) {
+        return;
+      }
+      shadow_reg.translation_map[reg.name].insert(std::move(out));
     };
     std::string copied_bytes = rinst.bytes;
     _Permutate(copied_bytes, idxs, 0, yield);
