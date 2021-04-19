@@ -208,7 +208,7 @@ namespace circuitous {
           remill::CloneBlockFunctionInto(func);
           auto block = &func->getEntryBlock();
 
-          ILifter lifter(ctx.arch(), intrinsics);
+          ILifter lifter(ctx.arch(), ctx.module());
           lifter.SupplyShadow(&group.shadows[i]);
           auto status = lifter.LiftIntoBlock(inst, block, false);
           if (status == remill::LiftStatus::kLiftedInstruction) {
