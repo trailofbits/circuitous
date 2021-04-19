@@ -128,10 +128,20 @@ namespace circuitous::shadowinst {
 
   template<typename Getter>
   auto make_decoder_selects(const Reg &s_reg, llvm::IRBuilder<> &ir, Getter &&get_reg) {
+    auto merge_conditions = [&](auto &all) -> llvm::Value * {
+      if (all.size() == 1) {
+        return all[0];
+      }
+      return intrinsics::make_xor(ir, all);
+    };
+
     SelectMaker selects{ir};
     for (auto &[reg, all_mats] : s_reg.translation_map) {
       auto conditions = decoder_conditions(s_reg, reg, ir);
-      auto condition = intrinsics::make_xor(ir, conditions);
+
+      // We do not need to emit `xor` if there there would
+      // be only one argument to it.
+      auto condition = merge_conditions(conditions);
       selects.chain(condition, get_reg(reg, ir));
     }
     auto xor_all = intrinsics::make_xor(ir, selects.conditions);
