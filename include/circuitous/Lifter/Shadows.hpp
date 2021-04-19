@@ -171,11 +171,54 @@ namespace circuitous::shadowinst {
     }
   };
 
-  struct Shift : has_regions {
-    using has_regions::has_regions;
+  struct Address {
+    std::optional< Reg > base_reg;
+    std::optional< Reg > index_reg;
+    std::optional< Immediate > scale;
+    std::optional< Immediate > displacement;
+
+    Address() = default;
+
+    bool empty() const {
+      return !(base_reg.has_value() || index_reg.has_value()
+             || scale.has_value() || displacement.has_value());
+    }
+
+    std::string to_string(uint8_t indent) const {
+      auto make_indent = [&](auto count) { return std::string(count * 2, ' '); };
+
+      std::stringstream ss;
+      if (base_reg) {
+        ss << make_indent(indent) << "Base: " << std::endl;
+        ss << base_reg->to_string(indent + 1);
+      } else {
+        ss << "( no base reg )\n";
+      }
+      if (index_reg) {
+        ss << make_indent(indent) << "Index: " << std::endl;
+        ss << index_reg->to_string(indent + 1);
+      } else {
+        ss << "( no index reg )\n";
+      }
+
+      if (scale) {
+        ss << make_indent(indent) << "Scale: " << std::endl;
+        ss << scale->to_string(indent + 1);
+      } else {
+        ss << "( no scale )\n";
+      }
+
+      if (displacement) {
+        ss << make_indent(indent) << "Displacement: " << std::endl;
+        ss << displacement->to_string(indent + 1);
+      } else {
+        ss << "( no displacement )\n";
+      }
+      return ss.str();
+    }
   };
 
-  struct Address : has_regions {
+  struct Shift : has_regions {
     using has_regions::has_regions;
   };
 
@@ -184,18 +227,22 @@ namespace circuitous::shadowinst {
 
     std::optional<Immediate> immediate;
     std::optional<Reg> reg;
+    std::optional<Address> address;
     maybe_region_t shift;
-    maybe_region_t address;
 
     template<typename T, typename ... Args>
     static auto As(Args && ... args) {
-      static_assert(std::is_same_v<T, Immediate> || std::is_same_v<T, Reg>);
+      static_assert(std::is_same_v<T, Immediate>
+                    || std::is_same_v<T, Reg>
+                    || std::is_same_v<T, Address>);
 
       Operand op;
       if constexpr (std::is_same_v<T, Immediate>) {
         op.immediate = Immediate(std::forward<Args>(args)...);
       } else if (std::is_same_v<T, Reg>) {
         op.reg = Reg(std::forward<Args>(args)...);
+      } else if (std::is_same_v<T, Address>) {
+        op.address = Address();
       }
       return op;
     }
@@ -205,7 +252,6 @@ namespace circuitous::shadowinst {
       if (!reg && !immediate && !shift && !address) {
         return false;
       }
-      CHECK(!address.has_value()) << "Cannot handle address";
       CHECK(!shift.has_value()) << "Cannot handle shift";
       CHECK(  static_cast<uint8_t>(reg.has_value())
             + static_cast<uint8_t>(immediate.has_value())
@@ -279,9 +325,27 @@ namespace circuitous::shadowinst {
           }
         }
         if (op.address) {
-          for (auto [from, size] : *op.address) {
-            out[from] = size;
+          if (op.address->base_reg) {
+            for (auto [from, size] : op.address->base_reg->regions) {
+              out[from] = size;
+            }
           }
+          if (op.address->index_reg) {
+            for (auto [from, size] : op.address->index_reg->regions) {
+              out[from] = size;
+            }
+          }
+          if (op.address->scale) {
+            for (auto [from, size] : op.address->scale->regions) {
+              out[from] = size;
+            }
+          }
+          if (op.address->displacement) {
+            for (auto [from, size] : op.address->displacement->regions) {
+              out[from] = size;
+            }
+          }
+
         }
       }
       return out;
@@ -318,9 +382,7 @@ namespace circuitous::shadowinst {
         }
         if (op.address) {
           ss << "  Address" << std::endl;
-          for (auto [from, size] : *op.address) {
-            ss << "    " << from << " , " << size << std::endl;
-          }
+          ss << op.address->to_string(2);
         }
       }
       return ss.str();
