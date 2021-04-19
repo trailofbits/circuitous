@@ -94,6 +94,46 @@ namespace permutate {
                self.reg.size == flipped.reg.size;
       };
     }
+
+    static auto identity_addr() {
+      return [](auto &self_, auto& flipped_) {
+        if (flipped_.type != OpType::kTypeAddress) {
+          return false;
+        }
+        auto &self = self_.addr;
+        auto &flipped = flipped_.addr;
+        uint8_t corrections = 0;
+
+        if (self.segment_base_reg.name != flipped.segment_base_reg.name) {
+          LOG(FATAL) << "Cannot deal with different segment_base_reg";
+        }
+
+        // Base
+        if (self.base_reg.size != flipped.base_reg.size) {
+          ++corrections;
+        }
+
+        // Index * scale (they must be checked together since they can be both missing)
+        uint8_t index_corrections = 0;
+        if (self.index_reg.size != flipped.index_reg.size) {
+          ++index_corrections;
+        }
+        if (self.scale != flipped.scale) {
+          ++index_corrections;
+        }
+        if (self.index_reg.name.empty() || flipped.index_reg.name.empty()) {
+          corrections += (index_corrections) ? 1 : 0;
+        } else {
+          corrections += index_corrections;
+        }
+
+        // Displacement
+        if (self.displacement != flipped.displacement) {
+          ++corrections;
+        }
+        return corrections <= 1;
+      };
+    }
   };
 
   template<typename Next>
@@ -186,6 +226,7 @@ namespace permutate {
       switch(type) {
         case OpType::kTypeImmediate: return Check(original, permutation, items, Next::identity_imm());
         case OpType::kTypeRegister : return Check(original, permutation, items, Next::identity_reg());
+        case OpType::kTypeAddress  : return Check(original, permutation, items, Next::identity_addr());
         default                    : return false;
       }
     }
@@ -249,6 +290,58 @@ struct InstructionFuzzer {
     }
   }
 
+  void DistributeAddr(const std::vector<bool> &bits,
+                      std::size_t idx,
+                      shadowinst::Address &s_addr)
+  {
+    std::vector<std::vector<bool>> distributed_bits = {
+      4, std::vector<bool>(rinst.bytes.size() * 8, false)
+    };
+
+    for (std::size_t i = 0; i < bits.size(); ++i) {
+      if (!bits[i] || !permutations[i]
+          || permutations[i]->operands.size() != rinst.operands.size()) {
+        continue;
+      }
+
+      auto &self = rinst.operands[idx].addr;
+      CHECK(permutations[i]->operands[idx].type == OpType::kTypeAddress);
+      auto &flipped = permutations[i]->operands[idx].addr;
+
+      if (self.base_reg.name != flipped.base_reg.name && !flipped.base_reg.name.empty()) {
+        distributed_bits[0][i] = true;
+      }
+
+      if (self.index_reg.name != flipped.index_reg.name && !flipped.index_reg.name.empty()) {
+        distributed_bits[1][i] = true;
+      }
+
+      if (self.scale != flipped.scale && !flipped.index_reg.name.empty()) {
+        distributed_bits[2][i] = true;
+      }
+
+      if (self.displacement != flipped.displacement) {
+        distributed_bits[3][i] = true;
+      }
+    }
+
+    auto get_base = [&](auto &from) -> remill::Operand::Register & {
+      CHECK(from.operands[idx].type == OpType::kTypeAddress);
+      return from.operands[idx].addr.base_reg;
+    };
+    auto get_index = [&](auto &from) -> remill::Operand::Register & {
+      CHECK(from.operands[idx].type == OpType::kTypeAddress);
+      return from.operands[idx].addr.index_reg;
+    };
+
+    s_addr.base_reg = std::make_optional<shadowinst::Reg>(std::move(distributed_bits[0]));
+    PopulateTranslationTable(*s_addr.base_reg, get_base);
+    s_addr.index_reg = std::make_optional<shadowinst::Reg>(std::move(distributed_bits[1]));
+    PopulateTranslationTable(*s_addr.index_reg, get_index);
+    s_addr.scale = std::make_optional<shadowinst::Immediate>(std::move(distributed_bits[2]));
+    s_addr.displacement = std::make_optional<shadowinst::Immediate>(std::move(distributed_bits[3]));
+  }
+
   auto FuzzOps() {
     shadowinst::Instruction shadow_inst;
     std::vector<std::vector<bool>> op_bits =
@@ -284,6 +377,10 @@ struct InstructionFuzzer {
           std::reverse(op_bits[i].begin(), op_bits[i].end());
           shadow_inst.Add<shadowinst::Immediate>(op_bits[i]);
           break;
+        }
+        case OpType::kTypeAddress: {
+          auto &s_addr = shadow_inst.Add<shadowinst::Address>();
+          DistributeAddr(op_bits[i], i, *s_addr.address);
         }
         default:
           shadow_inst.operands.emplace_back();
