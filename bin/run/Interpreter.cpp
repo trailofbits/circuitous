@@ -14,12 +14,15 @@ namespace circuitous {
 
 Interpreter::Interpreter(Circuit *c) : circuit(c) {}
 
-void Interpreter::SetNodeVal(Operation *op, const llvm::APInt &val) {
-  // CHECK(!node_values.count(op));
+void Interpreter::SetNodeVal(Operation *op, const value_type &val) {
   node_values[op] = val;
 }
 
-llvm::APInt &Interpreter::GetNodeVal(Operation *op) {
+void Interpreter::SetNodeVal(Operation *op, const raw_value_type &val) {
+  node_values[op] = {val};
+}
+
+auto Interpreter::GetNodeVal(Operation *op) -> value_type {
   auto iter{node_values.find(op)};
   CHECK(iter != node_values.end());
   return iter->second;
@@ -41,10 +44,13 @@ void Interpreter::SetInputRegisterValue(const std::string &name,
   LOG(WARNING) << "Input register " << name << " not present in circuit.";
 }
 
-uint64_t Interpreter::GetOutputRegisterValue(const std::string &name) {
+std::optional<uint64_t> Interpreter::GetOutputRegisterValue(const std::string &name) {
   for (auto reg : circuit->Attr<OutputRegister>()) {
     if (reg->reg_name == name) {
-      return GetNodeVal(reg).getLimitedValue();
+      if (auto val = GetNodeVal(reg)) {
+        return val->getLimitedValue();
+      }
+      return {};
     }
   }
 
@@ -80,6 +86,7 @@ void Interpreter::VisitConstant(Constant *op) {
 }
 
 void Interpreter::VisitInputRegister(InputRegister *op) {
+  // TODO(lukas): Should this set undef?
   DLOG(INFO) << "VisitInputRegister: " << op->Name();
   CHECK(node_values.count(op))
       << "Input register " << op->reg_name << " bits not set.";
@@ -117,52 +124,70 @@ void Interpreter::VisitHint(Hint *op) {
 }
 
 void Interpreter::VisitUndefined(Undefined *op) {
+  LOG(FATAL) << "TODO(lukas): Verify that undefs are working as intended";
   DLOG(INFO) << "VisitUndefined: " << op->Name();
   // TODO(surovic): See VisitOutputRegister()
   if (!node_values.count(op)) {
-    SetNodeVal(op, llvm::APInt(op->size, 0ULL));
+    SetNodeVal(op, Undef());
   }
 }
 
 void Interpreter::VisitExtract(Extract *op) {
   DLOG(INFO) << "VisitExtract: " << op->Name();
-  auto val{GetNodeVal(op->operands[0])};
+  auto val = GetNodeVal(op->operands[0]);
+  if (!val) {
+    return SetNodeVal(op, val);
+  }
+
   auto pos{op->low_bit_inc};
   auto num{op->high_bit_exc - pos};
-  node_values[op] = val.extractBits(num, pos);
+  SetNodeVal(op, val->extractBits(num, pos));
 }
 
 // TODO(lukas): Some non-align cases most likely need some extra handling
 //              which is currently not happening? Investigate.
 void Interpreter::VisitConcat(Concat *op) {
-    llvm::APInt build{ op->size, 0, false };
-    auto current = 0u;
-    for (auto i = 0u; i < op->operands.Size(); ++i) {
-        build.insertBits(node_values[op->operands[i]], current);
-        current += op->operands[i]->size;
-    }
-    node_values[op] = build;
+  DLOG(INFO) << "Visit concat: " << op->Name();
+  llvm::APInt build{ op->size, 0, false };
+  auto current = 0u;
+  for (auto i = 0u; i < op->operands.Size(); ++i) {
+      auto val = GetNodeVal(op->operands[i]);
+      if (!val) {
+        return SetNodeVal(op, val);
+      }
+      build.insertBits(*val, current);
+      current += op->operands[i]->size;
+  }
+  SetNodeVal(op, build);
 }
 
 void Interpreter::VisitNot(Not *op) {
-  LOG(INFO) << "Visit Not" << op->Name();
+  DLOG(INFO) << "Visit Not" << op->Name();
   auto val = GetNodeVal(op->operands[0]);
+  if (!val) {
+    return SetNodeVal(op, val);
+  }
   // NOTE(lukas): To avoid confusion the copy is here explicitly, since `negate` does
   //              change the APInt instead of returning a new one.
-  llvm::APInt copy = val;
+  llvm::APInt copy = *val;
   copy.negate();
   SetNodeVal(op, copy);
 }
 
 void Interpreter::VisitLLVMOperation(LLVMOperation *op) {
   DLOG(INFO) << "VisitLLVMOperation: " << op->Name();
-  auto lhs{[this, op] { return GetNodeVal(op->operands[0]); }};
-  auto rhs{[this, op] { return GetNodeVal(op->operands[1]); }};
+  if (!ValidChildren(op)) {
+    return SetNodeVal(op, Undef());
+  }
+
+  auto lhs{[this, op] { return *GetNodeVal(op->operands[0]); }};
+  auto rhs{[this, op] { return *GetNodeVal(op->operands[1]); }};
+
   switch (op->llvm_op_code) {
     case llvm::Instruction::OtherOps::Select: {
-      auto selector = GetNodeVal(op->operands[0]);
-      auto true_val = GetNodeVal(op->operands[1]);
-      auto false_val = GetNodeVal(op->operands[2]);
+      auto selector = *GetNodeVal(op->operands[0]);
+      auto true_val = *GetNodeVal(op->operands[1]);
+      auto false_val = *GetNodeVal(op->operands[2]);
       SetNodeVal(op, selector.getBoolValue() ? true_val : false_val );
     } break;
 
@@ -257,19 +282,22 @@ void Interpreter::VisitLLVMOperation(LLVMOperation *op) {
 void Interpreter::VisitParity(Parity *op) {
   DLOG(INFO) << "VisitParity: " << op->Name();
   auto val{GetNodeVal(op->operands[0])};
-  SetNodeVal(op, llvm::APInt(1, val.countPopulation() % 2));
+  if (!val) { return SetNodeVal(op, val); }
+  SetNodeVal(op, llvm::APInt(1, val->countPopulation() % 2));
 }
 
 void Interpreter::VisitPopulationCount(PopulationCount *op) {
   DLOG(INFO) << "VisitPopulationCount: " << op->Name();
   auto val{GetNodeVal(op->operands[0])};
-  SetNodeVal(op, llvm::APInt(op->size, val.countPopulation()));
+  if (!val) { return SetNodeVal(op, val); }
+  SetNodeVal(op, llvm::APInt(op->size, val->countPopulation()));
 }
 
 void Interpreter::VisitDecodeCondition(DecodeCondition *op) {
   DLOG(INFO) << "VisitDecodeCondition: " << op->Name();
   auto inst{GetNodeVal(op->operands[0])};
   auto bits{GetNodeVal(op->operands[1])};
+  if (!inst || !bits) { return SetNodeVal(op, Undef()); }
   SetNodeVal(op, inst == bits ? TrueVal() : FalseVal());
 }
 
@@ -334,9 +362,12 @@ void Interpreter::VisitHintCondition(HintCondition *op) {
 
 void Interpreter::VisitVerifyInstruction(VerifyInstruction *op) {
   DLOG(INFO) << "VisitVerifyInstruction: " << op->Name();
-  auto result{GetNodeVal(op->operands[0])};
+  if (!ValidChildren(op)) {
+    return SetNodeVal(op, FalseVal());
+  }
+  auto result{*GetNodeVal(op->operands[0])};
   for (auto i = 1U; i < op->operands.Size(); ++i) {
-    result = result & GetNodeVal(op->operands[i]);
+    result = result & *GetNodeVal(op->operands[i]);
   }
   SetNodeVal(op, result);
 }
@@ -369,7 +400,8 @@ bool Interpreter::Run() {
       Visit(op);
     }
     // Verification successful
-    if (GetNodeVal(op).getBoolValue()) {
+    CHECK(GetNodeVal(op));
+    if (GetNodeVal(op)->getBoolValue()) {
       return true;
     }
   }
