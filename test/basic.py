@@ -482,14 +482,14 @@ test_reg_parts = {
   .case(run_bytes = intel(["mov r8b, cl"]), R=True)
   .case(run_bytes = intel(["mov r8b, r9b"]), R=True),
 
-  ModelTest("xor rnw rnw - full").tags({"reduce_regs", "wip2"})
+  ModelTest("xor rnw rnw - full").tags({"reduce_regs"})
   .bytes(intel(["xor r10w, ax"]))
   .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
   .case(run_bytes = intel(["xor dx, r8w"]), R=True)
   .case(run_bytes = intel(["xor r8w, cx"]), R=True)
   .case(run_bytes = intel(["xor r8w, r9w"]), R=True),
 
-  ModelTest("xor rnb rnb - full").tags({"reduce_regs", "wip2"})
+  ModelTest("xor rnb rnb - full").tags({"reduce_regs"})
   .bytes(intel(["xor r10b, bl"]))
   .DI(S(0x250).aflags(0).RAX(0x12).RBX(0x13).RCX(0x14).RDX(0x15).R8(0x16).R9(0x17))
   .case(run_bytes = intel(["xor al, r8b"]), R=True)
@@ -514,11 +514,11 @@ test_reg_parts = {
   .case(run_bytes = intel(["mov cl, bh"]), R=True)
   .case(run_bytes = intel(["mov cl, bl"]), R=True),
 
-  ModelTest("xor 16 lift").tags({"reduce_regs", "wip3"})
+  ModelTest("xor 16 lift").tags({"reduce_regs"})
   .DI(S(0x250))
   .bytes(intel(["xor al, r8b"])).case(run_bytes = 0, R=True),
 
-  ModelTest("xor 32 lift").tags({"reduce_regs", "wip3"})
+  ModelTest("xor 32 lift").tags({"reduce_regs"})
   .DI(S(0x250))
   .bytes(intel(["xor eax, ebx"])).case(run_bytes = 0, R=True),
 
@@ -528,7 +528,7 @@ test_reg_parts = {
   .case(run_bytes = intel(["adc ah, 0xf"]), R=True),
 
 
-  ModelTest("xor/adc fractions").tags({"reduce_args", "wip"})
+  ModelTest("xor/adc fractions").tags({"reduce_args"})
   .bytes(intel(["xor al, ah", "xor al, 0xa", "xor ax, bx", "xor ax, 0x1",
                 "xor ah, al", "xor ah, 0xb",
                 "adc r8b, al", "adc r8b, 0xe", "adc ax, bx", "adc ax, 0x2",
