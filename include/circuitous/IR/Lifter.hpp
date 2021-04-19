@@ -59,11 +59,24 @@ struct WithShadow : public intrinsics::Extract {
 
 struct InstructionLifter : remill::InstructionLifter, WithShadow {
   using parent = remill::InstructionLifter;
+  using arch_ptr_t = const remill::Arch *;
+
   using functions_t = std::vector<llvm::Function *>;
 
-  using parent::parent;
   using parent::LiftIntoBlock;
 
+  llvm::Module *module;
+  llvm::LLVMContext *llvm_ctx;
+  llvm::IntegerType *word_type;
+  uint64_t word_size = 0;
+
+  InstructionLifter(arch_ptr_t arch_, llvm::Module *module_)
+      : parent(arch_, remill::IntrinsicTable(module_)),
+        module(module_),
+        llvm_ctx(&module_->getContext()),
+        word_type(llvm::Type::getIntNTy(*llvm_ctx, arch_->address_size)),
+        word_size(arch_->address_size)
+  {}
 
   void SupplyShadow(shadowinst::Instruction *shadow_) {
     CHECK(!shadow) << "Shadow is already set, possible error";
