@@ -141,14 +141,14 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   Operation *CreateMemoryRead(llvm::CallInst *read_call, unsigned size) {
     auto &read = val_to_mem_cond[read_call];
     if (read) {
-      verifier->operands.AddUse(read);
+      verifier->AddUse(read);
       return read->operands[ReadMemoryCondition::kHintedValue];
     }
 
-    Hint *expected_addr = impl->hints.Create(arch->address_size);
+    Hint *expected_addr = impl->Create<Hint>(arch->address_size);
     Hint *bytes[kMaxNumBytesRead] = {};
     for (auto i = 0u, j = 0u; i < size; i += 8u, j += 1u) {
-      bytes[j] = impl->hints.Create(8u);
+      bytes[j] = impl->Create<Hint>(8u);
     }
 
     Operation *value_read = nullptr;
@@ -158,7 +158,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       value_read = bytes[0u];
 
     } else {
-      value_read = impl->concats.Create(size);
+      value_read = impl->Create<Concat>(size);
       if (arch->MemoryAccessIsLittleEndian()) {
         for (auto i = 0u, j = num_bytes; i < num_bytes; ++i) {
           value_read->AddUse(bytes[--j]);
@@ -170,19 +170,14 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       }
     }
 
-    read = impl->memory_reads.Create();
+    read = impl->Create<ReadMemoryCondition>();
     read->AddUse(val_to_op[read_call->getArgOperand(1u)]);
     read->AddUse(expected_addr);
     read->AddUse(value_read);
 
     verifier->AddUse(read);
 
-    for (auto byte : bytes) {
-      if (byte) {
-        byte->weak_conditions.AddUse(read);
-      }
-    }
-
+    LOG(ERROR) << "TODO: Should set weak conditions when reading memory.";
     return value_read;
   }
 
