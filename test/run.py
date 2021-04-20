@@ -439,6 +439,9 @@ def main():
   args.jobs = int(args.jobs)
 
   tests = filter_by_tag(fetch_test(args.sets), args.tags)
+  if not tests:
+    log_error("No tests selected")
+    return
   log_info("Filtered " + str(len(tests)) + " tests.")
   if args.persist:
     log_info("Creating persistent directory")
