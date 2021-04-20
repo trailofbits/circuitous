@@ -338,6 +338,10 @@ struct InstructionFuzzer {
       return from.operands[idx].addr.index_reg;
     };
 
+    for (auto &bits : distributed_bits) {
+      std::reverse(bits.begin(), bits.end());
+    }
+
     s_addr.base_reg = std::make_optional<shadowinst::Reg>(std::move(distributed_bits[0]));
     PopulateTranslationTable(*s_addr.base_reg, get_base);
     s_addr.index_reg = std::make_optional<shadowinst::Reg>(std::move(distributed_bits[1]));
