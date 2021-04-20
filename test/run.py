@@ -160,7 +160,13 @@ class Interpret(SimulateCWDMixin):
     pipes = subprocess.Popen(args,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              text=True)
-    check_retcode(pipes, self.component)
+    try:
+      check_retcode(pipes, self.component)
+    except PipelineFail as e:
+      if dbg_verbose:
+        e._cause += "\n" + " ".join(args)
+      raise e
+
     parent.metafiles[case.name + ".result.json"] = self.locate(case.name + ".result.json")
 
     self.update_state(case, self.locate(case.name + ".result.json"))
