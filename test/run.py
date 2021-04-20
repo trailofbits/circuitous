@@ -383,12 +383,19 @@ def filter_by_tag(sets, tags):
 
   log_info("Filtering " + str(len(sets)) + " tests by " + str(tags))
 
+  positive_tags = [x for x in tags if not x.startswith('not_')]
+  negative_tags = [x[4:] for x in tags if x.startswith('not_')]
+  log_info("Include: " + str(positive_tags))
+  log_info("Exclude: " + str(negative_tags))
+
   result = set()
   for test in sets:
+    if test._tags.intersection(negative_tags):
+      continue
     if not include_todo and "todo" in test._tags:
       skipped_todos += len(test.cases)
       continue
-    if 'all' in tags or test._tags.intersection(tags):
+    if 'all' in tags or test._tags.intersection(positive_tags):
       result.add(test)
   log_info("Skipped " + str(skipped_todos) + " todo tests")
   return result
