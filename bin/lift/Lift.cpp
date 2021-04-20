@@ -26,11 +26,11 @@ DEFINE_string(binary_in, "",
 DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
-DEFINE_string(python_out, "", "Path to the output Python file.");
-DEFINE_string(smt_out, "", "Path to the output SMT-LIB2 file.");
+DEFINE_string(python_out, "", "TODO(luaks): Needs update");
+DEFINE_string(smt_out, "", "TODO(lukas): Needs updte");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
 DEFINE_string(optimizations, "",
-              "Comma-separated list of optimizations to run");
+              "TODO(lukas): Not supported atm");
 DEFINE_bool(append, false,
             "Append to output IR files, rather than overwriting.");
 DEFINE_bool(reduce_imms, false,
@@ -146,14 +146,13 @@ void Optimize(circuitous::Circuit *circuit) {
   opt_manager.AddPass("dagify");
   opt_manager.AddPass("popcount2parity");
   opt_manager.AddPass("reducepopcount");
+  // TODO(lukas): Broken fix.
+  //opt_manager.AddPass("extractcommon");
+  opt_manager.AddPass("depbreaker");
 
-  std::stringstream ss;
-  ss << FLAGS_optimizations;
-  for (std::string opt_name; std::getline(ss, opt_name, ',');) {
-    opt_manager.AddPass(opt_name);
-  }
   opt_manager.Run(circuit);
   LOG(INFO) << "Optimizations done.";
+  LOG(INFO) << opt_manager.Stats();
 }
 
 }  // namespace
@@ -184,11 +183,15 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "Debug dumping finished.";
   }
 
+
+  LOG(INFO) << "Debug mode: " << FLAGS_dbg;
+
   if (FLAGS_dbg) {
     Optimize<circuitous::DebugOptimizer<DefaultLog>>(circuit.get());
   } else {
     Optimize<circuitous::DefaultOptimizer<DefaultLog>>(circuit.get());
   }
+
 
   if (!FLAGS_ir_out.empty()) {
     if (FLAGS_ir_out == "-") {
