@@ -136,7 +136,8 @@ namespace circuitous::shadowinst {
 
     using has_regions::has_regions;
 
-    std::unordered_map<reg_t, materializations_t> translation_map;
+    // NOTE(lukas): We want them ordererd.
+    std::map<reg_t, materializations_t> translation_map;
 
     std::string to_string(uint8_t indent=0) const {
       std::stringstream ss;
