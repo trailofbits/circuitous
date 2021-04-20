@@ -275,6 +275,10 @@ struct InstructionFuzzer {
       case remill::Operand::kTypeShiftRegister : return "kTypeShiftRegister";
       case remill::Operand::kTypeImmediate : return "kTypeImmediate";
       case remill::Operand::kTypeAddress : return "kTypeAddress";
+      case remill::Operand::kTypeExpression : return "kTypeExpression";
+      case remill::Operand::kTypeRegisterExpression : return "kTypeRegisterExpression";
+      case remill::Operand::kTypeImmediateExpression : return "kTypeImmediateExpression";
+      case remill::Operand::kTypeAddressExpression : return "kTypeAddressExpression";
     }
   }
 
