@@ -11,7 +11,6 @@
 #include <glog/logging.h>
 #include <llvm/ADT/SmallString.h>
 #include <llvm/IR/BasicBlock.h>
-#include <llvm/IR/CallSite.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Function.h>
@@ -34,6 +33,16 @@
 
 namespace circuitous {
 namespace {
+
+auto CallArgs(llvm::CallInst *call) {
+  std::vector<llvm::Value *> out;
+  for (uint32_t i = 0; i < call->getNumArgOperands(); ++i) {
+    // NOTE(lukas): Check if we do not include the called fn by accident.
+    CHECK(!llvm::isa<llvm::Function>(call->getArgOperand(i)));
+    out.push_back(call->getArgOperand(i));
+  }
+  return out;
+}
 
 // Keeps track of instruction dependencies.
 template <typename T>
@@ -290,13 +299,11 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
   Operation *VisitOneOf(llvm::CallInst *call, llvm::Function *fn) {
     auto one_of = impl->Create<OnlyOneCondition>();
-    for (auto &arg : llvm::CallSite{call}.args()) {
-      arg.get()->print(llvm::errs());
-      llvm::errs().flush();
-      if (!val_to_op.count(arg.get())) {
-        Visit(call->getParent()->getParent(), arg.get());
+    for (auto arg : CallArgs(call)) {
+      if (!val_to_op.count(arg)) {
+        Visit(call->getParent()->getParent(), arg);
       }
-      auto op = val_to_op[arg.get()];
+      auto op = val_to_op[arg];
       one_of->AddUse(op);
     }
     return one_of;

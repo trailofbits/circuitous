@@ -165,11 +165,6 @@ namespace circuitous::shadowinst {
 
   struct Immediate : has_regions {
     using has_regions::has_regions;
-
-    Immediate &operator=(Immediate other) {
-      std::swap(regions, other.regions);
-      return *this;
-    }
   };
 
   struct Address {
