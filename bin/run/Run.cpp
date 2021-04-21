@@ -7,18 +7,21 @@
 #pragma clang diagnostic ignored "-Wconversion"
 #include <gflags/gflags.h>
 #include <glog/logging.h>
-#pragma clang diagnostic pop
-#include <circuitous/IR/IR.h>
-#include <circuitous/IR/Verify.hpp>
-#include <circuitous/Printers.h>
+
 #include <llvm/Support/JSON.h>
+#include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
+#pragma clang diagnostic pop
+
+#include "Interpreter.h"
+
+#include <circuitous/IR/Verify.hpp>
+#include <circuitous/IR/IR.h>
+#include <circuitous/Printers.h>
 
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
-
-#include "Interpreter.h"
 
 DEFINE_string(ir_in, "", "Path to a serialized circuitous IR file.");
 DEFINE_string(json_in, "", "Path to an input state JSON file.");
@@ -121,7 +124,7 @@ int main(int argc, char *argv[]) {
 
   circuitous::Interpreter run(circuit.get());
   // Initialize instruction bits
-  run.SetInstructionBitsValue(*inst);
+  run.SetInstructionBitsValue((*inst).str());
   // Initialize input register state
   for (auto [obj_key, obj_val] : *input_regs_obj) {
     auto reg_name{obj_key.str()};
