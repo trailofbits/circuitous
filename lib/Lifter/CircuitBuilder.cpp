@@ -11,13 +11,14 @@
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/IR/Lifter.hpp>
 
+#include <remill/BC/Compat/CallSite.h>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 #include <llvm/ADT/PostOrderIterator.h>
-#include <llvm/IR/CallSite.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/Codegen/IntrinsicLowering.h>
@@ -397,7 +398,9 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
     }
     // TODO(lukas): This is hack, rework.
     while (true) {
-      auto cs = llvm::CallSite(call_inst->getArgOperand(inst_fragments_prefix));
+      using CS = remill::compat::llvm::CallSite;
+      auto op = call_inst->getArgOperand(inst_fragments_prefix);
+      auto cs = CS(llvm::dyn_cast<llvm::Instruction>(op));
       if (!cs || intrinsics::Eq::IsIntrinsic(cs.getCalledFunction())) {
         break;
       }
@@ -635,7 +638,11 @@ void Circuit0::InjectSemantic(
   auto end = intrinsics::make_breakpoint(ir);
 
   llvm::InlineFunctionInfo info;
+#if LLVM_VERSION_NUMBER < LLVM_VERSION(11, 0)
   llvm::InlineFunction(sem_call, info);
+#else
+  llvm::InlineFunction(*sem_call, info);
+#endif
 
   // Create encoding comparisons
   auto params = ByteFragments(ir, isel);
