@@ -101,7 +101,21 @@ namespace circuitous::shadowinst {
     return llvm::APInt(size_, span, 2);
   }
 
-  // Emit instructions that will encode the `reg_name`
+  // Emit instructions that will check the encoding of the register `reg_name`
+  // First we check each entry of the `translation_map`
+  //
+  // fragment1 = extract.X1.X2()
+  // fragment2 = extract.Y1.Y2()
+  // ...
+  //
+  // Then we need to check the concated value against what's passed in
+  // `translation_map`
+  //
+  // fullN = concat(fragmentN, fragmentN-1, ..., fragment1)
+  // final_check = and fullN translation_map[REG]
+  //
+  // This can also be achieved without concats only with `and`s, but this should
+  // produced a slightly nicer bitcode.
   static inline auto decoder_conditions(
     const Reg &s_reg, const Reg::reg_t &reg_name, llvm::IRBuilder<> &ir)
   {
@@ -109,18 +123,19 @@ namespace circuitous::shadowinst {
 
     std::vector<llvm::Value *> translation_checks;
     for (auto &mats : s_reg.translation_map.find(reg_name)->second) {
-      std::vector<llvm::Value *> reg_fragment_checks;
+      std::vector<llvm::Value *> input_fragments;
       std::size_t current = 0;
 
       for (auto &[from, size] : s_reg.regions) {
         auto extract = intrinsics::make_extract(ir, from, size);
-        auto key = ir.getInt(make_APInt(mats, current, size));
-
-        reg_fragment_checks.push_back(ir.CreateICmpEQ(extract, key));
+        input_fragments.push_back(extract);
         current += size;
       }
-
-      translation_checks.push_back(make_and(ir, reg_fragment_checks));
+      // We need to match the order of the entry in `translation_map`
+      std::reverse(input_fragments.begin(), input_fragments.end());
+      auto full_input = intrinsics::make_concat(ir, input_fragments);
+      auto expected_value = ir.getInt(make_APInt(mats, 0, current));
+      translation_checks.push_back(ir.CreateICmpEQ(full_input, expected_value));
     }
 
     return translation_checks;

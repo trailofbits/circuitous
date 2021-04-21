@@ -97,7 +97,11 @@ namespace circuitous {
 
     static std::string LiftedName(const std::string &bytes) {
       std::stringstream ss;
-      ss << "inst_" << bytes;
+      ss << "inst_";
+      for (std::size_t i = 0; i < bytes.size(); ++i) {
+        ss << std::hex << static_cast<uint32_t>(bytes[i]);
+      }
+      LOG(INFO) << ss.str();
       return ss.str();
     }
 
