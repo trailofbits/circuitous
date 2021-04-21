@@ -39,6 +39,7 @@ class Interpreter : public Visitor<Interpreter> {
   // Operands
   void VisitConstant(Constant *op);
   void VisitInputRegister(InputRegister *op);
+  void VisitInputImmediate(InputImmediate *op);
   void VisitOutputRegister(OutputRegister *op);
   void VisitInputInstructionBits(InputInstructionBits *op);
   void VisitHint(Hint *op);
@@ -46,6 +47,7 @@ class Interpreter : public Visitor<Interpreter> {
   // Operations
   void VisitConcat(Concat *op);
   void VisitExtract(Extract *op);
+  void VisitNot(Not *op);
   void VisitLLVMOperation(LLVMOperation *op);
   void VisitParity(Parity *op);
   void VisitPopulationCount(PopulationCount *op);
@@ -61,5 +63,9 @@ class Interpreter : public Visitor<Interpreter> {
   void VisitCircuit(Circuit *op);
   // Runner
   bool Run();
+
+  std::unordered_map<Operation *, llvm::APInt> values() const {
+    return node_values;
+  }
 };
 }  // namespace circuitous

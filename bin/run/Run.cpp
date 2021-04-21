@@ -9,17 +9,21 @@
 #include <glog/logging.h>
 #pragma clang diagnostic pop
 #include <circuitous/IR/IR.h>
+#include <circuitous/IR/Verify.hpp>
+#include <circuitous/Printers.h>
 #include <llvm/Support/JSON.h>
 #include <llvm/Support/MemoryBuffer.h>
 
 #include <fstream>
 #include <iostream>
+#include <unordered_map>
 
 #include "Interpreter.h"
 
 DEFINE_string(ir_in, "", "Path to a serialized circuitous IR file.");
-DEFINE_string(json_in, "", "Path to a input state JSON file.");
-DEFINE_string(json_out, "", "Path to a output state JSON file.");
+DEFINE_string(json_in, "", "Path to an input state JSON file.");
+DEFINE_string(json_out, "", "Path to an output state JSON file.");
+DEFINE_string(dot_out, "", "Path to dump annotated dot file.");
 
 namespace {
 
@@ -77,6 +81,7 @@ int main(int argc, char *argv[]) {
     LOG(ERROR) << "Error while opening input IR file: " << std::strerror(errno);
     return EXIT_FAILURE;
   }
+
   // Read input state JSON file
   auto maybe_buff{llvm::MemoryBuffer::getFile(FLAGS_json_in)};
   if (!maybe_buff) {
@@ -84,6 +89,7 @@ int main(int argc, char *argv[]) {
                << GetErrorString(maybe_buff);
     return EXIT_FAILURE;
   }
+
   // Parse JSON
   auto maybe_json{llvm::json::parse(maybe_buff.get()->getBuffer())};
   if (!maybe_json) {
@@ -91,6 +97,7 @@ int main(int argc, char *argv[]) {
                << GetErrorString(maybe_json);
     return EXIT_FAILURE;
   }
+
   // Get top level JSON object
   auto input_obj{maybe_json.get().getAsObject()};
   CHECK(input_obj) << "Invalid input state JSON object";
@@ -102,6 +109,12 @@ int main(int argc, char *argv[]) {
   CHECK(input_regs_obj) << "Invalid input registers JSON object";
   // Deserialize circuit from binary IR file
   auto circuit{circuitous::Circuit::Deserialize(ir)};
+
+  const auto &[status, msg] = circuitous::VerifyCircuit(circuit.get());
+  if (!status) {
+    LOG(FATAL) << "Loaded IR is not valid -- Aborting.\n" << msg;
+  }
+
   circuitous::Interpreter run(circuit.get());
   // Initialize instruction bits
   run.SetInstructionBitsValue(*inst);
@@ -129,7 +142,7 @@ int main(int argc, char *argv[]) {
                << ec.message();
     // Dump output register values to JSON
     llvm::json::Object output_regs_obj;
-    for (auto reg : circuit->output_regs) {
+    for (auto reg : circuit->Attr<circuitous::OutputRegister>()) {
       auto key{reg->reg_name};
       output_regs_obj[key] = std::to_string(run.GetOutputRegisterValue(key));
     }
@@ -139,6 +152,15 @@ int main(int argc, char *argv[]) {
     output_obj["result"] = result;
     output_obj["inst_bytes"] = *inst;
     output << llvm::json::Value(std::move(output_obj));
+  }
+
+  if (!FLAGS_dot_out.empty()) {
+    std::unordered_map<circuitous::Operation *, std::string> values;
+    for (auto &[op, val] : run.values()) {
+      values[op] = val.toString(16, false);
+    }
+    std::ofstream os(FLAGS_dot_out);
+    circuitous::PrintDOT(os, circuit.get(), values);
   }
 
   return EXIT_SUCCESS;

@@ -26,13 +26,13 @@ llvm::APInt &Interpreter::GetNodeVal(Operation *op) {
 }
 
 void Interpreter::SetInstructionBitsValue(const std::string &bits) {
-  auto inst{circuit->inst_bits[0]};
+  auto inst = circuit->Attr<InputInstructionBits>()[0];
   SetNodeVal(inst, llvm::APInt(inst->size, bits, /*radix=*/16U));
 }
 
 void Interpreter::SetInputRegisterValue(const std::string &name,
                                         uint64_t bits) {
-  for (auto reg : circuit->input_regs) {
+  for (auto reg : circuit->Attr<InputRegister>()) {
     if (reg->reg_name == name) {
       SetNodeVal(reg, llvm::APInt(reg->size, bits));
       return;
@@ -42,7 +42,7 @@ void Interpreter::SetInputRegisterValue(const std::string &name,
 }
 
 uint64_t Interpreter::GetOutputRegisterValue(const std::string &name) {
-  for (auto reg : circuit->output_regs) {
+  for (auto reg : circuit->Attr<OutputRegister>()) {
     if (reg->reg_name == name) {
       return GetNodeVal(reg).getLimitedValue();
     }
@@ -84,6 +84,15 @@ void Interpreter::VisitInputRegister(InputRegister *op) {
   CHECK(node_values.count(op))
       << "Input register " << op->reg_name << " bits not set.";
 }
+
+void Interpreter::VisitInputImmediate(InputImmediate *op) {
+  LOG(INFO) << "VisitInputImmediate: " << op->Name();
+  CHECK(op->operands.Size() == 1)
+    << "Incorrect number of operands of InputImmediate:"
+    << op->operands.Size() << "!= 1";
+  SetNodeVal(op, GetNodeVal(op->operands[0]));
+}
+
 
 void Interpreter::VisitOutputRegister(OutputRegister *op) {
   DLOG(INFO) << "VisitOutputRegister: " << op->Name();
@@ -135,11 +144,28 @@ void Interpreter::VisitConcat(Concat *op) {
     node_values[op] = build;
 }
 
+void Interpreter::VisitNot(Not *op) {
+  LOG(INFO) << "Visit Not" << op->Name();
+  auto val = GetNodeVal(op->operands[0]);
+  // NOTE(lukas): To avoid confusion the copy is here explicitly, since `negate` does
+  //              change the APInt instead of returning a new one.
+  llvm::APInt copy = val;
+  copy.negate();
+  SetNodeVal(op, copy);
+}
+
 void Interpreter::VisitLLVMOperation(LLVMOperation *op) {
   DLOG(INFO) << "VisitLLVMOperation: " << op->Name();
   auto lhs{[this, op] { return GetNodeVal(op->operands[0]); }};
   auto rhs{[this, op] { return GetNodeVal(op->operands[1]); }};
   switch (op->llvm_op_code) {
+    case llvm::Instruction::OtherOps::Select: {
+      auto selector = GetNodeVal(op->operands[0]);
+      auto true_val = GetNodeVal(op->operands[1]);
+      auto false_val = GetNodeVal(op->operands[2]);
+      SetNodeVal(op, selector.getBoolValue() ? true_val : false_val );
+    } break;
+
     case llvm::BinaryOperator::Add: {
       SetNodeVal(op, lhs() + rhs());
     } break;
@@ -330,7 +356,7 @@ bool Interpreter::Run() {
   // Save initial node values
   auto node_values_init{node_values};
   // Run verification nodes until one succeeds
-  for (auto op : circuit->verifications) {
+  for (auto op : circuit->Attr<VerifyInstruction>()) {
     // Re-initialize node values
     node_values.swap(node_values_init);
     // Reset
