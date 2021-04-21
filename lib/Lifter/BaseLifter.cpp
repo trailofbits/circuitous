@@ -4,6 +4,7 @@
 
 #include <circuitous/Lifter/BaseLifter.hpp>
 
+#include <remill/BC/Compat/CallSite.h>
 #include <remill/BC/Util.h>
 #include <remill/BC/Optimizer.h>
 
@@ -14,7 +15,6 @@
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
 #include <glog/logging.h>
-#include <llvm/IR/CallSite.h>
 #include <llvm/Support/raw_os_ostream.h>
 #pragma clang diagnostic pop
 
@@ -33,7 +33,7 @@ namespace circuitous {
           for (auto &inst : bb) {
             // NOTE(lukas): I opted to go inst by inst to avoid accidentaly
             //              modifying semantic functions we do not use.
-            if (auto cs = llvm::CallSite(&inst)) {
+            if (auto cs = remill::compat::llvm::CallSite(&inst)) {
               if (cs.isCall() &&
                   cs.getCalledFunction()->getIntrinsicID() == llvm::Intrinsic::usub_sat)
                   calls.push_back(cs.getInstruction());
