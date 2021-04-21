@@ -151,7 +151,9 @@ int main(int argc, char *argv[]) {
     llvm::json::Object output_regs_obj;
     for (auto reg : circuit->Attr<circuitous::OutputRegister>()) {
       auto key{reg->reg_name};
-      output_regs_obj[key] = std::to_string(run.GetOutputRegisterValue(key));
+      if (auto val = run.GetOutputRegisterValue(key)) {
+        output_regs_obj[key] = std::to_string(*val);
+      }
     }
     // Serialize
     llvm::json::Object output_obj;
