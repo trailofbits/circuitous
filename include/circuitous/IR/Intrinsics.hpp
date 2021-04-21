@@ -178,7 +178,7 @@ namespace impl {
   };
 
   template<typename Self_t>
-  struct Identity : Base<Self_t> {
+  struct EncodeSize : Base<Self_t> {
     using Parent = Base<Self_t>;
 
     static std::string Name(uint64_t size) {
@@ -187,15 +187,11 @@ namespace impl {
       return ss.str();
     }
 
-    static llvm::Function *CreateFn(llvm::Module *module, llvm::Type *type) {
-      auto size = llvm::cast<llvm::IntegerType>(type)->getScalarSizeInBits();
-      return CreateFn(module, size);
-    }
-
     static llvm::Function *CreateFn(llvm::Module *module, uint64_t size) {
       llvm::IRBuilder<> ir(module->getContext());
-      auto self_ty = ir.getIntNTy(static_cast<uint32_t>(size));
-      auto fn_t = llvm::FunctionType::get(self_ty, {self_ty}, false);
+      auto ret_ty = Self_t::ResultType(module, size);
+      auto args_ty = Self_t::ArgTypes(module, size);
+      auto fn_t = llvm::FunctionType::get(ret_ty, args_ty, Self_t::is_vararg);
       auto callee = module->getOrInsertFunction(Name(size), fn_t);
       return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
     }
@@ -215,6 +211,31 @@ namespace impl {
       name.getAsInteger(10, out);
       return out;
     }
+
+  };
+
+  template<typename Self_t>
+  struct Identity : EncodeSize<Self_t> {
+    using Parent = EncodeSize<Self_t>;
+
+    using Parent::CreateFn;
+
+    static llvm::Function *CreateFn(llvm::Module *module, llvm::Type *type) {
+      auto size = llvm::cast<llvm::IntegerType>(type)->getScalarSizeInBits();
+      return EncodeSize<Self_t>::CreateFn(module, size);
+    }
+
+    static constexpr bool is_vararg = false;
+
+    static llvm::Type *ResultType(llvm::Module *module, uint64_t size) {
+      llvm::IRBuilder<> ir(module->getContext());
+      return ir.getIntNTy(static_cast<uint32_t>(size));
+    }
+
+    static std::vector<llvm::Type *> ArgTypes(llvm::Module *module, uint64_t size) {
+      return { ResultType(module, size) };
+    }
+
   };
 
   template <typename Self_t>
@@ -243,6 +264,22 @@ namespace impl {
     }
   };
 
+  template<typename Self_t>
+  struct VarArg : EncodeSize<Self_t> {
+    using Parent = EncodeSize<Self_t>;
+
+    static constexpr bool is_vararg = true;
+
+    static llvm::Type *ResultType(llvm::Module *module, uint64_t size) {
+      llvm::IRBuilder<> ir(module->getContext());
+      return ir.getIntNTy(static_cast<uint32_t>(size));
+    }
+
+    static std::vector<llvm::Type *> ArgTypes(llvm::Module *module, uint64_t size) {
+      return {};
+    }
+  };
+
 
   template<typename I, typename C = std::vector< llvm::Value * >, typename ...Args>
   auto implement_call(llvm::IRBuilder<> &ir, const C &c_args, Args &&...args) {
@@ -250,30 +287,49 @@ namespace impl {
     return ir.CreateCall(fn, c_args);
   }
 
+  template<typename C>
+  auto add_sizes(const C &c_args) {
+    uint64_t acc = 0;
+    for (auto val : c_args) {
+      auto int_ty = llvm::cast<llvm::IntegerType>(val->getType());
+      acc += int_ty->getBitWidth();
+    }
+    return acc;
+  }
+
 } // namesapce impl
 
 // TODO(lukas): We want to check that `fn_prefix` is never prefix of some
 //              other `fn_prefix`.
 namespace data {
+
+  // extract.FROM.SIZE - where we include FROM and exclude FROM + SIZE.
+  // If no argument is passed, instruction bits are considered to be an operand
+  // in the lowering phase.
+  // Data are reordered to fit endiannity as expected on instruction bits.
   struct Extract {
     static constexpr const char *fn_prefix = "__circuitous.extract";
     static constexpr const char *separator = ".";
   };
 
+  // Used to compared extracted parts of instruction bits with expected values
   struct BitCompare {
     static constexpr const char *fn_prefix = "__circuitous.bitcompare";
     static constexpr const char *separator = ".";
   };
 
+  // Reorder w.r.t to endiannity
   struct ByteSwap {
     static constexpr const char *fn_prefix = "__circuitous.byteswap";
     static constexpr const char *separator = ".";
   };
 
+  // xor of all arguments - must have at least one argument.
   struct OneOf {
     static constexpr const char *fn_prefix = "__circuitous.one_of";
   };
 
+  // Top-level semantics that defines "a context" of a single instruction.
   struct VerifyInst {
     static constexpr const char *fn_prefix = "__circuitous.verify_inst";
   };
@@ -287,23 +343,39 @@ struct Extract : data::Extract, impl::Interval<Extract> {};
 struct OneOf : data::OneOf, impl::Predicate<OneOf> {};
 struct VerifyInst : data::VerifyInst, impl::Predicate<VerifyInst> {};
 
+// See `Extract` but the reorder step is skipped.
 struct ExtractRaw : impl::Interval<ExtractRaw> {
   static constexpr const char *fn_prefix = "__circuitous.raw_extract";
   static constexpr const char *separator = ".";
 };
 
+// Equivalence between operands - should be used to check output valus
+// of the circuit only.
 struct Eq : impl::BinaryPredicate<Eq> {
   static constexpr const char *fn_prefix = "__circuitous.icmp_eq";
   static constexpr const char *separator = ".";
 };
 
+// Identity wrapper denoting that something is an input immediate
+// but can be in reality build from extracts and concats -- helps us
+// in optimization phase.
 struct InputImmediate : impl::Identity<InputImmediate> {
   static constexpr const char *fn_prefix = "__circuitous.input_imm";
   static constexpr const char *separator = ".";
 };
 
+// Returns a pointer to "allocated spaced". Intended to replace alloca 1:1
+// without fear of it being removed by `mem2reg`.
+// NOTE(lukas): Multiple calls should not be merged as we do not mark
+//              the function as readnone etc.
 struct AllocateDst : impl::Allocator<AllocateDst> {
   static constexpr const char *fn_prefix = "__circuitous.allocate_dst";
+  static constexpr const char *separator = ".";
+};
+
+// Concats all its arguments together.
+struct Concat : impl::VarArg<Concat> {
+  static constexpr const char *fn_prefix = "__circuitous.concat";
   static constexpr const char *separator = ".";
 };
 
@@ -316,6 +388,11 @@ struct BreakPoint : impl::Predicate<BreakPoint> {
   static constexpr const char *separator = ".";
 };
 
+
+/* Helper functions to make creation of intrinsic calls easier for the user
+ * C - container holding arguments
+ * Args... - arguments to be forwarded to appropriate `CreateFn`.
+ */
 template<typename C>
 auto make_xor(llvm::IRBuilder<> &ir, const C &args) {
   auto xor_fn = OneOf::CreateFn(ir.GetInsertBlock()->getModule());
@@ -345,6 +422,12 @@ auto make_alloca(llvm::IRBuilder<> &ir, Args &&...args) {
 template<typename C = std::vector<llvm::Value *>, typename ...Args>
 auto make_bitcompare(llvm::IRBuilder<> &ir, const C &c_args, Args &&...args) {
   return impl::implement_call<BitCompare>(ir, c_args, std::forward<Args>(args)...);
+}
+
+template<typename C = std::vector<llvm::Value *>>
+auto make_concat(llvm::IRBuilder<> &ir, const C &c_args) {
+  auto result_size = impl::add_sizes(c_args);
+  return impl::implement_call<Concat>(ir, c_args, result_size);
 }
 
 static inline auto make_breakpoint(llvm::IRBuilder<> &ir) {
