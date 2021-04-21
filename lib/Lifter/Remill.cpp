@@ -309,6 +309,26 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     return one_of;
   }
 
+  Operation *VisitConcat(llvm::CallInst *call, llvm::Function *fn) {
+    auto size = static_cast<uint32_t>(intrinsics::Concat::ParseArgs(fn));
+    auto acc = impl->Create<Concat>(size);
+
+    auto args = CallArgs(call);
+    if (args.size() == 1) {
+      Visit(call->getParent()->getParent(), args[0]);
+      return val_to_op[args[0]];
+    }
+
+    for (auto &arg : args) {
+      if (!val_to_op.count(arg)) {
+        Visit(call->getParent()->getParent(), arg);
+      }
+      auto op = val_to_op[arg];
+      acc->AddUse(op);
+    }
+    return acc;
+  }
+
   void VisitFunctionCall(llvm::Function *, llvm::CallInst *val) {
     auto &op = val_to_op[val];
     if (op) {
@@ -377,6 +397,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       op = VisitInputImmediate(val, func);
     } else if (intrinsics::OneOf::IsIntrinsic(func)) {
       op = VisitOneOf(val, func);
+    } else if (intrinsics::Concat::IsIntrinsic(func)) {
+      op = VisitConcat(val, func);
     } else {
       LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(val);
     }
