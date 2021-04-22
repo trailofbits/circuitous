@@ -85,7 +85,7 @@ namespace circuitous::shadowinst {
     }
 
     template<typename T=llvm::Value>
-    llvm::Value *get() { return llvm::cast< T >(head); }
+    llvm::Value *get() { return llvm::cast_or_null< T >(head); }
   };
 
   static inline auto make_APInt(
