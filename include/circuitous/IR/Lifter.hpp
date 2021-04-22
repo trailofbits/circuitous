@@ -247,10 +247,10 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
         ir.CreateStore(what, dst);
         return ir.CreateBitCast(dst, concrete->getType());
       }
-      return what;
+      CHECK(what->getType()->isIntOrIntVectorTy() && concrete->getType()->isIntOrIntVectorTy());
+      return ir.CreateSExtOrTrunc(what, concrete->getType());
     };
-
-    return ir.CreateSExtOrTrunc(dst(selected), concrete->getType());
+    return dst(selected);
   }
 
   llvm::Value *LiftSReg(llvm::BasicBlock *block,
