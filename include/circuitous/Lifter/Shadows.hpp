@@ -37,8 +37,11 @@ namespace circuitous::shadowinst {
   static inline std::string to_hex(const std::string &bytes) {
     std::stringstream ss;
     for (auto byte : bytes) {
-      ss << std::hex
-         << static_cast<unsigned>(static_cast<uint8_t>(byte));
+      ss << std::hex;
+      if (static_cast<uint8_t>(byte) < 16) {
+        ss << "0";
+      }
+      ss << static_cast<unsigned>(static_cast<uint8_t>(byte));
     }
     return ss.str();
   }
@@ -160,6 +163,32 @@ namespace circuitous::shadowinst {
         }
       }
       return ss.str();
+    }
+
+    uint64_t translation_entries_count() const {
+      uint64_t acc = 0;
+      for (auto &[_, mats] : translation_map) {
+        acc += mats.size();
+      }
+      return acc;
+    }
+
+    static std::string make_bitstring(const std::vector<bool> &from) {
+      std::string out;
+      for (std::size_t i = 0; i < from.size(); ++i) {
+        out += (from[i]) ? '1' : '0';
+      }
+      return out;
+    }
+
+    std::map<std::string, reg_t> translation_bytes_map() const {
+      std::map<std::string, reg_t> out;
+      for (auto &[reg, mats] : translation_map) {
+        for (auto &encoding : mats) {
+          out[make_bitstring(encoding)] = reg;
+        }
+      }
+      return out;
     }
   };
 
