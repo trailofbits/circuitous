@@ -282,6 +282,41 @@ namespace impl {
     }
   };
 
+  template<typename Self_t>
+  struct Select : ParseInts<Self_t, 2> {
+    using Parent = ParseInts<Self_t, 2>;
+
+    static std::string Name(uint64_t selector, uint64_t size) {
+      std::stringstream ss;
+      ss << Self_t::fn_prefix << Self_t::separator
+         << selector << Self_t::separator << size;
+      return ss.str();
+    }
+
+    static llvm::Function *CreateFn(llvm::Module *module, uint64_t selector, llvm::Type *type) {
+      auto size = llvm::cast<llvm::IntegerType>(type)->getScalarSizeInBits();
+      return CreateFn(module, selector, static_cast<uint64_t>(size));
+    }
+
+    static llvm::Function *CreateFn(llvm::Module *module, uint64_t selector, uint64_t size) {
+      llvm::IRBuilder<> ir(module->getContext());
+      auto r_ty = ir.getIntNTy(static_cast<uint32_t>(size));
+
+      using size_type = std::vector<llvm::Type>::size_type;
+      auto args_count = static_cast<size_type>((1 << selector) + 1);
+      std::vector<llvm::Type *>args{ args_count, r_ty };
+      args[0] = ir.getIntNTy(static_cast<uint32_t>(selector));
+
+      auto fn_t = llvm::FunctionType::get(r_ty, args, false);
+      auto callee = module->getOrInsertFunction(Name(selector, size), fn_t);
+      return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
+    }
+
+    static_assert(std::is_same_v<typename Parent::intrinsic_args_t,
+                                 std::tuple<uint64_t, uint64_t>
+                                >);
+  };
+
 
   template<typename I, typename C = std::vector< llvm::Value * >, typename ...Args>
   auto implement_call(llvm::IRBuilder<> &ir, const C &c_args, Args &&...args) {
@@ -434,6 +469,11 @@ auto make_concat(llvm::IRBuilder<> &ir, const C &c_args) {
 
 static inline auto make_breakpoint(llvm::IRBuilder<> &ir) {
   return impl::implement_call<BreakPoint>(ir, {});
+}
+
+template<typename C = std::vector<llvm::Value *>, typename ...Args>
+auto make_select(llvm::IRBuilder<> &ir, const C &c_args, Args &&... args) {
+  return impl::implement_call<Select>(ir, c_args, std::forward<Args>(args)...);
 }
 
 } // namespace circuitous::intrinsics
