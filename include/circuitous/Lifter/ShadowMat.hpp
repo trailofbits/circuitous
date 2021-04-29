@@ -101,6 +101,18 @@ namespace circuitous::shadowinst {
     return llvm::APInt(size_, span, 2);
   }
 
+  static inline auto region_selector(llvm::IRBuilder<> &ir, const Reg &s_reg) {
+    std::vector<llvm::Value *> input_fragments;
+
+    for (auto &[from, size] : s_reg.regions) {
+      auto extract = intrinsics::make_extract(ir, from, size);
+      input_fragments.push_back(extract);
+    }
+    // We need to match the order of the entry in `translation_map`
+    std::reverse(input_fragments.begin(), input_fragments.end());
+    return intrinsics::make_concat(ir, input_fragments);
+  }
+
   // Emit instructions that will check the encoding of the register `reg_name`
   // First we check each entry of the `translation_map`
   //
@@ -161,6 +173,42 @@ namespace circuitous::shadowinst {
     }
     auto xor_all = intrinsics::make_xor(ir, selects.conditions);
     return std::make_tuple(xor_all, selects.get());
+  }
+
+  template<typename Getter>
+  auto make_intrinsics_decoder(const Reg &s_reg, llvm::IRBuilder<> &ir, Getter &get_reg) {
+    auto entries = s_reg.translation_entries_count();
+    auto bits = s_reg.region_bitsize();
+    CHECK(entries <= (1 << bits))
+        << "Translation entries count do not correspond to regions size "
+        << entries << " > " << (1 << bits);
+
+    std::vector<llvm::Value *> select_args((1 << bits) + 1, nullptr);
+    select_args[0] = region_selector(ir, s_reg);
+
+    llvm::Type *type = nullptr;
+    for (auto &[str, reg] : s_reg.translation_bytes_map()) {
+      auto idx = llvm::APInt{static_cast<uint32_t>(bits), str, 2}.getLimitedValue();
+      CHECK(select_args.size() > idx + 1);
+      select_args[idx + 1] = get_reg(ir, reg);
+      if (!type) {
+        type = select_args[idx + 1]->getType();
+      }
+      CHECK(type == select_args[idx + 1]->getType());
+    }
+
+    CHECK(type);
+    for (std::size_t idx = 1; idx < select_args.size(); ++idx) {
+      if (select_args[idx]) {
+        continue;
+      }
+      select_args[idx] = llvm::UndefValue::get(type);
+    }
+
+    // We do not need to do any extra checking if we decoded something because
+    // the select is "saturated" -- each possible return is a valid register
+    CHECK(select_args.size() > 1);
+    return intrinsics::make_select(ir, select_args, bits, select_args[1]->getType());
   }
 
 } // namespace circuitous::shadowinst
