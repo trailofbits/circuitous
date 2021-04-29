@@ -37,8 +37,11 @@ namespace circuitous::shadowinst {
   static inline std::string to_hex(const std::string &bytes) {
     std::stringstream ss;
     for (auto byte : bytes) {
-      ss << std::hex
-         << static_cast<unsigned>(static_cast<uint8_t>(byte));
+      ss << std::hex;
+      if (static_cast<uint8_t>(byte) < 16) {
+        ss << "0";
+      }
+      ss << static_cast<unsigned>(static_cast<uint8_t>(byte));
     }
     return ss.str();
   }
