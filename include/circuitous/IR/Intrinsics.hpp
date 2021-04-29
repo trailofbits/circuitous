@@ -79,9 +79,45 @@ namespace impl {
     }
   };
 
-  template<typename Self_t>
-  struct Interval : Base<Self_t> {
+  template<typename Self_t, uint8_t C>
+  struct ParseInts : Base<Self_t> {
     using Parent = Base<Self_t>;
+
+    static auto ParseArgs(llvm::Function *fn) {
+      CHECK(Parent::IsIntrinsic(fn))
+        << "Cannot parse arguments of function: "
+        << LLVMName(fn)
+        << "that is not our intrinsic.";
+
+      auto as_uint64_t = [](auto &str_ref) {
+        uint64_t out;
+        str_ref.getAsInteger(10, out);
+        return out;
+      };
+
+      llvm::StringRef name = fn->getName();
+      name.consume_front(Self_t::fn_prefix);
+      name.consume_front(Self_t::separator);
+      return Consume<C>(name, as_uint64_t);
+    }
+
+    template<uint8_t L, typename Convert>
+    static auto Consume(llvm::StringRef str, Convert fn) {
+      static_assert(L > 0);
+      if constexpr (L == 1) {
+        return std::make_tuple(fn(str));
+      } else {
+        const auto &[from, size] = str.split(Self_t::separator);
+        return std::tuple_cat(std::make_tuple(fn(from)), Consume<L - 1>(size, fn));
+      }
+    }
+
+    using intrinsic_args_t = decltype(ParseArgs(nullptr));
+  };
+
+  template<typename Self_t>
+  struct Interval : ParseInts<Self_t, 2> {
+    using Parent = ParseInts<Self_t, 2>;
 
     static std::string Name(uint64_t from, uint64_t size) {
       std::stringstream ss;
@@ -96,26 +132,6 @@ namespace impl {
       auto fn_t = llvm::FunctionType::get(r_ty, {}, true);
       auto callee = module->getOrInsertFunction(Name(from, size), fn_t);
       return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
-    }
-
-    using intrinsic_args_t = std::tuple<uint64_t, uint64_t>;
-    static intrinsic_args_t ParseArgs(llvm::Function *fn) {
-      CHECK(Parent::IsIntrinsic(fn))
-        << "Cannot parse arguments of function: "
-        << LLVMName(fn)
-        << "that is not our intrinsic.";
-
-      llvm::StringRef name = fn->getName();
-      name.consume_front(Self_t::fn_prefix);
-      name.consume_front(Self_t::separator);
-      const auto &[from, size] = name.split(Self_t::separator);
-
-      auto as_uint64_t = [](auto &str_ref) {
-        uint64_t out;
-        str_ref.getAsInteger(10, out);
-        return out;
-      };
-      return {as_uint64_t(from), as_uint64_t(size)};
     }
   };
 
@@ -137,8 +153,8 @@ namespace impl {
   };
 
   template<typename Self_t>
-  struct BinaryPredicate : Base<Self_t> {
-    using Parent = Base<Self_t>;
+  struct BinaryPredicate : ParseInts<Self_t, 1> {
+    using Parent = ParseInts<Self_t, 1>;
 
     static std::string Name(uint64_t size) {
       std::stringstream ss;
@@ -160,21 +176,7 @@ namespace impl {
       return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
     }
 
-    using intrinsic_args_t = uint64_t;
-    static intrinsic_args_t ParseArgs(llvm::Function *fn) {
-      CHECK(Parent::IsIntrinsic(fn))
-        << "Cannot parse arguments of function: "
-        << LLVMName(fn)
-        << "that is not our intrinsic.";
-
-      llvm::StringRef name = fn->getName();
-      name.consume_front(Self_t::fn_prefix);
-      name.consume_front(Self_t::separator);
-
-      uint64_t out;
-      name.getAsInteger(10, out);
-      return out;
-    }
+    static_assert(std::is_same_v<typename Parent::intrinsic_args_t, std::tuple<uint64_t>>);
   };
 
   template<typename Self_t>
