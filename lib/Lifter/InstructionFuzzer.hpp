@@ -171,6 +171,10 @@ namespace permutate {
     static std::tuple<bool, bool> CheckStructure(
       cri original, cri permutation, const Item_t &items, Fn &&on_self)
     {
+      if (original.bytes.size() != permutation.bytes.size()) {
+        return { false, false };
+      }
+
       if (original.function != permutation.function) {
         return { false, false };
       }
@@ -513,6 +517,10 @@ struct InstructionFuzzer {
       }
       if (tmp.function != rinst.function) {
         LOG(WARNING) << "Guaranteed permutation generated different instruction.";
+        return;
+      }
+      if (tmp.bytes.size() != rinst.bytes.size()) {
+        LOG(WARNING) << "Guarantedd permutation resulted in inst with less used bytes.";
         return;
       }
 
