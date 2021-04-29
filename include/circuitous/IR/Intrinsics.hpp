@@ -485,4 +485,9 @@ static inline auto make_breakpoint(llvm::IRBuilder<> &ir) {
   return impl::implement_call<BreakPoint>(ir, {});
 }
 
+template<typename C = std::vector<llvm::Value *>, typename ...Args>
+auto make_select(llvm::IRBuilder<> &ir, const C &c_args, Args &&... args) {
+  return impl::implement_call<Select>(ir, c_args, std::forward<Args>(args)...);
+}
+
 } // namespace circuitous::intrinsics
