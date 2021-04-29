@@ -171,7 +171,21 @@ class Operation : public Node<Operation> {
     // the circuit, of which the minimum cost one is chosen.
     kCircuit = 23,
 
-    kLast = 24,
+    // Memory operations - load & store
+    kMemoryRead = 24,
+    kMemoryWrite = 25,
+
+    // Select which has the following prototype
+    // `select( idx, v1, v2, v3, ..., v^(|idx|) )`
+    // in practice however we do not want bigger selects than 2^4.
+    kSelect = 26,
+
+    // Error flag - we assume it will be only one bit, but maybe we may need to
+    // support multiple kinds of errrors in the future.
+    kInputErrorFlag = 27,
+    kOutputErrorFlag = 28,
+
+    kLast = 29,
     // Invalid -- you cannot have this tag present in you tree.
     kInvalid = 0xff
   };
@@ -226,6 +240,11 @@ static inline std::string to_string(Kind kind) {
     case Operation::kHint : return "HINT";
     case Operation::kOnlyOneCondition : return "ONE_OF";
     case Operation::kCircuit : return "RESULT";
+    case Operation::kMemoryRead : return "MEMORY_READ";
+    case Operation::kMemoryWrite : return "MEMORY_WRITE";
+    case Operation::kSelect : return "SELECT";
+    case Operation::kInputErrorFlag : return "INPUT_ERROR_FLAG";
+    case Operation::kOutputErrorFlag : return "OUTPUT_ERROR_FLAG";
     case Operation::kInvalid : return "INVALID";
     default : LOG(FATAL) << "Unknown kind " << kind; return "";
   }
@@ -257,6 +276,11 @@ static inline Kind from_string(const std::string &name) {
   if (name == "ONE_OF") return Operation::kOnlyOneCondition;
   if (name == "RESULT") return Operation::kCircuit;
   if (name == "INVALID") return Operation::kInvalid;
+  if (name == "MEMORY_READ") return Operation::kMemoryRead;
+  if (name == "MEMORY_WRITE") return Operation::kMemoryWrite;
+  if (name == "SELECT") return Operation::kSelect;
+  if (name == "INPUT_ERROR_FLAG") return Operation::kInputErrorFlag;
+  if (name == "OUTPUT_ERROR_FLAG") return Operation::kOutputErrorFlag;
   LOG(FATAL) << "Unknown name " << name;
   return "";
 }
@@ -451,8 +475,6 @@ class CountTrailingZeroes final : public BitOperation {
 };
 
 class Condition : public Operation {
- public:
-
  protected:
   inline explicit Condition(unsigned op_code_) : Operation(op_code_, 1u) {}
 };
@@ -590,6 +612,85 @@ class OnlyOneCondition final : public Condition {
   std::string Name(void) const override;
 };
 
+class MemoryOp : public Operation {
+ protected:
+  template<typename ...Args>
+  MemoryOp(uint32_t byte_count_, Args &&...args)
+      : Operation(std::forward<Args>(args)...), byte_count(byte_count_)
+  {}
+
+ public:
+  enum : uint8_t {
+    kAddress = 0u
+  };
+  static constexpr inline uint32_t kind = kInvalid;
+
+  std::string Name(void) const override;
+
+  uint32_t byte_count;
+};
+
+class MemoryRead : public MemoryOp {
+ public:
+  static constexpr inline uint32_t kind = kMemoryRead;
+
+  explicit MemoryRead(uint32_t byte_count_)
+      : MemoryOp(byte_count_, kind, byte_count_ * 8u)
+  {}
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+};
+
+class MemoryWrite : public MemoryOp {
+ public:
+  static constexpr inline uint32_t kind = kMemoryWrite;
+
+  explicit MemoryWrite(uint32_t byte_count_) : MemoryOp(byte_count_, kind, 0u) {}
+
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+};
+
+class Select : public Operation {
+ public:
+  static constexpr inline uint32_t kind = kSelect;
+
+  explicit Select(uint32_t bits_, uint32_t size_)
+      : Operation(kind, size_), bits(bits_)
+  {}
+
+  std::string Name() const override;
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+
+  // Return one of the `2 ^ bits` values. It is also expected that this node
+  // has `2 ^ bits + 1` operands.
+  uint32_t bits = 0;
+};
+
+class ErrorFlag : public Operation {
+ protected:
+  ErrorFlag(uint32_t derived_kind) : Operation(derived_kind, 1u) {}
+ public:
+  static constexpr inline uint32_t kind = kInvalid;
+
+  std::string Name(void) const override;
+};
+
+class InputErrorFlag : public ErrorFlag {
+ public:
+  static constexpr inline uint32_t kind = kInputErrorFlag;
+
+  InputErrorFlag() : ErrorFlag(kind) {}
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+};
+
+class OutputErrorFlag : public ErrorFlag {
+ public:
+  static constexpr inline uint32_t kind = kOutputErrorFlag;
+
+  OutputErrorFlag() : ErrorFlag(kind) {}
+  Operation *CloneWithoutOperands(Circuit *circuit) const override;
+};
+
 #undef FORWARD_CONSTRUCTOR
 #undef CONDITION_CONSTRUCTOR
 
@@ -663,7 +764,8 @@ using AllAttributes =
              Parity, InputRegister, InputImmediate,  OutputRegister, InputInstructionBits,
              RegisterCondition, PreservedCondition, CopyCondition, DecodeCondition,
              VerifyInstruction, ReadMemoryCondition, OnlyOneCondition,
-             Hint, HintCondition>;
+             Hint, HintCondition, MemoryRead, MemoryWrite, Select,
+             InputErrorFlag, OutputErrorFlag>;
 
 // TODO(lukas): Get rid of this
 #define FOR_EACH_OPERATION(what) \
@@ -689,7 +791,12 @@ using AllAttributes =
   what(ReadMemoryCondition) \
   what(OnlyOneCondition) \
   what(Hint) \
-  what(HintCondition)
+  what(HintCondition) \
+  what(MemoryRead) \
+  what(MemoryWrite) \
+  what(Select) \
+  what(InputErrorFlag) \
+  what(OutputErrorFlag)
 
 
 // Represents the results of verifying a circuit.
@@ -758,7 +865,7 @@ class Circuit : public Condition, AllAttributes {
     return op;
   }
 
- private:
+ public:
   Circuit(void);
 };
 

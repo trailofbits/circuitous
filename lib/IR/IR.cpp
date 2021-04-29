@@ -338,6 +338,39 @@ Operation *OnlyOneCondition::CloneWithoutOperands(Circuit *circuit) const {
   return circuit->Create<OnlyOneCondition>();
 }
 
+std::string MemoryOp::Name() const {
+  return StreamName(std::to_string(this->op_code), "_", std::to_string(byte_count));
+}
+
+Operation* MemoryRead::CloneWithoutOperands(Circuit *circuit) const {
+  return circuit->Create<MemoryRead>(byte_count);
+}
+
+Operation* MemoryWrite::CloneWithoutOperands(Circuit *circuit) const {
+  return circuit->Create<MemoryWrite>(byte_count);
+}
+
+std::string Select::Name() const {
+  return StreamName(to_string(this->op_code), "_", std::to_string(bits));
+}
+
+Operation *Select::CloneWithoutOperands(Circuit *circuit) const {
+  LOG(FATAL) << "Not implemented";
+}
+
+std::string ErrorFlag::Name() const {
+  return StreamName(to_string(this->op_code));
+}
+
+Operation *InputErrorFlag::CloneWithoutOperands(Circuit *circuit) const {
+  LOG(FATAL) << "Not implemented";
+}
+
+Operation *OutputErrorFlag::CloneWithoutOperands(Circuit *circuit) const {
+  LOG(FATAL) << "Not implemented";
+}
+
+
 Circuit::~Circuit(void) {
   // TODO(lukas): Maybe somethign is needed here?
 }

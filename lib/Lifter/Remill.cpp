@@ -328,6 +328,20 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
     return acc;
   }
+  Operation *VisitSelectIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
+    auto [bits, size] = intrinsics::Select::ParseArgs(fn);
+    auto acc = impl->Create<Select>(static_cast<uint32_t>(bits), static_cast<uint32_t>(size));
+
+    auto args = CallArgs(call);
+    for (auto &arg : args) {
+      if (!val_to_op.count(arg)) {
+        Visit(call->getParent()->getParent(), arg);
+      }
+      auto op = val_to_op[arg];
+      acc->AddUse(op);
+    }
+    return acc;
+  }
 
   void VisitFunctionCall(llvm::Function *, llvm::CallInst *val) {
     auto &op = val_to_op[val];
@@ -399,6 +413,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       op = VisitOneOf(val, func);
     } else if (intrinsics::Concat::IsIntrinsic(func)) {
       op = VisitConcat(val, func);
+    } else if (intrinsics::Select::IsIntrinsic(func)) {
+      op = VisitSelectIntrinsic(val, func);
     } else {
       LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(val);
     }
