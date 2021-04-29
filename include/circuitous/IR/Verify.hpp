@@ -69,13 +69,17 @@ struct Verifier {
       case Operation::kCountLeadingZeroes:
       case Operation::kCountTrailingZeroes:
       case Operation::kExtract:
+      case Operation::kMemoryRead:
         return Exactly(1, op);
       case Operation::kRegisterCondition:
       case Operation::kPreservedCondition:
       case Operation::kCopyCondition:
       case Operation::kDecodeCondition:
       case Operation::kHintCondition:
+      case Operation::kMemoryWrite:
         return Exactly(2, op);
+      case Operation::kSelect:
+        return Exactly((1 << op->operands[0]->size) + 1, op);
       case Operation::kConcat:
         return MoreThan(2, op);
       // TODO(lukas): LLVMOperation can actually have a variety of arities, but
