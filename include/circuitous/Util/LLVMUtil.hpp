@@ -83,4 +83,13 @@ namespace circuitous {
     return acc;
   }
 
+  template<typename C>
+  auto make_or(llvm::IRBuilder<> &ir, const C &vals) {
+    llvm::Value *acc = ir.getFalse();
+    for (auto val : vals) {
+      acc = ir.CreateOr(acc, val);
+    }
+    return acc;
+  }
+
 } // namespace circuitous
