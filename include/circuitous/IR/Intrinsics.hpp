@@ -370,28 +370,40 @@ namespace data {
   struct VerifyInst {
     static constexpr const char *fn_prefix = "__circuitous.verify_inst";
   };
+
+  struct ExtractRaw {
+    static constexpr const char *fn_prefix = "__circuitous.raw_extract";
+    static constexpr const char *separator = ".";
+  };
+
+  struct Eq {
+    static constexpr const char *fn_prefix = "__circuitous.icmp_eq";
+    static constexpr const char *separator = ".";
+  };
+
+  struct dot_seperator {
+    static constexpr const char *separator = ".";
+  };
+
+  struct Select : dot_seperator {
+    static constexpr const char *fn_prefix = "__circuitous.select";
+  };
 } //namespace data
 
-// TODO(lukas): I guess the `data::` is actually not needed + the `impl::`
-//              can be generalized a bit more. If you want to add a new one
-//              check if some already existing one cannot be generalized.
-struct BitCompare : data::BitCompare, impl::BinaryPredicate<BitCompare> {};
-struct Extract : data::Extract, impl::Interval<Extract> {};
-struct OneOf : data::OneOf, impl::Predicate<OneOf> {};
-struct VerifyInst : data::VerifyInst, impl::Predicate<VerifyInst> {};
+// NOTE(lukas): `data::` is needed because we would not be able to reference
+//              the static attributes in the `impl::` if they were a part of struct
+//              that is being defined.
+struct BitCompare : data::BitCompare, impl::BinaryPredicate<data::BitCompare> {};
+struct Extract : data::Extract, impl::Interval<data::Extract> {};
+struct OneOf : data::OneOf, impl::Predicate<data::OneOf> {};
+struct VerifyInst : data::VerifyInst, impl::Predicate<data::VerifyInst> {};
 
 // See `Extract` but the reorder step is skipped.
-struct ExtractRaw : impl::Interval<ExtractRaw> {
-  static constexpr const char *fn_prefix = "__circuitous.raw_extract";
-  static constexpr const char *separator = ".";
-};
+struct ExtractRaw : data::ExtractRaw, impl::Interval<data::ExtractRaw> {};
 
 // Equivalence between operands - should be used to check output valus
 // of the circuit only.
-struct Eq : impl::BinaryPredicate<Eq> {
-  static constexpr const char *fn_prefix = "__circuitous.icmp_eq";
-  static constexpr const char *separator = ".";
-};
+struct Eq : data::Eq, impl::BinaryPredicate<data::Eq> {};
 
 // Identity wrapper denoting that something is an input immediate
 // but can be in reality build from extracts and concats -- helps us
@@ -424,6 +436,8 @@ struct BreakPoint : impl::Predicate<BreakPoint> {
   static constexpr const char *fn_prefix = "__circuitous.breakpoint";
   static constexpr const char *separator = ".";
 };
+
+struct Select : data::Select, impl::Select<data::Select> {};
 
 
 /* Helper functions to make creation of intrinsic calls easier for the user
