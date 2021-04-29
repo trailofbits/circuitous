@@ -104,18 +104,21 @@ namespace permutate {
         auto &flipped = flipped_.addr;
         uint8_t corrections = 0;
 
-        if (self.segment_base_reg.name != flipped.segment_base_reg.name) {
-          LOG(FATAL) << "Cannot deal with different segment_base_reg";
+        if (self.segment_base_reg.name != flipped.segment_base_reg.name ||
+            self.segment_base_reg.size != flipped.segment_base_reg.size) {
+          return false;
         }
 
         // Base
-        if (self.base_reg.size != flipped.base_reg.size) {
+        if (self.base_reg.size != flipped.base_reg.size ||
+           (self.base_reg.name != flipped.base_reg.name)) {
           ++corrections;
         }
 
         // Index * scale (they must be checked together since they can be both missing)
         uint8_t index_corrections = 0;
-        if (self.index_reg.size != flipped.index_reg.size) {
+        if (self.index_reg.size != flipped.index_reg.size ||
+            (self.index_reg.name != flipped.index_reg.name)) {
           ++index_corrections;
         }
         if (self.scale != flipped.scale) {
@@ -312,11 +315,11 @@ struct InstructionFuzzer {
       CHECK(permutations[i]->operands[idx].type == OpType::kTypeAddress);
       auto &flipped = permutations[i]->operands[idx].addr;
 
-      if (self.base_reg.name != flipped.base_reg.name && !flipped.base_reg.name.empty()) {
+      if (self.base_reg.name != flipped.base_reg.name) {
         distributed_bits[0][i] = true;
       }
 
-      if (self.index_reg.name != flipped.index_reg.name && !flipped.index_reg.name.empty()) {
+      if (self.index_reg.name != flipped.index_reg.name) {
         distributed_bits[1][i] = true;
       }
 
