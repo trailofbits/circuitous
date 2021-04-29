@@ -66,6 +66,8 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
 
   using parent::LiftIntoBlock;
 
+  arch_ptr_t arch;
+
   llvm::Module *module;
   llvm::LLVMContext *llvm_ctx;
   llvm::IntegerType *word_type;
@@ -73,6 +75,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
 
   InstructionLifter(arch_ptr_t arch_, llvm::Module *module_)
       : parent(arch_, remill::IntrinsicTable(module_)),
+        arch(arch_),
         module(module_),
         llvm_ctx(&module_->getContext()),
         word_type(llvm::Type::getIntNTy(*llvm_ctx, arch_->address_size)),
@@ -189,6 +192,35 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     return HideValue(hidden_imm, bb, size);
   }
 
+  auto ShiftCoerceInfo(const shadowinst::Reg &s_reg) {
+    std::map<uint64_t, std::vector<std::string>> out;
+    for (auto &[reg, bits] : s_reg.translation_map) {
+      auto orig = arch->RegisterByName(reg);
+      auto big = orig->EnclosingRegister();
+
+      auto key = orig->offset - big->offset;
+      for (auto &bstr : bits) {
+        out[key].push_back(s_reg.make_bitstring(bstr));
+      }
+    }
+    return out;
+  }
+
+  auto MaskCoerceInfo(const shadowinst::Reg &s_reg) {
+    std::map<std::tuple<uint64_t, uint64_t>, std::vector<std::string>> out;
+    for (auto &[reg, bits] : s_reg.translation_map) {
+      auto orig = arch->RegisterByName(reg);
+      auto big = orig->EnclosingRegister();
+
+      auto key = std::make_tuple(orig->size, big->size);
+      for (auto &bstr : bits) {
+        out[key].push_back(s_reg.make_bitstring(bstr));
+      }
+    }
+    CHECK(out.size() == 1);
+    return out.begin()->first;
+  }
+
   llvm::Value *LiftRegisterOperand(remill::Instruction &inst,
                                    llvm::BasicBlock *bb,
                                    llvm::Value *state_ptr,
@@ -198,43 +230,23 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
       return this->parent::LiftRegisterOperand(inst, bb, state_ptr, arg, op);
     }
 
-    const auto &s_reg = CurrentShade().reg;
+    const auto &s_reg = *CurrentShade().reg;
 
     auto concrete = this->parent::LiftRegisterOperand(inst, bb, state_ptr, arg, op);
-    if (s_reg->size() == 0) {
+    if (s_reg.size() == 0) {
       return concrete;
     }
 
-    // Load register value -- even for pointer types! Since we are not really
-    // storing anything anywhere we do not care about pointers - we care about
-    // the value inside though.
-    // Allow only some types now.
-    // NOTE(lukas): `LoadRegValue` can modify underlying bitcode thus invalidating
-    //              IRBuilders we work with!
-    auto locate_reg = [&](auto name) {
-      if (llvm::isa<llvm::PointerType>(concrete->getType())) {
-        return this->parent::LoadRegValue(bb, state_ptr, name);
-      }
-      if (llvm::isa<llvm::IntegerType>(concrete->getType())) {
-        return this->parent::LoadRegValue(bb, state_ptr, name);
-      }
-      LOG(FATAL) << "Cannot locate " << name << " with type "
-                 << remill::LLVMThingToString(concrete->getType());
-    };
-
-    // We need to bump the ir builder after the instructions injected
-    // by `locate_reg`.
-    auto safe_locate_reg = [&](auto name, auto &ir) {
-      auto retrieved = locate_reg(name);
-      ir.SetInsertPoint(bb);
-      return retrieved;
-    };
-
     llvm::IRBuilder<> ir(bb);
 
-    auto [xor_all, selected] = shadowinst::make_decoder_selects(*s_reg, ir, safe_locate_reg);
-    AddMetadata(xor_all, "circuitous.verify_fn_args", current_op);
+    auto locate_reg = [&](auto &name) {
+      auto base = arch->RegisterByName(name);
+      CHECK(base) << "locate_reg failed for " << name;
+      auto enclosed = base->EnclosingRegister()->name;
+      return this->parent::LoadRegValue(bb, state_ptr, enclosed);
+    };
 
+    auto selected = LiftSReg(bb, ir, s_reg, locate_reg);
 
     auto dst = [&](auto what) -> llvm::Value * {
       if (llvm::isa<llvm::PointerType>(concrete->getType())) {
@@ -253,6 +265,47 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     return dst(selected);
   }
 
+  template<typename Locator>
+  llvm::Value *LiftSReg(llvm::BasicBlock *block,
+                        llvm::IRBuilder<> &ir,
+                        const shadowinst::Reg &s_reg,
+                        Locator &&locate_reg)
+  {
+    auto safe_locate_reg = [&](auto &ir, auto &name) {
+      auto retrieved = locate_reg(name);
+      ir.SetInsertPoint(block);
+      return retrieved;
+    };
+
+    auto shift_coerce = [&](auto what) {
+      shadowinst::SelectMaker selects{ ir };
+      for (auto &[shift_val, conds] : ShiftCoerceInfo(s_reg)) {
+        std::vector<llvm::Value *> args;
+        auto reg_selector = shadowinst::region_selector(ir, s_reg);
+        for (auto &bstr : conds) {
+          auto constant = llvm::APInt{static_cast<uint32_t>(bstr.size()), bstr, 2};
+          args.push_back(ir.CreateICmpEQ(reg_selector, ir.getInt(constant)));
+        }
+        auto cond = make_or(ir, args);
+        selects.chain(cond, ir.getInt64(shift_val * 8));
+      }
+      return ir.CreateLShr(what, selects.get());
+    };
+
+    auto mask_coerce = [&](auto what) {
+      auto [size, total_size] = MaskCoerceInfo(s_reg);
+      std::string mask_bits(size * 8, '1');
+      llvm::APInt mask{ static_cast<uint32_t>(total_size * 8), mask_bits, 2};
+      CHECK(ir.getInt(mask)->getType() == what->getType());
+      return ir.CreateAnd(what, ir.getInt(mask));
+    };
+
+    // TODO(lukas): Handle holes.
+    auto select = shadowinst::make_intrinsics_decoder(s_reg, ir, safe_locate_reg);
+    return mask_coerce(shift_coerce(select));
+  }
+
+
   llvm::Value *LiftSReg(llvm::BasicBlock *block,
                         llvm::Value *state_ptr,
                         const shadowinst::Reg &s_reg)
@@ -260,27 +313,43 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     llvm::IRBuilder<> ir(block);
     auto zero = llvm::ConstantInt::get(word_type, 0, false);
 
-    auto locate_reg = [&](auto name) {
-      return this->parent::LoadWordRegValOrZero(block, state_ptr, name, zero);
+    auto locate_reg = [&](auto &name) {
+      auto base = arch->RegisterByName(name);
+      CHECK(base) << "locate_reg failed for " << name;
+      auto enclosed = base->EnclosingRegister()->name;
+      return this->parent::LoadWordRegValOrZero(block, state_ptr, enclosed, zero);
     };
 
+    return LiftSReg(block, ir, s_reg, locate_reg);
+  }
 
-    // We need to bump the ir builder after the instructions injected
-    // by `locate_reg`.
-    auto safe_locate_reg = [&](auto name, auto &ir) {
-      auto retrieved = locate_reg(name);
-      ir.SetInsertPoint(block);
-      return retrieved;
-    };
+  // Return a register value, or zero.
+  llvm::Value *LoadWordRegValOrZero_(llvm::BasicBlock *block,
+                                    llvm::Value *state_ptr,
+                                    std::string_view reg_name,
+                                    llvm::Value *zero) {
 
-    auto [xor_all, selected] = shadowinst::make_decoder_selects(s_reg, ir, safe_locate_reg);
-    // Nothing was there to be chained together!
-    if (!selected) {
-      return this->parent::LoadWordRegValOrZero(block, state_ptr, "", zero);
+    if (reg_name.empty()) {
+      return zero;
     }
 
-    AddMetadata(xor_all, "circuitous.verify_fn_args", current_op);
-    return selected;
+    auto val = LoadRegValue(block, state_ptr, reg_name);
+    auto val_type = llvm::dyn_cast_or_null<llvm::IntegerType>(val->getType());
+    auto word_type = llvm::cast<llvm::IntegerType>(zero->getType());
+
+    CHECK(val_type) << "Register " << reg_name << " expected to be an integer.";
+
+    auto val_size = val_type->getBitWidth();
+    auto word_size = word_type->getBitWidth();
+    CHECK(val_size <= word_size)
+        << "Register " << reg_name << " expected to be no larger than the "
+        << "machine word size (" << word_type->getBitWidth() << " bits).";
+
+    if (val_size < word_size) {
+      val = new llvm::ZExtInst(val, word_type, llvm::Twine::createNull(), block);
+    }
+
+    return val;
   }
 
 
@@ -289,9 +358,9 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
       const std::optional<shadowinst::Reg> &maybe_s_reg,
       const remill::Operand &r_op)
   {
-    auto zero = llvm::ConstantInt::get(word_type, 0, false);
-    if (!maybe_s_reg) {
-      return this->LoadWordRegValOrZero(block, state_ptr, r_op.reg.name, zero);
+    llvm::Value *zero = HideValue(llvm::ConstantInt::get(word_type, 0, false), block, word_size);
+    if (!maybe_s_reg || maybe_s_reg->empty()) {
+      return LoadWordRegValOrZero_(block, state_ptr, r_op.reg.name, zero);
     }
     return LiftSReg(block, state_ptr, *maybe_s_reg);
   }

@@ -208,6 +208,38 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
     DEBUG_WRITE("}");
   }
 
+  void VisitMemoryRead(MemoryRead *op) {
+    DEBUG_WRITE(to_string(op->op_code) + ":");
+    Write(op->size);
+    Write(op->byte_count);
+    Write(op->operands);
+    DEBUG_WRITE("}");
+  }
+
+  void VisitMemoryWrite(MemoryWrite *op) {
+    DEBUG_WRITE(to_string(op->op_code) + ":");
+    Write(op->size);
+    Write(op->byte_count);
+    Write(op->operands);
+    DEBUG_WRITE("}");
+  }
+
+  void VisitSelect(Select *op) {
+    DEBUG_WRITE(to_string(op->op_code) + ":");
+    Write(op->size);
+    Write(op->bits);
+    Write(op->operands);
+    DEBUG_WRITE("}");
+  }
+
+  // TODO(lukas): See note in decoder.
+  void VisitInputErrorFlag(InputErrorFlag *op) {
+    LOG(FATAL) << "Not implemented";
+  }
+  void VisitOutputErrorFlag(OutputErrorFlag *op) {
+    LOG(FATAL) << "Not implemented";
+  }
+
  private:
   std::ostream &os;
   IdentityHasher hasher;
@@ -402,6 +434,42 @@ class DeserializeVisitor : FileConfig {
     DEBUG_READ("}");
     return op;
   }
+
+  MemoryRead *DecodeMemoryRead(uint64_t id) {
+    uint32_t byte_count;
+    Read(byte_count);
+    auto op = circuit->Adopt<MemoryRead>(id, byte_count);
+    ReadOps(op);
+    return op;
+  }
+
+  MemoryWrite *DecodeMemoryWrite(uint64_t id) {
+    uint32_t byte_count;
+    Read(byte_count);
+    auto op = circuit->Adopt<MemoryWrite>(id, byte_count);
+    ReadOps(op);
+    return op;
+  }
+
+  Select *DecodeSelect(uint64_t id) {
+    uint32_t size;
+    uint32_t bits;
+    Read(size);
+    Read(bits);
+    auto op = circuit->Adopt<Select>(id, bits, size);
+    ReadOps(op);
+    return op;
+  }
+
+  // TODO(lukas): Edges to (and maybe from) `ErrorFlag` will probably be special
+  //              and possibly not part of the usual UseDef structure.
+  InputErrorFlag *DecodeInputErrorFlag(uint64_t id) {
+    LOG(FATAL) << "Not implemented";
+  }
+  OutputErrorFlag *DecodeOutputErrorFlag(uint64_t id) {
+    LOG(FATAL) << "Not implemented";
+  }
+
 
 #define DECODE_GENERIC(cls) \
   cls *Decode##cls(uint64_t id) { \
