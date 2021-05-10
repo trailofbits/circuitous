@@ -835,6 +835,24 @@ class Circuit : public Condition, AllAttributes {
     return op;
   }
 
+  template<typename T>
+  T *Fork(T *original) {
+    T copy{*original};
+    copy._id = ++ids;
+    copy.operands.clear();
+    return Attr<T>().Adopt(std::move(copy));
+  }
+
+  Operation *Fork(Operation *op) {
+    #define FORK_CASE(T) \
+      if (op->op_code == T::kind) { \
+        return Fork<T>(dynamic_cast<T *>(op)); \
+      }
+    FOR_EACH_OPERATION(FORK_CASE)
+    #undef FORK_CASE
+    __builtin_unreachable();
+  }
+
  public:
   Circuit(void);
 };
