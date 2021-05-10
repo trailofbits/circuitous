@@ -43,7 +43,6 @@ class Operation : public Node<Operation> {
   virtual ~Operation(void) = default;
 
   virtual std::string Name(void) const;
-  virtual Operation *CloneWithoutOperands(Circuit *) const = 0;
 
   virtual bool Equals(const Operation *that) const;
 
@@ -320,7 +319,6 @@ class InputRegister : public Operation {
  public:
   static constexpr inline uint32_t kind = kInputRegister;
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
@@ -348,7 +346,6 @@ class OutputRegister : public Operation {
  public:
   static constexpr inline uint32_t kind = kOutputRegister;
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
@@ -369,7 +366,6 @@ class LLVMOperation final : public Operation {
 
   explicit LLVMOperation(llvm::Instruction *inst_);
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
@@ -386,7 +382,6 @@ class Undefined final : public Operation {
   inline explicit Undefined(unsigned size_)
       : Operation(Operation::kUndefined, size_) {}
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 
  protected:
@@ -402,7 +397,6 @@ class Constant final : public Operation {
         bits(bits_) {}
 
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
@@ -417,7 +411,6 @@ class Not final : public BitOperation {
   static constexpr inline uint32_t kind = kNot;
   FORWARD_CONSTRUCTOR(BitOperation, Not)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
 };
 
 // Extract bits.
@@ -425,7 +418,6 @@ class Extract final : public BitOperation {
  public:
   static constexpr inline uint32_t kind = kExtract;
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
@@ -444,7 +436,6 @@ class Concat final : public BitOperation {
   static constexpr inline uint32_t kind = kConcat;
   FORWARD_CONSTRUCTOR(BitOperation, Concat)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
 };
 
 // Population count of some bits. Needed for things like parity count
@@ -454,7 +445,6 @@ class PopulationCount final : public BitOperation {
   static constexpr inline uint32_t kind = kPopulationCount;
   FORWARD_CONSTRUCTOR(BitOperation, PopulationCount)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
 };
 
 // Count the leading zeroes of some bits.
@@ -463,7 +453,6 @@ class CountLeadingZeroes final : public BitOperation {
   static constexpr inline uint32_t kind = kCountLeadingZeroes;
   FORWARD_CONSTRUCTOR(BitOperation, CountLeadingZeroes)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
 };
 
 class CountTrailingZeroes final : public BitOperation {
@@ -471,7 +460,6 @@ class CountTrailingZeroes final : public BitOperation {
   static constexpr inline uint32_t kind = kCountTrailingZeroes;
   FORWARD_CONSTRUCTOR(BitOperation, CountTrailingZeroes)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
 };
 
 class Condition : public Operation {
@@ -487,7 +475,6 @@ class Parity final : public Condition {
   static constexpr inline uint32_t kind = kParity;
   CONDITION_CONSTRUCTOR(Parity)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -501,7 +488,6 @@ class ReadMemoryCondition final : public Condition {
     kHintedValue = 2u
   };
   CONDITION_CONSTRUCTOR(ReadMemoryCondition)
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -514,7 +500,6 @@ class RegisterCondition final : public Condition {
 
   CONDITION_CONSTRUCTOR(RegisterCondition)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -527,7 +512,6 @@ class HintCondition final : public Condition {
 
   CONDITION_CONSTRUCTOR(HintCondition)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -539,7 +523,6 @@ class PreservedCondition final : public Condition {
 
   CONDITION_CONSTRUCTOR(PreservedCondition)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -551,7 +534,6 @@ class CopyCondition final : public Condition {
 
   CONDITION_CONSTRUCTOR(CopyCondition)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -561,7 +543,6 @@ class InputInstructionBits : public Operation {
   static constexpr inline uint32_t kind = kInputInstructionBits;
   FORWARD_CONSTRUCTOR(Operation, InputInstructionBits)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -572,7 +553,6 @@ class DecodeCondition final : public Condition {
   static constexpr inline uint32_t kind = kDecodeCondition;
   CONDITION_CONSTRUCTOR(DecodeCondition)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -585,7 +565,6 @@ class Hint final : public Operation {
   inline explicit Hint(unsigned size_)
       : Operation(Operation::kHint, size_) {}
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 
   // Weak list of conditions that compare this hint value against what it is
@@ -599,7 +578,6 @@ class VerifyInstruction final : public Condition {
   static constexpr inline uint32_t kind = kVerifyInstruction;
   CONDITION_CONSTRUCTOR(VerifyInstruction)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -608,7 +586,6 @@ class OnlyOneCondition final : public Condition {
   static constexpr inline uint32_t kind = kOnlyOneCondition;
   CONDITION_CONSTRUCTOR(OnlyOneCondition)
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
 };
 
@@ -638,7 +615,6 @@ class MemoryRead : public MemoryOp {
       : MemoryOp(byte_count_, kind, byte_count_ * 8u)
   {}
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
 };
 
 class MemoryWrite : public MemoryOp {
@@ -647,7 +623,6 @@ class MemoryWrite : public MemoryOp {
 
   explicit MemoryWrite(uint32_t byte_count_) : MemoryOp(byte_count_, kind, 0u) {}
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
 };
 
 class Select : public Operation {
@@ -659,7 +634,6 @@ class Select : public Operation {
   {}
 
   std::string Name() const override;
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
 
   // Return one of the `2 ^ bits` values. It is also expected that this node
   // has `2 ^ bits + 1` operands.
@@ -680,7 +654,6 @@ class InputErrorFlag : public ErrorFlag {
   static constexpr inline uint32_t kind = kInputErrorFlag;
 
   InputErrorFlag() : ErrorFlag(kind) {}
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
 };
 
 class OutputErrorFlag : public ErrorFlag {
@@ -688,7 +661,6 @@ class OutputErrorFlag : public ErrorFlag {
   static constexpr inline uint32_t kind = kOutputErrorFlag;
 
   OutputErrorFlag() : ErrorFlag(kind) {}
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
 };
 
 #undef FORWARD_CONSTRUCTOR
@@ -803,8 +775,6 @@ using AllAttributes =
 class Circuit : public Condition, AllAttributes {
  public:
   virtual ~Circuit(void);
-
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
 
   using CircuitPtr = std::unique_ptr<Circuit>;
 
