@@ -248,6 +248,14 @@ namespace permutate {
 
     static bool Compare(const remill::Instruction &original,
                         const remill::Instruction &permutation,
+                        typename Item_t::key_type key,
+                        const remill::Operand * val)
+    {
+      return Compare(original, permutation, { { key , val } });
+    }
+
+    static bool Compare(const remill::Instruction &original,
+                        const remill::Instruction &permutation,
                         const Item_t &items)
     {
       CHECK(items.size() >= 1) << "Cannot compare " << items.size() << " items.";
