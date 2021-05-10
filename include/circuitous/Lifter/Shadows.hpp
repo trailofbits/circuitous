@@ -121,6 +121,14 @@ namespace circuitous::shadowinst {
     auto end() const { return regions.end(); }
     auto size() const { return regions.size(); }
     auto empty() const { return size() == 0; }
+    auto present(std::size_t idx) const {
+      for (auto &[from, size] : regions) {
+        if (idx >= from && idx < from + size) {
+          return true;
+        }
+      }
+      return false;
+    }
 
     std::string to_string(uint8_t indent=0) const {
       std::stringstream ss;
@@ -128,6 +136,33 @@ namespace circuitous::shadowinst {
         ss << std::string(indent * 2, ' ') << from << " , " << size << std::endl;
       }
       return ss.str();
+    }
+
+    auto biggest_chunk() const {
+      std::tuple<uint64_t, uint64_t> out{ 0, 0 };
+      for (auto &[from, size] : regions) {
+        if (size > std::get<1>(out)) {
+          out = {from, size};
+        }
+      }
+      return out;
+    }
+
+    std::optional<uint64_t> get_hole() const {
+      std::vector<uint64_t> out;
+      for (auto &[from, size] : regions) {
+        auto it = regions.find(from + 2);
+        if (it == regions.end() || size != 1) {
+          continue;
+        }
+        if (it->second == 1) {
+          out.push_back(from + 1);
+        }
+      }
+      if (out.size() == 1) {
+        return { out[0] };
+      }
+      return {};
     }
   };
 
@@ -209,6 +244,28 @@ namespace circuitous::shadowinst {
              || scale.has_value() || displacement.has_value());
     }
 
+    template<typename CB>
+    void ForEach(CB &cb) {
+      auto invoke = [&](auto &on_what) {
+        if (on_what) {
+          cb(*on_what);
+        }
+      };
+
+      invoke(base_reg);
+      invoke(index_reg);
+      invoke(scale);
+      invoke(displacement);
+    }
+
+    bool present(std::size_t idx) {
+      bool out = false;
+      auto collect = [&](auto &op) {
+        out |= op.present(idx);
+      };
+      return ForEach(collect), out;
+    }
+
     std::string to_string(uint8_t indent) const {
       auto make_indent = [&](auto count) { return std::string(count * 2, ' '); };
 
@@ -253,7 +310,7 @@ namespace circuitous::shadowinst {
     std::optional<Immediate> immediate;
     std::optional<Reg> reg;
     std::optional<Address> address;
-    maybe_region_t shift;
+    std::optional<Shift> shift;
 
     template<typename T, typename ... Args>
     static auto As(Args && ... args) {
@@ -270,6 +327,28 @@ namespace circuitous::shadowinst {
         op.address = Address();
       }
       return op;
+    }
+
+    template<typename CB>
+    void ForEach(CB &cb) {
+      auto invoke = [&](auto &on_what) {
+        if (on_what) {
+          cb(*on_what);
+        }
+      };
+
+      invoke(immediate);
+      invoke(reg);
+      invoke(address);
+      invoke(shift);
+    }
+
+    bool present(std::size_t idx) {
+      bool out = false;
+      auto collect = [&](auto &op) {
+        out |= op.present(idx);
+      };
+      return ForEach(collect), out;
     }
 
     bool IsHusk() const {
@@ -304,6 +383,15 @@ namespace circuitous::shadowinst {
     auto size() const { return operands.size(); }
     const auto &operator[](std::size_t idx) const { return operands[idx]; }
     auto &operator[](std::size_t idx) { return operands[idx]; }
+
+    bool present(std::size_t idx) {
+      for (auto &op : operands) {
+        if (op.present(idx)) {
+          return true;
+        }
+      }
+      return false;
+    }
 
     template<typename T, typename ...Args>
     auto &Add(Args && ... args) {
