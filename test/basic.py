@@ -514,11 +514,16 @@ test_reg_parts = {
   .case(run_bytes = intel(["mov cl, bh"]), R=True)
   .case(run_bytes = intel(["mov cl, bl"]), R=True),
 
-  ModelTest("xor 16 lift").tags({"reduce_regs"})
+  ModelTest("xor 8 lift").tags({"reduce_regs", "xor"})
   .DI(S(0x250))
   .bytes(intel(["xor al, r8b"])).case(run_bytes = 0, R=True),
 
-  ModelTest("xor 32 lift").tags({"reduce_regs"})
+
+  ModelTest("xor 16 lift").tags({"reduce_regs", "xor"})
+  .DI(S(0x250))
+  .bytes(intel(["xor ax, r8w"])).case(run_bytes = 0, R=True),
+
+  ModelTest("xor 32 lift").tags({"reduce_regs", "xor"})
   .DI(S(0x250))
   .bytes(intel(["xor eax, ebx"])).case(run_bytes = 0, R=True),
 
@@ -655,6 +660,10 @@ test_addr_ops = {
   .DI(S(0xffffffffff250))
   .bytes(intel(["lea eax, [ebx + r8d]"])).case(run_bytes = 0, R=True),
 
+  ModelTest("addr lifts 7").tags({"addr_op", "reduce_regs", "lift"})
+  .DI(S(0xffffffffff250))
+  .bytes(intel(["lea r8d, [ebx + eax]"])).case(run_bytes = 0, R=True),
+
   ModelTest("addr op basic r32").tags({"addr_op", "reduce_regs"})
   .bytes(intel(["lea eax, [ebx + 2 * ecx + 0x4]"]))
   .DI(S(0x250).aflags(0).RAX(0xffffffffff10).RBX(0xffffffffff20).RCX(0xffffffffff30)
@@ -687,6 +696,39 @@ test_addr_ops = {
   .DI(S(0xffffffffffff43))
   .case(run_bytes = intel(["lea rax, [rbx + 2 * rcx + 0x4]"]), R=False),
 
+  ModelTest("addr op permutations r32 test").tags({"addr_op", "reduce_regs"})
+  .bytes(intel(["lea eax, [ebx + r15d]",
+                "lea r8d, [ebx + eax]"
+  ]))
+  .DI(S(0xfffffffff250).aflags(0).RAX(0xffffffffff10).RBX(0xffffffffff20).RCX(0xffffffffff30)
+                       .RDX(0xffffffffff40).R8(0xffffffffff50).R9(0xffffffffff60)
+                       .R10(0xffffffffff70)
+                       .R14(0xffffffffff80)
+                       .R15(0xffffffffff90))
+  .case(run_bytes = intel(["lea eax, [ebx + r8d]"]), R=True),
+
+  ModelTest("addr op permutations r32 test").tags({"addr_op", "reduce_regs"})
+  .bytes(intel(["lea eax, [ebx + r15d]",
+                "lea r8d, [ebx + eax]"
+  ]))
+  .DI(S(0xfffffffff250).aflags(0).RAX(0xffffffffff10).RBX(0xffffffffff20).RCX(0xffffffffff30)
+                       .RDX(0xffffffffff40).R8(0xffffffffff50).R9(0xffffffffff60)
+                       .R10(0xffffffffff70)
+                       .R14(0xffffffffff80)
+                       .R15(0xffffffffff90))
+  .case(run_bytes = intel(["lea eax, [ebx + r8d]"]), R=True),
+
+
+  ModelTest("tmp").tags({"addr_op", "reduce_regs"})
+  .bytes(intel(["lea eax, [eax + ebx]", "lea eax, [ebx + 0x01]"]))
+  .DI(S(0xfffffffff250).aflags(0).RAX(0xffffffffff10).RBX(0xffffffffff20).RCX(0xffffffffff30)
+                       .RDX(0xffffffffff40).R8(0xffffffffff50).R9(0xffffffffff60)
+                       .R10(0xffffffffff70)
+                       .R14(0xffffffffff80)
+                       .R15(0xffffffffff90))
+  .case(run_bytes = intel(["lea eax, [eax + 2 * eax + 0x0]"]), R=True),
+
+
   ModelTest("addr op permutations r32").tags({"addr_op", "reduce_regs"})
   .bytes(intel(["lea eax, [eax + ebx]", "lea eax, [ebx + 0x01]",
                "lea ecx, [ecx + 2 * edx + 0x5]", "lea ecx, [eax + 0x0]",
@@ -703,23 +745,23 @@ test_addr_ops = {
   .case(run_bytes = intel(["lea edx, [eax + 8 * ebx + 0x7fff]"]), R=True)
   .case(run_bytes = intel(["lea ebx, [ecx + 0x7ffffff]"]), R=True)
   .case(run_bytes = intel(["lea eax, [ebx + r8d]"]), R=True)
-  .case(run_bytes = intel(["lea eax, [eax + 2 * eax + 0x0]"]), R=True)
-  .case(run_bytes = intel(["lea ecx, [ecx + 8 * ecx"]), R=True)
+  .case(run_bytes = intel(["lea eax, [eax + 2 * eax + 0x0]"]), R=True) #
+  .case(run_bytes = intel(["lea ecx, [ecx + 8 * ecx"]), R=True) #
   .case(run_bytes = intel(["lea ecx, [edx + 1 * ebx - 0x60]"]), R=True)
   .case(run_bytes = intel(["lea r10d, [eax - 0x5]"]), R=True)
   .case(run_bytes = intel(["lea r9d, [eax + 8 * r8d + 0x7fff]"]), R=True)
   .case(run_bytes = intel(["lea ebx, [r10d + 0x7ffffff]"]), R=True)
   .case(run_bytes = intel(["lea r10d, [ebx + r8d]"]), R=True)
-  .case(run_bytes = intel(["lea eax, [r9d + 2 * eax + 0x0]"]), R=True)
+  .case(run_bytes = intel(["lea eax, [r9d + 2 * eax + 0x0]"]), R=True) #
   .case(run_bytes = intel(["lea r10d, [r9d + 8 * r9d"]), R=True)
   .case(run_bytes = intel(["lea r9d, [edx + 1 * r8d - 0x60]"]), R=True)
   .case(run_bytes = intel(["lea r15d, [ebx + r8d]"]), R=True)
   .case(run_bytes = intel(["lea eax, [r15d + 2 * eax + 0x0]"]), R=True)
-  .case(run_bytes = intel(["lea r15d, [r15d + 8 * r15d"]), R=True)#
+  .case(run_bytes = intel(["lea r15d, [r15d + 8 * r15d"]), R=True)
   .case(run_bytes = intel(["lea r15d, [edx + 1 * r8d - 0x60]"]), R=True)
   .case(run_bytes = intel(["lea r14d, [ebx + r8d]"]), R=True)
   .case(run_bytes = intel(["lea eax, [r14d + 2 * eax + 0x0]"]), R=True)
-  .case(run_bytes = intel(["lea r14d, [r15d + 8 * r15d"]), R=True) #
+  .case(run_bytes = intel(["lea r14d, [r15d + 8 * r15d"]), R=True)
   .case(run_bytes = intel(["lea r14d, [edx + 1 * r8d - 0x60]"]), R=True),
 
   ModelTest("addr op permutations r32 reject").tags({"addr_op", "reduce_regs"})
