@@ -68,6 +68,16 @@ namespace permutate {
       return lhs.Serialize() == rhs.Serialize();
     }
 
+    static bool full_compare(const remill::Register *lhs, const remill::Register *rhs) {
+      if (!lhs && !rhs) {
+        return true;
+      }
+      if (!lhs || !rhs) {
+        return false;
+      }
+      return lhs->name == rhs->name;
+    }
+
     static bool Depends(const operands_t &) { return true; }
     // TODO(lukas): Dependency verifier
   };
