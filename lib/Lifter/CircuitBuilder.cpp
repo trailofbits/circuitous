@@ -223,7 +223,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
 
       const auto icmp_eq = call_inst->getCalledFunction();
       CHECK_NOTNULL(icmp_eq);
-      if (intrinsics::OneOf::IsIntrinsic(icmp_eq)) {
+      if (intrinsics::Xor::IsIntrinsic(icmp_eq)) {
         ++arg_num;
         continue;
       }

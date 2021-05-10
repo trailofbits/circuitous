@@ -746,7 +746,7 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
 
           const auto arg_cmp = llvm::cast<llvm::CallInst>(arg_use.get());
 
-          if (intrinsics::OneOf::IsIntrinsic(arg_cmp->getCalledFunction())) {
+          if (intrinsics::Xor::IsIntrinsic(arg_cmp->getCalledFunction())) {
             importer.Visit(circuit_func, arg_cmp);
             verify_inst->AddUse(importer.val_to_op[arg_cmp]);
             continue;
