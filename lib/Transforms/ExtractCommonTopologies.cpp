@@ -158,7 +158,7 @@ struct ECT {
     }
 
     CHECK_LT(0u, op_num_ops);
-    Operation *merged_op = first_op->CloneWithoutOperands(circuit);
+    Operation *merged_op = circuit->Fork(first_op);
 
     // Go cache that we've processed these nodes before we go and actually
     // merge the child nodes.
@@ -401,7 +401,7 @@ struct DependencyBreaker {
     std::vector<Operation *> models;
     for (uint64_t i = 0; i < allocations.current_size; ++i) {
       auto orig = *candidates.begin();
-      auto model = orig->CloneWithoutOperands(circuit);
+      auto model = circuit->Fork(orig);
       auto lhs = circuit->Create<Hint>(orig->operands[0]->size);
       auto rhs = circuit->Create<Hint>(orig->operands[1]->size);
       model->AddUse(lhs);
