@@ -241,7 +241,11 @@ namespace permutate {
     }
   };
 
-  template<typename Next>
+  // `exact_mod` allows to modify the behaviour of `Check` method if the operands of interest
+  // are exactly the same in both instructions.
+  // NOTE(lukas): See permutation generation and register enlarging heuristics for examples
+  //              of when this was flag is used.
+  template<typename Next, bool exact_mod = false>
   struct Dispatch : Next {
     using OpType = typename Next::OpType;
     using Item_t = typename Next::Item_t;
@@ -277,11 +281,13 @@ namespace permutate {
     template<typename Fn>
     static bool Check(cri original, cri permutation, citem_ref op, Fn &&on_self) {
       auto [structural, exact] = Next::CheckStructure(original, permutation, op, on_self);
-      return structural && !exact;
+      return structural && (exact_mod || !exact);
     }
   };
 
-  using Comparator = Dispatch<DependencyComparator<UnitCompares<TrueBase>>>;
+  template<bool exact_mod>
+  using RComparator = Dispatch<DependencyComparator<UnitCompares<TrueBase>>, exact_mod>;
+  using Comparator = RComparator<false>;
   using HuskComparator = Dispatch<DependencyComparator<EqDependency<UnitCompares<TrueBase>>>>;
 } // namespace permutate
 
