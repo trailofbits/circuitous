@@ -79,26 +79,29 @@ namespace impl {
     }
   };
 
+  // Parses `C` following the enc of the `fn_prefix`. Expects numbers
+  // separated by `.`.
   template<typename Self_t, uint8_t C>
   struct ParseInts : Base<Self_t> {
     using Parent = Base<Self_t>;
 
+    template<typename I=uint64_t>
     static auto ParseArgs(llvm::Function *fn) {
       CHECK(Parent::IsIntrinsic(fn))
         << "Cannot parse arguments of function: "
         << LLVMName(fn)
         << "that is not our intrinsic.";
 
-      auto as_uint64_t = [](auto &str_ref) {
+      auto as_I = [](auto &str_ref) {
         uint64_t out;
         str_ref.getAsInteger(10, out);
-        return out;
+        return static_cast<I>(out);
       };
 
       llvm::StringRef name = fn->getName();
       name.consume_front(Self_t::fn_prefix);
       name.consume_front(Self_t::separator);
-      return Consume<C>(name, as_uint64_t);
+      return Consume<C>(name, as_I);
     }
 
     template<uint8_t L, typename Convert>
@@ -112,7 +115,7 @@ namespace impl {
       }
     }
 
-    using intrinsic_args_t = decltype(ParseArgs(nullptr));
+    using intrinsic_args_t = decltype(ParseArgs<uint64_t>(nullptr));
   };
 
   template<typename Self_t>
