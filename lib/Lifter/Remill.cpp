@@ -481,6 +481,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     const auto lhs_val = val->getOperand(0u);
     const auto rhs_val = val->getOperand(1u);
+    Visit(func, lhs_val);
+    Visit(func, rhs_val);
     auto lhs_op = val_to_op[lhs_val];
     auto rhs_op = val_to_op[rhs_val];
     CHECK_NOTNULL(lhs_op);
@@ -520,14 +522,13 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   }
 
   void VisitAPInt(llvm::Constant *val, llvm::APInt ap_val) {
-    auto &op = val_to_op[val];
-    if (op) {
+    if (val_to_op.count(val)) {
       return;
     }
 
     const auto num_bits = dl.getTypeSizeInBits(val->getType());
+    llvm::SmallString<128> bits;
 
-    bits.clear();
     bits.reserve(num_bits);
     ap_val.toStringUnsigned(bits, 2);
     while (bits.size() < num_bits) {
@@ -537,26 +538,21 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     auto bits_str = bits.str().str();
 
     auto &bits_op = bits_to_constants[bits_str];
-    if (bits_op) {
-      op = bits_op;
-      return;
+    if (!bits_op) {
+      CHECK_EQ(num_bits, bits_str.size());
+      bits_op = impl->Create<Constant>(std::move(bits_str),
+                                      static_cast<unsigned>(num_bits));
     }
-
-    CHECK_EQ(num_bits, bits_str.size());
-
-    bits_op = impl->Create<Constant>(std::move(bits_str),
-                                     static_cast<unsigned>(num_bits));
-    op = bits_op;
+    val_to_op[val] = bits_op;
   }
 
   void VisitUndefined(llvm::Function *, llvm::UndefValue *val) {
-    auto &op = val_to_op[val];
-    if (op) {
+    if (val_to_op.count(val)) {
       return;
     }
 
-    const auto num_bits = dl.getTypeSizeInBits(val->getType());
-    op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
+    auto num_bits = static_cast<uint32_t>(dl.getTypeSizeInBits(val->getType()));
+    Emplace<Undefined>(val, num_bits);
   }
 
   void VisitConstantInt(llvm::Function *, llvm::ConstantInt *val) {
@@ -565,6 +561,18 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
   void VisitConstantFP(llvm::Function *, llvm::ConstantFP *val) {
     VisitAPInt(val, val->getValueAPF().bitcastToAPInt());
+  }
+
+  Operation *Fetch(llvm::Function *fn, llvm::Value *val) {
+    if (!val_to_op.count(val)) {
+      Visit(fn, val);
+    }
+    return val_to_op[val];
+  }
+
+  template<typename T, typename ...Args>
+  void Emplace(llvm::Value *key, Args &&... args) {
+    val_to_op.emplace(key, impl->Create<T>(std::forward<Args>(args)...));
   }
 
   const remill::Arch *const arch;
