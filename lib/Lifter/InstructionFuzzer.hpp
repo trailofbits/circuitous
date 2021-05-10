@@ -119,6 +119,11 @@ namespace permutate {
           return false;
         }
 
+        if (self.index_reg.size != flipped.index_reg.size ||
+            self.base_reg.size != flipped.base_reg.size) {
+          return false;
+        }
+
         // Base
         if (self.base_reg.size != flipped.base_reg.size ||
            (self.base_reg.name != flipped.base_reg.name)) {
