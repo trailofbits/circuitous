@@ -310,7 +310,7 @@ namespace circuitous::shadowinst {
     std::optional<Immediate> immediate;
     std::optional<Reg> reg;
     std::optional<Address> address;
-    maybe_region_t shift;
+    std::optional<Shift> shift;
 
     template<typename T, typename ... Args>
     static auto As(Args && ... args) {
