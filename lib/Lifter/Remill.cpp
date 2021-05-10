@@ -752,9 +752,11 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
             continue;
           }
 
-          CHECK(intrinsics::Eq::IsIntrinsic(arg_cmp->getCalledFunction()) ||
-                intrinsics::BitCompare::IsIntrinsic(arg_cmp->getCalledFunction()) ||
-                intrinsics::OneOf::IsIntrinsic(arg_cmp->getCalledFunction()));
+          auto is_expected = [](auto fn) {
+            using namespace intrinsics;
+            return one_of<BitCompare, Xor, Eq>(fn);
+          };
+          CHECK(is_expected(arg_cmp->getCalledFunction()));
 
           const auto proposed_val = arg_cmp->getArgOperand(0u);
           const auto expected_val = arg_cmp->getArgOperand(1u);
