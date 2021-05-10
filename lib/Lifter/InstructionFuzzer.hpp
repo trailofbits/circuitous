@@ -194,6 +194,16 @@ namespace permutate {
         return { false, false };
       }
 
+      // NOTE(lukas): Unfortunately we can have the following:
+      // `64 44 xyz`
+      // `64 64 44 xyz`
+      // and if `44` (valid REX prefix) is changed to `64` (segment override)
+      // this comparison will not notice it, as the segment override is always present
+      // which is really unfortunate.
+      if (!Next::full_compare(original.segment_override, permutation.segment_override)) {
+        return { false, false };
+      }
+
       if (original.operands.size() != permutation.operands.size()) {
         return { false, false };
       }
