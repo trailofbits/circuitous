@@ -3,6 +3,7 @@
  */
 
 #include <circuitous/Lifter/BaseLifter.hpp>
+#include <circuitous/IR/Intrinsics.hpp>
 
 #include <remill/BC/Compat/CallSite.h>
 #include <remill/BC/Util.h>
@@ -16,31 +17,86 @@
 #pragma clang diagnostic ignored "-Wconversion"
 #include <glog/logging.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Codegen/IntrinsicLowering.h>
 #pragma clang diagnostic pop
 
 namespace circuitous {
 
   struct InstrinsicHandler {
     using functions_t = std::vector<llvm::Function *>;
+    using intrinsic_id = llvm::Intrinsic::ID;
+    using intrinsic_map = std::map<intrinsic_id, std::vector<llvm::CallInst *>>;
 
-    void HandleUsubSat(const functions_t &fns) {
-      // TOOD(lukas): This most likely wants its own class
-      // We want to lower some intrinsics that llvm optimizations introduced
-      // `usub.sat` is a result of InstCombining.
+    intrinsic_map Fetch(const functions_t &fns) {
+      intrinsic_map out;
       std::vector<llvm::Instruction *> calls;
       for (auto fn : fns) {
         for (auto &bb : *fn) {
           for (auto &inst : bb) {
             // NOTE(lukas): I opted to go inst by inst to avoid accidentaly
             //              modifying semantic functions we do not use.
-            if (auto cs = remill::compat::llvm::CallSite(&inst)) {
-              if (cs.isCall() &&
-                  cs.getCalledFunction()->getIntrinsicID() == llvm::Intrinsic::usub_sat)
-                  calls.push_back(cs.getInstruction());
+            auto cs = remill::compat::llvm::CallSite(&inst);
+            if (!cs.isCall()) {
+              continue;
+            }
+            auto id = cs.getCalledFunction()->getIntrinsicID();
+            if (id == llvm::Intrinsic::usub_sat ||
+                id == llvm::Intrinsic::fshr) {
+              out[id].push_back(llvm::dyn_cast<llvm::CallInst>(cs.getInstruction()));
             }
           }
         }
       }
+      return out;
+    }
+
+    void Lower(const std::vector<llvm::CallInst *> &calls) {
+      if (calls.empty()) {
+        return;
+      }
+      auto dl = calls[0]->getModule()->getDataLayout();
+      llvm::IntrinsicLowering lower{dl};
+      for (auto c : calls) {
+        lower.LowerIntrinsicCall(c);
+      }
+    }
+
+    void Lower(const functions_t &fns) {
+      auto calls = Fetch(fns);
+      HandleUsubSat(calls[llvm::Intrinsic::usub_sat]);
+      HandleFSHR(calls[llvm::Intrinsic::fshr]);
+    }
+
+    llvm::Value *LowerFSHR(llvm::CallInst *call) {
+      llvm::IRBuilder<> ir(call);
+      auto &dl = call->getModule()->getDataLayout();
+
+      std::vector<llvm::Value *> args { call->getArgOperand(1u), call->getArgOperand(0u) };
+      // iN out = fshr(iN x, iN y, iZ z)
+      // i(N * 2) x'y' = concat(x, y)
+      auto full = intrinsics::make_concat(ir, args);
+
+      auto size = static_cast<uint32_t>(
+          dl.getTypeSizeInBits(call->getArgOperand(0u)->getType()));
+      auto shift_size = static_cast<uint32_t>(
+          dl.getTypeSizeInBits(call->getArgOperand(2u)->getType()));
+      // z' = z % N
+      auto shift_c = ir.CreateURem(call->getArgOperand(2u), ir.getIntN(shift_size, size));
+      // shifted' = x'y' << z'
+      auto shifted = ir.CreateLShr(full, ir.CreateZExt(shift_c, full->getType()));
+      // out' = extract.0.N(shifted')
+      return intrinsics::make_raw_extract(ir, shifted, 0ul, size);
+    }
+
+    void HandleFSHR(const std::vector<llvm::CallInst *> &calls) {
+      for (auto call : calls) {
+        auto nc = LowerFSHR(call);
+        call->replaceAllUsesWith(nc);
+        call->eraseFromParent();
+      }
+    }
+
+    void HandleUsubSat(const std::vector<llvm::CallInst *> &calls) {
       for (auto inst : calls) {
         llvm::IRBuilder<> ir(inst);
         auto call = llvm::cast<llvm::CallInst>(inst);
@@ -72,7 +128,7 @@ namespace circuitous {
 
     // Handle intrinsic which can be lowered && we do not have intrinsic for
     // them.
-    InstrinsicHandler().HandleUsubSat(fns);
+    InstrinsicHandler().Lower(fns);
 
     // Verify we did not broke anything
     remill::VerifyModule(module);
