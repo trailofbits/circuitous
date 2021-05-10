@@ -68,6 +68,16 @@ namespace permutate {
       return lhs.Serialize() == rhs.Serialize();
     }
 
+    static bool full_compare(const remill::Register *lhs, const remill::Register *rhs) {
+      if (!lhs && !rhs) {
+        return true;
+      }
+      if (!lhs || !rhs) {
+        return false;
+      }
+      return lhs->name == rhs->name;
+    }
+
     static bool Depends(const operands_t &) { return true; }
     // TODO(lukas): Dependency verifier
   };
@@ -106,6 +116,11 @@ namespace permutate {
 
         if (self.segment_base_reg.name != flipped.segment_base_reg.name ||
             self.segment_base_reg.size != flipped.segment_base_reg.size) {
+          return false;
+        }
+
+        if (self.index_reg.size != flipped.index_reg.size ||
+            self.base_reg.size != flipped.base_reg.size) {
           return false;
         }
 
@@ -179,6 +194,16 @@ namespace permutate {
         return { false, false };
       }
 
+      // NOTE(lukas): Unfortunately we can have the following:
+      // `64 44 xyz`
+      // `64 64 44 xyz`
+      // and if `44` (valid REX prefix) is changed to `64` (segment override)
+      // this comparison will not notice it, as the segment override is always present
+      // which is really unfortunate.
+      if (!Next::full_compare(original.segment_override, permutation.segment_override)) {
+        return { false, false };
+      }
+
       if (original.operands.size() != permutation.operands.size()) {
         return { false, false };
       }
@@ -216,10 +241,22 @@ namespace permutate {
     }
   };
 
-  template<typename Next>
+  // `exact_mod` allows to modify the behaviour of `Check` method if the operands of interest
+  // are exactly the same in both instructions.
+  // NOTE(lukas): See permutation generation and register enlarging heuristics for examples
+  //              of when this was flag is used.
+  template<typename Next, bool exact_mod = false>
   struct Dispatch : Next {
     using OpType = typename Next::OpType;
     using Item_t = typename Next::Item_t;
+
+    static bool Compare(const remill::Instruction &original,
+                        const remill::Instruction &permutation,
+                        typename Item_t::key_type key,
+                        const remill::Operand * val)
+    {
+      return Compare(original, permutation, { { key , val } });
+    }
 
     static bool Compare(const remill::Instruction &original,
                         const remill::Instruction &permutation,
@@ -244,11 +281,13 @@ namespace permutate {
     template<typename Fn>
     static bool Check(cri original, cri permutation, citem_ref op, Fn &&on_self) {
       auto [structural, exact] = Next::CheckStructure(original, permutation, op, on_self);
-      return structural && !exact;
+      return structural && (exact_mod || !exact);
     }
   };
 
-  using Comparator = Dispatch<DependencyComparator<UnitCompares<TrueBase>>>;
+  template<bool exact_mod>
+  using RComparator = Dispatch<DependencyComparator<UnitCompares<TrueBase>>, exact_mod>;
+  using Comparator = RComparator<false>;
   using HuskComparator = Dispatch<DependencyComparator<EqDependency<UnitCompares<TrueBase>>>>;
 } // namespace permutate
 
