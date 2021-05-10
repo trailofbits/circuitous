@@ -375,23 +375,12 @@ struct InstructionFuzzer {
       }
     }
 
-    auto get_base = [&](auto &from) -> remill::Operand::Register & {
-      CHECK(from.operands[idx].type == OpType::kTypeAddress);
-      return from.operands[idx].addr.base_reg;
-    };
-    auto get_index = [&](auto &from) -> remill::Operand::Register & {
-      CHECK(from.operands[idx].type == OpType::kTypeAddress);
-      return from.operands[idx].addr.index_reg;
-    };
-
     for (auto &bits : distributed_bits) {
       std::reverse(bits.begin(), bits.end());
     }
 
     s_addr.base_reg = std::make_optional<shadowinst::Reg>(std::move(distributed_bits[0]));
-    PopulateTranslationTable(*s_addr.base_reg, get_base);
     s_addr.index_reg = std::make_optional<shadowinst::Reg>(std::move(distributed_bits[1]));
-    PopulateTranslationTable(*s_addr.index_reg, get_index);
     s_addr.scale = std::make_optional<shadowinst::Immediate>(std::move(distributed_bits[2]));
     s_addr.displacement = std::make_optional<shadowinst::Immediate>(std::move(distributed_bits[3]));
   }
@@ -419,12 +408,6 @@ struct InstructionFuzzer {
         case OpType::kTypeRegister : {
           std::reverse(op_bits[i].begin(), op_bits[i].end());
           shadow_inst.Add<shadowinst::Reg>(op_bits[i]);
-          auto &s_op = shadow_inst.operands.back();
-          auto get_reg = [&](auto &from) -> remill::Operand::Register & {
-            CHECK(from.operands[i].type == OpType::kTypeRegister);
-            return from.operands[i].reg;
-          };
-          PopulateTranslationTable(*s_op.reg, get_reg);
           break;
         }
         case OpType::kTypeImmediate : {
@@ -443,7 +426,43 @@ struct InstructionFuzzer {
     }
 
     ResolveHusks(shadow_inst);
+    PopulateTranslationTables(shadow_inst);
+    LOG(INFO) << shadow_inst.to_string();
     return shadow_inst;
+  }
+
+  void PopulateTranslationTables(shadowinst::Instruction &s_inst) {
+    std::size_t idx = 0;
+    for (auto &op : s_inst.operands) {
+
+      using maybe_reg_t = std::optional<std::tuple<remill::Operand::Register *, std::size_t>>;
+      auto get_reg = [&](auto &from) -> maybe_reg_t {
+        CHECK(from.operands[idx].type == OpType::kTypeRegister);
+        return { { &from.operands[idx].reg, idx } };
+      };
+      auto get_base = [&](auto &from) -> maybe_reg_t {
+        CHECK(from.operands[idx].type == OpType::kTypeAddress);
+        return { { &from.operands[idx].addr.base_reg, idx } };
+      };
+      auto get_index = [&](auto &from) -> maybe_reg_t {
+        CHECK(from.operands[idx].type == OpType::kTypeAddress);
+        return { { &from.operands[idx].addr.index_reg, idx } };
+      };
+
+      if (op.reg && rinst.operands[idx].type == OpType::kTypeRegister) {
+        PopulateTranslationTable(*op.reg, get_reg);
+      }
+
+      if (op.address && rinst.operands[idx].type == OpType::kTypeAddress) {
+        if (op.address->base_reg) {
+          PopulateTranslationTable(*op.address->base_reg, get_base);
+        }
+        if (op.address->index_reg) {
+          PopulateTranslationTable(*op.address->index_reg, get_index);
+        }
+      }
+      ++idx;
+    }
   }
 
   using rops_map_t = std::map<std::size_t, const remill::Operand *>;
@@ -517,29 +536,119 @@ struct InstructionFuzzer {
       std::reverse(husk_bits.begin(), husk_bits.end());
       for (auto &[i, op] : group) {
         s_inst.Replace(i, op->type, husk_bits);
-        auto x = i;
-        auto get_reg = [=](auto &from) -> remill::Operand::Register & {
-          CHECK(from.operands[x].type == OpType::kTypeRegister);
-          return from.operands[x].reg;
-        };
-
-        if (op->type == OpType::kTypeRegister) {
-          PopulateTranslationTable(*s_inst[i].reg, get_reg);
-        }
       }
     }
+  }
+
+  template<typename Getter>
+  bool RegEnlargementHeuristic(shadowinst::Reg &s_reg, Getter get_reg) {
+    auto [from, size] = s_reg.biggest_chunk();
+    // 3 bits are okay since we do not always need REX prefix.
+    // 4 and more bits are most likely an error in decoding and we definitely
+    // do not want to add even more.
+    if (size == 3 || s_reg.region_bitsize() >= 4) {
+      return false;
+    }
+
+    std::vector<shadowinst::Reg> candidates;
+
+    // We have two defined bits (D) and need to add third
+    if (size == 2) {
+      // _DD_ -> DDD_
+      if (from != 0 && !s_reg.regions.count(from - 1)) {
+        shadowinst::Reg copy{s_reg};
+        copy.regions.erase(from);
+        copy.regions[from - 1] = size + 1;
+        candidates.push_back(std::move(copy));
+      }
+      // _DD_ -> _DDD
+      if (from + size < rinst.bytes.size() * 8 && !s_reg.regions.count(from + size)) {
+        shadowinst::Reg copy{s_reg};
+        copy.regions[from] = size + 1;
+        candidates.push_back(std::move(copy));
+      }
+    }
+    // Everything has size 1, therefore we search for "a hole": __D_D__ -> __DDD__
+    // TODO(lukas): Right now we do not try all cases in D_D_D as we expect there to
+    //              be only one reasonable candidate.
+    if (size == 1) {
+      auto hole = s_reg.get_hole();
+      if (!hole) {
+        return false;
+      }
+      shadowinst::Reg copy{s_reg};
+      copy.regions[*hole] = 1ul;
+      candidates.push_back(std::move(copy));
+    }
+    if (candidates.empty()) {
+      return false;
+    }
+
+    // We also need to check that the newly added combination satisfies the original
+    // selection criterium.
+    // NOTE(lukas): While this works (and overall is a good idea), the implementation
+    //              is a bit spaghetti like and would probably deserve some refactor.
+    auto wget_reg = [&](auto &from) {
+      auto raw = get_reg(from);
+      if (!raw || !std::get<0>(*raw)) {
+        return raw;
+      }
+      auto [reg, idx] = *raw;
+      if (permutate::RComparator<true>::Compare(rinst, from, idx, &from.operands[idx])) {
+        return raw;
+      }
+      // Return empty optional of correct type
+      return decltype(get_reg(from)){};
+    };
+
+    // Checks if the newly populated `shadowinst::Reg` has correct operands.
+    auto is_valid = [](auto &what) {
+      for (auto &[_, mats] : what.translation_map) {
+        if (mats.size() > 1) {
+          return false;
+        }
+      }
+      return true;
+    };
+
+    PopulateTranslationTable_(s_reg, wget_reg);
+    std::optional<shadowinst::Reg> chosen;
+    for (auto &c : candidates) {
+      PopulateTranslationTable_(c, wget_reg);
+      // We want to select more bits only if they led to more decoded reg operands
+      // and their values satisfy our conditions.
+      if (c.translation_map.size() > s_reg.size() && is_valid(c)) {
+        if (chosen) {
+          LOG(FATAL) << "Reg enlargement heuristic has chosen multiple candidates!";
+        }
+        chosen = std::move(c);
+      }
+    }
+    if (!chosen) {
+      LOG(FATAL) << "Reg enlargement heuristic did not choose aby candidate!";
+    }
+    s_reg = std::move(*chosen);
+    return true;
+  }
+
+  template<typename Getter>
+  void PopulateTranslationTable(shadowinst::Reg &shadow_reg, Getter &&get_reg)
+  {
+    if (RegEnlargementHeuristic(shadow_reg, get_reg)) {
+      return;
+    }
+    return PopulateTranslationTable_(shadow_reg, std::forward<Getter>(get_reg));
   }
 
   // `Getter` takes an remill::Operand and returns the register we to compare against.
   // This is so we can get nested registers as well (for example in `Address`)
   template<typename Getter>
-  void PopulateTranslationTable(shadowinst::Reg &shadow_reg, Getter &&get_reg)
+  void PopulateTranslationTable_(shadowinst::Reg &shadow_reg, Getter &&get_reg)
   {
     // TODO(lukas): This is 100% arbitrary check, I am curious
     //              if it fires (and how often)
     LOG_IF(WARNING, shadow_reg.region_bitsize() <= 6);
 
-    //auto idxs = shadow_reg.region_idxs();
     std::vector<uint64_t> idxs;
     for (auto &[from, size] : shadow_reg.regions) {
       auto afrom = rinst.bytes.size() * 8 - from - size;
@@ -548,10 +657,14 @@ struct InstructionFuzzer {
         ++afrom;
       }
     }
+
+    // The callback that is called on permutation
     auto yield = [&](auto bytes) {
+      // First decode permutation and check if it is valid
       remill::Instruction tmp;
       if (!arch->DecodeInstruction(0, bytes, tmp)) {
-        LOG(WARNING) << "Was not able to decode guaranteed permutation";
+        LOG(WARNING) << "Was not able to decode guaranteed permutation\n"
+                     << shadowinst::to_binary(bytes);
         return;
       }
       if (tmp.function != rinst.function) {
@@ -569,11 +682,23 @@ struct InstructionFuzzer {
         LOG(WARNING) << rinst.function;
         return;
       }
-      const auto &reg = get_reg(tmp);
+      // `tmp` hosts a valid instruction, therefore we now want to retrieve
+      // the register operand we are fuzzing.
+      // `get_reg` is allowed to perform more logic than simple retrieval, that's
+      // why the return type is wrapped in `std::optional` -> if the value is not
+      // present we do not want to work with this operand.
+      auto maybe_reg = get_reg(tmp);
+      if (!maybe_reg) {
+        LOG(INFO) << "get_reg returned no value";
+        return;
+      }
+      CHECK(std::get<0>(*maybe_reg));
+      const auto &reg = *(std::get<0>(*maybe_reg));
 
       std::vector<bool> out;
       std::stringstream ss;
 
+      // Generate the value
       for (auto idx : idxs) {
         auto byte = static_cast<uint8_t>(bytes[idx / 8]);
         out.push_back((byte >> (7 - (idx % 8))) & 1u);
@@ -586,6 +711,7 @@ struct InstructionFuzzer {
       }
       shadow_reg.translation_map[reg.name].insert(std::move(out));
     };
+
     std::string copied_bytes = rinst.bytes;
     _Permutate(copied_bytes, idxs, 0, yield);
   }
