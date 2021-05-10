@@ -152,7 +152,7 @@ struct ECT {
     LOG(INFO) << "JUST CHECKING THAT I AM PROGRESSING";
     // All of the operations are uniform. If we're dealing with a leaf node
     // then we'll go and merge them using a different approach.
-    if (IsOneOf<InputRegister, Hint, Constant, InputImmediate>(first_op)) {
+    if (IsOneOf<InputRegister, Hint, Constant, InputImmediate, InputInstructionBits>(first_op)) {
       LOG(INFO) << "GOING TO MERGE LEAVES";
       return MergeLeaves(circuit, op_uses);
     }
