@@ -664,14 +664,21 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
   IRImporter importer(arch, dl, impl.get());
 
   auto num_inst_bits = 0u;
+  auto i = 0u;
+  llvm::Value *ibits = nullptr;
   for (auto &arg : circuit_func->args()) {
+    if (i == 0) {
+      ++i;
+      ibits = &arg;
+    }
     if (arg.hasName() && !arg.getName().empty()) {
       break;
     }
     num_inst_bits += static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
   }
 
-  const auto inst_bits = impl->Create<InputInstructionBits>(num_inst_bits);
+  auto inst_bits = impl->Create<InputInstructionBits>(num_inst_bits);
+  importer.val_to_op.emplace(ibits, inst_bits);
   for (auto &arg : circuit_func->args()) {
     const auto arg_size =
         static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
