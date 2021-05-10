@@ -182,9 +182,10 @@ namespace impl {
     static_assert(std::is_same_v<typename Parent::intrinsic_args_t, std::tuple<uint64_t>>);
   };
 
-  template<typename Self_t>
-  struct EncodeSize : Base<Self_t> {
-    using Parent = Base<Self_t>;
+  template<typename Self_t, template<typename ...> class Derived_>
+  struct EncodeSize : ParseInts<Self_t, 1> {
+    using Parent = ParseInts<Self_t, 1>;
+    using Derived = Derived_<Self_t>;
 
     static std::string Name(uint64_t size) {
       std::stringstream ss;
@@ -194,40 +195,25 @@ namespace impl {
 
     static llvm::Function *CreateFn(llvm::Module *module, uint64_t size) {
       llvm::IRBuilder<> ir(module->getContext());
-      auto ret_ty = Self_t::ResultType(module, size);
-      auto args_ty = Self_t::ArgTypes(module, size);
-      auto fn_t = llvm::FunctionType::get(ret_ty, args_ty, Self_t::is_vararg);
+      auto ret_ty = Derived::ResultType(module, size);
+      auto args_ty = Derived::ArgTypes(module, size);
+      auto fn_t = llvm::FunctionType::get(ret_ty, args_ty, Derived::is_vararg);
       auto callee = module->getOrInsertFunction(Name(size), fn_t);
       return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
     }
 
-    using intrinsic_args_t = uint64_t;
-    static intrinsic_args_t ParseArgs(llvm::Function *fn) {
-      CHECK(Parent::IsIntrinsic(fn))
-        << "Cannot parse arguments of function: "
-        << LLVMName(fn)
-        << "that is not our intrinsic.";
-
-      llvm::StringRef name = fn->getName();
-      name.consume_front(Self_t::fn_prefix);
-      name.consume_front(Self_t::separator);
-
-      uint64_t out;
-      name.getAsInteger(10, out);
-      return out;
-    }
-
+    static_assert(std::is_same_v<typename Parent::intrinsic_args_t, std::tuple<uint64_t>>);
   };
 
   template<typename Self_t>
-  struct Identity : EncodeSize<Self_t> {
-    using Parent = EncodeSize<Self_t>;
+  struct Identity : EncodeSize<Self_t, Identity> {
+    using Parent = EncodeSize<Self_t, Identity>;
 
     using Parent::CreateFn;
 
     static llvm::Function *CreateFn(llvm::Module *module, llvm::Type *type) {
       auto size = llvm::cast<llvm::IntegerType>(type)->getScalarSizeInBits();
-      return EncodeSize<Self_t>::CreateFn(module, size);
+      return Parent::CreateFn(module, size);
     }
 
     static constexpr bool is_vararg = false;
@@ -270,8 +256,8 @@ namespace impl {
   };
 
   template<typename Self_t>
-  struct VarArg : EncodeSize<Self_t> {
-    using Parent = EncodeSize<Self_t>;
+  struct VarArg : EncodeSize<Self_t, VarArg> {
+    using Parent = EncodeSize<Self_t, VarArg>;
 
     static constexpr bool is_vararg = true;
 
