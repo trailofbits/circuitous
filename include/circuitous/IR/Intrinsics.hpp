@@ -315,8 +315,9 @@ namespace impl {
     return ir.CreateCall(fn, c_args);
   }
 
+  // Add size of each `llvm::Type` from `c_args` together.
   template<typename C>
-  auto add_sizes(const C &c_args) {
+  auto sum_sizes(const C &c_args) {
     uint64_t acc = 0;
     for (auto val : c_args) {
       auto int_ty = llvm::cast<llvm::IntegerType>(val->getType());
@@ -512,7 +513,7 @@ auto make_bitcompare(llvm::IRBuilder<> &ir, const C &c_args, Args &&...args) {
 
 template<typename C = std::vector<llvm::Value *>>
 auto make_concat(llvm::IRBuilder<> &ir, const C &c_args) {
-  auto result_size = impl::add_sizes(c_args);
+  auto result_size = impl::sum_sizes(c_args);
   return impl::implement_call<Concat>(ir, c_args, result_size);
 }
 
