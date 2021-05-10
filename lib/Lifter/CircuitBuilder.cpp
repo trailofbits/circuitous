@@ -731,7 +731,7 @@ std::vector<llvm::Value *> Circuit0::ByteFragments(
   auto tail_size = static_cast<uint32_t>(kMaxNumInstBits - rinst_size);
   auto tail = ir.getInt(llvm::APInt(tail_size, 0, false));
 
-  auto extracted = intrinsics::make_raw_extract(ir, rinst_size, tail_size);
+  auto extracted = intrinsics::make_raw_ib_extract(ir, rinst_size, tail_size);
   auto compare = intrinsics::make_bitcompare(ir, {tail, extracted}, tail_size);
   out.push_back(compare);
   return out;
