@@ -156,7 +156,7 @@ def parse(filename, verbose=False):
     print(out)
     print(err)
     raise Exception("Something happened during objdump")
-  section_data = out.split(".dummy_section:")[1]
+  section_data = out.split("<.dummy_section>:")[1]
   for line in section_data.split('\n'):
     # remove whitespaces first
     line = line.lstrip()
