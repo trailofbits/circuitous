@@ -59,6 +59,11 @@ struct DefList {
     return new_def;
   }
 
+  Value *Adopt(Value &&val) {
+    auto [it, _] = defs.insert(std::make_unique<Value>(std::move(val)));
+    return it->get();
+  }
+
   auto Size() const { return defs.size(); }
   bool Empty() const noexcept { return defs.size() == 0; }
 
