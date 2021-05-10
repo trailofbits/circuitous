@@ -49,6 +49,7 @@ template <typename T>
 class BottomUpDependencyVisitor {
  public:
   void VisitArgument(llvm::Function *, llvm::Argument *) {}
+  void VisitFreeze(llvm::Function *, llvm::FreezeInst *) {}
   void VisitFunctionCall(llvm::Function *, llvm::CallInst *) {}
   void VisitBinaryOperator(llvm::Function *, llvm::Instruction *) {}
   void VisitSelect(llvm::Function *, llvm::Instruction *);
@@ -98,6 +99,8 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
       } else if (llvm::isa<llvm::SelectInst>(inst_val)) {
         self->VisitSelect(context, inst_val);
 
+      } else if (auto freeze = llvm::dyn_cast<llvm::FreezeInst>(inst_val)) {
+        self->VisitFreeze(context, freeze);
       } else {
         LOG(FATAL) << "Unexpected value during visit: "
                    << remill::LLVMThingToString(inst_val);
@@ -144,6 +147,12 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
   void VisitArgument(llvm::Function *, llvm::Argument *val) {
     CHECK(val_to_op.count(val));
+  }
+
+  void VisitFreeze(llvm::Function *fn, llvm::FreezeInst *freeze) {
+    auto arg = freeze->getOperand(0u);
+    Visit(fn, arg);
+    val_to_op[freeze] = val_to_op[arg];
   }
 
   // Create an `size`-bit memory read.
