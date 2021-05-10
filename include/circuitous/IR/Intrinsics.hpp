@@ -493,4 +493,13 @@ auto make_select(llvm::IRBuilder<> &ir, const C &c_args, Args &&... args) {
   return impl::implement_call<Select>(ir, c_args, std::forward<Args>(args)...);
 }
 
+template<typename T, typename ... Ts>
+bool one_of(llvm::Function *fn) {
+  if constexpr (sizeof...(Ts) == 0) {
+    return T::IsIntrinsic(fn);
+  } else {
+    return T::IsIntrinsic(fn) || one_of<Ts ...>(fn);
+  }
+}
+
 } // namespace circuitous::intrinsics
