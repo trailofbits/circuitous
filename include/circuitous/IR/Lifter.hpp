@@ -29,6 +29,8 @@
 
 namespace circuitous {
 
+// Adds knowledge of a `shadowinst::Instruction` to a class that
+// inherits from it.
 struct WithShadow : public intrinsics::Extract {
   // TODO(lukas): We do not have it at the time of the construction (yet at least)
   //              so we cannot take it by `const &`.
@@ -134,6 +136,8 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     return canditate;
   }
 
+  // Hide some constant value behind a call to intrinsic, so llvm cannot
+  // optimize it away.
   llvm::Value *HideValue(llvm::Value *val, llvm::BasicBlock *bb, uint64_t size) {
     llvm::IRBuilder<> ir(bb);
     return ir.CreateCall(intrinsics::InputImmediate::CreateFn(bb->getModule(), size), val);
@@ -157,6 +161,18 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     return out;
   }
 
+  // Compared to original lifter which almost alwyas produced a constant (or
+  // at least a constant expression), here lifter needs to do more.
+  // There are 2 main branches of what can happen:
+  //  * Immediate has no shadow -> method returns original constant hidden
+  //    behind intrinsic call to avoid subsequent llvm opts.
+  //    e.g. instead of `i64 5` method return `__circuitous.input_immediate(i64 5)`
+  //  * Immediate has a shadow -> method will try to reconstruct the immediate
+  //    using instruction bytes.
+  //    e.g. `__circuitous.input_immediate(__circuitous.extract.0.32())`
+  //    Note that `extract` takes no argument -> by default it always references
+  //    instruction bytes (we do not have them as object in llvm IR in the scope
+  //    of the semantic function).
   llvm::Value *LiftImmediateOperand(remill::Instruction &inst, llvm::BasicBlock *bb,
                                     llvm::Argument *arg,
                                     remill::Operand &arch_op) override {
@@ -192,6 +208,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     return HideValue(hidden_imm, bb, size);
   }
 
+  // Some registers may require additional shifts
   auto ShiftCoerceInfo(const shadowinst::Reg &s_reg) {
     std::map<uint64_t, std::vector<std::string>> out;
     for (auto &[reg, bits] : s_reg.translation_map) {
@@ -206,6 +223,8 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     return out;
   }
 
+  // Some regsiters may require additional masks (most notably smaller version
+  // of its widest version - e.g. edi needs mask to be extracted from rdi)
   auto MaskCoerceInfo(const shadowinst::Reg &s_reg) {
     std::map<std::tuple<uint64_t, uint64_t>, std::vector<std::string>> out;
     for (auto &[reg, bits] : s_reg.translation_map) {
@@ -217,10 +236,18 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
         out[key].push_back(s_reg.make_bitstring(bstr));
       }
     }
-    CHECK(out.size() == 1);
+    CHECK_EQ(out.size(), 1);
     return out.begin()->first;
   }
 
+  // If register does not have a shadow we can procees the same way default lifter
+  // does. However, if a shadow is present we need to do more complex decision
+  // mostly in form of `selectN` with possible `undef` that represents that a register
+  // is not present for given encoding. See `LiftSReg` for more detailed info.
+  // If register is being written into, we emit an extra pointer that represent a place
+  // where the register "lives". Note that this is not the pointer into `State`,
+  // but it is initialized appropriately (e.g. if we write into `RAX` then load
+  // from this pointer will yield value of `RAX`).
   llvm::Value *LiftRegisterOperand(remill::Instruction &inst,
                                    llvm::BasicBlock *bb,
                                    llvm::Value *state_ptr,
@@ -265,6 +292,9 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     return dst(selected);
   }
 
+  // Lift register in a following way
+  // `selector = concat(extract_regions())`
+  // `reg_to_use = selectN(selector, r1, r2, ..., r(2^N))`
   template<typename Locator>
   llvm::Value *LiftSReg(llvm::BasicBlock *block,
                         llvm::IRBuilder<> &ir,
@@ -323,7 +353,8 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     return LiftSReg(block, ir, s_reg, locate_reg);
   }
 
-  // Return a register value, or zero.
+  // TODO(lukas): Port to remill, only differrence is the type of `zero`
+  //              since remill::InstructionLifter expects `llvm::Constant`.
   llvm::Value *LoadWordRegValOrZero_(llvm::BasicBlock *block,
                                     llvm::Value *state_ptr,
                                     std::string_view reg_name,
@@ -386,10 +417,6 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
 
     auto expected_type = llvm::IntegerType::get(*llvm_ctx, static_cast<uint32_t>(arch_op_size));
     if (hidden_imm->getType() != expected_type) {
-      LOG(INFO) << "Coercing immediate operand of type"
-                << remill::LLVMThingToString(hidden_imm->getType())
-                << "to type"
-                << remill::LLVMThingToString(expected_type);
       // NOTE(lukas): SExt used as it should be generally safer (we want to preserve)
       //              the sign bit.
       if constexpr (std::is_signed_v< I >) {
@@ -402,6 +429,8 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     return x;
   }
 
+  // Lift basically the same way as default lifter, but use mechanism of this class
+  // to lift both immediates and registers.
   llvm::Value *LiftAddressOperand(
       remill::Instruction &rinst, llvm::BasicBlock *block, llvm::Value *state_ptr,
       llvm::Argument *arg, remill::Operand &r_op) override
