@@ -333,7 +333,6 @@ class InputImmediate : public Operation {
  public:
   static constexpr inline uint32_t kind = kInputImmediate;
 
-  Operation *CloneWithoutOperands(Circuit *circuit) const override;
   std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
