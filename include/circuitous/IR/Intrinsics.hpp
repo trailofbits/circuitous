@@ -345,7 +345,7 @@ namespace data {
 
   // Used to compared extracted parts of instruction bits with expected values
   struct BitCompare : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.bitcomapare";
+    static constexpr const char *fn_prefix = "__circuitous.bitcompare";
   };
 
   // Reorder w.r.t to endiannity
