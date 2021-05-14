@@ -34,7 +34,7 @@ bool MergeByBytes(Circuit *circuit) {
   // Check if contexts are not overlaping
   auto ctxs = std::move(CtxCollector().Run(circuit).op_to_ctxs);
   for (auto &[op, ctx] : ctxs) {
-    if (!IsLeaf(op)) {
+    if (!IsLeafNode(op)) {
       LOG(WARNING) << op->Name() << " " << op->id() << " shares more contexts";
       return true;
     }
