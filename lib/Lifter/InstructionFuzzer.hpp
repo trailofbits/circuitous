@@ -15,12 +15,56 @@
 #include <map>
 #include <unordered_map>
 
+/* This header tries to implement a simple "instruction fuzzing".
+ *
+ * When we encounter `mov rax, rbx` and `mov rcx, rdx` we would want
+ * to treat them as one generic instruction in form `mov reg1, reg2`.
+ * This is useful because it allows us make the generated cirucit smaller.
+ *
+ * We try not to relay on any arch specific information (to make this
+ * component as re-usable as we can).
+ * Core pipeline can be laid out as follows:
+ *  - generate some permutations (generating all is quite expensive)
+ *  - decode them using remill provided decoder for given arch, which
+ *    yields remill::Instruction.
+ *  - compare original instruction with decoded permutations.
+ *  - keep track which bits are responsible for which operand:
+ *    e.g. if original instruction was `add rax, rbx` and permuation of bit
+ *    on position `x` decoded as `add rbx, rbx` we can assume that `x` is
+ *    responsible for first operand.
+ *    On the other hand if the permutation decoded as `xor rax, rbx` we know
+ *    it does not impact any operand.
+ *    There are a few cases which make ^ pretty complicated, but it does
+ *    demonstrate the basic idea.
+ *  - once we have all bits identified, we construct a "shadow" instruction
+ *    to the original `remill::Instruction` keeps track of encoding bits for
+ *    each operand (if they were determined).
+ *  - for registers, we permutate all bits to get an "translation map" so we
+ *    can later chose a correct reg given encoding.
+ * There is some other terminology that is used:
+ *  - `Husk` is an operand that does not have any identified bits, but we
+ *    think it is not harcoded. Usually husks pop out when one "real" operand
+ *    is represented as two in `remill::Instruction` (r/w).
+ */
+
 namespace circuitous {
 
 namespace permutate {
 
   using permutations_t = std::vector<std::optional<remill::Instruction>>;
 
+  // Generate simple permutations with bit flip.
+  // E.g. if `0110 1100` is passed as input then this function generates
+  // `1110 1100`
+  // `0010 1100`
+  // `0100 1100`
+  // ...
+  // `0110 1110`
+  // `0110 1101`
+  // It is possible some encodings are therefore missed, but generating all
+  // permutations on some architecture is not a reasonable way to go, therefore
+  // it is expected some part of the code down the line implements heuristic
+  // that can deal with these misses.
   static inline permutations_t Flip(
     const remill::Instruction &rinst, const remill::Arch::ArchPtr &arch)
   {
@@ -79,7 +123,6 @@ namespace permutate {
     }
 
     static bool Depends(const operands_t &) { return true; }
-    // TODO(lukas): Dependency verifier
   };
 
   template<typename Next>
@@ -285,6 +328,9 @@ namespace permutate {
     }
   };
 
+  // Comparator stack handles the identification of relevant bits per Operand.
+  // The layers allow customizations of smaller chunks so the bigger parts can
+  // be reused.
   template<bool exact_mod>
   using RComparator = Dispatch<DependencyComparator<UnitCompares<TrueBase>>, exact_mod>;
   using Comparator = RComparator<false>;
@@ -645,10 +691,6 @@ struct InstructionFuzzer {
   template<typename Getter>
   void PopulateTranslationTable_(shadowinst::Reg &shadow_reg, Getter &&get_reg)
   {
-    // TODO(lukas): This is 100% arbitrary check, I am curious
-    //              if it fires (and how often)
-    LOG_IF(WARNING, shadow_reg.region_bitsize() <= 6);
-
     std::vector<uint64_t> idxs;
     for (auto &[from, size] : shadow_reg.regions) {
       auto afrom = rinst.bytes.size() * 8 - from - size;

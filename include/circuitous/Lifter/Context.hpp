@@ -64,6 +64,8 @@ namespace circuitous {
   };
   using CtxRef = Ctx &;
 
+  // Maximum size of encoding of instruction on amd64
+  // TODO(lukas): Make configurable based on arch
   static constexpr const uint32_t kMaxNumInstBits = 15 * 8;
 
   using InstructionEncoding = std::bitset<kMaxNumInstBits>;
@@ -78,9 +80,7 @@ namespace circuitous {
     // Bitvector representations of the encodings of the instructions from
     // `instructions`.
     std::vector<InstructionEncoding> encodings;
-
     std::vector<shadowinst::Instruction> shadows;
-
     std::vector<llvm::Function *> lifted_fns;
 
     static auto RemillBytesToEncoding(const std::string &bytes) {
