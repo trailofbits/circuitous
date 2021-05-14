@@ -549,4 +549,8 @@ bool one_of(llvm::Function *fn) {
   }
 }
 
+static inline bool is_any(llvm::Function *fn) {
+  return fn->hasName() && fn->getName().startswith("__circuitous.");
+}
+
 } // namespace circuitous::intrinsics
