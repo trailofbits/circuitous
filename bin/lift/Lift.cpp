@@ -91,6 +91,14 @@ struct DefaultLog {
 
   static void kill() { LOG(FATAL) << "Aborted"; }
 
+  template<typename ...Args>
+  static void kill(Args &&...args) {
+    if constexpr (sizeof...(Args) == 0) {
+      return kill();
+    } else {
+      return (LOG(FATAL) << ... << std::forward<Args>(args));
+    }
+  }
 };
 
 std::unique_ptr<circuitous::Circuit> LoadCircuit() {
@@ -133,7 +141,7 @@ std::unique_ptr<circuitous::Circuit> LoadCircuit() {
     return circuitous::Circuit::Deserialize(is);
 
   }
-  std::cerr << "Expected one of `--binary_in` or `--ir_in`" << std::endl;
+  LOG(WARNING) << "Expected one of `--binary_in` or `--ir_in` or `--bytes_int`" << std::endl;
   return {};
 }
 
