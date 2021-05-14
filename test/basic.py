@@ -330,7 +330,7 @@ test_all = {
 }
 
 test_reduce_regs = {
-  ModelTest("mov reg, imm").tags({"reduce_regs", "todo1"})
+  ModelTest("mov reg, imm").tags({"reduce_regs"})
   .bytes(intel(["mov rax, 0x12"]))
   .DI(S(0x100).RAX(0x15).RBX(0x55).RCX(0x45).RDX(0xff).RSP(0x2000))
   .case(run_bytes = intel(["mov rax, 0x12"]), R=True)
@@ -342,7 +342,7 @@ test_reduce_regs = {
   .case(run_bytes = intel(["mov rcx, 0x22"]), R=True)
   .case(run_bytes = intel(["mov rdx, 0x22"]), R=True),
 
-  ModelTest("mov reg, reg").tags({"reduce_regs", "todo2"})
+  ModelTest("mov reg, reg").tags({"reduce_regs"})
   .bytes(intel(["mov rcx, rax"]))
   .DI(S(0x100).RAX(0x15).RBX(0x55).RCX(0x45).RDX(0xff).RSP(0x2000))
   .case(run_bytes = intel(["mov rax, rcx"]), R=True)
@@ -350,7 +350,7 @@ test_reduce_regs = {
   .case(run_bytes = intel(["mov rcx, rax"]), R=True)
   .case(run_bytes = intel(["mov rdx, rax"]), R=True),
 
-  ModelTest("add reg, reg").tags({"reduce_regs", "todo3"})
+  ModelTest("add reg, reg").tags({"reduce_regs"})
   .bytes(intel(["add rcx, rax"]))
   .DI(S(0x100).RAX(0x15).RBX(0x55).RCX(0x45).RDX(0xff).RSP(0x2000))
   .case(run_bytes = intel(["add rax, rcx"]), R=True)
@@ -359,7 +359,7 @@ test_reduce_regs = {
   .case(run_bytes = intel(["add rdx, rax"]), R=True),
 
 
-  ModelTest("add reg, imm/reg").tags({"reduce_regs", "todo4"})
+  ModelTest("add reg, imm/reg").tags({"reduce_regs"})
   .bytes(intel(["mov rax, 0x12", "mov rcx, rax"]))
   .DI(S(0x100).RAX(0x15).RBX(0x55).RCX(0x45).RDX(0xff).RSP(0x2000))
   .case(run_bytes = intel(["mov rax, 0x12"]), R=True)
