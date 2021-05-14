@@ -122,7 +122,7 @@ int main(int argc, char *argv[]) {
     LOG(WARNING) << warnings;
   }
 
-  circuitous::Interpreter run(circuit.get());
+  circuitous::QueueInterpreter run(circuit.get());
   // Initialize instruction bits
   run.SetInstructionBitsValue((*inst).str());
   // Initialize input register state
