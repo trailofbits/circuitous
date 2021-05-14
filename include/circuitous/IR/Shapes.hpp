@@ -27,7 +27,7 @@ bool IsOneOf(Operation *op) {
   }
 }
 
-static inline bool IsLeaf(Operation *op) {
+static inline bool IsLeafNode(Operation *op) {
   switch(op->op_code) {
     case Operation::kInputRegister:
     case Operation::kOutputRegister:
