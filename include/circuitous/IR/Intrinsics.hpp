@@ -402,6 +402,10 @@ namespace data {
   struct Identity : dot_seperator {
     static constexpr const char *fn_prefix = "__circuitous.id";
   };
+
+  struct OutputCheck : dot_seperator {
+    static constexpr const char *fn_prefix = "__circuitous.out_check";
+  };
 } //namespace data
 
 // Intrinsic declaration. Overall, they all try to provide the following unified API
@@ -436,6 +440,11 @@ struct ExtractRaw : impl::Interval<data::ExtractRaw> {};
 // of the circuit only.
 struct Eq : impl::BinaryPredicate<data::Eq> {};
 
+// Behaves in the same way as `Eq` but is reserved to represent output value
+// comparisons. We may want to lower them in a different way (for example due
+// to error bit value)
+struct OutputCheck : impl::BinaryPredicate<data::OutputCheck> {};
+
 // Identity wrapper denoting that something is an input immediate
 // but can be in reality build from extracts and concats -- helps us
 // in optimization phase.
@@ -462,6 +471,11 @@ struct BreakPoint : impl::Predicate<data::BreakPoint> {};
 // Note that it will always return some argument, since there is one operand
 // for each possible `selector` value.
 struct Select : impl::Select<data::Select> {};
+
+// Imposes a barrier that stops llvm optimizations (as they do not know)
+// the body of this functions. Has no representation in the IR and will
+// be thrown away during lowering process.
+struct Identity : impl::Identity<data::Identity> {};
 
 /* Helper functions to make creation of intrinsic calls easier for the user
  * C - container holding arguments
