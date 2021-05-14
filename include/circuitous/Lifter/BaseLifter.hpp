@@ -138,24 +138,7 @@ namespace circuitous {
       std::set<std::string> inst_bytes;
       std::unordered_map<std::string, size_t> isel_index;
 
-      // Abort if `inst.bytes` are filled with `0`s.
-      auto assert_non_zero = [](auto &inst) {
-        for (auto b : inst.bytes) {
-          if (b) {
-            return;
-          }
-        }
-        LOG(FATAL)
-            << "Instructions whose machine code representation is all zeroes are "
-            << "not permitted as they would invalidate the XOR-based checking of "
-            << "encode verification checks";
-      };
-
       ForEachInstructionInBuffer(ctx._arch, buff, [&](remill::Instruction inst) {
-        // Check that bytes of the instruction are not all `0`s, we cannot deal
-        // with that yet.
-        assert_non_zero(inst);
-
         // It's likely that some of Remill's decoders implicitly put position-
         // dependent operands into the operands list, so try to catch that, warn
         // about them, and skip them.
@@ -197,7 +180,6 @@ namespace circuitous {
       return grouped_insts;
     }
 
-      // Decode all instructions in `buff` using `arch`.
     void LiftInstructions(std::vector<InstructionSelection> &isels) {
       remill::IntrinsicTable intrinsics(ctx.module());
       std::vector<llvm::Function *> inst_funcs;
