@@ -5,7 +5,7 @@ from byte_generator import intel
 from model_test import ModelTest
 
 test_mov = {
-  Test("mov imm rdx") .bytes("ba12000000").tags({"min", "mov"})
+  Test("mov imm rdx") .bytes("ba12000000").tags({"min", "mov", "broken"})
   .DI(S(0x100).RIP(0x1000))
   .case(
     DE = MS().RDX(0x12).RIP(0x1005),
