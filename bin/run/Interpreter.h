@@ -152,7 +152,7 @@ namespace circuitous {
       // Run verification nodes until one succeeds
       for (auto op : circuit->Attr<VerifyInstruction>()) {
         // Re-initialize node values
-        node_values.swap(node_values_init);
+        node_values = node_values_init;
         // Reset
         changed = true;
         // Evaluate verification node until fixpoint
