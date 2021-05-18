@@ -130,8 +130,7 @@ The interesting cmd options are:
   * `--fragile` end with first failure - only supported if `--jobs` is `1`
   * Any other extra arguments are forwarded to the lifter
 
-Ideally, you want the following command to report no failures:
-`--tags all --reduce_imms`
+Ideally, you want the following command to report no failures: `--tags all`
 
 As for the structure of tests themselves, the most of the magic is abstracted away.
 Class `ModelTest` represents the `microx` test, why only `Test` requires manual definition
