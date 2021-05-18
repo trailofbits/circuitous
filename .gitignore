@@ -18,6 +18,7 @@ Makefile
 CMakeLists.txt.user
 .envrc
 .vscode
+.cache
 .idea
 .DS_Store
 .cproject
