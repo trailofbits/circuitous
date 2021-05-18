@@ -17,19 +17,9 @@ test_adc = {
   .DI(S(0x350).RAX(0x435).CF(0x1))
   .case(run_bytes = 0, R = True)
   .case(run_bytes = 1, R = True)
-  .case(
-    run_bytes = intel(["adc rax, 0x32"]),
-    RG = if_has("reduce_imms", True),
-    R = False
-  ).case(
-    run_bytes = intel(["adc eax, 0x52"]),
-    RG = if_has("reduce_imms", False),
-    R = False
-  ).case(
-    run_bytes = intel(["adc al, 0x52"]),
-    RG = if_has("reduce_imms", True),
-    R = False
-  ),
+  .case(run_bytes = intel(["adc rax, 0x32"]), R = True)
+  .case(run_bytes = intel(["adc eax, 0x52"]), R = False)
+  .case(run_bytes = intel(["adc al, 0x52"]), R = True),
 
   ModelTest("adc 2 variants opt").tags({"min", "adc"})
   .bytes(intel(["adc rax, 0x12", "adc rsi, 0x15"]))
@@ -50,9 +40,9 @@ test_adc = {
   .case(run_bytes = 1, R = True)
   .case(run_bytes = 2, R = True)
   .case(run_bytes = intel(["adc eax, 0x12"]), R = False)
-  .case(run_bytes = intel(["adc rax, 0x0"]), RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["adc rsi, 0x0"]), RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["adc rdi, 0x0"]), RG = if_has("reduce_imms", True), R = False)
+  .case(run_bytes = intel(["adc rax, 0x0"]), R = True)
+  .case(run_bytes = intel(["adc rsi, 0x0"]), R = True)
+  .case(run_bytes = intel(["adc rdi, 0x0"]), R = True)
 }
 
 test_sbb = {
@@ -67,22 +57,9 @@ test_sbb = {
   .bytes(intel(["sbb al, 0x12", "sbb rax, 0x22"]))
   .case(I = S(0x100).RAX(0x435).CF(0x1), run_bytes = 0, R = True)
   .case(I = S(0x100).RAX(0x435).CF(0x1), run_bytes = 1, R = True)
-  .case(
-    I = S(0x100).RAX(0x435).CF(0x1),
-    run_bytes = intel(["sbb rax, 0x32"]),
-    RG = if_has("reduce_imms", True),
-    R = False
-  ).case(
-    I = S(0x100).RAX(0x435).CF(0x1),
-    run_bytes = intel(["sbb eax, 0x52"]),
-    RG = if_has("reduce_imms", False),
-    R = False
-  ).case(
-    I = S(0x100).RAX(0x435).CF(0x1),
-    run_bytes = intel(["sbb al, 0x52"]),
-    RG = if_has("reduce_imms", True),
-    R = False
-  ),
+  .case(I = S(0x100).RAX(0x435).CF(0x1), run_bytes = intel(["sbb rax, 0x32"]), R = True)
+  .case(I = S(0x100).RAX(0x435).CF(0x1), run_bytes = intel(["sbb eax, 0x52"]), R = False)
+  .case(I = S(0x100).RAX(0x435).CF(0x1), run_bytes = intel(["sbb al, 0x52"]), R = True),
 
   ModelTest("sbb 3 variants").tags({"min", "sbb"})
   .bytes(intel(["sbb rax, 0x12", "sbb rsi, 0x15", "sbb rdi, 0x17"]))
@@ -91,9 +68,9 @@ test_sbb = {
   .case(run_bytes = 1, R = True)
   .case(run_bytes = 2, R = True)
   .case(run_bytes = intel(["sbb eax, 0x12"]), R = False)
-  .case(run_bytes = intel(["sbb rax, 0x0"]), RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["sbb rsi, 0x0"]), RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["sbb rdi, 0x0"]), RG = if_has("reduce_imms", True), R = False)
+  .case(run_bytes = intel(["sbb rax, 0x0"]), R = True)
+  .case(run_bytes = intel(["sbb rsi, 0x0"]), R = True)
+  .case(run_bytes = intel(["sbb rdi, 0x0"]), R = True)
 }
 
 test_shl = {
@@ -104,13 +81,11 @@ test_shl = {
   .case(
     I = S(0x100).RDX(0x7fffffffffffffff).CF(0x0),
     run_bytes = intel(["shl rdx, 0x4"]),
-    RG = if_has("reduce_imms", True),
-    R = False
+    R = True
   ).case(
     I = S(0x100).RDX(0x7fffffffffffffff).CF(0x0),
     run_bytes = intel(["shl rcx, 0x4"]),
-    RG = if_has("reduce_imms", True),
-    R = False
+    R = True 
   )
 }
 
@@ -140,20 +115,19 @@ test_xor = {
   .case(DI = MS().RSI(0x2), R = True)
   .case(DI = MS().RDI(0x22).CF(0x1), R = True)
   .case(run_bytes = intel(["xor rdi, 0x12"]), R = False)
-  .case(run_bytes = intel(["xor rdi, rax"]), RG = if_has("reduce_imms", True), R = False),
+  .case(run_bytes = intel(["xor rdi, rax"]), R = True),
 
   ModelTest("xor 2 variants").tags({"min", "xor"})
   .bytes(intel(["xor rsi, 0xff00ff", "xor rdi, 0x1"]))
   .DI(S(0x100).RSI(0xff12ee).RDI(0x101).aflags(0))
   .case(run_bytes = 0, R = True)
   .case(run_bytes = 1, R = True)
-  .case(run_bytes = intel(["xor rax, 0x12"]), RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["xor rsi, 0x101"]), RG = if_has("reduce_imms", True), R = False)
+  .case(run_bytes = intel(["xor rax, 0x12"]), R = True)
+  .case(run_bytes = intel(["xor rsi, 0x101"]), R = True)
   # Following test have their immediates of incorrect sizes -- should not work even with
   # --reduce_imms
-  .case(run_bytes = intel(["xor rsi, rax"]), RG = if_has("reduce_imms", False), R = False)
-  .case(run_bytes = intel(["xor rdi, 0x7fff"]),
-        RG = if_has("reduce_imms", True), R = False)
+  .case(run_bytes = intel(["xor rsi, rax"]), R = False)
+  .case(run_bytes = intel(["xor rdi, 0x7fff"]), R = True)
 }
 
 test_or = {
@@ -163,21 +137,20 @@ test_or = {
   .case(R = True)
   .case(DI = MS().RSI(0x2), R = True)
   .case(DI = MS().RDI(0x22).CF(0x1), R = True)
-  .case(run_bytes = intel(["or rdi, 0x12"]), RG = if_has("reduce_imms", False), R = False)
-  .case(run_bytes = intel(["or rdi, rax"]), RG = if_has("reduce_imms", True), R = False),
+  .case(run_bytes = intel(["or rdi, 0x12"]), R = False)
+  .case(run_bytes = intel(["or rdi, rax"]), R = True),
 
   ModelTest("or 2 variants").tags({"min", "or"})
   .bytes(intel(["or rsi, 0xff00ff", "or rdi, 0x1"]))
   .DI(S(0x100).RSI(0xff12ee).RDI(0x101).aflags(0))
   .case(run_bytes = 0, R = True)
   .case(run_bytes = 1, R = True)
-  .case(run_bytes = intel(["or rax, 0x12"]), RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["or rsi, 0x101"]), RG = if_has("reduce_imms", True), R = False)
+  .case(run_bytes = intel(["or rax, 0x12"]), R = True)
+  .case(run_bytes = intel(["or rsi, 0x101"]), R = True)
   # Following test have their immediates of incorrect sizes -- should not work even with
   # --reduce_imms
-  .case(run_bytes = intel(["or rsi, rax"]), RG = if_has("reduce_imms", False), R = False)
-  .case(run_bytes = intel(["or rdi, 0x7fff"]),
-        RG = if_has("reduce_imms", True), R = False)
+  .case(run_bytes = intel(["or rsi, rax"]), R = False)
+  .case(run_bytes = intel(["or rdi, 0x7fff"]), R = True )
 }
 
 test_and = {
@@ -188,21 +161,19 @@ test_and = {
   .case(DI = MS().RSI(0x2), R = True)
   .case(DI = MS().RDI(0x22).CF(0x1), R = True)
   .case(run_bytes = intel(["and rdi, 0x12"]), R = False)
-  .case(run_bytes = intel(["and rdi, rax"]), RG = if_has("reduce_imms", True), R = False),
+  .case(run_bytes = intel(["and rdi, rax"]), R = True),
 
   ModelTest("and 2 variants").tags({"min", "and"})
   .bytes(intel(["and rsi, 0xff00ff", "and rdi, 0x1"]))
   .DI(S(0x100).RSI(0xff12ee).RDI(0x101).aflags(0))
   .case(run_bytes = 0, R = True)
   .case(run_bytes = 1, R = True)
-  .case(run_bytes = intel(["and rax, 0x12"]), RG = if_has("reduce_imms", True), R = False)
-  .case(run_bytes = intel(["and rsi, 0x101"]), RG = if_has("reduce_imms", True), R = False)
+  .case(run_bytes = intel(["and rax, 0x12"]), R = True)
+  .case(run_bytes = intel(["and rsi, 0x101"]), R = True)
   # Following test have their immediates of incorrect sizes -- should not work even with
   # --reduce_imms
-  .case(run_bytes = intel(["and rsi, rbx"]), RG = if_has("reduce_imms", False), R = False)
-  .case(run_bytes = intel(["and rdi, 0x7fff"]),
-        RG = if_has("reduce_imms", True), R = False)
-
+  .case(run_bytes = intel(["and rsi, rbx"]), R = False)
+  .case(run_bytes = intel(["and rdi, 0x7fff"]), R = True)
 
 }
 

@@ -16,8 +16,7 @@ test_mov = {
   ).case(
     DE = MS().RDX(0x13).RIP(0x1005),
     run_bytes = "ba13000000",
-    RG = if_has("reduce_imms", True),
-    R = False
+    R = True
   ).case(
     I = S(0x0).RIP(0x1000),
     E = S(0x0).RDX(0x13).RIP(0x1005),
@@ -144,8 +143,7 @@ test_add = {
   ).case("rax+=16",
     I = S(0x100).RAX(0x5).aflags(0),
     run_bytes = intel(["add rax, 16"])[0],
-    RG = if_has("reduce_imms", True),
-    R = False
+    R = True
   ),
   Test("T_reduced:add rax imm") \
   .bytes(intel(["add rax, 0x10"])).tags({'reduce_imms', 'test2'})
@@ -153,8 +151,7 @@ test_add = {
     I = S(0x0).RAX(0x0).aflags(0),
     E = S(0x0).RAX(0x20).RIP(0x1004).aflags(0),
     run_bytes = intel(["add rax, 0x20"])[0],
-    RG = if_has("reduce_imms", True),
-    R = False
+    R = True 
   ),
   Test("T_reduced:add rax imm") \
   .bytes(intel(["add rax, 0x10", "mov rcx, 0x10"])).tags({'reduce_imms', 'test2'})
@@ -162,8 +159,7 @@ test_add = {
     I = S(0x0).RAX(0x0).RCX(0x0).aflags(0),
     E = S(0x0).RAX(0x0).RCX(0x20).RIP(0x1004),
     run_bytes = intel(["add rcx, 0x20"])[0],
-    RG = if_has("reduce_imms", True),
-    R = False
+    R = True
   )
 }
 
@@ -172,34 +168,16 @@ test_mov_add = {
   .bytes(intel(["add rax, 0x20", "mov rax, 0x10"]))
   .tags({'min', 'reduce_imms'})
   .DI(S(0x1).RAX(0x0).aflags(0))
-  .case("add",
-    run_bytes = 0,
-    R = True
-  ).case("mov",
-    run_bytes = 1,
-    R = True
-  ),
+  .case("add", run_bytes = 0, R = True)
+  .case("mov", run_bytes = 1, R = True),
   ModelTest("add, mov") \
   .bytes(intel(["add rax, 0x20", "mov rax, 0x10"]))
   .tags({'reduce_imms', 'test'})
   .DI(S(0x1).RAX(0x0).aflags(0))
-  .case("T:add",
-    run_bytes = intel(["add rax, 0x30"])[0],
-    RG = if_has("reduce_imms", True),
-    R = False
-  ).case("T:mov",
-    run_bytes = intel(["mov rax, 0x40"])[0],
-    RG = if_has("reduce_imms", True),
-    R = False
-  ).case("F:mov rbx",
-    run_bytes = intel(["mov rbx, 0x40"])[0],
-    RG = if_has("reduce_imms", True),
-    R = False
-  ).case("F:add rbx",
-    run_bytes = intel(["add rbx, 0x40"])[0],
-    RG = if_has("reduce_imms", True),
-    R = False
-  ),
+  .case("T:add", run_bytes = intel(["add rax, 0x30"])[0], R = True)
+  .case("T:mov", run_bytes = intel(["mov rax, 0x40"])[0], R = True) 
+  .case("F:mov rbx", run_bytes = intel(["mov rbx, 0x40"])[0], R = True) 
+  .case("F:add rbx", run_bytes = intel(["add rbx, 0x40"])[0], R = True),
 }
 
 circuitous_tests = [test_mov, test_lea, test_idiv, test_add, test_mov_add]
