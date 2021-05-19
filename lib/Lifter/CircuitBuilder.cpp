@@ -21,7 +21,7 @@
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Verifier.h>
-#include <llvm/Codegen/IntrinsicLowering.h>
+#include <llvm/CodeGen/IntrinsicLowering.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 #pragma clang diagnostic pop
 
