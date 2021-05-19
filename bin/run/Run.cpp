@@ -104,12 +104,19 @@ int main(int argc, char *argv[]) {
   // Get top level JSON object
   auto input_obj{maybe_json.get().getAsObject()};
   CHECK(input_obj) << "Invalid input state JSON object";
+
   // Get input instruction bits from JSON value
   auto inst{input_obj->getString("instruction_bits")};
   CHECK(inst) << "Invalid instruction bits JSON value";
+
+  // Get error bit from JSON
+  auto ebit{ input_obj->getBoolean("ebit") };
+  CHECK(ebit) << "Invalid ebit JSON value";
+
   // Get input register values from JSON values
   auto input_regs_obj{input_obj->getObject("input_regs")};
   CHECK(input_regs_obj) << "Invalid input registers JSON object";
+
   // Deserialize circuit from binary IR file
   auto circuit{circuitous::Circuit::Deserialize(ir)};
 
@@ -125,6 +132,7 @@ int main(int argc, char *argv[]) {
   circuitous::QueueInterpreter run(circuit.get());
   // Initialize instruction bits
   run.SetInstructionBitsValue((*inst).str());
+  run.SetInputEbit(*ebit);
   // Initialize input register state
   for (auto [obj_key, obj_val] : *input_regs_obj) {
     auto reg_name{obj_key.str()};
@@ -160,6 +168,11 @@ int main(int argc, char *argv[]) {
     output_obj["output_regs"] = std::move(output_regs_obj);
     output_obj["result"] = result;
     output_obj["inst_bytes"] = *inst;
+    if (auto ebit = run.GetOutputErrorFlagValue()) {
+      output_obj["ebit"] = *ebit;
+    } else {
+      LOG(FATAL) << "Output ebit is undefined!";
+    }
     output << llvm::json::Value(std::move(output_obj));
   }
 
