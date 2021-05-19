@@ -775,23 +775,23 @@ class Circuit : public Condition, AllAttributes {
  public:
   virtual ~Circuit(void);
 
-  using CircuitPtr = std::unique_ptr<Circuit>;
+  using circuit_ptr_t = std::unique_ptr<Circuit>;
 
 
-  static CircuitPtr CreateFromInstructions(const std::string &arch_name,
-                                           const std::string &os_name,
-                                           const std::string &file_name,
-                                           const Optimizations &opts={});
+  static circuit_ptr_t make_circuit(const std::string &arch_name,
+                                    const std::string &os_name,
+                                    const std::string &file_name,
+                                    const Optimizations &opts={});
 
-  static CircuitPtr CreateFromInstructions(const std::string &arch_name,
-                                           const std::string &os_name,
-                                           const llvm::StringRef &bytes,
-                                           const Optimizations &opts={});
+  static circuit_ptr_t make_circuit(const std::string &arch_name,
+                                    const std::string &os_name,
+                                    const llvm::StringRef &bytes,
+                                    const Optimizations &opts={});
 
-  static CircuitPtr CreateFromInstructions(const std::string &arch_name,
-                                           const std::string &os_name,
-                                           std::string_view bytes,
-                                           const Optimizations &opts={});
+  static circuit_ptr_t make_circuit(const std::string &arch_name,
+                                    const std::string &os_name,
+                                    std::string_view bytes,
+                                    const Optimizations &opts={});
  public:
   void Serialize(std::ostream &os);
 
