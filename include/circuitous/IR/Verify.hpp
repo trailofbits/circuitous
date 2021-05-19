@@ -61,6 +61,8 @@ struct Verifier {
       case Operation::kOutputRegister:
       case Operation::kInputInstructionBits:
       case Operation::kHint:
+      case Operation::kInputErrorFlag:
+      case Operation::kOutputErrorFlag:
         return Exactly(0, op);
       case Operation::kInputImmediate:
       case Operation::kNot:
