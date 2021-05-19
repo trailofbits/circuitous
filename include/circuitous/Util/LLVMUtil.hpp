@@ -44,6 +44,7 @@ namespace circuitous {
 
   template<typename T>
   void AddMetadata(llvm::Instruction *inst, const std::string &kind, T value) {
+    CHECK(inst);
     CHECK(!inst->getMetadata(kind));
     auto &ctx = inst->getContext();
     llvm::IRBuilder<> ir(ctx);
@@ -90,6 +91,10 @@ namespace circuitous {
       acc = ir.CreateOr(acc, val);
     }
     return acc;
+  }
+
+  static inline bool is_undef(llvm::Value *val) {
+    return llvm::UndefValue::get(val->getType()) == val;
   }
 
 } // namespace circuitous
