@@ -1,12 +1,12 @@
 # Copyright (c) 2020 Trail of Bits, Inc.
+cmake_minimum_required(VERSION 3.14)
+
+message("Building with VCPKG")
+include(cmake/vcpkg_helper.cmake)
 find_package(remill COMPONENTS VCPKG_DEPS QUIET)
 
-include(cmake/vcpkg_helper.cmake)
-
-project(circuitous)
-cmake_minimum_required(VERSION 3.14)
+project(circuitous C CXX ASM)
 include(GNUInstallDirs)
-enable_language(C CXX ASM)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/settings.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake")
