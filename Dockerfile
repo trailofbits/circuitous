@@ -85,7 +85,7 @@ SHELL ["/bin/bash", "-c"]
 
 COPY . ./
 
-# Source venv, build Anvill, Install binaries & system packages
+# Source venv, build circuitous, Install binaries & system packages
 RUN source ${VIRTUAL_ENV}/bin/activate && \
     cmake -G Ninja -B build -S . \
         -Dremill_DIR:PATH=/usr/local/lib/cmake/remill \
