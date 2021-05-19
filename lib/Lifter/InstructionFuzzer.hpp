@@ -663,7 +663,7 @@ struct InstructionFuzzer {
       PopulateTranslationTable_(c, wget_reg);
       // We want to select more bits only if they led to more decoded reg operands
       // and their values satisfy our conditions.
-      if (c.translation_map.size() > s_reg.size() && is_valid(c)) {
+      if (c.translation_map.size() > s_reg.translation_map.size() && is_valid(c)) {
         if (chosen) {
           LOG(FATAL) << "Reg enlargement heuristic has chosen multiple candidates!";
         }
