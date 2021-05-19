@@ -10,6 +10,20 @@ cmake -DVCPKG_ROOT=/path/to/vckpg \
 make
 ```
 
+### Docker image
+
+To build via Docker run, specify the architecture, base Ubuntu image and LLVM version. For example, to build `circuitous` linking against LLVM 12 on Ubuntu 20.04 on AMD64 do:
+
+```shell
+ARCH=amd64; UBUNTU_VERSION=20.04; LLVM=12; \
+   docker build . \
+   -t circuitous-llvm${LLVM}-ubuntu${UBUNTU_VERSION}-${ARCH} \
+   -f Dockerfile \
+   --build-arg UBUNTU_VERSION=${UBUNTU_VERSION} \
+   --build-arg ARCH=${ARCH} \
+   --build-arg LLVM_VERSION=${LLVM}
+```
+
 # Usage
 
 ## circuitous-run
