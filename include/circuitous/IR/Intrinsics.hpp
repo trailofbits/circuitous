@@ -45,12 +45,6 @@ namespace impl {
       return fn->getName().startswith(Self_t::fn_prefix);
     }
 
-    static llvm::Function *AddAttrs(llvm::Function *fn) {
-      fn->addFnAttr(llvm::Attribute::ReadNone);
-      fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
-      return fn;
-    }
-
     static std::vector<llvm::Function *> All(llvm::Module *module) {
       std::vector<llvm::Function *> out;
       for (auto &fn : *module) {
@@ -76,6 +70,32 @@ namespace impl {
       for (auto call: call_insts) {
         cb(call);
       }
+    }
+
+    static void freeze(llvm::Module *module) {
+      for (auto fn : All(module)) {
+        freeze(fn);
+      }
+    }
+
+    static llvm::Function* freeze(llvm::Function *fn) {
+      fn->addFnAttr(llvm::Attribute::NoMerge);
+      fn->removeFnAttr(llvm::Attribute::ReadNone);
+      fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
+      return fn;
+    }
+
+    static void melt(llvm::Module *module) {
+      for (auto fn : All(module)) {
+        melt(fn);
+      }
+    }
+
+    static llvm::Function* melt(llvm::Function *fn) {
+      fn->removeFnAttr(llvm::Attribute::NoMerge);
+      fn->addFnAttr(llvm::Attribute::ReadNone);
+      fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
+      return fn;
     }
   };
 
@@ -134,7 +154,7 @@ namespace impl {
       auto r_ty = ir.getIntNTy(static_cast<uint32_t>(size));
       auto fn_t = llvm::FunctionType::get(r_ty, {}, true);
       auto callee = module->getOrInsertFunction(Name(from, size), fn_t);
-      return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
+      return Parent::melt(llvm::cast<llvm::Function>(callee.getCallee()));
     }
   };
 
@@ -151,7 +171,7 @@ namespace impl {
       auto r_ty = ir.getInt1Ty();
       auto fn_t = llvm::FunctionType::get(r_ty, {}, true);
       auto callee = module->getOrInsertFunction(Name(), fn_t);
-      return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
+      return Parent::melt(llvm::cast<llvm::Function>(callee.getCallee()));
     }
   };
 
@@ -178,7 +198,7 @@ namespace impl {
       auto arg_ty = ir.getIntNTy(static_cast<uint32_t>(size));
       auto fn_t = llvm::FunctionType::get(r_ty, {arg_ty, arg_ty}, false);
       auto callee = module->getOrInsertFunction(Name(size), fn_t);
-      return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
+      return Parent::melt(llvm::cast<llvm::Function>(callee.getCallee()));
     }
 
     static_assert(std::is_same_v<typename Parent::intrinsic_args_t, std::tuple<uint64_t>>);
@@ -201,7 +221,7 @@ namespace impl {
       auto args_ty = Derived::ArgTypes(module, size);
       auto fn_t = llvm::FunctionType::get(ret_ty, args_ty, Derived::is_vararg);
       auto callee = module->getOrInsertFunction(Name(size), fn_t);
-      return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
+      return Parent::melt(llvm::cast<llvm::Function>(callee.getCallee()));
     }
 
     static_assert(std::is_same_v<typename Parent::intrinsic_args_t, std::tuple<uint64_t>>);
@@ -232,8 +252,8 @@ namespace impl {
   };
 
   template <typename Self_t>
-  struct Allocator : Base<Self_t> {
-    using Parent = Base<Self_t>;
+  struct Allocator : ParseInts<Self_t, 1> {
+    using Parent = ParseInts<Self_t, 1>;
 
     static std::string Name(llvm::Type *type) {
       auto name = [](auto rec, auto type) -> std::string {
@@ -253,7 +273,7 @@ namespace impl {
       llvm::IRBuilder<> ir(module->getContext());
       auto fn_t = llvm::FunctionType::get(type, {}, false);
       auto callee = module->getOrInsertFunction(Name(type), fn_t);
-      return llvm::cast<llvm::Function>(callee.getCallee());
+      return Parent::freeze(llvm::cast<llvm::Function>(callee.getCallee()));
     }
   };
 
@@ -300,7 +320,7 @@ namespace impl {
 
       auto fn_t = llvm::FunctionType::get(r_ty, args, false);
       auto callee = module->getOrInsertFunction(Name(selector, size), fn_t);
-      return Parent::AddAttrs(llvm::cast<llvm::Function>(callee.getCallee()));
+      return Parent::melt(llvm::cast<llvm::Function>(callee.getCallee()));
     }
 
     static_assert(std::is_same_v<typename Parent::intrinsic_args_t,
@@ -403,8 +423,20 @@ namespace data {
     static constexpr const char *fn_prefix = "__circuitous.id";
   };
 
+  struct Hint : dot_seperator {
+    static constexpr const char *fn_prefix = "__circuitous.hint";
+  };
+
+  struct HintCheck : dot_seperator {
+    static constexpr const char *fn_prefix = "__circuitous.check_hint";
+  };
+
   struct OutputCheck : dot_seperator {
     static constexpr const char *fn_prefix = "__circuitous.out_check";
+  };
+
+  struct Transport : dot_seperator {
+    static constexpr const char *fn_prefix = "__circuitous.transport";
   };
 } //namespace data
 
@@ -465,22 +497,77 @@ struct Concat : impl::VarArg<data::Concat> {};
 //              if optimizer is called (may merge multiple instances).
 struct BreakPoint : impl::Predicate<data::BreakPoint> {};
 
+struct Hint : impl::Allocator<data::Hint> {};
+struct HintCheck : impl::BinaryPredicate<data::HintCheck> {};
+
 // Has always `2 ** n + 1` operands and following prototype
 // `iX select.N(iN selecort, iX v_1, iX v_2, ..., iX_(v ** n))`
 // and returns the `v_(selector)` argument.
 // Note that it will always return some argument, since there is one operand
 // for each possible `selector` value.
-struct Select : impl::Select<data::Select> {};
+struct Select : impl::Select<data::Select> {
+
+  static llvm::Value *selector(llvm::CallInst *call) {
+    CHECK(IsIntrinsic(call->getCalledFunction()));
+    return call->getArgOperand(0);
+  }
+
+  static bool is_complete(llvm::CallInst *call) {
+    for (auto &arg : call->args()) {
+      if (is_undef(arg)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  // TODO(lukas): I think we should make this more general by introducing some
+  //              way to configure the
+  static bool are_compatible(llvm::CallInst *lhs, llvm::CallInst *rhs) {
+    auto size = std::min(lhs->getNumArgOperands(), rhs->getNumArgOperands());
+    auto op = [&](auto from, auto i) {
+      auto total = from->getNumArgOperands();
+      auto idx = i + (i - 1) * ((total - 1) / (size - 1) - 1);
+      return from->getArgOperand(idx);
+    };
+    for (uint32_t i = 1; i < size; ++i) {
+      if (is_undef(op(lhs, i)) || is_undef(op(rhs, i))) {
+        continue;
+      }
+      if (op(lhs, i) != op(rhs, i)) {
+        return false;
+      }
+    }
+    return true;
+  }
+};
 
 // Imposes a barrier that stops llvm optimizations (as they do not know)
 // the body of this functions. Has no representation in the IR and will
 // be thrown away during lowering process.
 struct Identity : impl::Identity<data::Identity> {};
 
+struct Transport : impl::Identity<data::Transport> {
+  static llvm::Value *unwrap(llvm::Value *gift) {
+    auto casted = llvm::dyn_cast_or_null<llvm::CallInst>(gift);
+    if (!casted || !Transport::IsIntrinsic(casted->getCalledFunction())) {
+      return gift;
+    }
+    auto suprise = casted->getArgOperand(0u);
+    casted->eraseFromParent();
+    return suprise;
+  }
+};
+
 /* Helper functions to make creation of intrinsic calls easier for the user
  * C - container holding arguments
  * Args... - arguments to be forwarded to appropriate `CreateFn`.
  */
+template<typename C>
+auto make_transport(llvm::IRBuilder<> &ir, const C &args) {
+  return impl::implement_call<Transport>(ir, {args}, args->getType());
+}
+
 template<typename C>
 auto make_xor(llvm::IRBuilder<> &ir, const C &args) {
   return impl::implement_call<Xor>(ir, args);
@@ -535,9 +622,28 @@ static inline auto make_breakpoint(llvm::IRBuilder<> &ir) {
   return impl::implement_call<BreakPoint>(ir, {});
 }
 
+template<typename ...Args>
+auto make_hint(llvm::IRBuilder<> &ir, Args &&...args) {
+  return impl::implement_call<Hint>(ir, {}, std::forward<Args>(args)...);
+}
+
+template<typename C = std::vector<llvm::Value *>>
+auto make_hintcheck(llvm::IRBuilder<> &ir, const C &c_args) {
+  CHECK_EQ(c_args.size(), 2) << "make_hintcheck expects 2 call args.";
+  CHECK(c_args[0]->getType() == c_args[1]->getType());
+  return impl::implement_call<HintCheck>(ir, c_args, c_args[0]->getType());
+}
+
 template<typename C = std::vector<llvm::Value *>, typename ...Args>
 auto make_select(llvm::IRBuilder<> &ir, const C &c_args, Args &&... args) {
   return impl::implement_call<Select>(ir, c_args, std::forward<Args>(args)...);
+}
+
+template<typename C = std::vector<llvm::Value *>>
+auto make_outcheck(llvm::IRBuilder<> &ir, const C &c_args) {
+  CHECK_EQ(c_args.size(), 2) << "make_outcheck expects 2 call args,.";
+  CHECK(c_args[0]->getType() == c_args[1]->getType());
+  return impl::implement_call<OutputCheck>(ir, c_args, c_args[0]->getType());
 }
 
 template<typename T, typename ... Ts>
@@ -551,6 +657,28 @@ bool one_of(llvm::Function *fn) {
 
 static inline bool is_any(llvm::Function *fn) {
   return fn->hasName() && fn->getName().startswith("__circuitous.");
+}
+
+
+template<typename T>
+std::vector<llvm::CallInst *> collect(llvm::Value *from, llvm::Value *to) {
+  CHECK(llvm::isa<llvm::Instruction>(from) && llvm::isa<llvm::Instruction>(to));
+
+  using bb_t = llvm::BasicBlock::iterator;
+  auto begin = bb_t{llvm::cast<llvm::Instruction>(from)};
+  auto end = bb_t{llvm::cast<llvm::Instruction>(to)};
+
+  std::vector<llvm::CallInst *> out;
+  for (;begin != end; ++begin) {
+    auto &inst = *begin;
+    if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(&inst)) {
+      if (T::IsIntrinsic(call_inst->getCalledFunction())) {
+        out.push_back(call_inst);
+      }
+    }
+  }
+  CHECK(out.size() != 0);
+  return out;
 }
 
 } // namespace circuitous::intrinsics
