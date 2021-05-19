@@ -146,7 +146,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
         impl(impl_) {}
 
   void VisitArgument(llvm::Function *, llvm::Argument *val) {
-    CHECK(val_to_op.count(val));
+    CHECK(val_to_op.count(val))
+        << remill::LLVMThingToString(val) << " not present IRImporter.";
   }
 
   void VisitFreeze(llvm::Function *fn, llvm::FreezeInst *freeze) {
@@ -157,6 +158,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
   // Create an `size`-bit memory read.
   Operation *CreateMemoryRead(llvm::CallInst *read_call, unsigned size) {
+    LOG(FATAL) << "TODO(lukas): Pending refactor.";
     auto &read = val_to_mem_cond[read_call];
     if (read) {
       verifier->AddUse(read);
@@ -313,8 +315,29 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     return out;
   }
 
+  Operation *VisitOutputCheckIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
+    return VisitGenericIntrinsic<RegisterCondition>(call, fn);
+  }
+
   Operation *VisitXor(llvm::CallInst *call, llvm::Function *fn) {
     return VisitGenericIntrinsic<OnlyOneCondition>(call, fn);
+  }
+
+  Operation *VisitBitCompare(llvm::CallInst *call, llvm::Function *fn) {
+    return VisitGenericIntrinsic<DecodeCondition>(call, fn);
+  }
+
+  Operation *VisitVerifyInst(llvm::CallInst *call, llvm::Function *fn) {
+    return VisitGenericIntrinsic<VerifyInstruction>(call, fn);
+  }
+
+  Operation *VisitHintCheckIntrinsics(llvm::CallInst *call, llvm::Function *fn) {
+    return VisitGenericIntrinsic<HintCondition>(call, fn);
+  }
+
+  Operation *VisitHintIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
+    auto [size] = intrinsics::Hint::ParseArgs<uint32_t>(fn);
+    return VisitGenericIntrinsic<Hint>(call, fn, size);
   }
 
   Operation *VisitSelectIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
@@ -386,6 +409,21 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
     if (intrinsics::Select::IsIntrinsic(fn)) {
       return VisitSelectIntrinsic(call, fn);
+    }
+    if (intrinsics::OutputCheck::IsIntrinsic(fn)) {
+      return VisitOutputCheckIntrinsic(call, fn);
+    }
+    if (intrinsics::BitCompare::IsIntrinsic(fn)) {
+      return VisitBitCompare(call, fn);
+    }
+    if (intrinsics::VerifyInst::IsIntrinsic(fn)) {
+      return VisitVerifyInst(call, fn);
+    }
+    if (intrinsics::Hint::IsIntrinsic(fn)) {
+      return VisitHintIntrinsic(call, fn);
+    }
+    if (intrinsics::HintCheck::IsIntrinsic(fn)) {
+      return VisitHintCheckIntrinsics(call, fn);
     }
     LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(call);
   }
@@ -571,13 +609,25 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   }
 
   template<typename T, typename ...Args>
-  void Emplace(llvm::Value *key, Args &&... args) {
-    val_to_op.emplace(key, impl->Create<T>(std::forward<Args>(args)...));
+  Operation* Emplace(llvm::Value *key, Args &&... args) {
+    auto [it, _] = val_to_op.emplace(key, impl->Create<T>(std::forward<Args>(args)...));
+    return it->second;
   }
 
-  const remill::Arch *const arch;
+  template<bool allow_failure=false>
+  Operation *get(llvm::Value *key) const {
+    auto it = val_to_op.find(key);
+    if constexpr (!allow_failure) {
+      CHECK(it != val_to_op.end() && it->second);
+    }
+    return (it != val_to_op.end()) ? it->second : nullptr;
+  }
+
+  bool contains(llvm::Value *key) const { return val_to_op.count(key); }
+
+  const remill::Arch *arch;
   const llvm::DataLayout &dl;
-  Circuit *const impl;
+  Circuit *impl;
   VerifyInstruction *verifier{nullptr};
 
   llvm::SmallString<128> bits;
@@ -589,35 +639,13 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   IRImporter(void) = delete;
 };
 
-// Apply a callback `cb(llvm::CallInst *)` to each call of `callee` in the
-// function `caller`.
-template <typename T>
-static void ForEachCallTo(llvm::Function *caller, llvm::Function *callee,
-                          T cb) {
-  if (!callee) {
-    return;
-  }
-
-  std::vector<llvm::CallInst *> verify_calls;
-  for (auto user : callee->users()) {
-    if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(user);
-        call_inst && call_inst->getParent()->getParent() == caller) {
-      verify_calls.push_back(call_inst);
-    }
-  }
-
-  for (auto call_inst : verify_calls) {
-    cb(call_inst);
-  }
-}
-
 }  // namespace
 
-std::unique_ptr<Circuit>
-Circuit::CreateFromInstructions(const std::string &arch_name,
-                                const std::string &os_name,
-                                const std::string &file_name,
-                                const Optimizations &opts) {
+auto Circuit::make_circuit(
+    const std::string &arch_name, const std::string &os_name,
+    const std::string &file_name, const Optimizations &opts)
+-> circuit_ptr_t
+{
   auto maybe_buff = llvm::MemoryBuffer::getFile(file_name, -1, false);
   if (remill::IsError(maybe_buff)) {
     LOG(ERROR) << remill::GetErrorString(maybe_buff) << std::endl;
@@ -625,25 +653,25 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
   }
 
   const auto buff = remill::GetReference(maybe_buff)->getBuffer();
-  return CreateFromInstructions(arch_name, os_name, buff, opts);
+  return make_circuit(arch_name, os_name, buff, opts);
 }
 
-std::unique_ptr<Circuit>
-Circuit::CreateFromInstructions(const std::string &arch_name,
-                                const std::string &os_name,
-                                std::string_view bytes,
-                                const Optimizations &opts) {
-  return CreateFromInstructions(arch_name, os_name,
-                                llvm::StringRef{bytes.data(),
-                                                bytes.size()},
-                                opts);
+auto Circuit::make_circuit(
+    const std::string &arch_name, const std::string &os_name,
+    std::string_view bytes, const Optimizations &opts)
+-> circuit_ptr_t
+{
+  return make_circuit(arch_name, os_name,
+                      llvm::StringRef{bytes.data(),
+                                      bytes.size()},
+                      opts);
 }
 
-std::unique_ptr<Circuit>
-Circuit::CreateFromInstructions(const std::string &arch_name,
-                                const std::string &os_name,
-                                const llvm::StringRef &buff,
-                                const Optimizations &opts) {
+auto Circuit::make_circuit(
+    const std::string &arch_name, const std::string &os_name,
+    const llvm::StringRef &buff, const Optimizations &opts)
+-> circuit_ptr_t
+{
 
   circuitous::Ctx ctx{ os_name, arch_name };
   circuitous::CircuitBuilder builder(ctx);
@@ -651,170 +679,49 @@ Circuit::CreateFromInstructions(const std::string &arch_name,
 
   const auto arch = builder.ctx.arch();
   const auto circuit_func = builder.Build(buff);
+  LOG(INFO) << "FINAL";
+  circuit_func->print(llvm::errs());
+  llvm::errs().flush();
+  LOG(INFO) << "DONE";
 
   const auto module = circuit_func->getParent();
   const auto &dl = module->getDataLayout();
 
-  std::unique_ptr<Circuit> impl(new Circuit);
-
-  auto num_inst_parts = 0u;
-  auto num_input_regs = 0u;
-  auto num_output_regs = 0u;
-
+  auto impl = std::make_unique<Circuit>();
   IRImporter importer(arch, dl, impl.get());
 
-  auto num_inst_bits = 0u;
-  auto i = 0u;
-  llvm::Value *ibits = nullptr;
+  importer.Emplace<InputInstructionBits>(remill::NthArgument(circuit_func, 0), kMaxNumInstBits);
+  importer.Emplace<InputErrorFlag>(remill::NthArgument(circuit_func, 1));
+  importer.Emplace<OutputErrorFlag>(remill::NthArgument(circuit_func, 2));
+
+  auto num_input_regs = 0u;
+  auto num_output_regs = 0u;
   for (auto &arg : circuit_func->args()) {
-    if (i == 0) {
-      ++i;
-      ibits = &arg;
+    auto arg_size = static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
+    // Expected output register.
+    if (Names::is_out_reg(&arg)) {
+      importer.Emplace<OutputRegister>(&arg, arg_size, Names::name(&arg).str());
+      ++num_output_regs;
+    // Input register.
+    } else if (Names::is_in_reg(&arg)) {
+      importer.Emplace<InputRegister>(&arg, arg_size, Names::name(&arg).str());
+      ++num_input_regs;
     }
-    if (arg.hasName() && !arg.getName().empty()) {
-      break;
-    }
-    num_inst_bits += static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
-  }
-
-  auto inst_bits = impl->Create<InputInstructionBits>(num_inst_bits);
-  importer.val_to_op.emplace(ibits, inst_bits);
-  for (auto &arg : circuit_func->args()) {
-    const auto arg_size =
-        static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
-    Operation *op = nullptr;
-    if (arg.hasName() && !arg.getName().empty()) {
-
-      // CHECK(num_inst_parts);
-
-      // Expected output register.
-      if (arg.getName().endswith("_next")) {
-        op = impl->Create<OutputRegister>(
-            arg_size,
-            arg.getName().substr(0u, arg.getName().size() - 5u).str());
-        ++num_output_regs;
-
-      // Input register.
-      } else {
-        op = impl->Create<InputRegister>(arg_size, arg.getName().str());
-        ++num_input_regs;
-      }
-
-    // Extract from the instruction bits.
-    } else {
-      CHECK(!num_input_regs);
-      CHECK(!num_output_regs);
-
-      op = impl->Create<Extract>(num_inst_bits - arg_size, num_inst_bits);
-      op->AddUse(inst_bits);
-
-      ++num_inst_parts;
-      num_inst_bits -= arg_size;
-    }
-    importer.val_to_op.emplace(&arg, op);
   }
 
   // CHECK_LT(0u, num_inst_parts);
   CHECK_LT(0u, num_input_regs);
   CHECK_EQ(num_input_regs, num_output_regs);
 
-  std::unordered_set<Operation *> seen;
-
-  auto verify_inst_func = intrinsics::VerifyInst::CreateFn(module);
   auto all_verifications = impl->Create<OnlyOneCondition>();
   impl->AddUse(all_verifications);
 
-  ForEachCallTo(
-      circuit_func, verify_inst_func, [&](llvm::CallInst *verify_isnt_call) {
-        const auto verify_inst = impl->Create<VerifyInstruction>();
-        importer.verifier = verify_inst;
-        all_verifications->AddUse(verify_inst);
-
-        seen.clear();
-
-        for (auto &arg_use : verify_isnt_call->arg_operands()) {
-          const auto val = arg_use.get();
-          auto &op = importer.val_to_op[val];
-          if (op) {
-            if (seen.count(op)) {
-              continue;
-            }
-            seen.insert(op);
-            verify_inst->AddUse(op);
-            continue;
-          }
-
-          const auto arg_cmp = llvm::cast<llvm::CallInst>(arg_use.get());
-
-          if (intrinsics::Xor::IsIntrinsic(arg_cmp->getCalledFunction())) {
-            importer.Visit(circuit_func, arg_cmp);
-            verify_inst->AddUse(importer.val_to_op[arg_cmp]);
-            continue;
-          }
-
-          auto is_expected = [](auto fn) {
-            using namespace intrinsics;
-            return one_of<BitCompare, Xor, Eq>(fn);
-          };
-          CHECK(is_expected(arg_cmp->getCalledFunction()));
-
-          const auto proposed_val = arg_cmp->getArgOperand(0u);
-          const auto expected_val = arg_cmp->getArgOperand(1u);
-
-          importer.Visit(circuit_func, arg_cmp->getArgOperandUse(0u));
-          importer.Visit(circuit_func, arg_cmp->getArgOperandUse(1u));
-
-          auto &lhs_op = importer.val_to_op[proposed_val];
-          const auto rhs_op = importer.val_to_op[expected_val];
-
-          CHECK_NOTNULL(rhs_op);
-
-          if (const auto output_reg = dynamic_cast<OutputRegister *>(rhs_op);
-              output_reg) {
-
-            // Proposed valid
-            if (lhs_op) {
-              if (const auto input_reg = dynamic_cast<InputRegister *>(lhs_op);
-                  input_reg) {
-                if (input_reg->reg_name == output_reg->reg_name) {
-                  op = impl->Create<PreservedCondition>();
-                } else {
-                  op = impl->Create<CopyCondition>();
-                }
-              } else {
-                op = impl->Create<RegisterCondition>();
-              }
-
-            // Proposed value of this register is dynamically computed.
-            } else {
-              importer.Visit(circuit_func, arg_cmp->getArgOperandUse(0u));
-              CHECK_NOTNULL(lhs_op);
-              op = impl->Create<RegisterCondition>();
-            }
-
-          } else if (const auto output_bits = dynamic_cast<Extract *>(rhs_op);
-                     output_bits) {
-
-            CHECK_EQ(output_bits->operands[0]->op_code,
-                     Operation::kInputInstructionBits);
-
-            if (!lhs_op) {
-              importer.Visit(circuit_func, arg_cmp->getArgOperandUse(0u));
-              CHECK_NOTNULL(lhs_op);
-            }
-
-            op = impl->Create<DecodeCondition>();
-          } else {
-            LOG(WARNING) << "Unexpected argument: "
-                       << remill::LLVMThingToString(expected_val);
-          }
-
-          op->AddUse(lhs_op);
-          op->AddUse(rhs_op);
-          verify_inst->AddUse(op);
-          seen.insert(op);
-        }
-      });
+  auto visit_context = [&](llvm::CallInst *verify_inst) {
+    importer.Visit(circuit_func, verify_inst);
+    CHECK(importer.get(verify_inst)->op_code == Operation::kVerifyInstruction);
+    all_verifications->AddUse(importer.get(verify_inst));
+  };
+  intrinsics::VerifyInst::ForAllIn(circuit_func, visit_context);
 
   return impl;
 }
