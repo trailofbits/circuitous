@@ -10,6 +10,7 @@
 #pragma clang diagnostic pop
 
 #include <sstream>
+#include <circuitous/Lifter/Context.hpp>
 
 namespace circuitous {
 
@@ -83,26 +84,20 @@ namespace circuitous {
     // Analyze how `val` is produced, and what input registers are read to
     // compute `val` or other output registers in the same logical instruction.
     void VisitArgument(llvm::Use &use, llvm::Argument *arg_val) {
-      const auto arg_name = arg_val->getName();
-      CHECK(!arg_name.endswith("_next"))
+      CHECK(!Names::is_out_reg(arg_val))
           << "Unexpected output register " << arg_val->getName().str()
           << " appears in use chain for computation of next value of "
           << remill::LLVMThingToString(use.getUser());
 
-      CHECK(arch->RegisterByName(arg_name.str()))
+      auto raw_name = Names::name(arg_val);
+      CHECK(arch->RegisterByName(raw_name))
           << "Argument " << remill::LLVMThingToString(arg_val)
           << " is not associated with a register";
 
       read_registers.insert(arg_val);
       auto func = arg_val->getParent();
-      for (auto arg_it = func->arg_begin() + arg_val->getArgNo() + 1u;
-          arg_it != func->arg_end(); ++arg_it) {
-        if (arg_it->getName().endswith("_next") &&
-            arg_it->getName().startswith(arg_name)) {
-          written_registers.insert(&*arg_it);
-          break;
-        }
-      }
+
+      written_registers.insert(Names::dual_reg(func, arg_val));
     }
 
     const remill::Arch *const arch;
