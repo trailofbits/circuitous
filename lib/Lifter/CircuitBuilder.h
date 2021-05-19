@@ -5,6 +5,7 @@
 #pragma once
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/IR/Intrinsics.hpp>
 
 #include <circuitous/Lifter/BaseLifter.hpp>
 
@@ -19,6 +20,114 @@
 
 namespace circuitous {
   static constexpr const uint32_t kMaxNumBytesRead = 16u;
+
+  struct Surface : Names {
+    struct ErrorBit { static constexpr uint8_t size = 1; } ebit;
+    struct InstructionBits { static constexpr uint8_t size = kMaxNumInstBits; } inst_bits;
+
+    using types_t = std::vector<llvm::Type *>;
+
+    CtxRef &ctx;
+
+    using remill_reg = const remill::Register *;
+    // register - input - output
+    using Arg = std::tuple<remill_reg, llvm::Argument *, llvm::Argument *>;
+    // TODO(lukas): For compatibility with history, this must be
+    //              ordered hence vector and not map.
+    std::vector<Arg> reg_to_args;
+    std::vector<llvm::Argument *> inst_bytes;
+    llvm::Value *pc = nullptr;
+    llvm::Function *circuit_fn = nullptr;
+    std::tuple<llvm::Value *, llvm::Value *> ebits;
+
+    Surface(CtxRef &ctx_) : ctx(ctx_) {}
+
+    template<typename T>
+    auto type(T &&t) const {
+      return llvm::IRBuilder<>(*ctx.llvm_ctx()).getIntNTy(t.size);
+    }
+
+    types_t Aliens() const {
+      return { type(inst_bits), type(ebit), type(ebit) };
+    }
+
+    void BindRegArgs(const std::string &base, llvm::Function *fn, uint32_t a, uint32_t b) {
+      return BindRegArgs(base, remill::NthArgument(fn, a), remill::NthArgument(fn, b));
+    }
+
+    void BindRegArgs(const std::string &base, llvm::Value *in, llvm::Value *out) {
+      in->setName(as_in_reg(base));
+      out->setName(as_out_reg(base));
+    }
+
+    types_t Regs() const;
+
+    types_t FullType() const {
+      auto aliens = Aliens();
+      auto regs = Regs();
+      aliens.insert(aliens.end(), regs.begin(), regs.end());
+      return aliens;
+    }
+
+    llvm::FunctionType *FnT(const types_t &params_types) {
+      llvm::IRBuilder<> ir{ *ctx.llvm_ctx() };
+      return llvm::FunctionType::get(ir.getInt1Ty(), params_types, false);
+    }
+
+    llvm::Function *Create(const std::string &name) {
+      auto linkage = llvm::GlobalValue::ExternalLinkage;
+      circuit_fn = llvm::Function::Create(FnT(FullType()), linkage, name, ctx.module());
+      circuit_fn->addFnAttr(llvm::Attribute::ReadNone);
+
+      remill::NthArgument(circuit_fn, 0)->setName(instruction_bits());
+      inst_bytes.push_back(remill::NthArgument(circuit_fn, 0));
+
+      auto ebit_name = [&](auto &mut) {
+        return this->build(this->flag, "ebit", mut);
+      };
+      remill::NthArgument(circuit_fn, 1)->setName(ebit_name(this->in));
+      remill::NthArgument(circuit_fn, 2)->setName(ebit_name(this->out));
+      ebits = std::make_tuple(remill::NthArgument(circuit_fn, 1),
+                              remill::NthArgument(circuit_fn, 2));
+
+      // The rest of arguments should be the registers in/out pairs
+      CHECK((circuit_fn->arg_size() - 3) % 2 == 0);
+      for (std::size_t i = 0; i < ctx.regs().size(); ++i) {
+        uint32_t arg_idx = static_cast<uint32_t>(i * 2) + 3;
+        BindRegArgs(ctx.regs()[i]->name, circuit_fn, arg_idx, arg_idx + 1);
+
+        reg_to_args.emplace_back(ctx.regs()[i],
+                                 remill::NthArgument(circuit_fn, arg_idx),
+                                 remill::NthArgument(circuit_fn, arg_idx + 1));
+        if (ctx.regs()[i]->name == ctx.arch()->ProgramCounterRegisterName()) {
+          pc = remill::NthArgument(circuit_fn, arg_idx);
+        }
+      }
+      return circuit_fn;
+    }
+
+    template<typename Str>
+    auto fetch(Str &&name) {
+      for (auto &arg : circuit_fn->args()) {
+        if (arg.getName() == name) {
+          return &arg;
+        }
+      }
+      return nullptr;
+    }
+
+    auto fetch_ebits() {
+      return ebits;
+    }
+
+    // Checks that once ebit is set it is not lowered
+    // `ebit_it -> ebit_out` which can be rewritten
+    // `!ebit_in || ebit_out`
+    auto saturation_property(llvm::IRBuilder<> &ir) {
+      auto [ebit_in, ebit_out] = fetch_ebits();
+      return ir.CreateOr(ir.CreateNot(ebit_in), ebit_out);
+    }
+  };
 
   class CircuitBuilder;
 
@@ -42,7 +151,7 @@ namespace circuitous {
 struct Circuit0 {
     static constexpr const char *name = "circuit_0";
 
-    Circuit0(CtxRef &ctx_) : ctx(ctx_) {}
+    Circuit0(CtxRef &ctx_) : ctx(ctx_), surface(ctx) {}
 
     llvm::FunctionType *FnT();
     llvm::Function *GetFn();
@@ -81,21 +190,15 @@ struct Circuit0 {
         ISEL_view isel,
         State &state);
 
-    using remill_reg = const remill::Register *;
-    // register - input - output
-    using Arg = std::tuple<remill_reg, llvm::Argument *, llvm::Argument *>;
-    // TODO(lukas): For compatibility with history, this must be
-    //              ordered hence vector and not map.
-    std::vector<Arg> reg_to_args;
-    std::vector<llvm::Argument *> inst_bytes;
-    llvm::Value *pc = nullptr;
-
     // Vector of return values, one for each result of doing a
     // `__circuitous_verify_decode`.
     std::vector<llvm::Value *> verified_insts;
 
+    std::map<llvm::Value *, std::vector<llvm::CallInst *>> used_selects;
+
     llvm::Function *circuit_fn = nullptr;
     CtxRef &ctx;
+    Surface surface;
   };
 
 
@@ -121,6 +224,10 @@ class CircuitBuilder {
   // use registers and try to eliminate unneeded registers from the function's
   // argument list.
   llvm::Function *BuildCircuit1(Circuit0 circuit0);
+
+  // NOTE(lukas): I think this is 99% redundant and not needed but since
+  //              I am not sure I am keeping it this way.
+  void FoldOutputChecks();
  public:
   CtxRef ctx;
 
