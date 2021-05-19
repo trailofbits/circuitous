@@ -234,10 +234,10 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
 
   // TODO(lukas): See note in decoder.
   void VisitInputErrorFlag(InputErrorFlag *op) {
-    LOG(FATAL) << "Not implemented";
+    DEBUG_WRITE("{ IEBIT }");
   }
   void VisitOutputErrorFlag(OutputErrorFlag *op) {
-    LOG(FATAL) << "Not implemented";
+    DEBUG_WRITE("{ OEBIT }");
   }
 
  private:
@@ -464,10 +464,12 @@ class DeserializeVisitor : FileConfig {
   // TODO(lukas): Edges to (and maybe from) `ErrorFlag` will probably be special
   //              and possibly not part of the usual UseDef structure.
   InputErrorFlag *DecodeInputErrorFlag(uint64_t id) {
-    LOG(FATAL) << "Not implemented";
+    DEBUG_READ("{ IEBIT }");
+    return circuit->Adopt<InputErrorFlag>(id);
   }
   OutputErrorFlag *DecodeOutputErrorFlag(uint64_t id) {
-    LOG(FATAL) << "Not implemented";
+    DEBUG_READ("{ OUTREG }");
+    return circuit->Adopt<OutputErrorFlag>(id);
   }
 
 
