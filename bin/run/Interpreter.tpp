@@ -44,6 +44,15 @@ void Interpreter<S>::SetInputRegisterValue(const std::string &name,
 }
 
 template<typename S>
+void Interpreter<S>::SetInputEbit(bool value)
+{
+  DLOG(INFO) << "SETTING INPUT Ebit";
+  CHECK(circuit->Attr<InputErrorFlag>().Size() == 1);
+  auto as_apint = (value) ? TrueVal() : FalseVal();
+  self().SetNodeVal(circuit->Attr<InputErrorFlag>()[0], as_apint);
+}
+
+template<typename S>
 std::optional<uint64_t> Interpreter<S>::GetOutputRegisterValue(const std::string &name) {
   for (auto reg : circuit->Attr<OutputRegister>()) {
     if (reg->reg_name == name) {
@@ -57,6 +66,15 @@ std::optional<uint64_t> Interpreter<S>::GetOutputRegisterValue(const std::string
   DLOG(FATAL) << "Output register " << name << " not present in circuit.";
 
   return 0ULL;
+}
+
+template<typename S>
+std::optional<bool> Interpreter<S>::GetOutputErrorFlagValue() {
+  auto op = circuit->Attr<OutputErrorFlag>()[0];
+  if (auto val = self().GetNodeVal(op)) {
+    return { val == TrueVal() };
+  }
+  return {};
 }
 
 template<typename S>
@@ -95,6 +113,20 @@ void Interpreter<S>::VisitOutputRegister(OutputRegister *op) {
   // undefined initial value;
   if (!node_values.count(op)) {
     self().SetNodeVal(op, llvm::APInt(op->size, 0ULL));
+  }
+}
+
+template<typename S>
+void Interpreter<S>::VisitInputErrorFlag(InputErrorFlag *op) {
+  DLOG(INFO) << "VisitInputErrorFlag: " << op->Name() << " " << op->id();
+  CHECK(node_values.count(op)) << "InputErrorFlag bits not set.";
+}
+
+template<typename S>
+void Interpreter<S>::VisitOutputErrorFlag(OutputErrorFlag *op) {
+  DLOG(INFO) << "VisitOutputErrorFlag: " << op->Name() << " " << op->id();
+  if (!node_values.count(op)) {
+    self().SetNodeVal(op, Undef());
   }
 }
 
