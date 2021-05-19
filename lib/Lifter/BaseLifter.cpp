@@ -17,7 +17,7 @@
 #pragma clang diagnostic ignored "-Wconversion"
 #include <glog/logging.h>
 #include <llvm/Support/raw_os_ostream.h>
-#include <llvm/Codegen/IntrinsicLowering.h>
+#include <llvm/CodeGen/IntrinsicLowering.h>
 #pragma clang diagnostic pop
 
 namespace circuitous {
