@@ -102,15 +102,14 @@ struct DefaultLog {
 };
 
 std::unique_ptr<circuitous::Circuit> LoadCircuit() {
-  auto choose_optimizations = [&](){
+  auto choose_opts = [&](){
     circuitous::Optimizations out;
     out.reduce_imms = FLAGS_reduce_imms;
     return out;
   };
 
   auto make_circuit = [&](auto buf) {
-    return circuitous::Circuit::CreateFromInstructions(
-      FLAGS_arch, FLAGS_os, buf, choose_optimizations());
+    return circuitous::Circuit::make_circuit(FLAGS_arch, FLAGS_os, buf, choose_opts());
   };
 
   if (!FLAGS_binary_in.empty()) {
