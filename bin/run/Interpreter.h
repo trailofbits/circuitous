@@ -86,7 +86,10 @@ namespace circuitous {
 
     void SetInstructionBitsValue(const std::string &bits);
     void SetInputRegisterValue(const std::string &name, uint64_t bits);
+    void SetInputEbit(bool value);
+
     std::optional<uint64_t> GetOutputRegisterValue(const std::string &name);
+    std::optional<bool> GetOutputErrorFlagValue();
 
     // Default
     void VisitOperation(Operation *op);
@@ -96,6 +99,8 @@ namespace circuitous {
     void VisitInputRegister(InputRegister *op);
     void VisitInputImmediate(InputImmediate *op);
     void VisitOutputRegister(OutputRegister *op);
+    void VisitInputErrorFlag(InputErrorFlag *op);
+    void VisitOutputErrorFlag(OutputErrorFlag *op);
     void VisitInputInstructionBits(InputInstructionBits *op);
     void VisitHint(Hint *op);
     void VisitUndefined(Undefined *op);
@@ -273,6 +278,15 @@ namespace circuitous {
             }
           }
         }
+        for (auto oreg : circuit->Attr<OutputErrorFlag>()) {
+          if (state.collector.op_to_ctxs[oreg].count(current)) {
+            for (auto user : oreg->users) {
+              if (user->op_code == Operation::kRegisterCondition) {
+                state.Notify(user);
+              }
+            }
+          }
+        }
       }
 
       void VisitRegisterCondition(RegisterCondition *op) {
@@ -358,6 +372,12 @@ namespace circuitous {
       }
     }
 
+    void SetInputEbit(bool val) {
+      for (auto &[_, runner] : runners) {
+        runner.SetInputEbit(val);
+      }
+    }
+
     void SetInstructionBitsValue(const std::string &bits) {
       for (auto &[_, runner] : runners) {
         runner.SetInstructionBitsValue(bits);
@@ -385,7 +405,7 @@ namespace circuitous {
         node_values = std::move(runners.begin()->second.node_values);
       }
       if (successes.size() > 1) {
-        LOG(WARNING) << "Multiple contexts satisfied." << successes.size();
+        DLOG(FATAL) << "Multiple contexts satisfied." << successes.size();
       }
       return successes.size() == 1;
     }
