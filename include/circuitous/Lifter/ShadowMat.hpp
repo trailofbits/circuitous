@@ -198,17 +198,29 @@ namespace circuitous::shadowinst {
     }
 
     CHECK(type);
+    std::vector<llvm::Value *> holes;
     for (std::size_t idx = 1; idx < select_args.size(); ++idx) {
       if (select_args[idx]) {
         continue;
       }
       select_args[idx] = llvm::UndefValue::get(type);
+      auto key = ir.getIntN(static_cast<uint32_t>(bits), idx - 1);
+      holes.push_back(ir.CreateICmpEQ(select_args[0], key));
     }
+
+    // We cannot accept is a hole was selected
+    auto cond = [&]() -> llvm::Value * {
+      if (holes.empty()) {
+        return nullptr;
+      }
+      return ir.CreateNot(make_or(ir, holes));
+    }();
 
     // We do not need to do any extra checking if we decoded something because
     // the select is "saturated" -- each possible return is a valid register
     CHECK(select_args.size() > 1);
-    return intrinsics::make_select(ir, select_args, bits, select_args[1]->getType());
+    auto select = intrinsics::make_select(ir, select_args, bits, select_args[1]->getType());
+    return std::make_tuple(cond, select);
   }
 
 } // namespace circuitous::shadowinst
