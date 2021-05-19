@@ -209,10 +209,9 @@ bool OutputRegister::Equals(const Operation *that_) const {
 }
 
 std::string RegisterCondition::Name() const {
-  CHECK(operands.size() == 2);
-  auto out_reg = dynamic_cast<OutputRegister *>(operands[kOutputRegister]);
-  CHECK(out_reg) << (operands[kOutputRegister]->op_code);
-  return StreamName(to_string(this->op_code), "_", out_reg->reg_name, "_", out_reg->size);
+  CHECK_EQ(operands.size(), 2);
+  auto out_reg = operands[kOutputRegister];
+  return StreamName(to_string(this->op_code), "_", out_reg->Name(), "_", out_reg->size);
 }
 
 STREAM_NAME(HintCondition, "HINT_CHECK_" << operands[kHint]->size)
@@ -233,7 +232,10 @@ STREAM_NAME(Hint, "HINT_" << size)
 
 STREAM_NAME(InputInstructionBits, "INSTRUCTION_BITS_" << size)
 
-STREAM_NAME(DecodeCondition, "INSTRUCTION_BITS_CHECK_" << operands[0]->size)
+std::string DecodeCondition::Name() const {
+  auto suffix = (operands.size()) ? std::to_string(operands[0]->size) : "NO_OPS";
+  return StreamName(to_string(this->op_code), "_", suffix);
+}
 
 STREAM_NAME(VerifyInstruction, "ALL_OF_" << operands.size())
 
