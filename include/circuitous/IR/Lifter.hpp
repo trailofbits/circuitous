@@ -331,7 +331,11 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     };
 
     // TODO(lukas): Handle holes.
-    auto select = shadowinst::make_intrinsics_decoder(s_reg, ir, safe_locate_reg);
+    auto [cond, select] = shadowinst::make_intrinsics_decoder(s_reg, ir, safe_locate_reg);
+    if (cond) {
+      auto wrapped = intrinsics::make_transport(ir, cond);
+      AddMetadata(llvm::dyn_cast<llvm::Instruction>(wrapped), "circuitous.verify_fn_args", 0);
+    }
     return mask_coerce(shift_coerce(select));
   }
 
