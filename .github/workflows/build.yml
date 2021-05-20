@@ -1,0 +1,226 @@
+#
+# Copyright (c) 2021-present, Trail of Bits, Inc.
+# All rights reserved.
+#
+# This source code is licensed in accordance with the terms specified in
+# the LICENSE file found in the root directory of this source tree.
+#
+
+name: Build
+
+on:
+  push:
+    branches:
+      - 'master'
+
+    tags:
+      - '*'
+
+  pull_request:
+    branches:
+      - '*'
+
+jobs:
+  build_linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - { name: 'ubuntu', tag: '20.04' }
+
+        llvm: [ '12' ]
+        cxxcommon_version: [ 'v0.1.4' ]
+
+    runs-on: ubuntu-20.04
+
+    timeout-minutes: 10
+
+    container:
+      image: docker.pkg.github.com/trailofbits/cxx-common/vcpkg-builder-${{ matrix.image.name }}:${{ matrix.image.tag }}
+
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Setup the build paths
+        shell: bash
+        id: build_paths
+        run: |
+          rel_build_path="build"
+          rel_source_path="src"
+          rel_install_path="install"
+          rel_downloads_path="downloads"
+          rel_ccache_path="ccache"
+          
+          mkdir -p ${rel_build_path} \
+                   ${rel_install_path} \
+                   ${rel_downloads_path} \
+                   ${rel_ccache_path}
+          
+          echo ::set-output name=SOURCE::$(pwd)/${rel_source_path}
+          echo ::set-output name=REL_SOURCE::${rel_source_path}
+          echo ::set-output name=BUILD::$(pwd)/${rel_build_path}
+          echo ::set-output name=REL_BUILD::${rel_build_path}
+          echo ::set-output name=INSTALL::$(pwd)/${rel_install_path}
+          echo ::set-output name=DOWNLOADS::$(pwd)/${rel_downloads_path}
+          echo ::set-output name=CCACHE::$(pwd)/${rel_ccache_path}
+
+      - name: Update the cache (downloads)
+        uses: actions/cache@v2
+        with:
+          path: ${{ steps.build_paths.outputs.DOWNLOADS }}
+
+          key: |
+            gitmodules_${{ matrix.image.name }}_${{ matrix.image.tag }}_${{ matrix.llvm }}_${{ github.sha }}
+          restore-keys: |
+            gitmodules_${{ matrix.image.name }}_${{ matrix.image.tag }}_${{ matrix.llvm }}
+
+      - name: Update the cache (ccache)
+        uses: actions/cache@v2
+        with:
+          path: ${{ steps.build_paths.outputs.CCACHE }}
+
+          key: |
+            gitmodules_${{ matrix.image.name }}_${{ matrix.image.tag }}_${{ matrix.llvm }}_${{ github.sha }}
+          restore-keys: |
+            gitmodules_${{ matrix.image.name }}_${{ matrix.image.tag }}_${{ matrix.llvm }}
+
+      - name: Install system requirements
+        shell: bash
+        run: |
+          apt-get update
+          apt-get install -y clang
+
+      - name: Clone the circuitous repository
+        uses: actions/checkout@v2
+        with:
+          path: ${{ steps.build_paths.outputs.REL_SOURCE }}/circuitous
+          fetch-depth: 0
+          submodules: true
+
+      - name: Install circuitous requirements
+        shell: bash
+        run: |
+          pip install --no-cache-dir -r ${{ steps.build_paths.outputs.REL_SOURCE }}/circuitous/requirements.txt
+
+      - name: Clone the remill repository
+        uses: actions/checkout@v2
+        with:
+          repository: 'lifting-bits/remill'
+          path: ${{ steps.build_paths.outputs.REL_SOURCE }}/remill
+          fetch-depth: 0
+
+      - name: Download the cxx-common ${{ matrix.cxxcommon_version}} package
+        shell: bash
+        id: cxxcommon_installer
+        working-directory: ${{ steps.build_paths.outputs.DOWNLOADS }}
+        run: |
+          folder_name="vcpkg_${{ matrix.image.name }}-${{ matrix.image.tag }}_llvm-${{ matrix.llvm }}_amd64"
+          archive_name="${folder_name}.tar.xz"
+
+          url="https://github.com/trailofbits/cxx-common/releases/download/${{ matrix.cxxcommon_version}}/${archive_name}"
+          local_path="${{ steps.build_paths.outputs.DOWNLOADS }}/${archive_name}"
+
+          if [[ ! -f "${local_path}" ]] ; then
+            echo "Downloading: ${url}"
+            curl "${url}" -L -o "${local_path}"
+
+            ls -t ${{ steps.build_paths.outputs.DOWNLOADS }}/vcpkg_* | tail -n +2 | while read archive_file ; do
+              rm "${archive_file}"
+            done
+          fi
+
+          tar xf "${local_path}" -C "${{ steps.build_paths.outputs.INSTALL }}"
+
+          destination_path="${{ steps.build_paths.outputs.INSTALL }}/vcpkg"
+
+          mv "${{ steps.build_paths.outputs.INSTALL }}/${folder_name}" \
+             "${destination_path}"
+
+          echo "${destination_path}/installed/x64-linux-rel/tools/llvm-${{matrix.llvm}}" >> $GITHUB_PATH
+
+          echo ::set-output name=PATH::${destination_path}
+
+      - name: Configure remill
+        working-directory: ${{ steps.build_paths.outputs.BUILD }}
+
+        env:
+          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
+
+        run: |
+          mkdir remill_build && cd remill_build
+
+          cmake \
+              -DCMAKE_VERBOSE_MAKEFILE=true \
+              -DVCPKG_ROOT="${{ steps.cxxcommon_installer.outputs.PATH }}" \
+              -G Ninja \
+              ${{ steps.build_paths.outputs.SOURCE }}/remill
+
+      - name: Build remill
+        working-directory: ${{ steps.build_paths.outputs.BUILD }}
+
+        env:
+          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
+
+        run: |
+          cmake --build remill_build -j $(nproc)
+
+      - name: Install remill
+        id: remill_installer
+        working-directory: ${{ steps.build_paths.outputs.BUILD }}
+
+        env:
+          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
+
+        run: |
+          export DESTDIR=${{ steps.build_paths.outputs.INSTALL }}/remill
+          cmake --build remill_build \
+                --target install
+          echo ::set-output name=PATH::${DESTDIR}
+
+      - name: Configure circuitous
+        working-directory: ${{ steps.build_paths.outputs.BUILD }}
+
+        env:
+          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
+
+        run: |
+          mkdir circuitous_build && cd circuitous_build
+
+          cmake \
+              -DCMAKE_VERBOSE_MAKEFILE=true \
+              -DVCPKG_ROOT="${{ steps.cxxcommon_installer.outputs.PATH }}" \
+              -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
+              -Dremill_DIR:PATH=${{ steps.remill_installer.outputs.PATH }}/usr/local/lib/cmake/remill \
+              -G Ninja \
+              ${{ steps.build_paths.outputs.SOURCE }}/circuitous
+
+      - name: Build circuitous
+        working-directory: ${{ steps.build_paths.outputs.BUILD }}
+
+        env:
+          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
+
+        run: |
+          cmake --build circuitous_build -j $(nproc)
+
+      - name: Install circuitous
+        id: circuitous_installer
+        working-directory: ${{ steps.build_paths.outputs.BUILD }}
+
+        env:
+          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
+
+        run: |
+          export DESTDIR=${{ steps.build_paths.outputs.INSTALL }}/circuitous
+          cmake --build circuitous_build \
+                --target install
+          echo ::set-output name=PATH::${DESTDIR}
+
+      - name: Run tests
+        working-directory: ${{ steps.build_paths.outputs.SOURCE }}/circuitous/test
+
+        run: |
+          export CIRCUITOUS_BUILD_DIR=${{ steps.build_paths.outputs.BUILD }}/circuitous_build
+          python3 ./run.py --tag min --jobs $(nproc)
