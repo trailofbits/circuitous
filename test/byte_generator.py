@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import tempfile
 
@@ -165,7 +166,7 @@ def parse(filename, verbose=False):
     if verbose:
       print(line)
     # remove address in form `xxx:``
-    line = line.split(': ')[1]
+    line = re.split(':\s', line)[1]
     # remove trailing assembly text
     line = line.split('\t')[0]
     # remove ' ' between bytes
