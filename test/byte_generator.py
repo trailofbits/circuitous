@@ -149,7 +149,7 @@ def get_instructions(instructions, syntax="intel"):
 #              not very portable.
 def parse(filename, verbose=False):
   bytes = []
-  args = ["objdump", "--disassemble", filename]
+  args = ["objdump", "--disassemble", "--wide", filename]
   pipes = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                            text=True)
   out, err = pipes.communicate()
