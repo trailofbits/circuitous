@@ -623,7 +623,8 @@ struct InstructionFuzzer {
         return false;
       }
       shadowinst::Reg copy{s_reg};
-      copy.regions[*hole] = 1ul;
+      copy.regions.erase(*hole + 1);
+      copy.regions[*hole - 1] = 3ul;
       candidates.push_back(std::move(copy));
     }
     if (candidates.empty()) {
