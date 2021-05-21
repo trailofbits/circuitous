@@ -13,6 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include <circuitous/Lifter/Context.hpp>
 #include <circuitous/Lifter/Shadows.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
 
@@ -29,8 +30,8 @@ namespace circuitous::shadowinst {
   using annotated_values = std::unordered_map<std::string, values_t>;
   static inline annotated_values collect_annotated(llvm::Value *from, llvm::Value *to) {
     annotated_values out = {
-      { "circuitous.dst.reg", {} },
-      { "circuitous.verify_fn_args", {} },
+      { Names::meta::dst_reg, {} },
+      { Names::meta::verify_args, {} },
     };
 
     using bb_it_t = llvm::BasicBlock::iterator;
@@ -38,11 +39,11 @@ namespace circuitous::shadowinst {
     auto end = bb_it_t{llvm::cast<llvm::Instruction>(to)};
     for (auto it = begin; it != end; ++it) {
       auto &inst = *it;
-      if (auto dst_alloca = GetMetadata(&inst, "circuitous.dst.reg")) {
-        out["circuitous.dst.reg"].push_back(&inst);
+      if (auto dst_alloca = GetMetadata(&inst, Names::meta::dst_reg)) {
+        out[Names::meta::dst_reg].push_back(&inst);
       }
-      if (auto verify_arg = GetMetadata(&inst, "circuitous.verify_fn_args")) {
-        out["circuitous.verify_fn_args"].push_back(&inst);
+      if (auto verify_arg = GetMetadata(&inst, Names::meta::verify_args)) {
+        out[Names::meta::verify_args].push_back(&inst);
       }
     }
     return out;

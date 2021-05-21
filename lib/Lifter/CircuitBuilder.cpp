@@ -626,9 +626,9 @@ void Circuit0::InjectSemantic(
   // Collect annotated instructions - this is the way separate components
   // of the lfiting pipleline communicate
   auto collected = shadowinst::collect_annotated(begin, end);
-  auto dst_intrinsics = std::move(collected["circuitous.dst.reg"]);
+  auto dst_intrinsics = std::move(collected[Names::meta::dst_reg]);
 
-  auto &extra_params = collected["circuitous.verify_fn_args"];
+  auto &extra_params = collected[Names::meta::verify_args];
   for (std::size_t i = 0; i < extra_params.size(); ++i) {
     extra_params[i] = intrinsics::Transport::unwrap(extra_params[i]);
   }

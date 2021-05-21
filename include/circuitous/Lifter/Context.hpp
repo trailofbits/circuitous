@@ -27,6 +27,13 @@ namespace remill {
 namespace circuitous {
 
   struct Names {
+    // TODO(lukas): This may deserve its own headet, so we do not have to include
+    //              everything from here if only metadata names are requested.
+    struct meta {
+      static constexpr const char *verify_args = "circuitous.verify_fn_args";
+      static constexpr const char *dst_reg =     "circuitous.dst.reg";
+    };
+
     static constexpr const char *in = "in";
     static constexpr const char *out = "out";
     static constexpr const char sep = '.';
