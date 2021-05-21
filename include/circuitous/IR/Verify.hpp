@@ -139,6 +139,11 @@ struct Verifier {
         if (op->op_code == Operation::kHintCondition) {
           ctx[op] = verif;
 
+          if (op->operands[HintCondition::kHint]->op_code != Operation::kHint) {
+            ss << "HINT_CHECK hint operand is not HINT";
+            status = false;
+          }
+
           bool found_hint = false;
           for (auto hint : op->operands) {
             if (hint->op_code == Operation::kHint) {
