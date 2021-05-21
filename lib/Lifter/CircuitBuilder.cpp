@@ -567,7 +567,7 @@ std::vector<llvm::Value *> Circuit0::HandleDstRegs(
 
         // Check if everything is still valid.
         CHECK(proccessed - 1 < dst_regs.size()) << proccessed - 1 << " >= " << dst_regs.size();
-        auto eq = intrinsics::make_xor(ir, reg_checks);
+        auto eq = intrinsics::make_xor<true>(ir, reg_checks);
         auto dst_load = ir.CreateLoad(dst_regs[proccessed - 1]);
         auto reg_addr = reg_part->AddressOf(state.raw(), ir);
 

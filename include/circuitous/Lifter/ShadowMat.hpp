@@ -172,7 +172,7 @@ namespace circuitous::shadowinst {
       auto condition = merge_conditions(conditions);
       selects.chain(condition, get_reg(reg, ir));
     }
-    auto xor_all = intrinsics::make_xor(ir, selects.conditions);
+    auto xor_all = merge_conditions(selects.conditions);
     return std::make_tuple(xor_all, selects.get());
   }
 
