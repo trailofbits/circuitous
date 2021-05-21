@@ -15,7 +15,7 @@ _aflags = ["AF", "CF", "OF", "ZF", "PF", "SF"]
 _all_regs = _regs + _aflags + _e_regs + _b_regs + _a_regs
 
 class State:
-  __slots__ = ('registers', 'bytes', 'result', 'undefined')
+  __slots__ = ('registers', 'bytes', 'result', 'undefined', '_ebit')
 
   def __init__(self, default_val = None, default_rip = 0x1000):
     self.registers = {}
@@ -24,6 +24,7 @@ class State:
     for x in _regs + _aflags:
       self.registers[x] = default_val
     self.registers["RIP"] = default_rip
+    self._ebit = False
     self.undefined = set()
 
   def aflags(self, val):
@@ -48,8 +49,13 @@ class State:
     self.bytes = bytes_
     return self
 
+  def ebit(self, val):
+    self._ebit = val
+    return self
+
   def get(self):
     out = {"instruction_bits" : self.bytes,
+           "ebit" : self._ebit,
            "input_regs" : {}}
     for reg, val in self.registers.items():
       if val is not None:
