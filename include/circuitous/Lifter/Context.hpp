@@ -152,6 +152,26 @@ namespace circuitous {
       return remill::Arch::Build(ctx, os, arch);
     }
 
+    auto clean_module(const std::unordered_set<llvm::Function *> &keep) {
+      std::vector<llvm::Function *> to_erase;
+      for (auto &fn : *module()) {
+        if (keep.count(&fn)) {
+          continue;
+        }
+        if (fn.isDeclaration()
+            || fn.getName().startswith("__remill")
+            || fn.getName().startswith("__circuitous"))
+        {
+          continue;
+        }
+        to_erase.push_back(&fn);
+      }
+      for (auto fn : to_erase) {
+        fn->replaceAllUsesWith(llvm::UndefValue::get(fn->getType()));
+        fn->eraseFromParent();
+      }
+    }
+
     Ctx(const std::string &os_name, const std::string &arch_name)
         : _arch(make_arch(_llvm_context.get(), os_name, arch_name)),
           _module(remill::LoadArchSemantics(arch()))
