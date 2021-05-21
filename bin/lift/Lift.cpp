@@ -150,7 +150,7 @@ void Optimize(circuitous::Circuit *circuit) {
   Optimizer opt_manager;
 
   // Populate by default passes we want to always run
-  opt_manager.AddPass("dagify");
+  //opt_manager.AddPass("dagify");
   opt_manager.AddPass("popcount2parity");
   opt_manager.AddPass("reducepopcount");
   // TODO(lukas): Broken fix.
