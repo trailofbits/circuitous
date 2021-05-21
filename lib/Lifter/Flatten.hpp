@@ -2,7 +2,9 @@
  * Copyright (c) 2021 Trail of Bits, Inc.
  */
 
- #pragma once
+#pragma once
+
+#include <circuitous/IR/Intrinsics.hpp>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
@@ -172,6 +174,16 @@ struct Flattener {
 
           phi->replaceAllUsesWith(sel_val);
 
+        } else if (auto call = llvm::dyn_cast<llvm::CallInst>(inst)) {
+          auto callee = call->getCalledFunction();
+          if (callee->getName() == "__remill_error") {
+            llvm::IRBuilder<> ir(new_block);
+            intrinsics::make_error(ir, reaching_cond[block]);
+            call->replaceAllUsesWith(call->getArgOperand(2u));
+            continue;
+          }
+          inst->removeFromParent();
+          new_block->getInstList().insert(new_block->end(), inst);
         } else if (auto ret = llvm::dyn_cast<llvm::ReturnInst>(inst)) {
           ret_vals[ret] = reaching_cond[block];
         } else if (auto store = llvm::dyn_cast<llvm::StoreInst>(inst)) {
