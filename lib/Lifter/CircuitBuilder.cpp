@@ -9,6 +9,7 @@
 #include "Flatten.hpp"
 
 #include <circuitous/Lifter/BaseLifter.hpp>
+#include <circuitous/Lifter/SelectFold.hpp>
 #include <circuitous/IR/Lifter.hpp>
 
 #include <remill/BC/Compat/CallSite.h>
@@ -197,7 +198,19 @@ auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) -> C
   auto circuit0_func = circuit0.Create();
   circuit0.InjectISELs(std::move(isels));
 
+  ctx.clean_module({circuit0_func});
+
+  intrinsics::disable_opts<intrinsics::VerifyInst, intrinsics::Select>(ctx.module());
+
+  OptimizeSilently(ctx.arch(), ctx.module(), {circuit0_func});
+
+  SelectFolder folder{ std::move(circuit0.used_selects), circuit0_func };
+  folder.run();
+
   remill::VerifyModule(ctx.module());
+  intrinsics::disable_opts<intrinsics::Select, intrinsics::Hint>(ctx.module());
+  intrinsics::enable_opts<intrinsics::VerifyInst, intrinsics::HintCheck>(ctx.module());
+
   OptimizeSilently(ctx.arch(), ctx.module(), {circuit0_func});
   remill::VerifyModule(ctx.module());
   return circuit0;
