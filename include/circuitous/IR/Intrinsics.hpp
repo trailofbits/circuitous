@@ -80,6 +80,8 @@ namespace impl {
 
     static llvm::Function* freeze(llvm::Function *fn) {
       fn->addFnAttr(llvm::Attribute::NoMerge);
+      fn->addFnAttr(llvm::Attribute::OptimizeNone);
+      fn->addFnAttr(llvm::Attribute::NoInline);
       fn->removeFnAttr(llvm::Attribute::ReadNone);
       fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
       return fn;
@@ -93,6 +95,8 @@ namespace impl {
 
     static llvm::Function* melt(llvm::Function *fn) {
       fn->removeFnAttr(llvm::Attribute::NoMerge);
+      fn->removeFnAttr(llvm::Attribute::OptimizeNone);
+      fn->removeFnAttr(llvm::Attribute::NoInline);
       fn->addFnAttr(llvm::Attribute::ReadNone);
       fn->setLinkage(llvm::GlobalValue::ExternalLinkage);
       return fn;
@@ -438,6 +442,10 @@ namespace data {
   struct Transport : dot_seperator {
     static constexpr const char *fn_prefix = "__circuitous.transport";
   };
+
+  struct Error : dot_seperator {
+    static constexpr const char *fn_prefix = "__circuitous.error";
+  };
 } //namespace data
 
 // Intrinsic declaration. Overall, they all try to provide the following unified API
@@ -559,6 +567,8 @@ struct Transport : impl::Identity<data::Transport> {
   }
 };
 
+struct Error : impl::Identity<data::Error> {};
+
 /* Helper functions to make creation of intrinsic calls easier for the user
  * C - container holding arguments
  * Args... - arguments to be forwarded to appropriate `CreateFn`.
@@ -569,7 +579,18 @@ auto make_transport(llvm::IRBuilder<> &ir, const C &args) {
 }
 
 template<typename C>
-auto make_xor(llvm::IRBuilder<> &ir, const C &args) {
+auto make_error(llvm::IRBuilder<> &ir, const C &arg) {
+  return impl::implement_call<Error>(ir, {arg}, arg->getType());
+}
+
+template<bool reduce=false, typename C>
+auto make_xor(llvm::IRBuilder<> &ir, const C &args) ->llvm::Value *
+{
+  if constexpr (reduce) {
+    if (args.size() == 1) {
+      return args[0];
+    }
+  }
   return impl::implement_call<Xor>(ir, args);
 }
 
@@ -659,6 +680,17 @@ static inline bool is_any(llvm::Function *fn) {
   return fn->hasName() && fn->getName().startswith("__circuitous.");
 }
 
+template<typename T, typename ... Ts>
+void enable_opts(llvm::Module *m) {
+  T::melt(m);
+  if constexpr (sizeof ... (Ts) != 0) return enable_opts<Ts...>(m);
+}
+
+template<typename T, typename ...Ts>
+void disable_opts(llvm::Module *m) {
+  T::freeze(m);
+  if constexpr (sizeof ... (Ts) != 0) return disable_opts<Ts...>(m);
+}
 
 template<typename T>
 std::vector<llvm::CallInst *> collect(llvm::Value *from, llvm::Value *to) {
@@ -677,7 +709,6 @@ std::vector<llvm::CallInst *> collect(llvm::Value *from, llvm::Value *to) {
       }
     }
   }
-  CHECK(out.size() != 0);
   return out;
 }
 
