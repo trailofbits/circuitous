@@ -8,12 +8,12 @@ import tempfile
 import threading
 import queue
 
-from tc import State, Test
-import tc as TC
+from tools.tc import State, Test
+import tools.tc as TC
 
 import simple
 import basic
-import model_test as mp
+import tools.model_test as mp
 
 circuitous_prefix = os.environ.get("CIRCUITOUS_BUILD_DIR", "../build")
 

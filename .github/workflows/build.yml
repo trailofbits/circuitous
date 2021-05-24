@@ -223,4 +223,4 @@ jobs:
 
         run: |
           export CIRCUITOUS_BUILD_DIR=${{ steps.build_paths.outputs.BUILD }}/circuitous_build
-          python3 ./run.py --tag min --jobs $(nproc)
+          python3 ./full/run.py --tag min --jobs $(nproc)

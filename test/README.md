@@ -22,7 +22,7 @@ Also, since `microx` does not provide any way to install itself somewhere
 
 # How to run this
 
-There is only one file that can be executed -- `run.py`
+There is only one file that can be executed -- `full/run.py`
 It has several options:
     * tags - you can specify which subset of tests to run (test has to have at least one of the tags)
     * fragile - stop on first lift error
