@@ -12,7 +12,7 @@ test_adc = {
   .case("0.0", I = S(0x250).RAX(0x0).CF(0x0), R = True)
   .case("ff.0", I = S(0x350).RAX(0x7fffffffffffffff).CF(0x1), R = True),
 
-  ModelTest("adc 2 variants").tags({"min", "adc"})
+  ModelTest("adc 2 variants").tags({"adc"})
   .bytes(intel(["adc al, 0x12", "adc rax, 0x22"]))
   .DI(S(0x350).RAX(0x435).CF(0x1))
   .case(run_bytes = 0, R = True)
@@ -21,13 +21,13 @@ test_adc = {
   .case(run_bytes = intel(["adc eax, 0x52"]), R = False)
   .case(run_bytes = intel(["adc al, 0x52"]), R = True),
 
-  ModelTest("adc 2 variants opt").tags({"min", "adc"})
+  ModelTest("adc 2 variants opt").tags({"adc"})
   .bytes(intel(["adc rax, 0x12", "adc rsi, 0x15"]))
   .DI(S(0x200).RAX(0x7fffffffffffffff).RSI(0xffffffffffffffff).RDI(0x0).CF(0x1))
   .case(run_bytes = 0, R = True)
   .case(run_bytes = 1, R = True),
 
-  ModelTest("adc 2 variants opt, 0 state").tags({"min", "adc"})
+  ModelTest("adc 2 variants opt, 0 state").tags({"adc"})
   .bytes(intel(["adc rax, 0x12", "adc rsi, 0x15"]))
   .DI(S(0x200).RAX(0x0).RSI(0x0).RDI(0x0).CF(0x1))
   .case(run_bytes = 0, R = True)
@@ -46,14 +46,14 @@ test_adc = {
 }
 
 test_sbb = {
-  ModelTest("sbb").tags({"min", "sbb"})
+  ModelTest("sbb").tags({"sbb"})
   .bytes(intel(["sbb al, 0x12"]))
   .case("ff.1", I = S(0x100).RAX(0x7fffffffffffffff).CF(0x1), R = True)
   .case("0.1", I = S(0x100).RAX(0x0).CF(0x1), R = True)
   .case("0.0", I = S(0x100).RAX(0x0).CF(0x0), R = True)
   .case("ff.0", I = S(0x100).RAX(0x7fffffffffffffff).CF(0x1), R = True),
 
-  ModelTest("sbb 2 variants").tags({"min", "sbb"})
+  ModelTest("sbb 2 variants").tags({"sbb"})
   .bytes(intel(["sbb al, 0x12", "sbb rax, 0x22"]))
   .case(I = S(0x100).RAX(0x435).CF(0x1), run_bytes = 0, R = True)
   .case(I = S(0x100).RAX(0x435).CF(0x1), run_bytes = 1, R = True)
@@ -85,12 +85,12 @@ test_shl = {
   ).case(
     I = S(0x100).RDX(0x7fffffffffffffff).CF(0x0),
     run_bytes = intel(["shl rcx, 0x4"]),
-    R = True 
+    R = True
   )
 }
 
 test_shr = {
-  ModelTest("shr rax").tags({"min", "shr"}).bytes(intel(["shr rax"]))
+  ModelTest("shr rax").tags({"shr"}).bytes(intel(["shr rax"]))
   .case(I = S(0x100).RAX(0b101).aflags(0), R = True)
   .case(I = S(0x100).RAX(0b1010).aflags(0), R = True),
 
@@ -102,13 +102,13 @@ test_shr = {
   .case(I = S(0x100).RBX(0b101).aflags(0), R = True)
   .case(I = S(0x100).RBX(0b101).aflags(1), R = True),
 
-  ModelTest("shr rdx cl").tags({"min", "shr"}).bytes(intel(["shr rdx, cl"]))
+  ModelTest("shr rdx cl").tags({"shr"}).bytes(intel(["shr rdx, cl"]))
   .case(I = S(0x100).RDX(0x7fffffffffffffff).RCX(63), R = True)
   .case(I = S(0x100).RDX(0x7fffffffffffffff).RCX(65), R = True)
 }
 
 test_xor = {
-  ModelTest("xor").tags({"min", "xor"})
+  ModelTest("xor").tags({"xor"})
   .bytes(intel(["xor rsi, rdi"]))
   .DI(S(0x100).RSI(0x42).RDI(0x42).OF(0x1))
   .case(R = True)
@@ -131,7 +131,7 @@ test_xor = {
 }
 
 test_or = {
-  ModelTest("or").tags({"min", "or"})
+  ModelTest("or").tags({"or"})
   .bytes(intel(["or rsi, rdi"]))
   .DI(S(0x100).RSI(0x42).RDI(0x42).OF(0x1))
   .case(R = True)
@@ -154,7 +154,7 @@ test_or = {
 }
 
 test_and = {
-  ModelTest("and").tags({"min", "and"})
+  ModelTest("and").tags({"and"})
   .bytes(intel(["and rsi, rdi"]))
   .DI(S(0x100).RSI(0x42).RDI(0x42).OF(0x1))
   .case(R = True)
@@ -209,21 +209,21 @@ test_rcr = {
   .case(I = S(0x100).RBX(0b1011111).aflags(0), R = True)
   .case(I = S(0x100).RBX(0b1000000).aflags(0), R = True),
 
-  ModelTest("rcr rbx 0").tags({"min", "rcr"}).bytes(intel(["rcr rbx, 0"]))
+  ModelTest("rcr rbx 0").tags({"rcr"}).bytes(intel(["rcr rbx, 0"]))
   .case(I = S(0x100).RBX(0b101).aflags(0), R = True)
   .case(I = S(0x100).RBX(0b101).aflags(1), R = True),
 
-  ModelTest("rcr rdx cl").tags({"min", "rcr"}).bytes(intel(["rcr rdx, cl"]))
+  ModelTest("rcr rdx cl").tags({"rcr"}).bytes(intel(["rcr rdx, cl"]))
   .case(I = S(0x100).RDX(0x7fffffffffffffff).RCX(63).aflags(0), R = True)
   .case(I = S(0x100).RDX(0x7fffffffffffffff).RCX(65).aflags(1), R = True)
 }
 
 test_ror = {
-  ModelTest("ror rax").tags({"min", "ror"}).bytes(intel(["ror rax"]))
+  ModelTest("ror rax").tags({"ror"}).bytes(intel(["ror rax"]))
   .case(I = S(0x100).RAX(0b101).aflags(0), R = True)
   .case(I = S(0x100).RAX(0b1010).aflags(0), R = True),
 
-  ModelTest("ror rbx imm8").tags({"min", "ror"}).bytes(intel(["ror rbx, 0x5"]))
+  ModelTest("ror rbx imm8").tags({"ror"}).bytes(intel(["ror rbx, 0x5"]))
   .case(I = S(0x100).RBX(0b1011111).aflags(0), R = True)
   .case(I = S(0x100).RBX(0b1000000).aflags(0), R = True),
 
@@ -245,11 +245,11 @@ test_rcl = {
   .case(I = S(0x100).RBX(0b1011111).aflags(0), R = True)
   .case(I = S(0x100).RBX(0b1000000).aflags(0), R = True),
 
-  ModelTest("rcl rbx 0").tags({"min", "rcl"}).bytes(intel(["rcl rbx, 0"]))
+  ModelTest("rcl rbx 0").tags({"rcl"}).bytes(intel(["rcl rbx, 0"]))
   .case(I = S(0x100).RBX(0b101).aflags(0), R = True)
   .case(I = S(0x100).RBX(0b101).aflags(1), R = True),
 
-  ModelTest("rcl rdx cl").tags({"min", "rcl"}).bytes(intel(["rcl rdx, cl"]))
+  ModelTest("rcl rdx cl").tags({"rcl"}).bytes(intel(["rcl rdx, cl"]))
   .case(I = S(0x100).RDX(0x7fffffffffffffff).RCX(63).aflags(0), DE = MS().uOF(), R = True)
   .case(I = S(0x100).RDX(0x7fffffffffffffff).RCX(65).aflags(1), DE = MS().uOF(), R = True)
 }
@@ -342,7 +342,7 @@ test_reduce_regs = {
   .case(run_bytes = intel(["mov rcx, rax"]), R=True)
   .case(run_bytes = intel(["mov rdx, rax"]), R=True),
 
-  ModelTest("add/mov reg/reg, reg/imm").tags({"reduce_regs"})
+  ModelTest("add/mov reg/reg, reg/imm").tags({"reduce_regs", "min"})
   .bytes(intel(["mov rax, 0x12", "add rax, 0x12", "mov rbx, rcx", "add r8, rax"]))
   .DI(S(0x100).RAX(0x15).RBX(0x55).RCX(0x45).RDX(0xff).R8(0x12).R9(0x22).RSP(0x2000).aflags(0))
   .case(run_bytes = intel(["mov rax, 0x12"]), R=True)
@@ -504,7 +504,7 @@ test_reg_parts = {
   .case(run_bytes = intel(["adc ah, 0xf"]), R=True),
 
 
-  ModelTest("xor/adc fractions").tags({"reduce_args"})
+  ModelTest("xor/adc fractions").tags({"reduce_args", "min"})
   .bytes(intel(["xor al, ah", "xor al, 0xa", "xor ax, bx", "xor ax, 0x1",
                 "xor ah, al", "xor ah, 0xb",
                 "adc r8b, al", "adc r8b, 0xe", "adc ax, bx", "adc ax, 0x2",
@@ -589,7 +589,7 @@ test_addr_ops = {
   .case(run_bytes = intel(["lea r9, [r10 + rcx]"]), R=True)
   .case(run_bytes = intel(["lea r9, [r10 + 2 * rax + rcx]"]), R=True),
 
-  ModelTest("addr op permutations").tags({"addr_op", "reduce_regs"})
+  ModelTest("addr op permutations").tags({"addr_op", "reduce_regs", "min"})
   .bytes(intel(["lea rax, [rax + rbx]", "lea rax, [rbx + 0x01]",
                "lea rcx, [rcx + 2 * rdx + 0x5]", "lea rcx, [rax + 0x0]",
                "lea rax, [rbx + 0xf543f]", "lea rcx, [rcx + 2 * rdx + 0x5fdfd12]"]))
@@ -700,7 +700,7 @@ test_addr_ops = {
   .case(run_bytes = intel(["lea eax, [eax + 2 * eax + 0x0]"]), R=True),
 
 
-  ModelTest("addr op permutations r32").tags({"addr_op", "reduce_regs"})
+  ModelTest("addr op permutations r32").tags({"addr_op", "reduce_regs", "min"})
   .bytes(intel(["lea eax, [eax + ebx]", "lea eax, [ebx + 0x01]",
                "lea ecx, [ecx + 2 * edx + 0x5]", "lea ecx, [eax + 0x0]",
                "lea eax, [ebx + 0xf543f]", "lea ecx, [ecx + 2 * edx + 0x5fdfd12]",
