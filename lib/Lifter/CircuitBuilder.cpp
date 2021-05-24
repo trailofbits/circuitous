@@ -426,11 +426,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
             lhs == rhs) {
           continue;
         }
-        if (!Names::are_tied(lhs, rhs)) {
-          args.push_back(op);
-        } else {
-          args.push_back(op);
-        }
+        args.push_back(op);
       }
 
     }
@@ -609,7 +605,7 @@ void Circuit0::InjectSemantic(
   auto state_ptr = state.raw();
   llvm::IRBuilder<> ir(inst_block);
 
-  for (auto [reg, arg, _] : surface.reg_to_args) {
+  for (const auto &[reg, arg, _] : surface.reg_to_args) {
     state.store(ir, reg, arg);
   }
 
