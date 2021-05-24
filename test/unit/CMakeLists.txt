@@ -6,10 +6,12 @@ add_subdirectory(lib)
 
 add_executable(test_circuitous
   main.cpp
+  ADT/UnionFind.cpp
 )
 
 target_link_libraries(test_circuitous
   PRIVATE
+    circuitous_settings
     thirdparty_doctest
 )
 
