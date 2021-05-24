@@ -48,8 +48,7 @@ void Interpreter<S>::SetInputEbit(bool value)
 {
   DLOG(INFO) << "SETTING INPUT Ebit";
   CHECK(circuit->Attr<InputErrorFlag>().Size() == 1);
-  auto as_apint = (value) ? TrueVal() : FalseVal();
-  self().SetNodeVal(circuit->Attr<InputErrorFlag>()[0], as_apint);
+  self().SetNodeVal(circuit->Attr<InputErrorFlag>()[0], BoolVal(value));
 }
 
 template<typename S>
@@ -305,7 +304,7 @@ void Interpreter<S>::VisitLLVMOperation(LLVMOperation *op) {
 
         default: DLOG(FATAL) << "Unknown LLVM operation: " << op->Name() << " " << op->id(); break;
       }
-      self().SetNodeVal(op, result ? TrueVal() : FalseVal());
+      self().SetNodeVal(op, BoolVal(result));
     } break;
 
     default: DLOG(FATAL) << "Unknown LLVM operation: " << op->Name() << " " << op->id(); break;
