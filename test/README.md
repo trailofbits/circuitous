@@ -13,12 +13,7 @@ let `z3` find out if they are the same.
 
 # Prerequisites
 
-Build the project. Build `microx`. If you are on macOS, `microx` may fail
-to compile -- try to use patches in `test/patches` directory. (Via `git am`
-for example).
-
-Also, since `microx` does not provide any way to install itself somewhere
-(or maybe correct me about how to do it), just symlink it here (do not forget the `.so`).
+Build the project. Install python dependencies: `pip install -r requirements.txt`.
 
 # How to run this
 
