@@ -1,8 +1,8 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 
-from byte_generator import intel
-from model_test import ModelTest, Test
-from tc import State, S, MS, if_has
+from tools.byte_generator import intel
+from tools.model_test import ModelTest, Test
+from tools.tc import State, S, MS, if_has
 
 test_adc = {
   ModelTest("adc").tags({"min", "adc"})
