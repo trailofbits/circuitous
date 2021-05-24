@@ -253,6 +253,24 @@ namespace impl {
       return { ResultType(module, size) };
     }
 
+    static llvm::Value *unwrap(llvm::Value *gift) {
+      auto casted = llvm::dyn_cast_or_null<llvm::CallInst>(gift);
+      if (!casted || !Parent::IsIntrinsic(casted->getCalledFunction())) {
+        return gift;
+      }
+      auto suprise = casted->getArgOperand(0u);
+      casted->eraseFromParent();
+      return suprise;
+    }
+
+    static auto unwrap(const std::vector<llvm::CallInst *> &gifts) {
+      std::vector<llvm::Value *> out;
+      for (auto x : gifts) {
+        out.push_back(unwrap(x));
+      }
+      return out;
+    }
+
   };
 
   template <typename Self_t>
@@ -550,17 +568,7 @@ struct Select : impl::Select<data::Select> {
 // be thrown away during lowering process.
 struct Identity : impl::Identity<data::Identity> {};
 
-struct Transport : impl::Identity<data::Transport> {
-  static llvm::Value *unwrap(llvm::Value *gift) {
-    auto casted = llvm::dyn_cast_or_null<llvm::CallInst>(gift);
-    if (!casted || !Transport::IsIntrinsic(casted->getCalledFunction())) {
-      return gift;
-    }
-    auto suprise = casted->getArgOperand(0u);
-    casted->eraseFromParent();
-    return suprise;
-  }
-};
+struct Transport : impl::Identity<data::Transport> {};
 
 struct Error : impl::Identity<data::Error> {};
 
@@ -688,13 +696,7 @@ void disable_opts(llvm::Module *m) {
 }
 
 template<typename T>
-std::vector<llvm::CallInst *> collect(llvm::Value *from, llvm::Value *to) {
-  CHECK(llvm::isa<llvm::Instruction>(from) && llvm::isa<llvm::Instruction>(to));
-
-  using bb_t = llvm::BasicBlock::iterator;
-  auto begin = bb_t{llvm::cast<llvm::Instruction>(from)};
-  auto end = bb_t{llvm::cast<llvm::Instruction>(to)};
-
+auto collect(llvm::BasicBlock::iterator begin, llvm::BasicBlock::iterator end) {
   std::vector<llvm::CallInst *> out;
   for (;begin != end; ++begin) {
     auto &inst = *begin;
@@ -705,6 +707,17 @@ std::vector<llvm::CallInst *> collect(llvm::Value *from, llvm::Value *to) {
     }
   }
   return out;
+}
+
+template<typename T>
+std::vector<llvm::CallInst *> collect(llvm::Value *from, llvm::Value *to) {
+  CHECK(llvm::isa<llvm::Instruction>(from) && llvm::isa<llvm::Instruction>(to));
+
+  using bb_t = llvm::BasicBlock::iterator;
+  auto begin = bb_t{llvm::cast<llvm::Instruction>(from)};
+  auto end = bb_t{llvm::cast<llvm::Instruction>(to)};
+
+  return collect<T>(begin, end);
 }
 
 } // namespace circuitous::intrinsics
