@@ -73,13 +73,13 @@ namespace circuitous {
 
     static bool is_in_reg(llvm::Value *arg) {
       CHECK(arg->hasName());
-      auto [type, _, mut, _1] = parse(arg);
+      const auto &[type, _, mut, _1] = parse(arg);
       return type == reg_type_ && mut == in;
     }
 
     static bool is_out_reg(llvm::Value *arg) {
       CHECK(arg->hasName());
-      auto [type, _, mut, _1] = parse(arg);
+      const auto &[type, _, mut, _1] = parse(arg);
       return type == reg_type_ && mut == out;
     }
 
@@ -105,7 +105,7 @@ namespace circuitous {
     }
 
     static llvm::Argument *dual_reg(llvm::Function *fn, llvm::Value *val) {
-      auto [type, _, _1, _2] = parse(val);
+      const auto &[type, _, _1, _2] = parse(val);
       CHECK(type == reg_type_);
 
       for (auto &arg : fn->args()) {
@@ -121,8 +121,8 @@ namespace circuitous {
       if (!lhs->hasName() || !rhs->hasName()) {
         return false;
       }
-      auto [ltype, lname, lmut, _] = parse(lhs);
-      auto [rtype, rname, rmut, _1] = parse(rhs);
+      const auto &[ltype, lname, lmut, _] = parse(lhs);
+      const auto &[rtype, rname, rmut, _1] = parse(rhs);
       return ltype == rtype && lname == rname && _cast_mut(lmut) + _cast_mut(rmut) == tied_c;
     }
   };
