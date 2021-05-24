@@ -10,6 +10,7 @@
 
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/SelectFold.hpp>
+#include <circuitous/Lifter/Error.hpp>
 #include <circuitous/IR/Lifter.hpp>
 
 #include <remill/BC/Compat/CallSite.h>
@@ -623,14 +624,20 @@ void Circuit0::InjectSemantic(
 
   // Create encoding comparisons
   auto params = ByteFragments(ir, isel);
+  // Collect selects, they will be needed later for folding
+  auto selects = intrinsics::collect<intrinsics::Select>(begin, end);
 
   auto fragments_size = params.size();
   params.push_back(surface.saturation_property(ir));
 
   auto [ebit_in, ebit_out] = surface.fetch_ebits();
+  auto current_err = err::synthesise_current(ir, begin, end);
+  if (!current_err) {
+    params.push_back(ir.CreateICmpEQ(ebit_in, ir.getFalse()));
+  } else {
+    current_err = ir.CreateOr(ebit_in, current_err);
+  }
   params.push_back(intrinsics::make_outcheck(ir, {ebit_in, ebit_out}));
-
-  auto selects = intrinsics::collect<intrinsics::Select>(begin, end);
 
   // Collect annotated instructions - this is the way separate components
   // of the lfiting pipleline communicate
