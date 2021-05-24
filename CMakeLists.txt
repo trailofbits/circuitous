@@ -120,6 +120,13 @@ target_link_libraries(circuitous-run PUBLIC
 target_include_directories(circuitous-run PUBLIC circuitous_settings)
 
 #
+# tests
+#
+
+enable_testing()
+add_subdirectory(test)
+
+#
 # install settings
 #
 
