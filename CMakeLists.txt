@@ -39,7 +39,7 @@ target_include_directories(circuitous_settings INTERFACE
 target_compile_options(circuitous_settings INTERFACE
   -Werror
   -Wconversion
-  -pedantic 	
+  -pedantic
   -Wno-unreachable-code-return
 )
 
@@ -66,7 +66,7 @@ add_library(circuitous_lifter STATIC
 target_include_directories(circuitous_lifter PUBLIC circuitous_settings)
 target_link_libraries(circuitous_lifter PUBLIC circuitous_settings)
 
-add_library(circuitous_printers STATIC 
+add_library(circuitous_printers STATIC
   lib/Printers/DOT.cpp
   lib/Printers/Python.cpp
   lib/Printers/JSON.cpp
@@ -107,7 +107,6 @@ target_link_libraries(circuitous-lift PUBLIC
 target_include_directories(circuitous-lift PUBLIC circuitous_settings)
 
 add_executable(circuitous-run
-  bin/run/Interpreter.cpp
   bin/run/Run.cpp
 )
 
