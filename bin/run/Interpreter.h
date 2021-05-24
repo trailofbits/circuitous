@@ -42,6 +42,7 @@ namespace circuitous {
     value_type Undef() { return {}; }
     llvm::APInt TrueVal() { return llvm::APInt(1, 1); }
     llvm::APInt FalseVal() { return llvm::APInt(1, 0); }
+    llvm::APInt BoolVal(bool v) { return (v) ? TrueVal() : FalseVal(); }
 
     template<typename ...Args>
     bool ValidVals(Args &&... args) {
