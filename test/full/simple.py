@@ -1,8 +1,8 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 
-from tc import State, Test, accept, reject, if_has, if_nhas, S, MS
-from byte_generator import intel
-from model_test import ModelTest
+from tools.tc import State, Test, accept, reject, if_has, if_nhas, S, MS
+from tools.byte_generator import intel
+from tools.model_test import ModelTest
 
 test_mov = {
   Test("mov imm rdx") .bytes("ba12000000").tags({"mov"})

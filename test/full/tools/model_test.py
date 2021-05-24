@@ -1,6 +1,6 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 
-from tc import State, Test, _regs, _aflags, MS
+from tools.tc import State, Test, _regs, _aflags, MS
 
 import microx
 from microx_core import Executor
