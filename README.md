@@ -1,3 +1,5 @@
+[![Build](https://github.com/trailofbits/circuitous/actions/workflows/build.yml/badge.svg)](https://github.com/trailofbits/circuitous/actions/workflows/build.yml)
+
 # Installation
 
 Install `remill` and `cxx-common`. Then use the same process here, e.g. something like:
