@@ -521,16 +521,11 @@ struct Select : impl::Select<data::Select> {
   }
 
   static bool is_complete(llvm::CallInst *call) {
-    for (auto &arg : call->args()) {
-      if (is_undef(arg)) {
-        return false;
-      }
-    }
-    return true;
+    return std::none_of(call->arg_begin(), call->arg_end(), is_undef);
   }
 
   // TODO(lukas): I think we should make this more general by introducing some
-  //              way to configure the
+  //              way to configure the stride if arguments counts are different.
   static bool are_compatible(llvm::CallInst *lhs, llvm::CallInst *rhs) {
     auto size = std::min(lhs->getNumArgOperands(), rhs->getNumArgOperands());
     auto op = [&](auto from, auto i) {
