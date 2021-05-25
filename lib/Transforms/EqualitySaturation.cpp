@@ -9,6 +9,7 @@
 #include <functional>
 #include <iostream>
 #include <optional>
+#include <vector>
 
 namespace circuitous {
 
@@ -20,10 +21,39 @@ namespace circuitous {
     return {};
   }
 
+  template < typename Graph >
+  struct Pattern
+  {
+
+  };
+
+  // substitution mapping from varibles to equality classes
+  template< typename Graph >
+  struct Substitutions
+  {
+
+  };
+
+  // Result of matched nodes in one eclass
+  template< typename Graph >
+  struct EClassMatches
+  {
+    using Id = typename Graph::Id;
+
+    Id eclass;
+
+    std::vector< Substitutions< Graph > > substitutions;
+  };
+
   template< typename Graph >
   struct Matcher
   {
+    using EClassMatches = EClassMatches< Graph >;
 
+    std::vector< EClassMatches > match(const Graph &egraph) const
+    {
+      return {};
+    }
   };
 
   template< typename Graph >
@@ -35,25 +65,47 @@ namespace circuitous {
   template< typename Graph >
   struct Rule
   {
-    using RMatcher = Matcher< Graph >;
-    using RApplier = Applier< Graph >;
+    using Matcher = Matcher< Graph >;
+    using Applier = Applier< Graph >;
+
+    using EClassMatches = EClassMatches< Graph >;
 
     const std::string name;
 
     // Rewrite rule 'lhs -> rhs' that allows to match
     // left-hand-side and replace it with right-hand-side
-    RMatcher lhs;
-    RApplier rhs;
+    Matcher lhs;
+    Applier rhs;
+
+    std::vector< EClassMatches > match(const Graph &egraph) const
+    {
+      return lhs.match(egraph);
+    }
   };
 
   template< typename Graph >
   using Rules = std::vector< Rule< Graph > >;
 
-  // Runner orchestrates a whole equality saturation
+
   template< typename Graph >
+  struct BasicRulesScheduler
+  {
+    using EClassMatches = EClassMatches< Graph >;
+    using Rule = Rule< Graph >;
+
+    std::vector< EClassMatches > match_rule(const Graph &egraph, const Rule &rule) const
+    {
+      return rule.match(egraph);
+    }
+  };
+
+  // Runner orchestrates a whole equality saturation
+  template< typename Graph, template< typename > typename Scheduler >
   struct EqSatRunner
   {
-    using GRules = Rules< Graph >;
+    using Rules = Rules< Graph >;
+    using RulesScheduler = Scheduler< Graph >;
+    using EClassMatches = EClassMatches< Graph >;
 
     EqSatRunner(Graph &&egraph) : _egraph(std::move(egraph)) {}
 
@@ -67,7 +119,7 @@ namespace circuitous {
 
     // Run equality saturation with given rewrite rules until it stops,
     // i.e., hits any of limits or fully saturates graph
-    stop_reason run(const GRules &rules)
+    stop_reason run(const Rules &rules)
     {
       _egraph.rebuild();
 
@@ -80,17 +132,26 @@ namespace circuitous {
     }
 
     // One iteration of the saturation loop
-    Status step(const GRules &rules)
+    Status step(const Rules &rules)
     {
+      // TODO(Heno): check limits & timeout
+
+      std::vector< EClassMatches > matches;
+      for (const auto &rule : rules) {
+        auto matched = _scheduler.match_rule(_egraph, rule);
+        matches.insert(matches.end(), matched.begin(), matched.end());
+        // TODO(Heno): check limits
+      }
+
       return stop_reason::unknown;
     }
 
   private:
+    RulesScheduler _scheduler;
     Graph _egraph;
   };
 
-
-  using DefaultRunner = EqSatRunner< CircuitEGraph >;
+  using DefaultRunner = EqSatRunner< CircuitEGraph, BasicRulesScheduler >;
   using CircuitRules = Rules< CircuitEGraph >;
 
   bool EqualitySaturation(Circuit *circuit)
