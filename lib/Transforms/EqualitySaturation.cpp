@@ -8,6 +8,7 @@
 #include <circuitous/ADT/EGraph.hpp>
 #include <functional>
 #include <iostream>
+#include <optional>
 
 namespace circuitous {
 
@@ -62,20 +63,26 @@ namespace circuitous {
       saturated, iteration_limit, node_limit, time_limit, unknown
     };
 
+    using Status = std::optional< stop_reason >;
+
     // Run equality saturation with given rewrite rules until it stops,
     // i.e., hits any of limits or fully saturates graph
     stop_reason run(const GRules &rules)
     {
-      while (!is_saturated_ot_timeout()) {
+      _egraph.rebuild();
 
+      Status stopped = std::nullopt;
+      while (!stopped.has_value()) {
+        stopped = step(rules);
       }
 
-      return stop_reason::unknown;
+      return stopped.value();
     }
 
-    [[nodiscard]] bool is_saturated_ot_timeout() const
+    // One iteration of the saturation loop
+    Status step(const GRules &rules)
     {
-      return true;
+      return stop_reason::unknown;
     }
 
   private:
