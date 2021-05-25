@@ -158,6 +158,10 @@ namespace circuitous {
         // TODO(Heno): check limits
       }
 
+      _egraph.rebuild();
+
+      // TODO(Heno): chack graph saturation
+
       return stop_reason::unknown;
     }
 
