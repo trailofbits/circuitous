@@ -45,30 +45,28 @@ namespace circuitous {
     std::vector< Substitutions< Graph > > substitutions;
   };
 
-  template< typename Graph >
-  struct Matcher
-  {
-    using EClassMatches = EClassMatches< Graph >;
-
-    std::vector< EClassMatches > match(const Graph &egraph) const
-    {
-      return {};
-    }
-  };
-
-  template< typename Graph >
-  struct Applier
-  {
-
-  };
 
   template< typename Graph >
   struct Rule
   {
-    using Matcher = Matcher< Graph >;
-    using Applier = Applier< Graph >;
-
     using EClassMatches = EClassMatches< Graph >;
+    using Matches = std::vector< EClassMatches >;
+
+    struct Matcher
+    {
+      Matches match(const Graph &egraph) const
+      {
+        return {};
+      }
+    };
+
+    struct Applier
+    {
+      void apply_on_matches(const Graph &egraph, const Matches &matches) const
+      {
+
+      }
+    };
 
     const std::string name;
 
@@ -77,9 +75,14 @@ namespace circuitous {
     Matcher lhs;
     Applier rhs;
 
-    std::vector< EClassMatches > match(const Graph &egraph) const
+    Matches match(const Graph &egraph) const
     {
       return lhs.match(egraph);
+    }
+
+    void apply(const Graph &egraph, const Matches &matches) const
+    {
+      rhs.apply_on_matches(egraph, matches);
     }
   };
 
@@ -91,11 +94,17 @@ namespace circuitous {
   struct BasicRulesScheduler
   {
     using EClassMatches = EClassMatches< Graph >;
+    using Matches = std::vector< EClassMatches >;
     using Rule = Rule< Graph >;
 
-    std::vector< EClassMatches > match_rule(const Graph &egraph, const Rule &rule) const
+    Matches match_rule(const Graph &egraph, const Rule &rule) const
     {
       return rule.match(egraph);
+    }
+
+    void apply_rule(const Graph &egraph, const Rule &rule, const Matches &matches) const
+    {
+      rule.apply(egraph, matches);
     }
   };
 
@@ -103,9 +112,11 @@ namespace circuitous {
   template< typename Graph, template< typename > typename Scheduler >
   struct EqSatRunner
   {
+    using Rule = Rule< Graph >;
     using Rules = Rules< Graph >;
     using RulesScheduler = Scheduler< Graph >;
     using EClassMatches = EClassMatches< Graph >;
+    using Matches = std::vector< EClassMatches >;
 
     EqSatRunner(Graph &&egraph) : _egraph(std::move(egraph)) {}
 
@@ -136,10 +147,14 @@ namespace circuitous {
     {
       // TODO(Heno): check limits & timeout
 
-      std::vector< EClassMatches > matches;
+      std::vector< std::pair< Rule, Matches > > matches;
       for (const auto &rule : rules) {
-        auto matched = _scheduler.match_rule(_egraph, rule);
-        matches.insert(matches.end(), matched.begin(), matched.end());
+        matches.emplace_back(rule, _scheduler.match_rule(_egraph, rule));
+        // TODO(Heno): check limits
+      }
+
+      for (const auto &[rule, match] : matches) {
+        _scheduler.apply_rule(_egraph, rule, match);
         // TODO(Heno): check limits
       }
 
