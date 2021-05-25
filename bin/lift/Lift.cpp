@@ -155,6 +155,7 @@ void Optimize(circuitous::Circuit *circuit) {
   opt_manager.AddPass("reducepopcount");
   // TODO(lukas): Broken fix.
   //opt_manager.AddPass("extractcommon");
+  opt_manager.AddPass("eqsat");
   opt_manager.AddPass("depbreaker");
 
   opt_manager.Run(circuit);
