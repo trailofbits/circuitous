@@ -39,6 +39,10 @@ bool ExtractCommonTopologies(Circuit *circuit);
 
 bool DependencyBreaker(Circuit *circuit);
 
+// Applies rewrite rules via equality saturation,
+// minimizing the const of a whole circuit.
+bool EqualitySaturation(Circuit *circuit);
+
 // Merge all of the hint inputs into a single "wide" input hint that is of
 // sufficient size to support all verifiers. In place of the individual hints,
 // the verifiers pull out slices of wide hint value with an EXTRACT.
@@ -58,6 +62,7 @@ struct KnownPasses {
     {"reducepopcount", { 1, &StrengthReducePopulationCount } },
     {"extractcommon", { 3, &ExtractCommonTopologies } },
     {"depbreaker", { 4, &DependencyBreaker } },
+    {"eqsat", {5, &EqualitySaturation } },
     {"mergehints", { 99, &MergeHints } }
   };
 
@@ -149,7 +154,7 @@ struct Defensive : Next {
 
   void RunPass(Circuit *circuit, pass_t pass) {
     auto name = this->PassName(pass);
-    Logger::log("Going to run transformation", name);
+    Logger::log("Going to run transformation ", name);
     this->Next::RunPass(circuit, pass);
     Logger::log("Done. Running verify pass:");
     const auto &[status, msg, warnings] = VerifyCircuit(circuit);

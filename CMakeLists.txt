@@ -93,6 +93,7 @@ add_library(circuitous_transforms STATIC
   lib/Transforms/MergeHints.cpp
   lib/Transforms/StrengthReducePopulationCount.cpp
   lib/Transforms/MergeByBytes.cpp
+  lib/Transforms/EqualitySaturation.cpp
 )
 
 target_link_libraries(circuitous_transforms PUBLIC circuitous_settings)
