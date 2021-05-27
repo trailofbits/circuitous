@@ -8,18 +8,52 @@
 #include <circuitous/ADT/EGraph.hpp>
 #include <functional>
 #include <iostream>
+#include <fstream>
+#include <memory>
 #include <optional>
 #include <vector>
 
 namespace circuitous {
 
-  struct CircuitNode {};
-  using CircuitEGraph = EGraph< CircuitNode >;
-
-  CircuitEGraph make_circuit_egraph(Circuit *circuit)
+  struct CircuitENode
   {
-    return {};
-  }
+    CircuitENode(Operation *op) : op(op) {}
+
+    Operation *op;
+
+    bool is_leaf() const { return IsLeafNode(op); }
+    std::string name() const { return to_string(op->op_code); }
+
+    CircuitENode* operator->() { return this; }
+    const CircuitENode* operator->() const { return this; }
+
+    std::vector< CircuitENode > children() const
+    {
+      std::vector< CircuitENode > children;
+      for (const auto &child : op->operands) {
+        children.emplace_back(child);
+      }
+      return children;
+    }
+
+    friend bool operator<(const CircuitENode &a, const CircuitENode &b) { return a.op < b.op; }
+  };
+
+  using CircuitEGraph = EGraph< CircuitENode >;
+
+  struct EGraphBuilder : public Visitor< EGraphBuilder >
+  {
+    CircuitEGraph build(Circuit *circuit)
+    {
+      CircuitEGraph egraph;
+
+      circuit->AllAttributes::ForEachOperation([&] (Operation *op) {
+        egraph.add(CircuitENode(op));
+      });
+
+      return egraph;
+    }
+  };
 
   template < typename Graph >
   struct Pattern
@@ -165,6 +199,8 @@ namespace circuitous {
       return stop_reason::unknown;
     }
 
+    const Graph& egraph() const { return _egraph; }
+
   private:
     RulesScheduler _scheduler;
     Graph _egraph;
@@ -177,14 +213,17 @@ namespace circuitous {
   {
     LOG(INFO) << "Start equality saturation";
 
-    auto runner = DefaultRunner(make_circuit_egraph(circuit));
+    EGraphBuilder ebuilder;
+    auto runner = DefaultRunner( ebuilder.build(circuit) );
 
     auto rules = CircuitRules();
     runner.run(rules);
 
-    LOG(INFO) << "Equality saturation stopped with";
+    LOG(INFO) << "Equality saturation stopped";
 
     // extract best circuit
+    std::ofstream out("egraph.dot");
+    to_dot(runner.egraph(), out);
 
     return true;
   }
