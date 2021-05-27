@@ -36,7 +36,7 @@ jobs:
     timeout-minutes: 10
 
     container:
-      image: docker.pkg.github.com/trailofbits/cxx-common/vcpkg-builder-${{ matrix.image.name }}:${{ matrix.image.tag }}
+      image: docker.pkg.github.com/lifting-bits/cxx-common/vcpkg-builder-${{ matrix.image.name }}:${{ matrix.image.tag }}
 
       credentials:
         username: ${{ github.actor }}
@@ -52,12 +52,12 @@ jobs:
           rel_install_path="install"
           rel_downloads_path="downloads"
           rel_ccache_path="ccache"
-          
+
           mkdir -p ${rel_build_path} \
                    ${rel_install_path} \
                    ${rel_downloads_path} \
                    ${rel_ccache_path}
-          
+
           echo ::set-output name=SOURCE::$(pwd)/${rel_source_path}
           echo ::set-output name=REL_SOURCE::${rel_source_path}
           echo ::set-output name=BUILD::$(pwd)/${rel_build_path}
@@ -119,7 +119,7 @@ jobs:
           folder_name="vcpkg_${{ matrix.image.name }}-${{ matrix.image.tag }}_llvm-${{ matrix.llvm }}_amd64"
           archive_name="${folder_name}.tar.xz"
 
-          url="https://github.com/trailofbits/cxx-common/releases/download/${{ matrix.cxxcommon_version}}/${archive_name}"
+          url="https://github.com/lifting-bits/cxx-common/releases/download/${{ matrix.cxxcommon_version}}/${archive_name}"
           local_path="${{ steps.build_paths.outputs.DOWNLOADS }}/${archive_name}"
 
           if [[ ! -f "${local_path}" ]] ; then
