@@ -773,7 +773,7 @@ using AllAttributes =
 
 
 // Represents the results of verifying a circuit.
-class Circuit : public Condition, AllAttributes {
+class Circuit : public Condition, public AllAttributes {
  public:
   virtual ~Circuit(void);
 
