@@ -15,7 +15,7 @@ import simple
 import basic
 import tools.model_test as mp
 
-circuitous_prefix = os.environ.get("CIRCUITOUS_BUILD_DIR", "../build")
+circuitous_prefix = os.environ.get("CIRCUITOUS_BUILD_DIR", "../../build")
 
 circuitous_run=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-run"))
 circuitous_lift=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-lift"))
