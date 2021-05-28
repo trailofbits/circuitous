@@ -149,9 +149,10 @@ class Interpret(SimulateCWDMixin):
 
   def run_case(self, case, ir, parent):
     args = [self.binary,
+            "--derive",
             "--log_dir", self.test_dir,
-            "--json_in", case.input.as_json_file(case.name, self.test_dir),
-            "--json_out", self.locate(case.name + ".result.json"),
+            "--singular_current", case.input.as_json_file(case.name, self.test_dir),
+            "--export_derived", self.locate(case.name + ".result.json"),
             "--ir_in", ir]
     if dbg_verbose:
       args += ["--dot_out", self.locate(case.name + ".result.dot")]
@@ -175,9 +176,10 @@ class Interpret(SimulateCWDMixin):
   def update_state(self, case, result):
     with open(result) as f:
       result = json.load(f)
-      for reg, val in result["output_regs"].items():
+      for reg, val in result["regs"].items():
         case.simulated.set_reg(reg, int(val, 10))
       case.simulated.result = result["result"]
+      case.simulated._ebit = result.get("ebit")
 
 
 class TestResult:
