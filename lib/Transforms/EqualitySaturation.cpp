@@ -15,42 +15,28 @@
 
 namespace circuitous {
 
-  struct CircuitENode
-  {
-    CircuitENode(Operation *op) : op(op) {}
-
-    Operation *op;
-
-    bool is_leaf() const { return IsLeafNode(op); }
-    std::string name() const { return to_string(op->op_code); }
-
-    CircuitENode* operator->() { return this; }
-    const CircuitENode* operator->() const { return this; }
-
-    std::vector< CircuitENode > children() const
-    {
-      std::vector< CircuitENode > children;
-      for (const auto &child : op->operands) {
-        children.emplace_back(child);
-      }
-      return children;
-    }
-
-    friend bool operator<(const CircuitENode &a, const CircuitENode &b) { return a.op < b.op; }
-  };
-
-  using CircuitEGraph = EGraph< CircuitENode >;
+  using CircuitEGraph = EGraph< ENode< Operation* > >;
 
   struct EGraphBuilder : public Visitor< EGraphBuilder >
   {
+    using ENode = CircuitEGraph::ENode;
+    using Id = CircuitEGraph::Id;
+
+    Id add_node_recurse(Operation *op, CircuitEGraph &egraph)
+    {
+        ENode node(op);
+        for (const auto &child : op->operands) {
+          node.children.push_back(add_node_recurse(child, egraph));
+        }
+        return egraph.add(std::move(node));
+    }
+
     CircuitEGraph build(Circuit *circuit)
     {
       CircuitEGraph egraph;
-
       circuit->AllAttributes::ForEachOperation([&] (Operation *op) {
-        egraph.add(CircuitENode(op));
+        add_node_recurse(op, egraph);
       });
-
       return egraph;
     }
   };
@@ -194,7 +180,7 @@ namespace circuitous {
 
       _egraph.rebuild();
 
-      // TODO(Heno): chack graph saturation
+      // TODO(Heno): check graph saturation
 
       return stop_reason::unknown;
     }
@@ -223,7 +209,7 @@ namespace circuitous {
 
     // extract best circuit
     std::ofstream out("egraph.dot");
-    to_dot(runner.egraph(), out);
+    to_dot(runner.egraph(), out, [] (auto *node) { return to_string(node->expr->op_code); });
 
     return true;
   }
