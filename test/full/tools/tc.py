@@ -15,7 +15,7 @@ _aflags = ["AF", "CF", "OF", "ZF", "PF", "SF"]
 _all_regs = _regs + _aflags + _e_regs + _b_regs + _a_regs
 
 class State:
-  __slots__ = ('registers', 'bytes', 'result', 'undefined', '_ebit')
+  __slots__ = ('registers', 'bytes', 'result', 'undefined', '_ebit', 'timestamp')
 
   def __init__(self, default_val = None, default_rip = 0x1000):
     self.registers = {}
@@ -26,6 +26,7 @@ class State:
     self.registers["RIP"] = default_rip
     self._ebit = False
     self.undefined = set()
+    self.timestamp = 0
 
   def aflags(self, val):
     for flag in _aflags:
@@ -54,12 +55,13 @@ class State:
     return self
 
   def get(self):
-    out = {"instruction_bits" : self.bytes,
+    out = {"inst_bits" : self.bytes,
            "ebit" : self._ebit,
-           "input_regs" : {}}
+           "timestamp" : self.timestamp,
+           "regs" : {}}
     for reg, val in self.registers.items():
       if val is not None:
-        out["input_regs"][reg] = str(val)
+        out["regs"][reg] = str(val)
     return out
 
   def as_json_file(self, prefix="def.", dir=None):
