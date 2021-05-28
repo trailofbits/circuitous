@@ -43,8 +43,10 @@ class Operation : public Node<Operation> {
   virtual ~Operation(void) = default;
 
   virtual std::string Name(void) const;
-
   virtual bool Equals(const Operation *that) const;
+
+  auto &operator[](std::size_t idx) { return operands[idx]; }
+  const auto &operator[](std::size_t idx) const { return operands[idx]; }
 
   enum : unsigned {
 
@@ -851,6 +853,34 @@ class Circuit : public Condition, AllAttributes {
     #undef FORK_CASE
     __builtin_unreachable();
   }
+
+  template<typename What>
+  auto fetch_singular() {
+    auto &all = this->Attr<What>();
+    CHECK_EQ(all.Size(), 1);
+    return all[0];
+  }
+
+  template<typename What, bool allow_failure = true>
+  auto fetch_reg(const std::string &name) -> What * {
+    for (auto reg : this->Attr<What>()) {
+      if (reg->reg_name == name) {
+        return reg;
+      }
+    }
+    if constexpr (!allow_failure) {
+      LOG(FATAL) << "Register " << name << " not present";
+    }
+    return nullptr;
+  }
+
+  InputInstructionBits *input_inst_bits() { return fetch_singular<InputInstructionBits>(); }
+  InputErrorFlag *input_ebit() { return fetch_singular<InputErrorFlag>(); }
+  OutputErrorFlag *output_ebit() { return fetch_singular<OutputErrorFlag>(); }
+
+  using cstr_ref = const std::string &;
+  InputRegister *input_reg(cstr_ref name) { return fetch_reg<InputRegister>(name); }
+  OutputRegister *output_reg(cstr_ref name) { return fetch_reg<OutputRegister>(name); }
 
  public:
   Circuit(void);
