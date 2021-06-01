@@ -258,9 +258,9 @@ namespace impl {
       if (!casted || !Parent::IsIntrinsic(casted->getCalledFunction())) {
         return gift;
       }
-      auto suprise = casted->getArgOperand(0u);
+      auto surprise = casted->getArgOperand(0u);
       casted->eraseFromParent();
-      return suprise;
+      return surprise;
     }
 
     static auto unwrap(const std::vector<llvm::CallInst *> &gifts) {
@@ -695,11 +695,10 @@ void disable_opts(llvm::Module *m) {
   if constexpr (sizeof ... (Ts) != 0) return disable_opts<Ts...>(m);
 }
 
-template<typename T>
-auto collect(llvm::BasicBlock::iterator begin, llvm::BasicBlock::iterator end) {
+template<typename T, typename R = llvm::iterator_range<llvm::BasicBlock::iterator>>
+auto collect(R range) {
   std::vector<llvm::CallInst *> out;
-  for (;begin != end; ++begin) {
-    auto &inst = *begin;
+  for (auto &inst : range) {
     if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(&inst)) {
       if (T::IsIntrinsic(call_inst->getCalledFunction())) {
         out.push_back(call_inst);
@@ -717,7 +716,7 @@ std::vector<llvm::CallInst *> collect(llvm::Value *from, llvm::Value *to) {
   auto begin = bb_t{llvm::cast<llvm::Instruction>(from)};
   auto end = bb_t{llvm::cast<llvm::Instruction>(to)};
 
-  return collect<T>(begin, end);
+  return collect<T>({ begin, end });
 }
 
 } // namespace circuitous::intrinsics
