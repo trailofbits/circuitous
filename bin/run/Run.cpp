@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-present Trail of Bits, Inc.
+ * Copyright (c) 2020-2021 Trail of Bits, Inc.
  */
 
 #pragma clang diagnostic push
