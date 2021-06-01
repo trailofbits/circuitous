@@ -218,7 +218,14 @@ jobs:
                 --target install
           echo ::set-output name=PATH::${DESTDIR}
 
-      - name: Run tests
+      - name: Run unit tests
+        working-directory: ${{ steps.build_paths.outputs.BUILD }}/circuitous_build
+
+        run: |
+          ctest
+
+
+      - name: Run functional tests
         working-directory: ${{ steps.build_paths.outputs.SOURCE }}/circuitous/test
 
         run: |
