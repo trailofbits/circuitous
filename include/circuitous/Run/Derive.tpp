@@ -104,7 +104,7 @@ void CSem<S>::VisitOnlyOneCondition(OnlyOneCondition *op) {
   auto xor_ = [&](OnlyOneCondition *op) {
     auto result = 0u;
     for (std::size_t i = 0; i < op->operands.Size(); ++i) {
-      result += (self().GetNodeVal(op->operands[i]) == this->TrueVal()) ? 1 : 0;
+      result += uint32_t(self().GetNodeVal(op->operands[i]) == this->TrueVal());
     }
     return this->BoolVal(result == 1U);
   };
