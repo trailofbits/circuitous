@@ -21,6 +21,8 @@ namespace circuitous::run {
     State(const State &) = default;
     State(State &&) = delete;
 
+    State& operator=(State) = delete;
+
     auto Pop() {
       auto x = todo.front();
       todo.pop_front();
@@ -66,6 +68,8 @@ namespace circuitous::run {
 
     Spawn(const Spawn &) = default;
     Spawn(Spawn &&) = delete;
+
+    Spawn &operator=(Spawn) = delete;
 
     void SetNodeVal(Operation *op, const value_type &val) {
       if (node_values.count(op)) {

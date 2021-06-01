@@ -104,7 +104,10 @@ void OpSem<S>::VisitLLVMOperation(LLVMOperation *op) {
       case llvm::BinaryOperator::Sub: return { lhs() - rhs() };
       case llvm::BinaryOperator::Mul: return { lhs() * rhs() };
 
-      case llvm::BinaryOperator::UDiv: return { lhs().udiv(rhs()) };
+      // TODO(lukas): Eventually it should not be possible for division by `0` to happen
+      //              as circuits may raise & xor error_bit in.
+      case llvm::BinaryOperator::UDiv:
+          return (is_zero(rhs())) ? this->Undef() : std::make_optional( lhs().udiv(rhs()) );
       case llvm::BinaryOperator::SDiv:
           return (is_zero(rhs())) ? this->Undef() : std::make_optional( lhs().sdiv(rhs()) );
 
