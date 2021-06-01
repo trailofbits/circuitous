@@ -19,13 +19,13 @@ namespace circuitous::err {
   }
 
   // Returns `[explicit_errors, implicit_erros]`
-  static inline auto collect(
-      llvm::BasicBlock::iterator begin, llvm::BasicBlock::iterator end)
+  template<typename R = llvm::iterator_range<llvm::BasicBlock::iterator>>
+  static inline auto collect(R range)
   {
-    auto explicit_errs = intrinsics::collect<intrinsics::Error>(begin, end);
+    auto explicit_errs = intrinsics::collect<intrinsics::Error>(range);
     std::vector<llvm::Value *> implicit_errs;
-    for (;begin != end; ++begin) {
-      if (auto bin_op = llvm::dyn_cast<llvm::BinaryOperator>(&*begin)) {
+    for (auto &inst : range) {
+      if (auto bin_op = llvm::dyn_cast<llvm::BinaryOperator>(&inst)) {
         if (is_div(bin_op)) {
           implicit_errs.push_back(bin_op);
         }
@@ -40,7 +40,7 @@ namespace circuitous::err {
     auto as_it = [](auto what) {
       return llvm::BasicBlock::iterator{ llvm::cast<llvm::Instruction>(what) };
     };
-    return collect(as_it(from), as_it(to));
+    return collect({as_it(from), as_it(to)});
   }
 
 
