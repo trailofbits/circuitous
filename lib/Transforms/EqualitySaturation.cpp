@@ -84,7 +84,8 @@ namespace circuitous {
     {
       // TODO(Heno): check limits & timeout
 
-      std::vector< std::pair< Rule, Matches > > matches;
+      using RuleRef = std::reference_wrapper< const Rule >;
+      std::vector< std::pair< RuleRef, Matches > > matches;
       for (const auto &rule : rules) {
         matches.emplace_back(rule, _scheduler.match_rule(_egraph, rule));
         // TODO(Heno): check limits
