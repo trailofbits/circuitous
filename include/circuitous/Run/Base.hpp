@@ -108,8 +108,14 @@ namespace circuitous::run {
     void VisitCircuit(Circuit *op);
   };
 
+  // Tags that tells us about which visits are implemented by a layer
+  // eventually we want to have all included to be able to interpret
+  // the circuit properly.
+  // Semantics of input/output nodes
   struct io_sem {};
+  // Semantics of operations (addition, and, xor, ...)
   struct op_sem {};
+  // Semantics of conditions (hint check, output check, ...)
   struct c_sem {};
 
   template<typename T, typename ... Kinds>

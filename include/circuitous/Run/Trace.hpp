@@ -45,7 +45,7 @@ namespace circuitous::run::trace {
       ss << prefix << "ibits: " << inst_bits << std::endl;
       ss << prefix << "ebits: " << ebit << std::endl;
       ss << prefix << "regs:" << std::endl;
-      for (auto &[reg, val] : regs) {
+      for (const auto &[reg, val] : regs) {
         ss << prefix << "  |- " << reg << " -> " << val << std::endl;
       }
       return ss.str();
@@ -65,7 +65,7 @@ namespace circuitous::run::trace {
       std::stringstream ss;
       ss << "trace_id: " << trace_id << std::endl;;
       ss << "......" << std::endl;
-      for (auto &[_, entry] : entries) {
+      for (const auto &[_, entry] : entries) {
         ss << entry.to_string(1);
       }
       return ss.str();
@@ -103,7 +103,7 @@ namespace circuitous::run::trace {
     state.timestamp = static_cast<uint64_t>(unwrap(entry.getInteger("timestamp")));
     state.inst_bits = unwrap(entry.getString("inst_bits"));
     state.ebit = unwrap(entry.getBoolean("ebit"));
-    for (auto &[reg, val] : unwrap(entry.getObject("regs"))) {
+    for (const auto &[reg, val] : unwrap(entry.getObject("regs"))) {
       auto raw = unwrap(val.getAsString());
       state.regs[reg.str()] = std::strtoull(raw.data(), nullptr, 10);
     }
@@ -115,7 +115,7 @@ namespace circuitous::run::trace {
     Trace out;
     out.trace_id = trace_id;
 
-    for (auto &entry_ : arr) {
+    for (const auto &entry_ : arr) {
       auto entry_obj = unwrap(entry_.getAsObject());
       auto entry = get_entry(trace_id, entry_obj);
       out.entries.emplace(entry.timestamp, std::move(entry));
@@ -126,7 +126,7 @@ namespace circuitous::run::trace {
   template<typename T>
   auto get_traces(const T &obj) {
     std::vector<Trace> out;
-    for (auto &[trace_id_, traces] : obj) {
+    for (const auto &[trace_id_, traces] : obj) {
       auto trace_id = std::strtoull(trace_id_.str().c_str(), nullptr, 10);
       out.push_back(get_trace(trace_id, unwrap(traces.getAsArray())));
     }
