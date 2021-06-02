@@ -44,12 +44,8 @@ target_include_directories(circuitous_settings INTERFACE
   $<INSTALL_INTERFACE:include>
 )
 
-target_compile_options(circuitous_settings INTERFACE
-  -Werror
-  -Wconversion
-  -pedantic
-  -Wno-unreachable-code-return
-)
+include(cmake/compiler_warnings.cmake)
+set_project_warnings(circuitous_settings)
 
 #
 # library targets
