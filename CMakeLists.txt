@@ -39,6 +39,9 @@ set_project_warnings(circuitous_settings)
 include(cmake/sanitizers.cmake)
 enable_sanitizers(circuitous_settings)
 
+# allow for static analysis options
+include(cmake/static_analyzers.cmake)
+
 target_link_libraries(circuitous_settings INTERFACE
   remill_settings
   remill
