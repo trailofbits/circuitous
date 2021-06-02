@@ -1,10 +1,16 @@
-# Copyright (c) 2020 Trail of Bits, Inc.
+# Copyright (c) 2020-2021 Trail of Bits, Inc.
 cmake_minimum_required(VERSION 3.14)
 
 find_package(remill COMPONENTS VCPKG_DEPS QUIET)
 include(cmake/vcpkg_helper.cmake)
 
-project(circuitous C CXX ASM)
+project(circuitous
+  LANGUAGES C CXX ASM
+  VERSION 0.1.0
+  DESCRIPTION "Binary to circuit lifter tool"
+  HOMEPAGE_URL "https://github.com/trailofbits/circuitous.git"
+)
+
 include(GNUInstallDirs)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/settings.cmake")
