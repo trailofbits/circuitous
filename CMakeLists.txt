@@ -42,6 +42,9 @@ enable_sanitizers(circuitous_settings)
 # allow for static analysis options
 include(cmake/static_analyzers.cmake)
 
+# test options
+option(ENABLE_TESTING "Enable Test Builds" ON)
+
 target_link_libraries(circuitous_settings INTERFACE
   remill_settings
   remill
@@ -124,8 +127,10 @@ target_link_libraries(circuitous-run PUBLIC
 # tests
 #
 
-enable_testing()
-add_subdirectory(test)
+if (ENABLE_TESTING)
+  enable_testing()
+  add_subdirectory(test)
+endif()
 
 #
 # install settings
