@@ -53,7 +53,6 @@ add_library(circuitous_ir STATIC
   lib/IR/Serialize.cpp
 )
 
-target_include_directories(circuitous_ir PUBLIC circuitous_settings)
 target_link_libraries(circuitous_ir PUBLIC circuitous_settings)
 
 
@@ -63,7 +62,6 @@ add_library(circuitous_lifter STATIC
   lib/Lifter/BaseLifter.cpp
 )
 
-target_include_directories(circuitous_lifter PUBLIC circuitous_settings)
 target_link_libraries(circuitous_lifter PUBLIC circuitous_settings)
 
 add_library(circuitous_printers STATIC
@@ -74,7 +72,6 @@ add_library(circuitous_printers STATIC
   lib/Printers/SMT.cpp
 )
 
-target_include_directories(circuitous_printers PUBLIC circuitous_settings)
 target_link_libraries(circuitous_printers PUBLIC circuitous_settings)
 
 add_library(circuitous_transforms STATIC
@@ -85,7 +82,6 @@ add_library(circuitous_transforms STATIC
   lib/Transforms/MergeByBytes.cpp
 )
 
-target_include_directories(circuitous_transforms PUBLIC circuitous_settings)
 target_link_libraries(circuitous_transforms PUBLIC circuitous_settings)
 
 #
@@ -104,8 +100,6 @@ target_link_libraries(circuitous-lift PUBLIC
   circuitous_transforms
 )
 
-target_include_directories(circuitous-lift PUBLIC circuitous_settings)
-
 add_executable(circuitous-run
   bin/run/Run.cpp
 )
@@ -115,8 +109,6 @@ target_link_libraries(circuitous-run PUBLIC
   circuitous_ir
   circuitous_printers
 )
-
-target_include_directories(circuitous-run PUBLIC circuitous_settings)
 
 #
 # tests
