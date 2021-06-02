@@ -5,10 +5,18 @@ macro(settings_main)
   if(WIN32)
     set(CMAKE_BUILD_TYPE Release)
   else()
-    if(NOT CMAKE_BUILD_TYPE)
-      set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+    # Set a default build type if none was specified
+    if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+      message( STATUS "Setting build type to 'RelWithDebInfo' as none was specified." )
+      set(CMAKE_BUILD_TYPE
+          RelWithDebInfo
+          CACHE STRING "Choose the type of build." FORCE)
+      # Set the possible values of build type for cmake-gui, ccmake
+      set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
+                  "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
     endif()
   endif()
+
 
   # overwrite the default install prefix
   if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -38,7 +46,7 @@ macro(settings_main)
     else()
       set(PLATFORM_NAME "linux")
     endif()
-  
+
   elseif(WIN32)
     set(PLATFORM_NAME "windows")
 
