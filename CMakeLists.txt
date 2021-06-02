@@ -35,6 +35,10 @@ add_library(circuitous_settings INTERFACE)
 include(cmake/compiler_warnings.cmake)
 set_project_warnings(circuitous_settings)
 
+# sanitizer options if supported by compiler
+include(cmake/sanitizers.cmake)
+enable_sanitizers(circuitous_settings)
+
 target_link_libraries(circuitous_settings INTERFACE
   remill_settings
   remill
