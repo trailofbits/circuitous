@@ -17,7 +17,6 @@ macro(settings_main)
     endif()
   endif()
 
-
   # overwrite the default install prefix
   if(CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
     if(DEFINED WIN32)
@@ -35,6 +34,19 @@ macro(settings_main)
   #
   # compiler and linker flags
   #
+  option(ENABLE_IPO
+    "Enable Interprocedural Optimization, aka Link Time Optimization (LTO)" ON
+  )
+
+  if(ENABLE_IPO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT result OUTPUT output)
+    if(result)
+      set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+    else()
+      message(WARNING "IPO is not supported: ${output}")
+    endif()
+  endif()
 
   # Globally set the required C++ standard
   set(CMAKE_CXX_STANDARD 17)
