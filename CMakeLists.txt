@@ -30,9 +30,11 @@ find_package(gflags CONFIG REQUIRED)
 # target settings
 #
 
-# set(CIRCUITOUS circuitous_${REMILL_LLVM_VERSION})
-
 add_library(circuitous_settings INTERFACE)
+
+include(cmake/compiler_warnings.cmake)
+set_project_warnings(circuitous_settings)
+
 target_link_libraries(circuitous_settings INTERFACE
   remill_settings
   remill
@@ -43,9 +45,6 @@ target_include_directories(circuitous_settings INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-
-include(cmake/compiler_warnings.cmake)
-set_project_warnings(circuitous_settings)
 
 #
 # library targets
