@@ -11,6 +11,8 @@ project(circuitous
   HOMEPAGE_URL "https://github.com/trailofbits/circuitous.git"
 )
 
+include(cmake/prevent_in_source_builds.cmake)
+
 include(GNUInstallDirs)
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/settings.cmake")
