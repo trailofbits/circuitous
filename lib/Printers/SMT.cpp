@@ -330,7 +330,7 @@ z3::expr OrToAnd(z3::context &ctx, const z3::expr &e,
                  z3::expr_vector &z3_expr_vec) {
   auto iter = z3_expr_map.find(e.id());
   if (iter != z3_expr_map.end()) {
-    return z3_expr_vec[(signed) iter->second];
+    return z3_expr_vec[signed(iter->second)];
   }
 
   if (!e.is_app()) {
@@ -349,7 +349,7 @@ z3::expr OrToAnd(z3::context &ctx, const z3::expr &e,
   if (is_or) {
     r = args[0];
     for (auto i = 1U; i < e.num_args(); ++i) {
-      r = r && args[(signed) i];
+      r = r && args[signed(i)];
     }
     r = !(r);
   } else {
@@ -367,7 +367,7 @@ z3::expr EqToXnor(z3::context &ctx, const z3::expr &e,
                   z3::expr_vector &z3_expr_vec) {
   auto iter = z3_expr_map.find(e.id());
   if (iter != z3_expr_map.end()) {
-    return z3_expr_vec[(signed) iter->second];
+    return z3_expr_vec[signed(iter->second)];
   }
 
   if (!e.is_app()) {
@@ -395,7 +395,7 @@ z3::expr ElimNot(z3::context &ctx, const z3::expr &e,
                  z3::expr_vector &z3_expr_vec) {
   auto iter = z3_expr_map.find(e.id());
   if (iter != z3_expr_map.end()) {
-    return z3_expr_vec[(signed) iter->second];
+    return z3_expr_vec[signed(iter->second)];
   }
 
   if (!e.is_app()) {
