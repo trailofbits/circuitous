@@ -40,6 +40,14 @@ namespace circuitous {
     }
     friend bool operator<(const ENode &a, const ENode &b) { return a.term < b.term; }
 
+    std::string name() const
+    {
+      if constexpr (std::is_same_v< Term, std::string >)
+        return term;
+      else
+        return term->Name();
+    }
+
     Term term;
     std::vector< Id > children;
   };
@@ -205,7 +213,7 @@ namespace circuitous {
     }
 
     const auto& classes() const { return _classes; }
-    const auto& terms() const { return _terms; }
+    const auto& nodes() const { return _nodes; }
 
   private:
     // stores heap allocated nodes of egraph
