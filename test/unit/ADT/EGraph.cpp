@@ -35,21 +35,6 @@ namespace circuitous {
     CHECK(egraph.eclass(midx).size() == 2);
   }
 
-  TEST_CASE("EGraph Unify Same Nodes")
-  {
-    TestGraph egraph;
-
-    auto idx = egraph.make_leaf("x");
-    auto idy = egraph.make_leaf("y");
-    auto idz = egraph.make_leaf("z");
-    auto ida1 = egraph.make_node("+", {idx, idy});
-    auto ida2 = egraph.make_node("+", {idx, idy});
-    auto ida3 = egraph.make_node("+", {idx, idz});
-
-    CHECK(ida1 == ida2);
-    CHECK(ida1 != ida3);
-    CHECK(ida2 != ida3);
-  }
 
   TEST_CASE("EGraph Merge Internal Nodes")
   {
