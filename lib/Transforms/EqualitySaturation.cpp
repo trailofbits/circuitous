@@ -52,8 +52,8 @@ namespace circuitous {
     using Rule = Rule< Graph >;
     using Rules = Rules< Graph >;
     using RulesScheduler = Scheduler< Graph >;
-    using EClassMatches = EClassMatches< Graph >;
-    using Matches = std::vector< EClassMatches >;
+    using EClassMatch = EClassMatch< Graph >;
+    using Matches = std::vector< EClassMatch >;
 
     EqSatRunner(Graph &&egraph) : _egraph(std::move(egraph)) {}
 

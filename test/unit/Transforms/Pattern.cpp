@@ -15,7 +15,6 @@ namespace circuitous {
 
   using parser_t = PatternParser<int>;
   using list_t = parser_t::List;
-  using symbol_t = parser_t::Symbol;
   using error_t = parser_t::Error;
   using place_t = parser_t::Place;
   using op_t = parser_t::Op;
@@ -56,8 +55,6 @@ namespace circuitous {
     CHECK(parse<int, 0>(parser, "(1 2 3)") == 1);
     CHECK(parse<int, 1>(parser, "(1 2 3)") == 2);
     CHECK(parse<int, 2>(parser, "(1 2 3)") == 3);
-
-    CHECK(parse<symbol_t>(parser, "out").name == "out");
 
     CHECK(parse<op_t, 0>(parser, "(op_add 1 2)").name == "add");
 
