@@ -11,6 +11,7 @@ add_executable(test_circuitous
   ADT/EGraph.cpp
 
   Transforms/Pattern.cpp
+  Transforms/EqualitySaturation.cpp
 )
 
 target_link_libraries(test_circuitous
