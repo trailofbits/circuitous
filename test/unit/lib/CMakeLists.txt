@@ -10,3 +10,8 @@ add_library(thirdparty_doctest INTERFACE)
 target_include_directories(thirdparty_doctest INTERFACE
   "${CMAKE_CURRENT_SOURCE_DIR}/doctest"
 )
+
+add_library(test_support INTERFACE)
+target_include_directories(test_support INTERFACE
+  "${CMAKE_CURRENT_SOURCE_DIR}/support"
+)
