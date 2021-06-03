@@ -49,6 +49,8 @@ namespace circuitous {
 
       Matches match(const Graph &egraph) const
       {
+        // TODO(Heno): add operation caching to egraph
+
         return {};
       }
 

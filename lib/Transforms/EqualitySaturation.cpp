@@ -127,7 +127,7 @@ namespace circuitous {
 
     // TODO(Heno) extract best circuit
     std::ofstream out("egraph.dot");
-    to_dot(runner.egraph(), out, [] (auto *node) { return to_string(node->expr->op_code); });
+    to_dot(runner.egraph(), out, [] (auto *node) { return to_string(node->term->op_code); });
 
     return true;
   }
