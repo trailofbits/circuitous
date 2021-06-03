@@ -24,9 +24,21 @@ namespace circuitous {
     struct Error {};
     using Constant = Constant_;
     using Name = std::string;
-    struct Symbol { std::string name; };
-    struct Place { std::string name; };
-    struct Op { std::string name; };
+    struct Symbol
+    {
+      std::string name;
+      bool operator==(const Symbol &) const = default;
+    };
+    struct Place
+    {
+      std::string name;
+      bool operator==(const Place &) const = default;
+    };
+    struct Op
+    {
+      std::string name;
+      bool operator==(const Op &) const = default;
+    };
 
     template< typename T > using ListT = std::vector< T >;
 
@@ -199,6 +211,5 @@ namespace circuitous {
 
     Value value;
   };
-
 
 } // namespace circuitous
