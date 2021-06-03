@@ -17,6 +17,7 @@ target_link_libraries(test_circuitous
   PRIVATE
     circuitous_settings
     thirdparty_doctest
+    test_support
 )
 
 add_test(
