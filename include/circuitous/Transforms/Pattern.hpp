@@ -35,6 +35,11 @@ namespace circuitous {
       using base = std::variant< Constant, Symbol, Op, Name, Place, ListT< Value >, Error >;
       using base::base;
 
+      using Constant = Constant;
+      using Symbol = Symbol;
+      using Place = Place;
+      using Op = Op;
+
       using List = ListT< Value >;
     };
 
