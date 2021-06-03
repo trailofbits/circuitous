@@ -5,9 +5,11 @@
 #pragma once
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <cassert>
 #include <memory>
+#include <optional>
 #include <vector>
 #include <ostream>
 #include <unordered_map>
@@ -22,6 +24,7 @@ namespace circuitous {
   {
     using Id = UnionFind::Id;
     using Term = Term_;
+    using Children = std::vector< Id >;
 
     explicit ENode(const Term &t) : term(t) {}
 
@@ -34,9 +37,7 @@ namespace circuitous {
 
     friend bool operator==(const ENode &a, const ENode &b)
     {
-      if (a.term != b.term)
-        return false;
-      return std::is_permutation(a.children.begin(), a.children.end(), b.children.begin());
+      return std::tie(a.term, a.children) == std::tie(b.term, b.children);
     }
     friend bool operator<(const ENode &a, const ENode &b) { return a.term < b.term; }
 
@@ -48,8 +49,26 @@ namespace circuitous {
         return term->Name();
     }
 
+    std::optional< std::int64_t > constant() const
+    {
+      auto is_number = [] (const std::string &s) {
+        auto isdigit = [](auto c) { return std::isdigit(c); };
+        return !s.empty() && std::all_of(s.begin(), s.end(), isdigit);
+      };
+
+      if constexpr (std::is_same_v< Term, std::string >) {
+        if (is_number(term)) {
+          return std::stoll(term);
+        }
+      }
+
+      // TODO(Heno): Parse constant from circ
+
+      return std::nullopt;
+    }
+
     Term term;
-    std::vector< Id > children;
+    Children children;
   };
 
   // Equivalence class of term nodes
@@ -85,6 +104,8 @@ namespace circuitous {
     using Id = UnionFind::Id;
     using ENode = ENode_;
     using Term = typename ENode::Term;
+    using Children = typename ENode::Children;
+    using TermKey = std::pair< Term, Children >;
     using EClass = EClass< ENode >;
 
     Id create_singleton_eclass(ENode *enode)
@@ -104,21 +125,12 @@ namespace circuitous {
       node->update_children([&](auto child) { return _unions.find_compress(child); });
     }
 
-    Id add(ENode node)
+    Id add(ENode &&node)
     {
       canonicalize(&node);
-      if (auto it = _terms.find(node.term); it != _terms.end()) {
-        auto &[_, found_node] = *it;
-        assert( _nodes.count(found_node.get()) );
-        // checks that nodes has a same children
-        if (node == *found_node) {
-          return _unions.find_compress( _nodes[found_node.get()] );
-        }
-      }
-
       // allocate new egraph node
-      auto [it, _] = _terms.emplace(node.term, std::make_unique< ENode >(node));
-      auto &[term, enode] = *it;
+      _terms.push_back(std::make_unique< ENode >(std::move(node)));
+      auto &enode = _terms.back();
 
       auto id = create_singleton_eclass(enode.get());
 
@@ -131,7 +143,7 @@ namespace circuitous {
     }
 
     Id find(Id id) const { return _unions.find(id); }
-    Id find(ENode *enode) const { return _unions.find( _nodes.at(enode) ); }
+    Id find(const ENode *enode) const { return _unions.find( _nodes.at(enode) ); }
 
     Id merge(Id a, Id b)
     {
@@ -163,7 +175,7 @@ namespace circuitous {
     const EClass& eclass(ENode *enode) const { return _classes[ _nodes[enode] ]; }
 
     EClass& eclass(Id id) { return _classes[ _unions.find(id) ]; }
-    const EClass& eclass(Id id) const { return _classes[ _unions.find(id) ]; }
+    const EClass& eclass(Id id) const { return _classes.at( _unions.find(id) ); }
 
     // Restores the egraph invariants, i.e, congruence equality and enode uniqueness
     void rebuild()
@@ -217,7 +229,7 @@ namespace circuitous {
 
   private:
     // stores heap allocated nodes of egraph
-    std::unordered_map< Term, std::unique_ptr< ENode > > _terms;
+    std::vector< std::unique_ptr< ENode > > _terms;
 
     // stores equivalence relation between equaltity classes
     UnionFind _unions;
@@ -226,7 +238,7 @@ namespace circuitous {
     std::unordered_map< Id, EClass > _classes;
 
     // stores equality ids of enodes
-    std::unordered_map< ENode*, Id > _nodes;
+    std::unordered_map< const ENode*, Id > _nodes;
 
     // modified eclasses that needs to be rebuild
     std::vector< Id > _pending;
