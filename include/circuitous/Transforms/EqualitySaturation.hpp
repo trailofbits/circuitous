@@ -18,22 +18,38 @@
 
 namespace circuitous {
 
-  // substitution mapping from varibles to equality classes
+  template< typename Place >
+  struct place_hasher_t
+  {
+    std::size_t operator()(const Place &plc) const
+    {
+      return std::hash<std::string>()(plc.name);
+    }
+  };
+
+  // substitution mapping from places (variables) to equality classes
   template< typename Graph >
   struct Substitutions
   {
+    using Pattern = Pattern< Graph >;
+    using PatternNode = typename Pattern::Value;
+    using place_t     = typename PatternNode::Place;
 
+    using Id = typename Graph::Id;
+
+    using hasher = place_hasher_t< place_t >;
+    std::unordered_map< place_t, Id, hasher > mapping;
   };
 
-  // Result of matched nodes in one eclass
+  // Result of matched nodes rooting in the given equality class
   template< typename Graph >
   struct EClassMatch
   {
     using Id = typename Graph::Id;
+    using Substitutions = Substitutions< Graph >;
 
     Id eclass;
-
-    std::vector< Substitutions< Graph > > substitutions;
+    std::vector< Substitutions > substitutions;
   };
 
 
@@ -41,8 +57,8 @@ namespace circuitous {
   struct Rule
   {
     using Pattern = Pattern< Graph >;
-    using EClassMatches = EClassMatch< Graph >;
-    using Matches = std::vector< EClassMatches >;
+    using EClassMatch = EClassMatch< Graph >;
+    using Matches = std::vector< EClassMatch >;
 
     Rule(std::string_view name, std::string_view lhs, std::string_view rhs)
       : name(name), _lhs(Pattern(lhs)), _rhs(Pattern(rhs))
@@ -53,10 +69,10 @@ namespace circuitous {
       using PatternNode = typename Pattern::Value;
       using ENode = typename Graph::ENode;
       using EClass = typename Graph::EClass;
+      using Substitutions = Substitutions< Graph >;
       using Id = typename Graph::Id;
 
       using constant_t = typename PatternNode::Constant;
-      using symbol_t   = typename PatternNode::Symbol;
       using place_t    = typename PatternNode::Place;
       using op_t       = typename PatternNode::Op;
       using list_t     = typename PatternNode::List;
@@ -64,19 +80,6 @@ namespace circuitous {
       EGraphMatcher(const Graph &egraph, const Pattern &pattern)
         : _egraph(egraph), _pattern(pattern)
       {}
-
-      Matches match()
-      {
-        // TODO(Heno): add operation caching to egraph
-        Matches matches;
-        for (const auto &[id, eclass] : _egraph.classes()) {
-          if (match(eclass, _pattern.value)) {
-            // TODO(Heno): fill substitutions
-            matches.push_back( EClassMatches{id, {}} );
-          }
-        }
-        return matches;
-      }
 
       // helper for patter visitor
       template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
@@ -89,10 +92,11 @@ namespace circuitous {
         return std::span(&(*beg), &(*end));
       }
 
+      bool match(const EClass &eclass) { return match(eclass, _pattern.value); }
+
       bool match(const EClass &eclass, const PatternNode &pattern)
       {
         for (const auto *node : eclass.nodes) {
-          std::cout << node->name() << std::endl;
           if (!match(node, pattern))
             return false;
         }
@@ -105,9 +109,6 @@ namespace circuitous {
           [&] (const constant_t &con) -> bool {
             if (auto node_con = root->constant())
               return node_con == con;
-            return false;
-          },
-          [&] (const symbol_t &sym) -> bool {
             return false;
           },
           [&] (const place_t &plc) -> bool {
@@ -145,20 +146,15 @@ namespace circuitous {
         }, pattern);
       }
 
-
+      std::vector< Substitutions > substitutions() const { return _substs; }
     private:
       const Graph &_egraph;
       const Pattern &_pattern;
 
-      struct place_hasher_t
-      {
-        std::size_t operator()(const place_t &plc) const
-        {
-          return std::hash<std::string>()(plc.name);
-        }
-      };
+      std::vector< Substitutions > _substs;
 
-      std::unordered_map< place_t, Id, place_hasher_t > _matched_places;
+      using hasher = place_hasher_t< place_t >;
+      std::unordered_map< place_t, Id, hasher > _matched_places;
     };
 
     struct Matcher
@@ -167,8 +163,16 @@ namespace circuitous {
 
       Matches match(const Graph &egraph) const
       {
-        EGraphMatcher matcher(egraph, _pattern);
-        return matcher.match();
+        // TODO(Heno): add operation caching to egraph
+
+        Matches matches;
+        for (const auto &[id, eclass] : egraph.classes()) {
+          EGraphMatcher matcher(egraph, _pattern);
+
+          if (matcher.match(eclass))
+            matches.push_back( EClassMatch{id, matcher.substitutions()} );
+        }
+        return matches;
       }
 
     private:
@@ -179,7 +183,14 @@ namespace circuitous {
     {
       Applier(Pattern pattern) : _pattern(pattern) {}
 
-      void apply_on_matches(const Graph &egraph, const Matches &matches) const
+      void apply_on_matches(Graph &egraph, const Matches &matches) const
+      {
+        for (const auto &match : matches) {
+          apply_on(egraph, match);
+        }
+      }
+
+      void apply_on(Graph &egraph, const EClassMatch &match) const
       {
 
       }
@@ -193,9 +204,15 @@ namespace circuitous {
       return _lhs.match(egraph);
     }
 
-    void apply(const Graph &egraph, const Matches &matches) const
+    void apply(Graph &egraph, const Matches &matches) const
     {
       _rhs.apply_on_matches(egraph, matches);
+    }
+
+    void apply(Graph &egraph) const
+    {
+      auto matches = mathc(egraph);
+      apply(egraph, matches);
     }
 
     const std::string name;
@@ -223,10 +240,16 @@ namespace circuitous {
       return rule.match(egraph);
     }
 
-    void apply_rule(const Graph &egraph, const Rule &rule, const Matches &matches) const
+    void apply_rule(Graph &egraph, const Rule &rule, const Matches &matches) const
     {
       rule.apply(egraph, matches);
     }
+
+    void apply_rule(Graph &egraph, const Rule &rule) const
+    {
+      rule.apply(egraph);
+    }
+
   };
 
 } // namespace circuitous

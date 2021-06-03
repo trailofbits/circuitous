@@ -24,11 +24,6 @@ namespace circuitous {
     struct Error {};
     using Constant = Constant_;
     using Name = std::string;
-    struct Symbol
-    {
-      std::string name;
-      bool operator==(const Symbol &) const = default;
-    };
     struct Place
     {
       std::string name;
@@ -42,13 +37,12 @@ namespace circuitous {
 
     template< typename T > using ListT = std::vector< T >;
 
-    struct Value : std::variant< Constant, Symbol, Op, Name, Place, ListT< Value >, Error >
+    struct Value : std::variant< Constant, Op, Name, Place, ListT< Value >, Error >
     {
-      using base = std::variant< Constant, Symbol, Op, Name, Place, ListT< Value >, Error >;
+      using base = std::variant< Constant, Op, Name, Place, ListT< Value >, Error >;
       using base::base;
 
       using Constant = Constant;
-      using Symbol = Symbol;
       using Place = Place;
       using Op = Op;
 
@@ -105,10 +99,7 @@ namespace circuitous {
       // parse operations
       if (is_operation(str))
         return parse_operation(str);
-      // parse variables
-      if (std::isalpha(str[0]))
-        return parse_symbol(str);
-      // parse pattern placeholders
+      // parse pattern placeholders (variables)
       if (is_placeholder(str[0]))
         return parse_placeholder(str);
 
@@ -163,14 +154,6 @@ namespace circuitous {
       }
 
       return { std::string(str, 0, i), str.substr(i) };
-    }
-
-    ParseResult parse_symbol(std::string_view str) const
-    {
-      auto [name, rest] = parse_name(str);
-      if (is_error(name))
-        return parse_error;
-      return { Symbol{unwrap(name)}, rest };
     }
 
     ParseResult parse_operation(std::string_view str) const
