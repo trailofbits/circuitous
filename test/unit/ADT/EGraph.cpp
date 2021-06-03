@@ -13,7 +13,7 @@
 
 namespace circuitous {
 
-  struct TestGraph : circuitous::EGraph< ENode< std::string > >
+  struct TestGraph : EGraph< ENode< std::string > >
   {
     auto make_leaf(const std::string &expr)
     {
@@ -29,7 +29,7 @@ namespace circuitous {
 
     void dump(const std::string &file) {
       std::ofstream out(file);
-      to_dot(*this, out, [] (auto *node) { return node->expr; });
+      to_dot(*this, out, [] (auto *node) { return node->term; });
     }
   };
   using TestENode = TestGraph::ENode;

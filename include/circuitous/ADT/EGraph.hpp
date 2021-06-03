@@ -17,13 +17,13 @@
 
 namespace circuitous {
 
-  template< typename Expr_ >
+  template< typename Term_ >
   struct ENode
   {
     using Id = UnionFind::Id;
-    using Expr = Expr_;
+    using Term = Term_;
 
-    explicit ENode(const Expr &e) : expr(e) {}
+    explicit ENode(const Term &t) : term(t) {}
 
     template< typename Fn >
     void update_children(Fn &&fn)
@@ -34,17 +34,17 @@ namespace circuitous {
 
     friend bool operator==(const ENode &a, const ENode &b)
     {
-      if (a.expr != b.expr)
+      if (a.term != b.term)
         return false;
       return std::is_permutation(a.children.begin(), a.children.end(), b.children.begin());
     }
-    friend bool operator<(const ENode &a, const ENode &b) { return a.expr < b.expr; }
+    friend bool operator<(const ENode &a, const ENode &b) { return a.term < b.term; }
 
-    Expr expr;
+    Term term;
     std::vector< Id > children;
   };
 
-  // Equivalence class of expression nodes
+  // Equivalence class of term nodes
   template< typename ENode >
   struct EClass {
 
@@ -76,7 +76,7 @@ namespace circuitous {
   {
     using Id = UnionFind::Id;
     using ENode = ENode_;
-    using Expr = typename ENode::Expr;
+    using Term = typename ENode::Term;
     using EClass = EClass< ENode >;
 
     Id create_singleton_eclass(ENode *enode)
@@ -99,7 +99,7 @@ namespace circuitous {
     Id add(ENode node)
     {
       canonicalize(&node);
-      if (auto it = _exprs.find(node.expr); it != _exprs.end()) {
+      if (auto it = _terms.find(node.term); it != _terms.end()) {
         auto &[_, found_node] = *it;
         assert( _nodes.count(found_node.get()) );
         // checks that nodes has a same children
@@ -109,8 +109,8 @@ namespace circuitous {
       }
 
       // allocate new egraph node
-      auto [it, _] = _exprs.emplace(node.expr, std::make_unique< ENode >(node));
-      auto &[expr, enode] = *it;
+      auto [it, _] = _terms.emplace(node.term, std::make_unique< ENode >(node));
+      auto &[term, enode] = *it;
 
       auto id = create_singleton_eclass(enode.get());
 
@@ -205,10 +205,11 @@ namespace circuitous {
     }
 
     const auto& classes() const { return _classes; }
+    const auto& terms() const { return _terms; }
 
   private:
     // stores heap allocated nodes of egraph
-    std::unordered_map< Expr, std::unique_ptr< ENode > > _exprs;
+    std::unordered_map< Term, std::unique_ptr< ENode > > _terms;
 
     // stores equivalence relation between equaltity classes
     UnionFind _unions;
