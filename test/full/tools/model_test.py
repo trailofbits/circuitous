@@ -1,5 +1,7 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 
+import copy
+
 from tools.tc import State, Test, _regs, _aflags, MS
 
 import microx
@@ -55,6 +57,15 @@ class MicroxGen:
     e.execute(t, 1)
 
     out = State()
+
+    try:
+      e.execute(t, 1)
+    except FloatingPointError as e:
+      out = copy.deepcopy(input)
+      out.ebit(True)
+      return out
+
     for reg in _regs + _aflags:
       out.set_reg(reg, t.read_register(reg, t.REG_HINT_NONE))
+    out.ebit(False)
     return out
