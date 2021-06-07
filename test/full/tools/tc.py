@@ -28,6 +28,16 @@ class State:
     self.undefined = set()
     self.timestamp = 0
 
+  def disarm(self):
+    self.registers = None
+    self._ebit = None
+    self.timestamp = None
+
+  def __bool__(self):
+    return self.registers is not None \
+           or self._ebit is not None \
+           or self.timestamp is not None
+
   def aflags(self, val):
     for flag in _aflags:
       self.registers[flag] = val
@@ -40,6 +50,9 @@ class State:
     for reg in other.removed:
       mutated.registers.pop(reg)
       mutated.undefined.add(reg)
+    if other._ebit is not None:
+      mutated._ebit = other._ebit
+
     return mutated
 
   def set_reg(self, reg, value):
@@ -55,7 +68,7 @@ class State:
     return self
 
   def get(self):
-    out = {"inst_bits" : self.bytes,
+    out = {"inst_bits" : self.bytes if self.bytes is not None else "0",
            "ebit" : self._ebit,
            "timestamp" : self.timestamp,
            "regs" : {}}
@@ -73,11 +86,12 @@ class State:
 
 
 class Mutator:
-  __slots__ = ('registers', 'removed')
+  __slots__ = ('registers', 'removed', '_ebit')
 
   def __init__(self):
     self.registers = {}
     self.removed = set()
+    self._ebit = None
 
   def set_reg(self, reg, val):
     self.registers[reg] = val
@@ -90,6 +104,10 @@ class Mutator:
   def aflags(self, val):
     for flag in _aflags:
       self.registers[flag] = val
+    return self
+
+  def ebit(self, val):
+    self._ebit = val
     return self
 
 def MS():
@@ -153,7 +171,8 @@ def reject():
   return Reject()
 
 class TestCase:
-  __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated', '_result_generator')
+  __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated', '_result_generator',
+               'run_mode')
 
   def __init__(self, name_=None, bytes_=None, input_=None, expected_=None):
     self.name = name_
@@ -162,6 +181,7 @@ class TestCase:
     self.expected = expected_
     self.simulated = State()
     self._result_generator = None
+    self.run_mode = '--derive'
 
 # Base class to define tests with -- unfortunately it already does a lot of custom options
 # feel free to come with better decomposition
@@ -170,7 +190,7 @@ class TestCase:
 class Test:
   __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
                '_tags', '_names', '_lift_opts', '_inst_arr',
-               'default_istate', 'e_mutators')
+               'default_istate', 'e_mutators', '_mode')
 
   def __init__(self, name_=""):
     # TODO(lukas): Split this into
@@ -196,6 +216,11 @@ class Test:
     # _inst_arr must always be a `Union[list[str], LazyBytes]`
     self._inst_arr = []
 
+    self._mode = None
+
+  def mode(self, what) :
+    self._mode = what
+    return self
 
   def bytes(self, bytes_):
     assert bytes_ is not None, "Cannot build the bytes yet (TODO)."
@@ -258,6 +283,7 @@ class Test:
   #              Test if `lift_bytes` actually work.
   def case(self, name_=None, **kwargs):
     case = TestCase()
+    case.run_mode = self._mode if self._mode is not None else case.run_mode
     self._names += 1
     case.name = name_
     case.name = kwargs.get('name',
