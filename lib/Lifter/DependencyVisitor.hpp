@@ -89,15 +89,12 @@ namespace circuitous {
           << " appears in use chain for computation of next value of "
           << remill::LLVMThingToString(use.getUser());
 
-      auto raw_name = Names::name(arg_val);
-      CHECK(arch->RegisterByName(raw_name))
-          << "Argument " << remill::LLVMThingToString(arg_val)
-          << " is not associated with a register";
+      if (Names::is_reg(arg_val)) {
+        read_registers.insert(arg_val);
+        auto func = arg_val->getParent();
 
-      read_registers.insert(arg_val);
-      auto func = arg_val->getParent();
-
-      written_registers.insert(Names::dual_reg(func, arg_val));
+        written_registers.insert(Names::dual_reg(func, arg_val));
+      }
     }
 
     const remill::Arch *const arch;
