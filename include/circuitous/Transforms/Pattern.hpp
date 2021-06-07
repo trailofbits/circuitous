@@ -7,7 +7,9 @@
 
 #include <algorithm>
 #include <cctype>
+#include <memory>
 #include <vector>
+#include <optional>
 #include <variant>
 #include <list>
 #include <string>
@@ -21,41 +23,46 @@ namespace circuitous {
   struct PatternParser
   {
 
-    struct Error {};
     using Constant = Constant_;
     using Name = std::string;
     struct Place
     {
-      std::string name;
+      Place(std::string name) : name(std::move(name)) {}
+
       bool operator==(const Place &) const = default;
+
+      std::string name;
     };
+
     struct Op
     {
-      std::string name;
+      Op(std::string name) : name(std::move(name)) {}
+
       bool operator==(const Op &) const = default;
+
+      std::string name;
     };
 
-    template< typename T > using ListT = std::vector< T >;
+    using Value = std::variant< Constant, Op, Name, Place >;
 
-    struct Value : std::variant< Constant, Op, Name, Place, ListT< Value >, Error >
+    struct ASTNode;
+    using ASTNodePtr = std::unique_ptr< ASTNode >;
+
+    struct ASTNode
     {
-      using base = std::variant< Constant, Op, Name, Place, ListT< Value >, Error >;
-      using base::base;
+      ASTNode(const Value &value) : value(value) {}
+      ASTNode(Value &&value) : value(value) {}
 
-      using Constant = Constant;
-      using Place = Place;
-      using Op = Op;
-
-      using List = ListT< Value >;
+      Value value;
+      std::vector< ASTNodePtr > children;
     };
 
-    using List = typename Value::List;
+    using ParseResult = std::pair< ASTNodePtr, std::string_view >;
 
-    using ParseResult = std::pair< Value, std::string_view >;
-
-    static inline const ParseResult parse_error = { Error(), "" };
-
-    static bool is_error(const Value &v) { return std::holds_alternative< Error >(v); }
+    ParseResult parse_error(std::string_view msg = "") const
+    {
+      return { nullptr, msg };
+    }
 
     static bool is_sign(char c) { return std::strchr("-", c); }
     static bool is_placeholder(char c) { return c == '?'; }
@@ -71,24 +78,25 @@ namespace circuitous {
       return res;
     }
 
-    Value parse(std::string_view pattern) const
+    ASTNodePtr parse(std::string_view pattern) const
     {
-      auto [val, str] = parse_pattern(pattern);
+      auto &&[val, str] = parse_pattern(pattern);
       if (ltrim(str).empty())
-        return val;
-      return Error();
+        return std::move(val);
+      return nullptr;
     }
 
-    std::string unwrap(const Value &value) const
+    template< typename Kind, typename ...Args >
+    auto make_node( Args && ...args ) const
     {
-      return std::get<Name>(value);
+      return std::make_unique< ASTNode >( Kind( std::forward<Args>(args)... ) );
     }
 
     ParseResult parse_pattern(std::string_view str) const
     {
       str = ltrim(str);
       if (str.empty())
-        return parse_error;
+        return parse_error();
 
       // parse argument list
       if (str[0] == '(')
@@ -103,28 +111,34 @@ namespace circuitous {
       if (is_placeholder(str[0]))
         return parse_placeholder(str);
 
-      return parse_error;
+      return parse_error();
     }
 
     ParseResult parse_list(std::string_view str) const
     {
       str = ltrim(str);
       if (str.empty())
-        return parse_error;
+        return parse_error();
       if (str.starts_with(')'))
-        return { List(), str.substr(1) };
+        return parse_error("empty list");
 
-      auto [head, rest_1] = parse_pattern(str);
-      if (rest_1.empty() || (!std::isblank( rest_1[0] ) && rest_1[0] != ')') )
-        return parse_error;
-      auto [tail, rest_2] = parse_list(rest_1);
+      auto [head, tail] = parse_pattern(str);
+      if (tail.empty() || (!std::isblank( tail[0] ) && tail[0] != ')') )
+        return parse_error();
 
-      if (is_error(head) || is_error(tail))
-        return parse_error;
+      if (!head)
+        return parse_error();
 
-      auto list = std::get< List >(tail);
-      list.insert(list.begin(), head);
-      return { list, rest_2 };
+      auto rest = tail;
+      while (!rest.empty() && rest[0] != ')') {
+        auto &&[child, next] = parse_pattern(rest);
+        if (!child || next.empty())
+          return parse_error();
+        head->children.push_back(std::move(child));
+        rest = next;
+      }
+
+      return { std::move(head), rest.substr(1) };
     }
 
     ParseResult parse_constant(std::string_view str) const
@@ -133,45 +147,48 @@ namespace circuitous {
       auto [rest, err] = std::from_chars(str.data(), str.data() + str.size(), con);
       if (err == std::errc()) {
         auto count = size_t(std::distance(str.data(), rest));
-        return {con, str.substr(count)};
+        return { make_node< Constant >(con), str.substr(count)};
       }
-      return parse_error;
+      return parse_error();
     }
 
-    ParseResult parse_name(std::string_view str) const
+    using ParseNameResult = std::optional< std::pair< std::string, std::string_view > >;
+    ParseNameResult parse_name(std::string_view str) const
     {
       if (str.empty())
-        return parse_error;
+        return std::nullopt;
       if (!std::isalpha(str[0]))
-        return parse_error;
+        return std::nullopt;
 
       unsigned i = 0;
       for (; i < str.size(); ++i) {
         if (std::isblank(str[i]) || str[i] == ')')
           break;
         if (!std::isalnum(str[i]))
-          return parse_error;
+          return std::nullopt;
       }
 
-      return { std::string(str, 0, i), str.substr(i) };
+      return {{ std::string(str, 0, i), str.substr(i) }};
     }
 
     ParseResult parse_operation(std::string_view str) const
     {
       str.remove_prefix(3); // remove 'op_' prefix
-      auto [name, rest] = parse_name(str);
-      if (is_error(name))
-        return parse_error;
-      return { Op{unwrap(name)}, rest };
+      if (auto parsed_name = parse_name(str)) {
+        auto &&[name, rest] = parsed_name.value();
+        return { make_node< Op >(name), rest };
+      }
+      return parse_error();
     }
 
     ParseResult parse_placeholder(std::string_view str) const
     {
       str.remove_prefix(1); // remove '?' prefix
-      auto [name, rest] = parse_name(str);
-      if (is_error(name))
-        return parse_error;
-      return { Place{unwrap(name)}, rest };
+      if (auto parsed_name = parse_name(str)) {
+        auto &&[name, rest] = parsed_name.value();
+        return { make_node< Place >(name), rest };
+      }
+      return parse_error();
     }
   };
 
@@ -179,20 +196,20 @@ namespace circuitous {
   struct Pattern
   {
     using Parser = PatternParser<int>;
+    using ASTNodePtr = Parser::ASTNodePtr;
     using Value = Parser::Value;
+    using Place = Parser::Place;
+    using Constant = Parser::Constant;
+    using Op = Parser::Op;
 
-    Pattern(std::string_view pattern)
-      : value(parse(pattern))
-    {
-      assert(!Parser::is_error(value));
-    }
+    Pattern(std::string_view pattern) : value(parse(pattern)) { assert(value); }
 
-    static Value parse(std::string_view pattern)
+    static ASTNodePtr parse(std::string_view pattern)
     {
       return Parser().parse(pattern);
     }
 
-    Value value;
+    ASTNodePtr value;
   };
 
 } // namespace circuitous
