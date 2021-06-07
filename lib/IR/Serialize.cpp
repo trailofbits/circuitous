@@ -50,7 +50,7 @@ struct FileConfig {
     Reference = 0xff
   };
 
-  using raw_op_code_t = uint64_t;
+  using raw_op_code_t = uint32_t;
   using raw_id_t = uint64_t;
 
   std::string to_string(const Selector &sel) {
@@ -75,7 +75,7 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
  using Selector = FileConfig::Selector;
 
  public:
-  ~SerializeVisitor(void) {
+  ~SerializeVisitor() {
     os.flush();
   }
 
@@ -88,21 +88,16 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
   void Write(Operation *op) {
     if (!written.count(op->id())) {
       Write(Selector::Operation);
-      DEBUG_WRITE("OP:");
       raw_id_t id = hasher[op];
       Write(id);
       CHECK_LE(0u, op->op_code);
-      CHECK_LT(op->op_code, Operation::kLast);
       raw_op_code_t op_code = op->op_code;
       Write(op_code);
       written.insert(op->id());
-      this->Visit(op);
-      DEBUG_WRITE(";");
+      this->Dispatch(op);
     } else {
       Write(Selector::Reference);
-      DEBUG_WRITE("XR:");
       Write<raw_id_t>(op->id());
-      DEBUG_WRITE(";");
     }
   }
 
@@ -115,35 +110,18 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
   }
 
   template <typename T>
-  void Write(const std::vector<T> &elems) {
-    DEBUG_WRITE("[");
-    Write<uint32_t>(static_cast<uint32_t>(elems.size()));
-    for (const auto &elem : elems) {
-      Write(elem);
-    }
-    DEBUG_WRITE("]");
-  }
-
-  template <typename T>
   void Write(const UseList<T> &elems) {
-    DEBUG_WRITE("[");
     Write<uint32_t>(static_cast<uint32_t>(elems.size()));
-    auto sep = "";
     for (const auto elem : elems) {
-      DEBUG_WRITE(sep);
       Write(elem);
-      sep = "|";
     }
-    DEBUG_WRITE("]");
   }
 
   void Write(const std::string &str) {
-    DEBUG_WRITE("<");
     Write<uint32_t>(static_cast<uint32_t>(str.size()));
     for (auto ch : str) {
       Write(ch);
     }
-    DEBUG_WRITE(">");
   }
 
   template <typename T>
@@ -154,91 +132,25 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
     }
   }
 
-  void VisitOperation(Operation *op) {
-    DEBUG_WRITE("{size=");
-    Write(op->size);
-    DEBUG_WRITE(";operands=");
-    Write(op->operands);
-    DEBUG_WRITE("}");
+  template<typename ...Args>
+  void write(Args &&... args) {
+    (Write(std::forward<Args>(args)), ...);
   }
 
-  void VisitConstant(Constant *op) {
-    DEBUG_WRITE("{CONST:");
-    Write(op->size);
-    Write(op->bits);
-    DEBUG_WRITE("}");
-  }
+  void Visit(InputRegister *op) { write(op->reg_name, op->size); }
+  void Visit(OutputRegister *op) { write(op->reg_name, op->size); }
 
-  void VisitInputRegister(InputRegister *op) {
-    DEBUG_WRITE("{INREG:");
-    Write(op->size);
-    Write(op->reg_name);
-    DEBUG_WRITE("}");
-  }
+  void Visit(Operation *op) { write(op->size, op->operands); }
+  void Visit(Constant *op) { write(op->size, op->bits); }
+  void Visit(InputImmediate *op) { write(op->size, op->operands); }
 
-  void VisitInputImmediate(InputImmediate *op) {
-    DEBUG_WRITE("{INIMM:");
-    Write(op->size);
-    DEBUG_WRITE(";operands")
-    Write(op->operands);
-    DEBUG_WRITE("}");
+  void Visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc, op->operands[0]); }
+  void Visit(LLVMOperation *op) {
+    write(op->size, op->llvm_op_code, op->llvm_predicate, op->operands);
   }
-
-  void VisitOutputRegister(OutputRegister *op) {
-    DEBUG_WRITE("{OUTREG:");
-    Write(op->size);
-    Write(op->reg_name);
-    DEBUG_WRITE("}");
-  }
-
-  void VisitExtract(Extract *op) {
-    DEBUG_WRITE("{EXTRACT:");
-    Write(op->high_bit_exc);
-    Write(op->low_bit_inc);
-    Write(op->operands[0]);
-    DEBUG_WRITE("}");
-  }
-
-  void VisitLLVMOperation(LLVMOperation *op) {
-    DEBUG_WRITE("{LLVM:");
-    Write(op->size);
-    Write(op->llvm_op_code);
-    Write(op->llvm_predicate);
-    Write(op->operands);
-    DEBUG_WRITE("}");
-  }
-
-  void VisitMemoryRead(MemoryRead *op) {
-    DEBUG_WRITE(to_string(op->op_code) + ":");
-    Write(op->size);
-    Write(op->byte_count);
-    Write(op->operands);
-    DEBUG_WRITE("}");
-  }
-
-  void VisitMemoryWrite(MemoryWrite *op) {
-    DEBUG_WRITE(to_string(op->op_code) + ":");
-    Write(op->size);
-    Write(op->byte_count);
-    Write(op->operands);
-    DEBUG_WRITE("}");
-  }
-
-  void VisitSelect(Select *op) {
-    DEBUG_WRITE(to_string(op->op_code) + ":");
-    Write(op->size);
-    Write(op->bits);
-    Write(op->operands);
-    DEBUG_WRITE("}");
-  }
-
-  // TODO(lukas): See note in decoder.
-  void VisitInputErrorFlag(InputErrorFlag *op) {
-    DEBUG_WRITE("{ IEBIT }");
-  }
-  void VisitOutputErrorFlag(OutputErrorFlag *op) {
-    DEBUG_WRITE("{ OEBIT }");
-  }
+  void Visit(Select *op) { write(op->size, op->bits, op->operands); }
+  void Visit(InputErrorFlag *op) {}
+  void Visit(OutputErrorFlag *op) {}
 
  private:
   std::ostream &os;
@@ -246,58 +158,13 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
   std::unordered_set<uint64_t> written;
 };
 
-class DeserializeVisitor : FileConfig {
+struct DeserializeVisitor : FileConfig, DVisitor<DeserializeVisitor> {
   using Selector = FileConfig::Selector;
  public:
   explicit DeserializeVisitor(std::istream &is_, Circuit *circuit_)
       : is(is_),
         circuit(circuit_)
   {}
-
-  Operation *Decode(raw_id_t id, raw_op_code_t op_code) {
-    switch (op_code) {
-#define GOTO_VISITOR(type) \
-  case Operation::k##type: return this->Decode##type(id);
-
-      FOR_EACH_OPERATION(GOTO_VISITOR)
-#undef GOTO_VISITOR
-
-      default:
-        LOG(FATAL) << "Cannot deserialize opcode " << op_code;
-        return nullptr;
-    }
-  }
-
-  void Read(Operation *&op) {
-    Selector sel = Selector::Invalid;
-    Read(sel);
-    if (sel == Selector::Operation) {
-      raw_id_t hash = 0;
-      DEBUG_READ("OP:");
-      Read(hash);
-      raw_op_code_t op_code = 0;
-      Read(op_code);
-
-      op = Decode(hash, op_code);
-      id_to_op[hash] = op;
-
-      DEBUG_READ(";");
-    } else if (sel == Selector::Reference) {
-      DEBUG_READ("XR:");
-      raw_id_t hash = 0;
-      Read(hash);
-      DEBUG_READ(";");
-      auto op_it = id_to_op.find(hash);
-      if (op_it == id_to_op.end()) {
-        LOG(FATAL) << "Could not reference with id: " << hash;
-      } else {
-        op = op_it->second;
-      }
-
-    } else {
-      LOG(FATAL) << "Unexpected tag for an operation reference: " << this->to_string(sel);
-    }
-  }
 
   void Read(Selector &sel) {
     std::underlying_type_t<Selector> out;
@@ -315,48 +182,13 @@ class DeserializeVisitor : FileConfig {
     }
   }
 
-  void Read(int8_t &byte) {
-    uint8_t b;
-    Read(b);
-    byte = static_cast<int8_t>(b);
-  }
-
-  template <typename T>
-  void Read(std::vector<T> &elems) {
-    DEBUG_READ("[");
-    uint32_t size = 0u;
-    Read(size);
-    elems.resize(size);
-    for (auto i = 0u; i < size; ++i) {
-      Read(elems[i]);
-    }
-    DEBUG_READ("]");
-  }
-
-  void ReadOps(Operation *elems) {
-    DEBUG_READ("[");
-    uint32_t size = 0u;
-    Read(size);
-    auto sep = "";
-    for (auto i = 0u; i < size; ++i) {
-      Operation *ref = nullptr;
-      DEBUG_READ(sep);
-      Read(ref);
-      elems->AddUse(ref);
-      sep = "|";
-    }
-    DEBUG_READ("]");
-  }
-
   void Read(std::string &str) {
-    DEBUG_READ("<");
     uint32_t size = 0u;
     Read(size);
     str.resize(size);
     for (auto i = 0u; i < size; ++i) {
       Read(str[i]);
     }
-    DEBUG_READ(">");
   }
 
   template <typename T>
@@ -367,136 +199,143 @@ class DeserializeVisitor : FileConfig {
     }
   }
 
-  InputRegister *DecodeInputRegister(uint64_t id) {
-    unsigned size = 0;
-    std::string reg_name;
-    DEBUG_READ("{INREG:");
-    Read(size);
-    Read(reg_name);
-    DEBUG_READ("}");
-    return circuit->Adopt<InputRegister>(id, size, std::move(reg_name));
+  void Read(int8_t &byte) {
+    uint8_t b;
+    Read(b);
+    byte = static_cast<int8_t>(b);
   }
 
-  InputImmediate *DecodeInputImmediate(uint64_t id) {
-    unsigned size = 0;
-    DEBUG_READ("{INIMM:");
-    Read(size);
-    auto self = circuit->Adopt<InputImmediate>(id, size);
+  template<typename ...Args>
+  std::tuple<Args ...> read() {
+    std::tuple< Args ... > out;
+
+    auto read_ = [&](Args &... args) { (Read(args), ... ); };
+    std::apply(read_, out);
+    return out;
+  }
+
+
+  void ReadOps(Operation *elems) {
+    auto [size] = read<uint32_t>();
+    for (auto i = 0u; i < size; ++i) {
+      elems->AddUse(Read());
+    }
+  }
+
+  Operation *Read() {
+    auto [sel] = read< Selector >();
+
+    if (sel == Selector::Operation) {
+      auto [hash, op_code] = read< raw_id_t, raw_op_code_t >();
+
+      auto op = Decode(hash, op_code);
+      id_to_op[hash] = op;
+      return op;
+
+    }
+    if (sel == Selector::Reference) {
+      auto [hash] = read< raw_id_t >();
+
+      auto op_it = id_to_op.find(hash);
+      if (op_it == id_to_op.end()) {
+        LOG(FATAL) << "Could not reference with id: " << hash;
+      }
+      return op_it->second;
+    }
+    LOG(FATAL) << "Unexpected tag for an operation reference: " << this->to_string(sel);
+  }
+
+  template< typename T >
+  Operation *Visit(T *op, uint64_t id) {
+    LOG(FATAL) << "Cannot deserialize " << T::kind << ". Most likely cause is missing impl.";
+  }
+
+  Operation *Decode(raw_id_t id, raw_op_code_t op_code) {
+    return this->Dispatch(op_code, id);
+  }
+
+  template<typename T, typename ...Args>
+  auto make_op(uint64_t id, std::tuple< Args... > &&args) {
+    auto make = [&](Args &&... args) {
+      return circuit->Adopt<T>(id, std::forward<Args>(args)... );
+    };
+    return std::apply(make, std::forward<std::tuple<Args ...>>(args));
+  }
+
+  template<typename T, typename U>
+  auto with_ops(uint64_t id, U &&u) {
+    auto self = make_op<T>(id, std::forward<U>(u));
     ReadOps(self);
-    DEBUG_READ("}");
     return self;
   }
 
-  Constant *DecodeConstant(uint64_t id) {
-    unsigned size = 0;
-    std::string bits;
-    DEBUG_READ("{CONST:");
-    Read(size);
-    Read(bits);
-    DEBUG_READ("}");
+  template<typename T>
+  auto reg_like(uint64_t id) {
+    return make_op<T>(id, read<unsigned, std::string>());
+  }
+
+  template<typename T>
+  auto reg_like_(uint64_t id) {
+    return make_op<T>(id, read<std::string, unsigned>());
+  }
+
+  Operation *Visit(InputRegister *, uint64_t id) { return reg_like_<InputRegister>(id); }
+  Operation *Visit(OutputRegister *, uint64_t id) { return reg_like_<OutputRegister>(id); }
+
+  Operation *Visit(InputImmediate *, uint64_t id) {
+    auto op = make_op<InputImmediate>(id, read<unsigned>());
+    ReadOps(op);
+    return op;
+  }
+
+  Operation *Visit(Constant *, uint64_t id) {
+    auto [size, bits] = read<unsigned, std::string>();
     return circuit->Adopt<Constant>(id, std::move(bits), size);
   }
 
-  OutputRegister *DecodeOutputRegister(uint64_t id) {
-    unsigned size = 0;
-    std::string reg_name;
-    DEBUG_READ("{OUTREG:");
-    Read(size);
-    Read(reg_name);
-    DEBUG_READ("}");
-    return circuit->Adopt<OutputRegister>(id, size, std::move(reg_name));
-  }
-
-  Extract *DecodeExtract(uint64_t id) {
-    unsigned high_bit_exc = 0;
-    unsigned low_bit_inc = 0;
-    Operation *value = nullptr;
-    DEBUG_READ("{EXTRACT:");
-    Read(high_bit_exc);
-    Read(low_bit_inc);
-    Read(value);
-    DEBUG_READ("}");
-    auto op = circuit->Adopt<Extract>(id, low_bit_inc, high_bit_exc);
-    op->AddUse(value);
+  Operation *Visit(Extract *, uint64_t id) {
+    auto [high, low] = read<unsigned, unsigned>();
+    auto op = circuit->Adopt<Extract>(id, low, high);
+    op->AddUse(Read());
     return op;
   }
 
-  LLVMOperation *DecodeLLVMOperation(uint64_t id) {
-    unsigned size;
-    unsigned llvm_op_code;
-    unsigned llvm_predicate;
-    DEBUG_READ("{LLVM:");
-    Read(size);
-    Read(llvm_op_code);
-    Read(llvm_predicate);
-    auto op = circuit->Adopt<LLVMOperation>(id, llvm_op_code, llvm_predicate, size);
-    ReadOps(op);
-    DEBUG_READ("}");
-    return op;
-  }
-
-  MemoryRead *DecodeMemoryRead(uint64_t id) {
-    uint32_t byte_count;
-    Read(byte_count);
-    auto op = circuit->Adopt<MemoryRead>(id, byte_count);
+  Operation *Visit(LLVMOperation *, uint64_t id) {
+    auto [size, llvm_op, llvm_pred] = read<unsigned, unsigned, unsigned>();
+    auto op = circuit->Adopt<LLVMOperation>(id, llvm_op, llvm_pred, size);
     ReadOps(op);
     return op;
   }
 
-  MemoryWrite *DecodeMemoryWrite(uint64_t id) {
-    uint32_t byte_count;
-    Read(byte_count);
-    auto op = circuit->Adopt<MemoryWrite>(id, byte_count);
-    ReadOps(op);
-    return op;
-  }
-
-  Select *DecodeSelect(uint64_t id) {
-    uint32_t size;
-    uint32_t bits;
-    Read(size);
-    Read(bits);
+  Operation *Visit(Select *, uint64_t id) {
+    //auto op = make_op<Select>(id, read<uint32_t, uint32_t>());
+    auto [size, bits] = read<unsigned, unsigned>();
     auto op = circuit->Adopt<Select>(id, bits, size);
     ReadOps(op);
     return op;
   }
 
-  // TODO(lukas): Edges to (and maybe from) `ErrorFlag` will probably be special
-  //              and possibly not part of the usual UseDef structure.
-  InputErrorFlag *DecodeInputErrorFlag(uint64_t id) {
-    DEBUG_READ("{ IEBIT }");
-    return circuit->Adopt<InputErrorFlag>(id);
-  }
-  OutputErrorFlag *DecodeOutputErrorFlag(uint64_t id) {
-    DEBUG_READ("{ OUTREG }");
-    return circuit->Adopt<OutputErrorFlag>(id);
-  }
+  Operation *Visit(InputErrorFlag *, uint64_t id) { return circuit->Adopt<InputErrorFlag>(id); }
+  Operation *Visit(OutputErrorFlag *, uint64_t id) { return circuit->Adopt<OutputErrorFlag>(id); }
 
 
-#define DECODE_GENERIC(cls) \
-  cls *Decode##cls(uint64_t id) { \
-    unsigned size = 0; \
-    DEBUG_READ("{size="); \
-    Read(size); \
-    auto op = circuit->Adopt<cls>(id, size); \
-    DEBUG_READ(";operands="); \
-    ReadOps(op); \
-    DEBUG_READ("}"); \
-    return op; \
+  template<typename T>
+  auto make_generic(uint64_t id) { return with_ops<T>(id, read<unsigned>()); }
+
+  template<typename T>
+  auto make_condition(uint64_t id) {
+    auto [size] = read<unsigned>();
+    CHECK(size == 1);
+    auto self = circuit->Adopt<T>(id);
+    ReadOps(self);
+    return self;
   }
 
-#define DECODE_CONDITION(cls) \
-  cls *Decode##cls(uint64_t id) { \
-    unsigned size = 0; \
-    DEBUG_READ("{size="); \
-    Read(size); \
-    CHECK_EQ(size, 1); \
-    auto op = circuit->Adopt<cls>(id); \
-    DEBUG_READ(";operands="); \
-    ReadOps(op); \
-    DEBUG_READ("}"); \
-    return op; \
-  }
+  #define DECODE_GENERIC(cls) \
+  Operation *Visit(cls *, uint64_t id) { return make_generic<cls>(id); }
+
+  #define DECODE_CONDITION(cls) \
+  Operation *Visit(cls *, uint64_t id) {return make_condition<cls>(id); }
 
   DECODE_GENERIC(Undefined)
   DECODE_GENERIC(Not)
@@ -505,7 +344,6 @@ class DeserializeVisitor : FileConfig {
   DECODE_CONDITION(Parity)
   DECODE_GENERIC(CountLeadingZeroes)
   DECODE_GENERIC(CountTrailingZeroes)
-  DECODE_CONDITION(ReadMemoryCondition)
   DECODE_CONDITION(HintCondition)
   DECODE_CONDITION(RegisterCondition)
   DECODE_CONDITION(PreservedCondition)
@@ -513,6 +351,7 @@ class DeserializeVisitor : FileConfig {
   DECODE_GENERIC(InputInstructionBits)
   DECODE_CONDITION(DecodeCondition)
   DECODE_GENERIC(Hint)
+  DECODE_CONDITION(Or)
   DECODE_CONDITION(VerifyInstruction)
   DECODE_CONDITION(OnlyOneCondition)
 
@@ -533,9 +372,7 @@ void Circuit::Serialize(std::ostream &os) {
   os.flush();
 }
 
-void Circuit::Serialize(
-    std::function<std::ostream &(const std::string &)> os_opener) {
-
+void Circuit::Serialize(std::function<std::ostream &(const std::string &)> os_opener) {
   std::unordered_map<std::string, SerializeVisitor> visitors;
 
   std::string topology;
@@ -568,8 +405,7 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   is.unsetf(std::ios::skipws);
 
   while (is.good() && !is.eof() && EOF != is.peek()) {
-    Operation *op = nullptr;
-    vis.Read(op);
+    auto op = vis.Read();
     if (!op) {
       break;
     }
@@ -590,13 +426,13 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   for (const auto &[name, op] : in_regs) {
     if (!out_regs.count(name)) {
       out_regs.emplace(name,
-                       circuit->Create<OutputRegister>(op->size, op->reg_name));
+                       circuit->Create<OutputRegister>(op->reg_name , op->size));
     }
   }
 
   for (const auto &[name, op] : out_regs) {
     if (!in_regs.count(name)) {
-      in_regs.emplace(name, circuit->Create<InputRegister>(op->size, op->reg_name));
+      in_regs.emplace(name, circuit->Create<InputRegister>(op->reg_name, op->size));
     }
   }
 

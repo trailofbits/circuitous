@@ -1,10 +1,11 @@
 /*
- * Copyright (c) 2020 Trail of Bits, Inc.
+ * Copyright (c) 2020-2021 Trail of Bits, Inc.
  */
 
 #pragma once
 
 #include <circuitous/Util/UseDef.h>
+#include <circuitous/Util/TypeList.hpp>
 
 #include <bitset>
 #include <iosfwd>
@@ -32,342 +33,195 @@ struct Optimizations {
   bool reduce_imms = false;
 };
 
-template <typename Derived>
-class Visitor;
-
 class Circuit;
 
 // A general instruction.
 class Operation : public Node<Operation> {
  public:
-  virtual ~Operation(void) = default;
+  static constexpr uint32_t kind = 0;
 
-  virtual std::string Name(void) const;
+  virtual ~Operation() = default;
+
+  virtual std::string Name() const;
   virtual bool Equals(const Operation *that) const;
 
   auto &operator[](std::size_t idx) { return operands[idx]; }
   const auto &operator[](std::size_t idx) const { return operands[idx]; }
 
-  enum : unsigned {
-
-    // Some sequence of bits.
-    kConstant = 0,
-
-    // An undefined value, either an `llvm::Undef` or a `__remill_undefined_*`
-    // value.
-    kUndefined = 1,
-
-    // Every LLVM instruction kind. Things like Add, Sub, etc.
-    kLLVMOperation = 2,
-
-    // Flip all bits.
-    kNot = 3,
-
-    // Extract some selection of bits [low_inc, high_exc) from an operand.
-    //
-    // NOTE(pag): `low_inc` is the lowest order bit, `high_exc` is the highest
-    //             order bit.
-    kExtract = 4,
-
-    // Concatenate an N and an M bit value, producing an (N+M)-bit value.
-    kConcat = 5,
-
-    // Compute the population count of some bit string.
-    kPopulationCount = 6,
-
-    // Compute the parity of some bit string. This produces a single bit result.
-    kParity = 7,
-
-    // Count the leading zeroes of a bit string.
-    kCountLeadingZeroes = 8,
-
-    // Count the trailing zeros of a bit string.
-    kCountTrailingZeroes = 9,
-
-    // Memory read condition. In bitcode, we might have the following:
-    //
-    //      v = __remill_read_memory_32(mem, addr)
-    //
-    // In the circuit, we actually want to have `v` be a hint value, and the
-    // expected value of `addr` be a hint value, and then this condition
-    // just checks the following:
-    //
-    //      computed_addr == Hint()
-    //
-    // It is up to the memory trace verifier to actually verify that `v` is the
-    // right thing to read from `addr`.
-    //
-    // Produces a single bit as output.
-    kReadMemoryCondition = 10,
-
-    // Named register that is an input to the circuit, representing the value
-    // of the register before the instruction "executes".
-    kInputRegister = 11,
-
-    kInputImmediate = 12,
-
-    // Named register that is a hint input to teh circuit, representing the
-    // value of the register after the instruction "executes". We need to verify
-    // that the computed value of the register after the instruction matches
-    // this value, which is what `kRegisterCondition` is for.
-    kOutputRegister = 13,
-
-    // Input to the circuit representing the bits of the instruction.
-    kInputInstructionBits = 14,
-
-    // A condition generated as part of optimizations, where a hint is generated.
-    kHintCondition = 15,
-
-    // Checks that a computed register's value matches some output value, e.g.:
-    //
-    //      new_EAX == OutputRegister(EAX)
-    //
-    // Produces a single bit as output.
-    kRegisterCondition = 16,
-
-    // Checks that a register's value is preserved, e.g.:
-    //
-    //      InputRegister(EAX) == OutputRegister(EAX)
-    //
-    // Produces a single bit as output.
-    kPreservedCondition = 17,
-
-    // Checks that a register's value is actually a copy of another register,
-    // e.g.:
-    //
-    //      InputRegister(EBX) == OutputRegister(EAX)
-    //
-    // Produces a single bit as output.
-    kCopyCondition = 18,
-
-    // Condition that checks if a proposed encoding matches some input
-    // instruction bits.
-    //
-    // Produces a single bit as output.
-    kDecodeCondition = 19,
-
-    // A condition representing the result of verifying one or more instruction
-    // transitions. Initially, there is one verification per unique instruction
-    // encoding. For example, if we have `mov eax, ebx` and `mov ebx, eax`,
-    // then we will have two uses of `kVerifyInstruction`. Later, multiple
-    // verifications might be merged onto one.
-    //
-    // This is semantically equivalent to an AND of N bits, i.e. `b1 & .. & bN`.
-    // The semantic is that all of the inputs must be `1` in order for this
-    // function to have "verified" some instruction.
-    //
-    // Produces a single bit as output.
-    kVerifyInstruction = 20,
-
-    // An input hint value of some size.
-    kHint = 21,
-
-    // A XOR of N bits, i.e. `b1 ^ ... ^ bN`. We construct the circuit such
-    // that we know that only one of the bits will ever be `1`, and all others
-    // will be zero.
-    kOnlyOneCondition = 22,
-
-    // Output value (0 or 1) of the circuit. This is really just a specialized
-    // equivalence class, where all the inputs are equivalent ways of expressing
-    // the circuit, of which the minimum cost one is chosen.
-    kCircuit = 23,
-
-    // Memory operations - load & store
-    kMemoryRead = 24,
-    kMemoryWrite = 25,
-
-    // Select which has the following prototype
-    // `select( idx, v1, v2, v3, ..., v^(|idx|) )`
-    // in practice however we do not want bigger selects than 2^4.
-    kSelect = 26,
-
-    // Error flag - we assume it will be only one bit, but maybe we may need to
-    // support multiple kinds of errrors in the future.
-    kInputErrorFlag = 27,
-    kOutputErrorFlag = 28,
-
-    kLast = 29,
-    // Invalid -- you cannot have this tag present in you tree.
-    kInvalid = 0xff
-  };
-
   uint64_t id() const { return _id; }
 
-  // The "opcode" of this.
-  const unsigned op_code{0};
-  uint64_t _id = 0;
 
   // Size in bits of this instruction's "result" value. For example, a zero-
   // extension will represent the size of the output value.
   const unsigned size{0};
 
+  // The "opcode" of this.
+  const unsigned op_code{0};
+
+  uint64_t _id = 0;
+
+
   template <typename Vis>
   void Traverse(Vis &vis) {
     for (auto op : operands) {
-      vis.Visit(op);
+      vis.Dispatch(op);
     }
   }
 
-  static constexpr inline uint32_t kind = kInvalid;
-
- protected:
-  explicit Operation(unsigned op_code_, unsigned size_);
+  explicit Operation(unsigned size_, unsigned op_code_) : size(size_), op_code(op_code_) {}
 };
 
-template<typename Kind>
-static inline std::string to_string(Kind kind) {
-  switch (kind) {
-    case Operation::kConstant : return "CONSTANT";
-    case Operation::kUndefined : return "UNDEFINED";
-    case Operation::kLLVMOperation : return "LLVMOPERATION";
-    case Operation::kNot : return "NOT";
-    case Operation::kExtract : return "EXTRACT";
-    case Operation::kConcat : return "CONCAT";
-    case Operation::kPopulationCount : return "POPULATION_COUNT";
-    case Operation::kParity : return "PARITY";
-    case Operation::kCountLeadingZeroes : return "COUNT_LEADING_ZEROES";
-    case Operation::kCountTrailingZeroes : return "COUNT_TRAILING_ZEROES";
-    case Operation::kReadMemoryCondition: return "READ_MEMORY_CONDITION";
-    case Operation::kInputRegister: return "INPUT_REGISTER";
-    case Operation::kInputImmediate : return "INPUT_IMMEDIATE";
-    case Operation::kOutputRegister : return "OUTPUT_REGISTER";
-    case Operation::kInputInstructionBits : return "INSTRUNCTION_BITS";
-    case Operation::kHintCondition : return "HINT_CONDITION";
-    case Operation::kRegisterCondition : return "OUTPUT_REGISTER_CHECK";
-    case Operation::kPreservedCondition : return "PRESERVED_REGISTER_CHECK";
-    case Operation::kCopyCondition : return "COPIED_REGISTER_CHECK";
-    case Operation::kDecodeCondition : return "INSTRUCTION_BITS_CHECK";
-    case Operation::kVerifyInstruction : return "ALL_OF";
-    case Operation::kHint : return "HINT";
-    case Operation::kOnlyOneCondition : return "ONE_OF";
-    case Operation::kCircuit : return "RESULT";
-    case Operation::kMemoryRead : return "MEMORY_READ";
-    case Operation::kMemoryWrite : return "MEMORY_WRITE";
-    case Operation::kSelect : return "SELECT";
-    case Operation::kInputErrorFlag : return "INPUT_ERROR_FLAG";
-    case Operation::kOutputErrorFlag : return "OUTPUT_ERROR_FLAG";
-    case Operation::kInvalid : return "INVALID";
-    default : LOG(FATAL) << "Unknown kind " << kind; return "";
+static constexpr uint32_t build_kind(uint8_t type, uint16_t op_code, uint8_t meta) {
+  return static_cast<uint32_t>((type << 24) + (op_code << 8) + meta);
+}
+
+static constexpr uint32_t add_type(uint32_t val, uint8_t type) {
+  auto type_ = static_cast< uint32_t >(type);
+  return static_cast<uint32_t>((type_ << 24) + val);
+}
+
+static constexpr uint32_t add_tag(uint32_t val, uint16_t tag) {
+  auto tag_ = static_cast< uint32_t >(tag);
+  return static_cast<uint32_t>((tag_ << 8) + val);
+}
+
+static constexpr uint32_t add_meta(uint32_t val, uint8_t meta) {
+  return static_cast<uint32_t>(meta + val);
+}
+
+template< uint8_t type_ >
+struct with_type { static constexpr uint8_t type = type_; };
+
+using LeafValue = with_type< 0x1 >;
+using HiddenValue = with_type< 0x2 >;
+using BitManip = with_type< 0x3 >;
+using BitOp = with_type< 0x4 >;
+
+using Computational = with_type< 0x5 >;
+
+using Constraint = with_type< 0x6 >;
+using Uncat = with_type< 0x7 >;
+using BoolOp = with_type< 0x9 >;
+
+template< uint16_t tag_ >
+struct Tag {
+  static constexpr uint16_t tag = tag_;
+};
+
+template< typename Type, typename Tag >
+struct with_type_tag : Type, Tag {
+
+  static constexpr uint32_t compute_kind(uint32_t base) {
+    return add_type(add_tag(base, Tag::tag), Type::type);
   }
-}
-
-template<typename Kind>
-static inline Kind from_string(const std::string &name) {
-  if (name == "CONSTANT") return Operation::kConstant;
-  if (name == "UNDEFINED") return Operation::kUndefined;
-  if (name == "LLVMOPERATION") return Operation::kLLVMOperation;
-  if (name == "NOT") return Operation::kNot;
-  if (name == "EXTRACT") return Operation::kExtract;
-  if (name == "CONCAT") return Operation::kConcat;
-  if (name == "POPULATION_COUNT") return Operation::kPopulationCount;
-  if (name == "PARITY") return Operation::kParity;
-  if (name == "COUNT_LEADING_ZEROES") return Operation::kCountLeadingZeroes;
-  if (name == "COUNT_TRAILING_ZEROES") return Operation::kCountTrailingZeroes;
-  if (name == "READ_MEMORY_CONDITION") return Operation::kReadMemoryCondition;
-  if (name == "INPUT_REFGISTER") return Operation::kInputRegister;
-  if (name == "OUTPOUT_REGISTER") return Operation::kOutputRegister;
-  if (name == "INSTRUNCTION_BITS") return Operation::kInputInstructionBits;
-  if (name == "HINT_CONDITION") return Operation::kHintCondition;
-  if (name == "OUTPUT_REGISTER_CHECK") return Operation::kRegisterCondition;
-  if (name == "PRESERVED_REGISTER_CHECK") return Operation::kPreservedCondition;
-  if (name == "COPIED_REGISTER_CHECK") return Operation::kCopyCondition;
-  if (name == "INSTRUCTION_BITS_CHECK") return Operation::kDecodeCondition;
-  if (name == "ALL_OF") return Operation::kVerifyInstruction;
-  if (name == "HINT") return Operation::kHint;
-  if (name == "ONE_OF") return Operation::kOnlyOneCondition;
-  if (name == "RESULT") return Operation::kCircuit;
-  if (name == "INVALID") return Operation::kInvalid;
-  if (name == "MEMORY_READ") return Operation::kMemoryRead;
-  if (name == "MEMORY_WRITE") return Operation::kMemoryWrite;
-  if (name == "SELECT") return Operation::kSelect;
-  if (name == "INPUT_ERROR_FLAG") return Operation::kInputErrorFlag;
-  if (name == "OUTPUT_ERROR_FLAG") return Operation::kOutputErrorFlag;
-  LOG(FATAL) << "Unknown name " << name;
-  return "";
-}
-
-#define FORWARD_CONSTRUCTOR(base_class, derived_class) \
-  inline explicit derived_class(unsigned size_) \
-      : base_class(derived_class::kind, size_) {}
-
-
-#define CONDITION_CONSTRUCTOR(derived_class) \
-  inline explicit derived_class(void) \
-      : Condition(derived_class::kind) {}
-
-// Some bitwise operation; must be extended.
-class BitOperation : public Operation {
- public:
-  static constexpr inline uint32_t kind = kInvalid;
-
-  std::string Name(void) const override;
-
- protected:
-  using Operation::Operation;
 };
 
-template<typename T>
-struct ValueLeaf : public Operation {
-  static constexpr inline uint32_t kind = kInvalid;
 
-  std::string Name(void) const override;
-  using Operation::Operation;
+template< typename T, uint8_t meta >
+struct IO : T {
+  static constexpr uint32_t kind = add_meta(T::kind, meta);
 
-  T value;
+  template< typename ... Args >
+  IO(Args &&...args) : T(std::forward<Args>(args)..., kind) {}
 };
 
-// An input register.
-class InputRegister : public Operation {
- public:
-  static constexpr inline uint32_t kind = kInputRegister;
 
-  std::string Name(void) const override;
+template< typename T >
+struct Input : IO< T, 0 >  {
+  using IO< T, 0 >::IO;
+  std::string Name() const override { return "In." + T::Name(); }
+};
+
+template< typename T >
+struct Output : IO< T, 1 > {
+  using IO< T, 1 >::IO;
+  std::string Name() const override { return "Out." + T::Name(); }
+};
+
+/* I/O & Leaf nodes */
+
+struct Register : Operation, with_type_tag< LeafValue, Tag< 3 > >{
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+
+  template< typename ...As >
+  Register(const std::string &rn_, As &&... as)
+      : Operation(std::forward<As>(as)...), reg_name(rn_)
+  {}
+
+  std::string Name() const override { return "register." + reg_name; }
+  bool Equals(const Operation *other) const override { LOG(FATAL) << "TODO"; }
+
+  std::string reg_name;
+};
+
+using InputRegister = Input< Register >;
+using OutputRegister = Output< Register >;
+
+struct ErrorFlag : Operation, with_type_tag< LeafValue, Tag< 4 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+
+  template< typename ...Args >
+  ErrorFlag(Args &&... args) : Operation(1u, std::forward<Args>(args)...) {}
+
+  std::string Name() const override { return "error_flag"; }
+};
+
+using InputErrorFlag = Input< ErrorFlag >;
+using OutputErrorFlag = Output< ErrorFlag >;
+
+// An undefined value.
+struct Undefined final : Operation, with_type_tag< LeafValue, Tag< 2 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+
+  explicit Undefined(unsigned size_) : Operation(size_, kind) {}
+  std::string Name() const override { return "undefined"; }
+};
+
+
+struct Constant final : Operation, with_type_tag< LeafValue, Tag< 1 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+
+  explicit Constant(std::string bits_, unsigned size_)
+      : Operation(size_, kind),
+        bits(std::move(bits_))
+  {}
+
   bool Equals(const Operation *that) const override;
+  std::string Name() const override;
 
-  inline explicit InputRegister(unsigned size_, std::string reg_name_)
-      : Operation(Operation::kInputRegister, size_),
-        reg_name(std::move(reg_name_)) {}
-
-  const std::string reg_name;
+  // Value of this constant. The least significant bit is stored in `bits[0]`,
+  // and the most significant bit is stored in `bits[size - 1u]`.
+  const std::string bits;
 };
 
-class InputImmediate : public Operation {
- public:
-  static constexpr inline uint32_t kind = kInputImmediate;
+struct Hint final : Operation, with_type_tag< LeafValue, Tag< 5 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
 
-  std::string Name(void) const override;
-  bool Equals(const Operation *that) const override;
+  inline explicit Hint(unsigned size_) : Operation(size_, kind) {}
 
-  explicit InputImmediate(unsigned size_)
-      : Operation(Operation::kInputImmediate, size_) {}
+  std::string Name() const override { return "hint"; }
 };
 
-// An output register.
-class OutputRegister : public Operation {
- public:
-  static constexpr inline uint32_t kind = kOutputRegister;
+// Input bits that
+struct InputInstructionBits : Operation, with_type_tag< LeafValue, Tag< 6 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+  explicit InputInstructionBits(unsigned size_) : Operation(size_, kind) {}
 
-  std::string Name(void) const override;
-  bool Equals(const Operation *that) const override;
-
-  inline explicit OutputRegister(unsigned size_, std::string reg_name_)
-      : Operation(Operation::kOutputRegister, size_),
-        reg_name(std::move(reg_name_)) {}
-
-  const std::string reg_name;
+  std::string Name() const override { return "instruction_bits"; }
 };
+
+/* LLVMOP */
 
 
 // Mirrors an instruction from LLVM. `op_code` is `inst->getOpcode()`.
-class LLVMOperation final : public Operation {
- public:
-  static constexpr inline uint32_t kind = kLLVMOperation;
+struct LLVMOperation final : Operation, with_type_tag< Computational, Tag< 1 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
   explicit LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
                          unsigned size_);
 
   explicit LLVMOperation(llvm::Instruction *inst_);
 
-  std::string Name(void) const override;
+  std::string Name() const override;
   bool Equals(const Operation *that) const override;
 
   const uint32_t llvm_op_code;
@@ -376,54 +230,70 @@ class LLVMOperation final : public Operation {
   static const uint32_t kInvalidLLVMPredicate;
 };
 
-// An undefined value.
-class Undefined final : public Operation {
- public:
-  static constexpr inline uint32_t kind = kUndefined;
-  inline explicit Undefined(unsigned size_)
-      : Operation(Operation::kUndefined, size_) {}
 
-  std::string Name(void) const override;
-
- protected:
-  using Operation::Operation;
+#define declare_llvm_op(cls, idx) \
+struct cls final : Operation, with_type_tag< Computational, Tag< idx > > { \
+  static constexpr uint32_t kind = compute_kind(Operation::kind); \
+  cls(unsigned size_) : Operation(size_, kind) {} \
+  std::string Name() const override { return #cls; } \
 };
 
-class Constant final : public Operation {
- public:
-  static constexpr inline uint32_t kind = kConstant;
+declare_llvm_op(Add, 0)
+declare_llvm_op(Sub, 1)
+declare_llvm_op(Mul, 2)
 
-  inline explicit Constant(std::string bits_, unsigned size_)
-      : Operation(Operation::kConstant, size_),
-        bits(bits_) {}
+declare_llvm_op(UDiv, 3)
+declare_llvm_op(SDiv, 4)
+
+declare_llvm_op(Shl, 5)
+declare_llvm_op(LShr, 6)
+declare_llvm_op(AShr, 7)
+
+declare_llvm_op(Trunc, 8)
+declare_llvm_op(ZExt, 9)
+declare_llvm_op(SExt, 10)
+
+declare_llvm_op(Icmp_ult, 11)
+declare_llvm_op(Icmp_slt, 12)
+declare_llvm_op(Icmp_ugt, 13)
+declare_llvm_op(Icmp_eq, 14)
+declare_llvm_op(Icmp_ne, 15)
+
+#undef declare_llvm_op
+
+using llvm_ops_t = TL<
+    Add, Sub, Mul, UDiv, SDiv, Shl, LShr, AShr, Trunc, ZExt, SExt,
+    Icmp_ult, Icmp_slt, Icmp_ugt, Icmp_eq, Icmp_ne
+>;
 
 
-  std::string Name(void) const override;
+/* Hidden */
+
+struct InputImmediate : HiddenValue, Operation {
+  static constexpr uint16_t tag = 0x1;
+  static constexpr uint32_t kind = add_type(add_tag(Operation::kind, tag), HiddenValue::type);
+
+  std::string Name() const override { return "input_immediate"; }
   bool Equals(const Operation *that) const override;
 
-  // Value of this constant. The least significant bit is stored in `bits[0]`,
-  // and the most significant bit is stored in `bits[size - 1u]`.
-  const std::string bits;
+  explicit InputImmediate(unsigned size_) : Operation(size_, kind) {}
 };
 
-// Flip all bits in a bitvector.
-class Not final : public BitOperation {
- public:
-  static constexpr inline uint32_t kind = kNot;
-  FORWARD_CONSTRUCTOR(BitOperation, Not)
+/* BitManips */
 
-};
+struct Extract final : Operation, with_type_tag< BitManip, Tag< 0 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
 
-// Extract bits.
-class Extract final : public BitOperation {
- public:
-  static constexpr inline uint32_t kind = kExtract;
+  std::string Name() const override {
+    std::stringstream ss;
+    ss << "extract." << high_bit_exc << "." << low_bit_inc;
+    return ss.str();
+  }
 
-  std::string Name(void) const override;
   bool Equals(const Operation *that) const override;
 
-  inline explicit Extract(unsigned low_bit_inc_, unsigned high_bit_exc_)
-      : BitOperation(Operation::kExtract, high_bit_exc_ - low_bit_inc_),
+  inline explicit Extract(uint32_t low_bit_inc_, uint32_t high_bit_exc_)
+      : Operation(high_bit_exc_ - low_bit_inc_, kind),
         low_bit_inc(low_bit_inc_),
         high_bit_exc(high_bit_exc_) {}
 
@@ -431,241 +301,128 @@ class Extract final : public BitOperation {
   const uint32_t high_bit_exc;
 };
 
-// Concatenate two bitvectors.
-class Concat final : public BitOperation {
- public:
-  static constexpr inline uint32_t kind = kConcat;
-  FORWARD_CONSTRUCTOR(BitOperation, Concat)
 
+struct Concat final : Operation, with_type_tag< BitManip, Tag< 1 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+  Concat(uint32_t size_) : Operation(size_, kind) {}
+  std::string Name() const override { return "concat"; }
 };
 
-// Population count of some bits. Needed for things like parity count
-// calculation.
-class PopulationCount final : public BitOperation {
- public:
-  static constexpr inline uint32_t kind = kPopulationCount;
-  FORWARD_CONSTRUCTOR(BitOperation, PopulationCount)
+/* BitOps */
 
+struct PopulationCount final : Operation, with_type_tag< BitOp, Tag< 0 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+  explicit PopulationCount(unsigned size_) : Operation(size_, kind) {}
+  std::string Name() const override { return "pop_count"; }
 };
 
-// Count the leading zeroes of some bits.
-class CountLeadingZeroes final : public BitOperation {
- public:
-  static constexpr inline uint32_t kind = kCountLeadingZeroes;
-  FORWARD_CONSTRUCTOR(BitOperation, CountLeadingZeroes)
-
+struct CountLeadingZeroes final : Operation, with_type_tag< BitOp, Tag< 1 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+  explicit CountLeadingZeroes(unsigned size_) : Operation(size_, kind) {}
+  std::string Name() const override { return "count_lead_zeroes"; }
 };
 
-class CountTrailingZeroes final : public BitOperation {
- public:
-  static constexpr inline uint32_t kind = kCountTrailingZeroes;
-  FORWARD_CONSTRUCTOR(BitOperation, CountTrailingZeroes)
-
+struct CountTrailingZeroes final : Operation, with_type_tag< BitOp, Tag< 2 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+  explicit CountTrailingZeroes(unsigned size_) : Operation(size_, kind) {}
+  std::string Name() const override { return "count_trailing_zeroes"; }
 };
 
-class Condition : public Operation {
- protected:
-  inline explicit Condition(unsigned op_code_) : Operation(op_code_, 1u) {}
+struct Not final : Operation, with_type_tag< BitOp, Tag< 3 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+  explicit Not(unsigned size_) : Operation(size_, kind) {}
+  std::string Name() const override { return "not"; }
 };
 
-// Returns `0` if there are an even numbers of bits in a bit string, and `1`
-// if there are an odd number of bits in a bit string.
-// TODO(lukas): Should this not inherit from BitOperation?
-class Parity final : public Condition {
- public:
-  static constexpr inline uint32_t kind = kParity;
-  CONDITION_CONSTRUCTOR(Parity)
+struct Parity final : Operation, with_type_tag< BitOp, Tag< 4 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+  explicit Parity() : Operation(1, kind) {}
 
-  std::string Name(void) const override;
+  std::string Name() const override { return "parity"; }
 };
 
-// Condition that verifies that some computed address matches a hint address.
-class ReadMemoryCondition final : public Condition {
- public:
-  static constexpr inline uint32_t kind = kReadMemoryCondition;
-  enum : unsigned {
-    kDynamicAddress = 0u,
-    kHintedAddress = 1u,
-    kHintedValue = 2u
-  };
-  CONDITION_CONSTRUCTOR(ReadMemoryCondition)
-  std::string Name(void) const override;
-};
+/* Without category */
 
-// A comparison between the proposed output value of a register, and the
-// output register itself.
-class RegisterCondition final : public Condition {
- public:
-  static constexpr inline uint32_t kind = kRegisterCondition;
-  enum : unsigned { kDynamicRegisterValue = 0u, kOutputRegister = 1u };
-
-  CONDITION_CONSTRUCTOR(RegisterCondition)
-
-  std::string Name(void) const override;
-};
-
-// A comparison between the proposed output value of a register, and the
-// output register itself.
-class HintCondition final : public Condition {
- public:
-  static constexpr inline uint32_t kind = kHintCondition;
-  enum : unsigned { kDynamicValue = 0u, kHint = 1u };
-
-  CONDITION_CONSTRUCTOR(HintCondition)
-
-  std::string Name(void) const override;
-};
-
-// Says that we are preserving the value of a register.
-class PreservedCondition final : public Condition {
- public:
-  static constexpr inline uint32_t kind = kPreservedCondition;
-  enum : unsigned { kInputRegister = 0u, kOutputRegister = 1u };
-
-  CONDITION_CONSTRUCTOR(PreservedCondition)
-
-  std::string Name(void) const override;
-};
-
-// Says that we are moving one register to a different register.
-class CopyCondition final : public Condition {
- public:
-  static constexpr inline uint32_t kind = kCopyCondition;
-  enum : unsigned { kOtherInputRegister = 0u, kOutputRegister = 1u };
-
-  CONDITION_CONSTRUCTOR(CopyCondition)
-
-  std::string Name(void) const override;
-};
-
-// Input bits that
-class InputInstructionBits : public Operation {
- public:
-  static constexpr inline uint32_t kind = kInputInstructionBits;
-  FORWARD_CONSTRUCTOR(Operation, InputInstructionBits)
-
-  std::string Name(void) const override;
-};
-
-// Checks whether or not some instruction bits (second operand) equals some
-// proposed values.
-class DecodeCondition final : public Condition {
- public:
-  static constexpr inline uint32_t kind = kDecodeCondition;
-  CONDITION_CONSTRUCTOR(DecodeCondition)
-
-  std::string Name(void) const override;
-};
-
-// A hint value is an input to the circuit. It can serve several purposes,
-// e.g.
-class Hint final : public Operation {
- public:
-  static constexpr inline uint32_t kind = kHint;
-
-  inline explicit Hint(unsigned size_)
-      : Operation(Operation::kHint, size_) {}
-
-  std::string Name(void) const override;
-
-  // Weak list of conditions that compare this hint value against what it is
-  // hinting.
-  // TODO(lukas): ???
-  //UseList<Operation> weak_conditions;
-};
-
-class VerifyInstruction final : public Condition {
- public:
-  static constexpr inline uint32_t kind = kVerifyInstruction;
-  CONDITION_CONSTRUCTOR(VerifyInstruction)
-
-  std::string Name(void) const override;
-};
-
-class OnlyOneCondition final : public Condition {
- public:
-  static constexpr inline uint32_t kind = kOnlyOneCondition;
-  CONDITION_CONSTRUCTOR(OnlyOneCondition)
-
-  std::string Name(void) const override;
-};
-
-class MemoryOp : public Operation {
- protected:
-  template<typename ...Args>
-  MemoryOp(uint32_t byte_count_, Args &&...args)
-      : Operation(std::forward<Args>(args)...), byte_count(byte_count_)
-  {}
-
- public:
-  enum : uint8_t {
-    kAddress = 0u
-  };
-  static constexpr inline uint32_t kind = kInvalid;
-
-  std::string Name(void) const override;
-
-  uint32_t byte_count;
-};
-
-class MemoryRead : public MemoryOp {
- public:
-  static constexpr inline uint32_t kind = kMemoryRead;
-
-  explicit MemoryRead(uint32_t byte_count_)
-      : MemoryOp(byte_count_, kind, byte_count_ * 8u)
-  {}
-
-};
-
-class MemoryWrite : public MemoryOp {
- public:
-  static constexpr inline uint32_t kind = kMemoryWrite;
-
-  explicit MemoryWrite(uint32_t byte_count_) : MemoryOp(byte_count_, kind, 0u) {}
-
-};
-
-class Select : public Operation {
- public:
-  static constexpr inline uint32_t kind = kSelect;
+struct Select : Operation, with_type_tag< Uncat, Tag< 0 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
 
   explicit Select(uint32_t bits_, uint32_t size_)
-      : Operation(kind, size_), bits(bits_)
+      : Operation(size_, kind), bits(bits_)
   {}
-
-  std::string Name() const override;
+  std::string Name() const override {
+    std::stringstream ss;
+    ss << "select." << bits;
+    return ss.str();
+  }
 
   // Return one of the `2 ^ bits` values. It is also expected that this node
   // has `2 ^ bits + 1` operands.
   uint32_t bits = 0;
 };
 
-class ErrorFlag : public Operation {
- protected:
-  ErrorFlag(uint32_t derived_kind) : Operation(derived_kind, 1u) {}
- public:
-  static constexpr inline uint32_t kind = kInvalid;
+/* Constaints */
 
-  std::string Name(void) const override;
+struct EnforceCtx : Operation {
+  using Operation::Operation;
+  enum : uint8_t { kDynamic = 0u, kFixed = 1u };
+
+  Operation *dynamic() { return operands[kDynamic]; }
+  Operation *fixed() { return operands[kFixed]; }
+
+  const Operation *dynamic() const { return operands[kDynamic]; }
+  const Operation *fixed() const { return operands[kFixed]; }
+
+  std::string suffix_() const {
+    if (operands.size() != 2) {
+      return "invalid.0";
+    }
+    return fixed()->Name() + "." + std::to_string(fixed()->size);
+  }
 };
 
-class InputErrorFlag : public ErrorFlag {
- public:
-  static constexpr inline uint32_t kind = kInputErrorFlag;
-
-  InputErrorFlag() : ErrorFlag(kind) {}
+// A comparison between the proposed output value of a register, and the
+// output register itself.
+struct RegisterCondition final : EnforceCtx, with_type_tag< Constraint, Tag< 0 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+  RegisterCondition() : EnforceCtx(1u, kind) {}
+  std::string Name() const override { return "register_condition." + EnforceCtx::suffix_(); }
 };
 
-class OutputErrorFlag : public ErrorFlag {
- public:
-  static constexpr inline uint32_t kind = kOutputErrorFlag;
-
-  OutputErrorFlag() : ErrorFlag(kind) {}
+// A comparison between the proposed output value of a register, and the
+// output register itself.
+struct HintCondition final : EnforceCtx, with_type_tag< Constraint, Tag< 1 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+  HintCondition() : EnforceCtx(1u, kind) {}
+  std::string Name() const override { return "hint_condition." + EnforceCtx::suffix_(); }
 };
 
-#undef FORWARD_CONSTRUCTOR
-#undef CONDITION_CONSTRUCTOR
+// Says that we are preserving the value of a register.
+struct PreservedCondition final : EnforceCtx, with_type_tag< Constraint, Tag< 2 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+  PreservedCondition() : EnforceCtx(1u, kind) {}
+  std::string Name() const override { return "preserved_condition." + EnforceCtx::suffix_(); }
+};
+
+// Says that we are moving one register to a different register.
+struct CopyCondition final : EnforceCtx, with_type_tag< Constraint, Tag< 3 > > {
+  static constexpr uint32_t kind = compute_kind(Operation::kind);
+  CopyCondition() : EnforceCtx(1u, kind) {}
+  std::string Name() const override { return "copy_condition." + EnforceCtx::suffix_(); }
+};
+
+#define make_bool_op(cls, idx) \
+struct cls final : Operation, with_type_tag< BoolOp, Tag< idx > > { \
+  static constexpr uint32_t kind = compute_kind(Operation::kind); \
+  cls() : Operation(1u, kind) {} \
+  std::string Name() const override { return "#cls"; } \
+};
+
+make_bool_op(DecodeCondition, 0)
+make_bool_op(VerifyInstruction, 1)
+make_bool_op(Or, 2)
+make_bool_op(OnlyOneCondition, 3)
+
+#undef make_bool_op
 
 template<typename OP>
 struct MaterializedDefList {
@@ -693,14 +450,49 @@ struct MaterializedDefList {
   }
 
   auto &Attr() { return data; }
+
+  template<typename CB>
+  auto match(Operation *op, CB cb) {
+    if (op->op_code == OP::kind) {
+      cb(dynamic_cast<OP *>(op));
+    }
+  }
+
+  template<typename CB>
+  auto match_d(uint32_t kind, CB cb) {
+    if (kind == OP::kind) {
+      cb(static_cast<OP *>(nullptr));
+    }
+  }
 };
 
+using generic_list_t =
+TL<
+  Constant, Undefined, LLVMOperation, Not, Concat,
+  CountLeadingZeroes, CountTrailingZeroes, Extract, PopulationCount,
+  Parity, InputRegister, InputImmediate,  OutputRegister, InputInstructionBits,
+  RegisterCondition, PreservedCondition, CopyCondition, DecodeCondition,
+  VerifyInstruction, OnlyOneCondition,
+  Hint, HintCondition, Select,
+  InputErrorFlag, OutputErrorFlag, Or
+>;
 
-template<typename ... Ops>
-struct Attributes : MaterializedDefList<Ops> ... {
+using node_list_t = merge< generic_list_t, llvm_ops_t >;
+
+template< typename T >
+struct to_mat_def_list {
+  using type = MaterializedDefList< T >;
+};
+
+using m_def_lists = apply< node_list_t, to_mat_def_list >;
+
+template< typename L > struct Attributes {};
+
+template< typename ... Ops >
+struct Attributes< TL< Ops ... > > : Ops ... {
 
   template<typename T>
-  using parent = MaterializedDefList<T>;
+  using parent = MaterializedDefList< T >;
 
   template<typename T>
   auto &Attr() {
@@ -709,7 +501,7 @@ struct Attributes : MaterializedDefList<Ops> ... {
 
   template<typename CB>
   void ForEachOperation(CB cb) {
-    (parent<Ops>::ForEachOperation(cb), ...);
+    (this->Ops::ForEachOperation(cb), ...);
   }
 
   void ClearWithoutErasure() {
@@ -718,64 +510,30 @@ struct Attributes : MaterializedDefList<Ops> ... {
         op->operands.ClearWithoutErasure();
       }
     };
-    (parent<Ops>::Apply(clear), ...);
+    (this->Ops::Apply(clear), ...);
   }
 
   template<typename CB>
   void ForEachField(CB cb) {
-    (parent<Ops>::Apply(cb), ...);
+    (this->Ops::Apply(cb), ...);
   }
 
   std::size_t RemoveUnused() {
-    return (parent<Ops>::RemoveUnused() + ...);
+    return (this->Ops::RemoveUnused() + ...);
   }
+
+  template<typename CB> auto match(Operation *op, CB cb) { (this->Ops::match(op, cb), ...); }
+  template<typename CB> auto match_d(uint32_t k, CB cb) { (this->Ops::match_d(k, cb), ...); }
 };
-
-using AllAttributes =
-  Attributes<Constant, Undefined, LLVMOperation, Not, Concat,
-             CountLeadingZeroes, CountTrailingZeroes, Extract, PopulationCount,
-             Parity, InputRegister, InputImmediate,  OutputRegister, InputInstructionBits,
-             RegisterCondition, PreservedCondition, CopyCondition, DecodeCondition,
-             VerifyInstruction, ReadMemoryCondition, OnlyOneCondition,
-             Hint, HintCondition, MemoryRead, MemoryWrite, Select,
-             InputErrorFlag, OutputErrorFlag>;
-
-// TODO(lukas): Get rid of this
-#define FOR_EACH_OPERATION(what) \
-  what(Constant) \
-  what(Undefined) \
-  what(LLVMOperation) \
-  what(Not) \
-  what(Concat) \
-  what(CountLeadingZeroes) \
-  what(CountTrailingZeroes) \
-  what(Extract) \
-  what(PopulationCount) \
-  what(Parity) \
-  what(InputRegister) \
-  what(InputImmediate) \
-  what(OutputRegister) \
-  what(InputInstructionBits) \
-  what(RegisterCondition) \
-  what(PreservedCondition) \
-  what(CopyCondition) \
-  what(DecodeCondition) \
-  what(VerifyInstruction) \
-  what(ReadMemoryCondition) \
-  what(OnlyOneCondition) \
-  what(Hint) \
-  what(HintCondition) \
-  what(MemoryRead) \
-  what(MemoryWrite) \
-  what(Select) \
-  what(InputErrorFlag) \
-  what(OutputErrorFlag)
+using AllAttributes = Attributes< m_def_lists >;
 
 
 // Represents the results of verifying a circuit.
-class Circuit : public Condition, public AllAttributes {
+class Circuit : public Operation, public AllAttributes {
  public:
-  virtual ~Circuit(void);
+  static constexpr inline uint32_t kind = 0x1;
+
+  virtual ~Circuit(void) = default;
 
   using circuit_ptr_t = std::unique_ptr<Circuit>;
 
@@ -836,6 +594,16 @@ class Circuit : public Condition, public AllAttributes {
     return op;
   }
 
+  template<typename ...Args>
+  Operation *Adopt(uint64_t id, uint32_t kind, Args &&...args) {
+    Operation *out;
+    auto adopt = [&](auto op) {
+      using raw_t = std::decay_t< decltype( op ) >;
+      out = this->Create< raw_t >( std::forward< Args >( args )... );
+    };
+    return out;
+  }
+
   template<typename T>
   T *Fork(T *original) {
     T copy{*original};
@@ -845,13 +613,13 @@ class Circuit : public Condition, public AllAttributes {
   }
 
   Operation *Fork(Operation *op) {
-    #define FORK_CASE(T) \
-      if (op->op_code == T::kind) { \
-        return Fork<T>(dynamic_cast<T *>(op)); \
-      }
-    FOR_EACH_OPERATION(FORK_CASE)
-    #undef FORK_CASE
-    __builtin_unreachable();
+    Operation *out;
+    auto fork = [&](auto op) {
+      out = this->Fork(op);
+    };
+
+    this->match(op, fork);
+    return out;
   }
 
   template<typename What>
@@ -883,65 +651,152 @@ class Circuit : public Condition, public AllAttributes {
   OutputRegister *output_reg(cstr_ref name) { return fetch_reg<OutputRegister>(name); }
 
  public:
+  std::string Name() const override { return "circuit"; }
   Circuit(void);
 };
 
-// Visitor for visiting IR.
-template <typename Derived>
-class Visitor {
- public:
-  void VisitOperation(Operation *op) {
+
+template< typename D, typename L > struct Visitor_ {};
+
+template<typename Derived, typename ... Ops >
+struct Visitor_< Derived, TL< Ops ... > > {
+  void Visit(Operation *op) {
     op->Traverse(*this);
   }
 
-  void Visit(Operation *op) {
-    auto self = static_cast<Derived *>(this);
-    switch (const auto op_code = op->op_code; op_code) {
-#define VISITOR_CASE(type) \
-  case Operation::k##type: \
-    if (auto typed_op = dynamic_cast<type *>(op)) { \
-      self->Visit##type(typed_op); \
-    } else { \
-      LOG(FATAL) << "Node with op_code=" << op_code << " (k" << #type \
-                 << ") has incorrect dynamic type: " << typeid(*op).name(); \
-    } \
-    break;
+  Derived &self() { return static_cast<Derived &>(*this); }
 
-      FOR_EACH_OPERATION(VISITOR_CASE)
-      VISITOR_CASE(Circuit)
-#undef VISITOR_CASE
-      default: LOG(FATAL) << "Unhandled operation: " << op->Name();
+  template<typename T, typename ...Tail, typename ... Args>
+  auto Visit_(Operation *op, Args &&...args) {
+    if (op->op_code == T::kind) {
+      return self().Visit(dynamic_cast<T *>(op), std::forward<Args>(args)...);
+    }
+    if constexpr (sizeof...(Tail) != 0) {
+      return this->Visit_<Tail ...>(op, std::forward<Args>(args)...);
+    } else {
+      return self().Visit(op, std::forward<Args>(args)...);
     }
   }
 
-#define DECLARE_VISITOR(type) \
-  void Visit##type(type *op) { \
-    auto self = static_cast<Derived *>(this); \
-    self->VisitOperation(op); \
+  template<typename ...Args>
+  void Dispatch(Operation *op, Args &&...args) {
+    this->Visit_<Ops...>(op, std::forward<Args>(args)...);
+  }
+};
+
+template< typename Derived >
+using Visitor = Visitor_< Derived, node_list_t >;
+
+template< typename D, typename L > struct DVisitor_ {};
+
+template<typename Derived, typename ... Ops >
+struct DVisitor_< Derived, TL< Ops ... > > {
+  Derived &self() { return static_cast<Derived &>(*this); }
+
+  template<typename T, typename ...Tail, typename ...Args>
+  auto Visit_(uint32_t kind, Args &&... args) {
+    if (kind == T::kind) {
+      return self().Visit(static_cast<T *>(nullptr), std::forward<Args>(args)...);
+    }
+    if constexpr (sizeof...(Tail) != 0) {
+      return this->Visit_<Tail ...>(kind, std::forward<Args>(args)...);
+    } else {
+      LOG(FATAL) << "Kind: " << kind << " does not correspond to known Operation!";
+    }
   }
 
-  FOR_EACH_OPERATION(DECLARE_VISITOR)
-  DECLARE_VISITOR(Circuit)
-#undef DECLARE_VISITOR
+  template<typename ...Args>
+  auto Dispatch(uint32_t kind, Args &&...args) {
+    return this->Visit_<Ops...>(kind, std::forward<Args>(args)...);
+  }
 };
+
+template< typename Derived >
+using DVisitor = DVisitor_< Derived, node_list_t >;
 
 template <typename Derived>
 struct UniqueVisitor : public Visitor<Derived> {
   using parent = Visitor<Derived>;
 
-  void Visit(Operation *op) {
+  void Dispatch(Operation *op) {
     if (seen_ops.count(op)) {
       return;
     }
     seen_ops.insert(op);
-    this->parent::Visit(op);
+    this->parent::Dispatch(op);
   }
 
-  void Reset(void) {
+  void Reset() {
     seen_ops.clear();
   }
 
   std::unordered_set<Operation *> seen_ops;
 };
+
+template<typename Kind>
+static inline std::string to_string(Kind kind) {
+  switch (kind) {
+    case Constant::kind : return "CONSTANT";
+    case Undefined::kind : return "UNDEFINED";
+    case LLVMOperation::kind : return "LLVMOPERATION";
+    case Not::kind : return "NOT";
+    case Extract::kind : return "EXTRACT";
+    case Concat::kind : return "CONCAT";
+    case PopulationCount::kind : return "POPULATION_COUNT";
+    case Parity::kind : return "PARITY";
+    case CountLeadingZeroes::kind : return "COUNT_LEADING_ZEROES";
+    case CountTrailingZeroes::kind : return "COUNT_TRAILING_ZEROES";
+    case InputRegister::kind: return "INPUT_REGISTER";
+    case InputImmediate::kind : return "INPUT_IMMEDIATE";
+    case OutputRegister::kind : return "OUTPUT_REGISTER";
+    case InputInstructionBits::kind : return "INSTRUNCTION_BITS";
+    case HintCondition::kind : return "HINT_CONDITION";
+    case RegisterCondition::kind : return "OUTPUT_REGISTER_CHECK";
+    case PreservedCondition::kind : return "PRESERVED_REGISTER_CHECK";
+    case CopyCondition::kind : return "COPIED_REGISTER_CHECK";
+    case DecodeCondition::kind : return "INSTRUCTION_BITS_CHECK";
+    case VerifyInstruction::kind : return "AND";
+    case Hint::kind : return "HINT";
+    case OnlyOneCondition::kind : return "XOR";
+    case Or::kind : return "OR";
+    case Circuit::kind : return "RESULT";
+    case Select::kind : return "SELECT";
+    case InputErrorFlag::kind : return "INPUT_ERROR_FLAG";
+    case OutputErrorFlag::kind : return "OUTPUT_ERROR_FLAG";
+    default : LOG(FATAL) << "Unknown kind " << kind; return "";
+  }
+}
+
+template<typename Kind>
+static inline Kind from_string(const std::string &name) {
+  if (name == "CONSTANT") return Constant::kind;
+  if (name == "UNDEFINED") return Undefined::kind;
+  if (name == "LLVMOPERATION") return LLVMOperation::kind;
+  if (name == "NOT") return Not::kind;
+  if (name == "EXTRACT") return Extract::kind;
+  if (name == "CONCAT") return Concat::kind;
+  if (name == "POPULATION_COUNT") return PopulationCount::kind;
+  if (name == "PARITY") return Parity::kind;
+  if (name == "COUNT_LEADING_ZEROES") return CountLeadingZeroes::kind;
+  if (name == "COUNT_TRAILING_ZEROES") return CountTrailingZeroes::kind;
+  if (name == "INPUT_REFGISTER") return InputRegister::kind;
+  if (name == "OUTPOUT_REGISTER") return OutputRegister::kind;
+  if (name == "INSTRUNCTION_BITS") return InputInstructionBits::kind;
+  if (name == "HINT_CONDITION") return HintCondition::kind;
+  if (name == "OUTPUT_REGISTER_CHECK") return RegisterCondition::kind;
+  if (name == "PRESERVED_REGISTER_CHECK") return PreservedCondition::kind;
+  if (name == "COPIED_REGISTER_CHECK") return CopyCondition::kind;
+  if (name == "INSTRUCTION_BITS_CHECK") return DecodeCondition::kind;
+  if (name == "AND") return VerifyInstruction::kind;
+  if (name == "HINT") return Hint::kind;
+  if (name == "XOR") return OnlyOneCondition::kind;
+  if (name == "OR") return Or::kind;
+  if (name == "RESULT") return Circuit::kind;
+  if (name == "SELECT") return Select::kind;
+  if (name == "INPUT_ERROR_FLAG") return InputErrorFlag::kind;
+  if (name == "OUTPUT_ERROR_FLAG") return OutputErrorFlag::kind;
+  LOG(FATAL) << "Unknown name " << name;
+  return "";
+}
 
 }  // namespace circuitous

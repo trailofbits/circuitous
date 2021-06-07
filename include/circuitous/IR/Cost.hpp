@@ -33,12 +33,12 @@ struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
     ++it->second;
   }
 
-  void VisitOperation(Operation *op) {
+  void Visit(Operation *op) {
     Process(op);
     op->Traverse(*this);
   }
 
-  void VisitOperation(LLVMOperation *op) {
+  void Visit(LLVMOperation *op) {
     Process(op);
     const auto &[it, _] = llvm_ops.try_emplace(op->llvm_op_code, 0);
     ++it->second;
@@ -46,7 +46,7 @@ struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
   }
 
   void Run(Operation *op) {
-    Visit(op);
+    Dispatch(op);
   }
 
   auto Export() { return *this; }
@@ -94,7 +94,7 @@ struct Printer {
     for (auto &[op_code, count] : self.nodes) {
       ss << " " << to_string(op_code) << " " << count << std::endl;
 
-      if (op_code == Operation::kLLVMOperation) {
+      if (op_code == LLVMOperation::kind) {
         for (auto &[llvm_op, count] : self.llvm_ops) {
           ss << "\t " << llvm::Instruction::getOpcodeName(llvm_op) << " " << count << std::endl;
         }
