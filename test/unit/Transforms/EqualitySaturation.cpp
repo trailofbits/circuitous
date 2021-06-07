@@ -7,6 +7,7 @@
  */
 
 #include <doctest/doctest.h>
+#include <numeric>
 #include <support/EGraph.hpp>
 #include <circuitous/Transforms/Pattern.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
@@ -17,8 +18,9 @@
 namespace circuitous {
 
   unsigned count_matches(auto matches) {
-    auto eclass_match_count = [] (unsigned sum, auto &eclsass_match) {
-      return sum + eclsass_match.substitutions.size();
+    auto eclass_match_count = [] (unsigned sum, auto &eclass_match) {
+      const auto &[id, matches] = eclass_match;
+      return sum + matches.size();
     };
     return std::accumulate(matches.begin(), matches.end(), unsigned(0), eclass_match_count);
   }
@@ -82,6 +84,28 @@ namespace circuitous {
 
     auto cadd = Rule("addition", "(op_add ?x (op_add 0 ?y))", "(op_add ?x ?y)");
     CHECK(count_matches(cadd.match(egraph)) == 1);
+  }
+
+  TEST_CASE("EGraph Match Same Classes")
+  {
+    using Rule = circuitous::Rule< TestGraph >;
+
+    TestGraph egraph;
+
+    auto a  = egraph.make_leaf("a");
+    auto b  = egraph.make_leaf("b");
+    egraph.make_node("add", {a, b});
+
+    auto madd = Rule("addition to mult", "(op_add ?x ?x)", "(op_mul 2 ?x)");
+    // CHECK(count_matches(madd.match(egraph)) == 0);
+
+    egraph.merge(a, b);
+    egraph.rebuild();
+
+    egraph.dump("egraph.dot");
+
+    auto m = madd.match(egraph);
+    CHECK(count_matches(m)== 1);
   }
 
 } // namespace circuitous
