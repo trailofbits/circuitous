@@ -18,20 +18,20 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
 
   max_depth -= 1u;
   switch (op->op_code) {
-    case Operation::kInputRegister : {
+    case InputRegister::kind : {
       if (auto x = dynamic_cast<InputRegister *>(op); x->reg_name == "RIP") {
         os << "I_RIP"; break;
       }
     }
-    case Operation::kConstant:
-    case Operation::kUndefined:
-    case Operation::kOutputRegister:
-    case Operation::kInputInstructionBits:
-    case Operation::kInputImmediate:
-    case Operation::kHint:
+    case Constant::kind:
+    case Undefined::kind:
+    case OutputRegister::kind:
+    case InputInstructionBits::kind:
+    case InputImmediate::kind:
+    case Hint::kind:
       os << 'V' << op->size;
       break;
-    case Operation::kLLVMOperation:
+    case LLVMOperation::kind:
       os << "(L" << op->size;
       for (auto sub_op : op->operands) {
         os << ' ';
@@ -39,12 +39,12 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       }
       os << ')';
       break;
-    case Operation::kExtract:
+    case Extract::kind:
       os << "(E" << op->size << ' ';
       PrintTopology(os, op->operands[0], max_depth, accept);
       os << ')';
       break;
-    case Operation::kConcat:
+    case Concat::kind:
       os << "(C";
       for (auto sub_op : op->operands) {
         os << ' ';
@@ -52,18 +52,18 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       }
       os << ')';
       break;
-    case Operation::kPopulationCount:
-    case Operation::kParity:
-    case Operation::kCountLeadingZeroes:
-    case Operation::kCountTrailingZeroes:
+    case PopulationCount::kind:
+    case Parity::kind:
+    case CountLeadingZeroes::kind:
+    case CountTrailingZeroes::kind:
       os << "(F" << op->size << ' ';
       PrintTopology(os, op->operands[0], max_depth, accept);
       os << ')';
       break;
-    case Operation::kRegisterCondition:
-    case Operation::kPreservedCondition:
-    case Operation::kCopyCondition:
-    case Operation::kDecodeCondition:
+    case RegisterCondition::kind:
+    case PreservedCondition::kind:
+    case CopyCondition::kind:
+    case DecodeCondition::kind:
       os << "(=";
       for (auto sub_op : op->operands) {
         os << ' ';
@@ -71,7 +71,7 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       }
       os << ')';
       break;
-    case Operation::kVerifyInstruction: {
+    case VerifyInstruction::kind: {
       os << "(&";
       std::vector<std::string> topos;
       topos.reserve(op->operands.Size());
@@ -89,7 +89,7 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       os << ')';
       break;
     }
-    case Operation::kOnlyOneCondition:
+    case OnlyOneCondition::kind:
       os << "(^";
       for (auto sub_op : op->operands) {
         os << ' ';
@@ -97,7 +97,7 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       }
       os << ')';
       break;
-    case Operation::kCircuit:
+    case Circuit::kind:
       return PrintTopology(os, op->operands[0], max_depth + 1u, accept);
   }
 }
