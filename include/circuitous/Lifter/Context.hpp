@@ -71,6 +71,13 @@ namespace circuitous {
           std::move(type), std::move(name), std::move(mut), std::move(mut_tail) );
     }
 
+    static auto type(llvm::Value *arg) {
+      const auto &[type, _, _1, _2] = parse(arg);
+      return type;
+    }
+
+    static bool is_reg(llvm::Value *arg) { return type(arg) == reg_type_; }
+
     static bool is_in_reg(llvm::Value *arg) {
       CHECK(arg->hasName());
       const auto &[type, _, mut, _1] = parse(arg);
@@ -106,7 +113,7 @@ namespace circuitous {
 
     static llvm::Argument *dual_reg(llvm::Function *fn, llvm::Value *val) {
       const auto &[type, _, _1, _2] = parse(val);
-      CHECK(type == reg_type_);
+      CHECK(type == reg_type_) << "Cannot get dual_reg from thing that is not a reg!";
 
       for (auto &arg : fn->args()) {
         CHECK(arg.hasName());
