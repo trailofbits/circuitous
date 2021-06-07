@@ -158,47 +158,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
   // Create an `size`-bit memory read.
   Operation *CreateMemoryRead(llvm::CallInst *read_call, unsigned size) {
-    LOG(FATAL) << "TODO(lukas): Pending refactor.";
-    auto &read = val_to_mem_cond[read_call];
-    if (read) {
-      verifier->AddUse(read);
-      return read->operands[ReadMemoryCondition::kHintedValue];
-    }
-
-    Hint *expected_addr = impl->Create<Hint>(arch->address_size);
-    Hint *bytes[kMaxNumBytesRead] = {};
-    for (auto i = 0u, j = 0u; i < size; i += 8u, j += 1u) {
-      bytes[j] = impl->Create<Hint>(8u);
-    }
-
-    Operation *value_read = nullptr;
-
-    const auto num_bytes = size / 8u;
-    if (1 == num_bytes) {
-      value_read = bytes[0u];
-
-    } else {
-      value_read = impl->Create<Concat>(size);
-      if (arch->MemoryAccessIsLittleEndian()) {
-        for (auto i = 0u, j = num_bytes; i < num_bytes; ++i) {
-          value_read->AddUse(bytes[--j]);
-        }
-      } else {
-        for (auto i = 0u; i < num_bytes; ++i) {
-          value_read->AddUse(bytes[i]);
-        }
-      }
-    }
-
-    read = impl->Create<ReadMemoryCondition>();
-    read->AddUse(val_to_op[read_call->getArgOperand(1u)]);
-    read->AddUse(expected_addr);
-    read->AddUse(value_read);
-
-    verifier->AddUse(read);
-
-    LOG(ERROR) << "TODO: Should set weak conditions when reading memory.";
-    return value_read;
+    // TODO(lukas): Implement.
+    LOG(FATAL) << "Not implemented";
   }
 
   static unsigned SizeFromSuffix(llvm::StringRef name) {
@@ -363,7 +324,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     if (!val_to_op.count(arg_0)) {
       Visit(call->getParent()->getParent(), arg_0);
     }
-    if (val_to_op[arg_0]->op_code == Operation::kUndefined) {
+    if (val_to_op[arg_0]->op_code == Undefined::kind) {
       return impl->Create<Undefined>(res_size);
     }
     return VisitGenericIntrinsic<T>(call, fn, res_size);
@@ -462,7 +423,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     // The condition is undefined, that means we aren't selecting either value,
     // unfortunately :-(
-    if (cond_op->op_code == Operation::kUndefined) {
+    if (cond_op->op_code == Undefined::kind) {
       op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
 
     // Condition is defined.
@@ -475,8 +436,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       CHECK_EQ(num_bits, false_op->size);
 
       // Both selected values are undefined, thus the result is undefined.
-      if (true_op->op_code == Operation::kUndefined &&
-          false_op->op_code == Operation::kUndefined) {
+      if (true_op->op_code == Undefined::kind &&
+          false_op->op_code == Undefined::kind) {
         op = true_op;
         return;
       }
@@ -486,7 +447,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
       // True side is undefined; convert it into a defined value that is not
       // the same as the False side.
-      if (true_op->op_code == Operation::kUndefined) {
+      if (true_op->op_code == Undefined::kind) {
         auto not_false_op = impl->Create<Not>(num_bits);
         not_false_op->AddUse(false_op);
 
@@ -495,7 +456,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
       // False side is undefined; convert it into a defined value that is not
       // the same as the True side.
-      } else if (false_op->op_code == Operation::kUndefined) {
+      } else if (false_op->op_code == Undefined::kind) {
         auto not_true_op = impl->Create<Not>(num_bits);
         not_true_op->AddUse(true_op);
 
@@ -527,8 +488,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     CHECK_NOTNULL(rhs_op);
 
     // Fold undefined values.
-    if (lhs_op->op_code == Operation::kUndefined ||
-        rhs_op->op_code == Operation::kUndefined) {
+    if (lhs_op->op_code == Undefined::kind ||
+        rhs_op->op_code == Undefined::kind) {
       const auto num_bits = dl.getTypeSizeInBits(val->getType());
       op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
 
@@ -550,7 +511,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     auto op0 = val_to_op[op_val];
     CHECK_NOTNULL(op0);
 
-    if (op0->op_code == Operation::kUndefined) {
+    if (op0->op_code == Undefined::kind) {
       const auto num_bits = dl.getTypeSizeInBits(val->getType());
       op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
     } else {
@@ -632,7 +593,6 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
   llvm::SmallString<128> bits;
   std::unordered_map<llvm::Value *, Operation *> val_to_op;
-  std::unordered_map<llvm::CallInst *, ReadMemoryCondition *> val_to_mem_cond;
   std::unordered_map<std::string, Constant *> bits_to_constants;
 
  private:
@@ -700,11 +660,11 @@ auto Circuit::make_circuit(
     auto arg_size = static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
     // Expected output register.
     if (Names::is_out_reg(&arg)) {
-      importer.Emplace<OutputRegister>(&arg, arg_size, Names::name(&arg).str());
+      importer.Emplace<OutputRegister>(&arg, Names::name(&arg).str(), arg_size);
       ++num_output_regs;
     // Input register.
     } else if (Names::is_in_reg(&arg)) {
-      importer.Emplace<InputRegister>(&arg, arg_size, Names::name(&arg).str());
+      importer.Emplace<InputRegister>(&arg, Names::name(&arg).str(), arg_size);
       ++num_input_regs;
     }
   }
@@ -718,7 +678,7 @@ auto Circuit::make_circuit(
 
   auto visit_context = [&](llvm::CallInst *verify_inst) {
     importer.Visit(circuit_func, verify_inst);
-    CHECK(importer.get(verify_inst)->op_code == Operation::kVerifyInstruction);
+    CHECK(importer.get(verify_inst)->op_code == VerifyInstruction::kind);
     all_verifications->AddUse(importer.get(verify_inst));
   };
   intrinsics::VerifyInst::ForAllIn(circuit_func, visit_context);
