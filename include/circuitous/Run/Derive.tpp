@@ -28,12 +28,12 @@ void Ctx_<S>::verify_cond(Operation *op) {
 /* Input/Output nodes */
 
 template<typename S>
-void IOSem<S>::VisitInputRegister(InputRegister *op) {
+void IOSem<S>::Visit(InputRegister *op) {
   CHECK(this->node_values.count(op)) << "Input register " << op->reg_name << " bits not set.";
 }
 
 template<typename S>
-void IOSem<S>::VisitInputImmediate(InputImmediate *op) {
+void IOSem<S>::Visit(InputImmediate *op) {
   CHECK(op->operands.Size() == 1)
     << "Incorrect number of operands of InputImmediate:"
     << op->operands.Size() << "!= 1";
@@ -41,34 +41,34 @@ void IOSem<S>::VisitInputImmediate(InputImmediate *op) {
 }
 
 template<typename S>
-void IOSem<S>::VisitOutputRegister(OutputRegister *op) {
+void IOSem<S>::Visit(OutputRegister *op) {
   LOG(FATAL) << "Output values should not be visited in derivation mode.";
 }
 
 template<typename S>
-void IOSem<S>::VisitInputErrorFlag(InputErrorFlag *op) {
+void IOSem<S>::Visit(InputErrorFlag *op) {
   CHECK(this->node_values.count(op)) << "InputErrorFlag bits not set.";
 }
 
 template<typename S>
-void IOSem<S>::VisitOutputErrorFlag(OutputErrorFlag *op) {
+void IOSem<S>::Visit(OutputErrorFlag *op) {
   LOG(FATAL) << "Output values should not be visited in derivation mode.";
 }
 
 template<typename S>
-void IOSem<S>::VisitInputInstructionBits(InputInstructionBits *op) {
+void IOSem<S>::Visit(InputInstructionBits *op) {
   CHECK(this->node_values.count(op)) << "Input instruction bits not set.";
 }
 
 template<typename S>
-void IOSem<S>::VisitHint(Hint *op) {
+void IOSem<S>::Visit(Hint *op) {
   LOG(FATAL) << "Output values should not be visited in derivation mode.";
 }
 
 /* Conditions */
 
 template<typename S>
-void CSem<S>::VisitDecodeCondition(DecodeCondition *op) {
+void CSem<S>::Visit(DecodeCondition *op) {
   auto decode = [&](DecodeCondition *op) {
     return this->BoolVal( self().get( op, 0 ) == self().get( op, 1 ) );
   };
@@ -76,19 +76,19 @@ void CSem<S>::VisitDecodeCondition(DecodeCondition *op) {
 }
 
 template<typename S>
-void CSem<S>::VisitRegisterCondition(RegisterCondition *op) { return this-> handle_cond(op); }
+void CSem<S>::Visit(RegisterCondition *op) { return this-> handle_cond(op); }
 
 template<typename S>
-void CSem<S>::VisitPreservedCondition(PreservedCondition *op) { return this->handle_cond(op); }
+void CSem<S>::Visit(PreservedCondition *op) { return this->handle_cond(op); }
 
 template<typename S>
-void CSem<S>::VisitCopyCondition(CopyCondition *op) { return this->handle_cond(op); }
+void CSem<S>::Visit(CopyCondition *op) { return this->handle_cond(op); }
 
 template<typename S>
-void CSem<S>::VisitHintCondition(HintCondition *op) { return this->handle_cond(op); }
+void CSem<S>::Visit(HintCondition *op) { return this->handle_cond(op); }
 
 template<typename S>
-void CSem<S>::VisitVerifyInstruction(VerifyInstruction *op) {
+void CSem<S>::Visit(VerifyInstruction *op) {
   auto verify = [&](VerifyInstruction *op) {
     auto result = this->TrueVal();
     for (auto child : op->operands) {
@@ -100,7 +100,7 @@ void CSem<S>::VisitVerifyInstruction(VerifyInstruction *op) {
 }
 
 template<typename S>
-void CSem<S>::VisitOnlyOneCondition(OnlyOneCondition *op) {
+void CSem<S>::Visit(OnlyOneCondition *op) {
   auto xor_ = [&](OnlyOneCondition *op) {
     auto result = 0u;
     for (std::size_t i = 0; i < op->operands.Size(); ++i) {

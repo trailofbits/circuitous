@@ -62,9 +62,7 @@ namespace circuitous::run {
     Spawn(Circuit *circuit_, VerifyInstruction *current_,
           const State &state_)
         : parent_t(circuit_), current(current_), state(state_)
-    {
-      init();
-    }
+    {}
 
     Spawn(const Spawn &) = default;
     Spawn(Spawn &&) = delete;
@@ -72,7 +70,7 @@ namespace circuitous::run {
     Spawn &operator=(Spawn) = delete;
 
     void SetNodeVal(Operation *op, const value_type &val) {
-      if (node_values.count(op)) {
+      if (node_values.count(op) && node_values[op].has_value()) {
         CHECK(node_values[op] == val);
         return;
       }
@@ -80,23 +78,25 @@ namespace circuitous::run {
       state.SetNodeVal(op);
     }
 
-    void Visit(Operation *op) {
+    void Dispatch(Operation *op) {
       if (state.collector.op_to_ctxs[op].count(current)) {
-        parent_t::Visit(op);
+        parent_t::Dispatch(op);
       }
     }
 
     void init() {
       parent_t::init();
 
-      for (auto hc : circuit->template Attr<HintCondition>()) {
-        // TODO(lukas): I am not sure if the following scenario propagates properly
-        //              `HintCondition(H1, A)`
-        //              `HintCondition(H1, H2)`
-        //               I am not sure that after visting the first condition the value
-        //               of H1 will propagate to H2.
-        if (state.collector.op_to_ctxs[hc].count(current)) {
-          state.blocked[hc] = 1;
+      for (auto hint : circuit->template Attr<Hint>()) {
+        if (this->node_values.count(hint)) {
+          continue;
+        }
+        if (state.collector.op_to_ctxs[hint].count(current)) {
+          for (auto user : hint->users) {
+            if (user->op_code == HintCondition::kind) {
+              state.Notify(user);
+            }
+          }
         }
       }
 
@@ -116,7 +116,7 @@ namespace circuitous::run {
         }
         if (state.collector.op_to_ctxs[oreg].count(current)) {
           for (auto user : oreg->users) {
-            if (user->op_code == Operation::kRegisterCondition) {
+            if (user->op_code == RegisterCondition::kind) {
               state.Notify(user);
             }
           }
@@ -125,9 +125,10 @@ namespace circuitous::run {
     }
 
     bool Run() {
+      init();
       while (!state.todo.empty()) {
         auto x = state.Pop();
-        Visit(x);
+        Dispatch(x);
       }
       for (auto x : current->operands) {
         LOG(INFO) << to_string(x->op_code) << " " << x->id()

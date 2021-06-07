@@ -103,9 +103,9 @@ namespace circuitous::run {
     }
 
     // Default
-    void VisitOperation(Operation *op);
+    void Visit(Operation *op);
     // Circuit
-    void VisitCircuit(Circuit *op);
+    void Visit(Circuit *op);
   };
 
   // Tags that tells us about which visits are implemented by a layer
@@ -134,21 +134,25 @@ namespace circuitous::run {
     using raw_value_type = typename Next::raw_value_type;
 
     using Next::self;
+    using Next::Visit;
     using Next::safe;
+
+
     using Next::Next;
 
     // Constant semantics
-    void VisitConstant(Constant *op);
-    void VisitUndefined(Undefined *op);
+    void Visit(Constant *op);
+    void Visit(Undefined *op);
 
     // Operations
-    void VisitConcat(Concat *op);
-    void VisitExtract(Extract *op);
-    void VisitNot(Not *op);
-    void VisitLLVMOperation(LLVMOperation *op);
-    void VisitSelect(Select *op);
-    void VisitParity(Parity *op);
-    void VisitPopulationCount(PopulationCount *op);
+    void Visit(Concat *op);
+    void Visit(Extract *op);
+    void Visit(Not *op);
+    void Visit(LLVMOperation *op);
+    void Visit(Select *op);
+    void Visit(Parity *op);
+    void Visit(PopulationCount *op);
+    void Visit(Or *op);
   };
 
   #include "Base.tpp"
@@ -157,6 +161,8 @@ namespace circuitous::run {
   struct Ctx_ : Next {
     using Next::self;
     using Next::safe;
+    using Next::Visit;
+
     using Next::Next;
 
     std::unordered_set<Operation *> supplied;
@@ -207,18 +213,21 @@ namespace circuitous::run {
 
     using Next::self;
     using Next::safe;
+    using Next::Visit;
+
     using Next::Next;
 
+
     // Input semantics
-    void VisitInputRegister(InputRegister *op);
-    void VisitInputImmediate(InputImmediate *op);
-    void VisitInputErrorFlag(InputErrorFlag *op);
-    void VisitInputInstructionBits(InputInstructionBits *op);
+    void Visit(InputRegister *op);
+    void Visit(InputImmediate *op);
+    void Visit(InputErrorFlag *op);
+    void Visit(InputInstructionBits *op);
 
     // Output semantics
-    void VisitOutputRegister(OutputRegister *op);
-    void VisitOutputErrorFlag(OutputErrorFlag *op);
-    void VisitHint(Hint *op);
+    void Visit(OutputRegister *op);
+    void Visit(OutputErrorFlag *op);
+    void Visit(Hint *op);
   };
 
   template<typename Next>
@@ -228,16 +237,19 @@ namespace circuitous::run {
 
     using Next::self;
     using Next::safe;
+    using Next::Visit;
+
     using Next::Next;
 
+
     // Condition semantics
-    void VisitDecodeCondition(DecodeCondition *op);
-    void VisitRegisterCondition(RegisterCondition *op);
-    void VisitPreservedCondition(PreservedCondition *op);
-    void VisitCopyCondition(CopyCondition *op);
-    void VisitHintCondition(HintCondition *op);
-    void VisitVerifyInstruction(VerifyInstruction *op);
-    void VisitOnlyOneCondition(OnlyOneCondition *op);
+    void Visit(DecodeCondition *op);
+    void Visit(RegisterCondition *op);
+    void Visit(PreservedCondition *op);
+    void Visit(CopyCondition *op);
+    void Visit(HintCondition *op);
+    void Visit(VerifyInstruction *op);
+    void Visit(OnlyOneCondition *op);
   };
 
   #include <circuitous/Run/Derive.tpp>
