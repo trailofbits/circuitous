@@ -14,18 +14,18 @@ namespace circuitous::run {
 
     using parent_t::parent_t;
 
-    void Visit(Operation *op) {
+    void Dispatch(Operation *op) {
       op->Traverse(*this);
       if (node_values.count(op)) {
         // Remember previous node value
         auto prev_val{GetNodeVal(op)};
         // Compute new node value
-        parent_t::Visit(op);
+        parent_t::Dispatch(op);
         // Was there a change?
         changed |= prev_val != GetNodeVal(op);
       } else {
         // We have no value. Just do it!
-        parent_t::Visit(op);
+        parent_t::Dispatch(op);
         changed = true;
       }
     }
@@ -42,7 +42,7 @@ namespace circuitous::run {
         // Evaluate verification node until fixpoint
         while (changed) {
           changed = false;
-          Visit(op);
+          Dispatch(op);
         }
         // Verification successful
         CHECK(GetNodeVal(op));
@@ -73,8 +73,6 @@ namespace circuitous::run {
       for (auto vi : circuit->Attr<VerifyInstruction>()) {
         runners.insert( std::make_pair( vi, Spawn(circuit, vi, init_state) ) );
       }
-
-      init();
     }
 
     void SetNodeVal(Operation *op, const value_type &val) {
@@ -118,6 +116,8 @@ namespace circuitous::run {
     void init() { init<Undefined, Constant>(); }
 
     bool Run() {
+      init();
+
       std::unordered_set<Spawn *> successes;
       for (auto &[_, runner] : runners) {
         if (runner.Run()) {
