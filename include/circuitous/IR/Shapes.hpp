@@ -29,12 +29,12 @@ bool IsOneOf(Operation *op) {
 
 static inline bool IsLeafNode(Operation *op) {
   switch(op->op_code) {
-    case Operation::kInputRegister:
-    case Operation::kOutputRegister:
-    case Operation::kConstant:
-    case Operation::kHint:
-    case Operation::kUndefined:
-    case Operation::kInputInstructionBits:
+    case InputRegister::kind:
+    case OutputRegister::kind:
+    case Constant::kind:
+    case Hint::kind:
+    case Undefined::kind:
+    case InputInstructionBits::kind:
       return true;
     default:
       return false;

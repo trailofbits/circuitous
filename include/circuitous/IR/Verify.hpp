@@ -55,44 +55,41 @@ struct Verifier {
   bool VerifyArity(Operation *op) {
     CHECK(op);
     switch (op->op_code) {
-      case Operation::kConstant:
-      case Operation::kUndefined:
-      case Operation::kInputRegister:
-      case Operation::kOutputRegister:
-      case Operation::kInputInstructionBits:
-      case Operation::kHint:
-      case Operation::kInputErrorFlag:
-      case Operation::kOutputErrorFlag:
+      case Constant::kind:
+      case Undefined::kind:
+      case InputRegister::kind:
+      case OutputRegister::kind:
+      case InputInstructionBits::kind:
+      case Hint::kind:
+      case InputErrorFlag::kind:
+      case OutputErrorFlag::kind:
         return Exactly(0, op);
-      case Operation::kInputImmediate:
-      case Operation::kNot:
-      case Operation::kPopulationCount:
-      case Operation::kParity:
-      case Operation::kCountLeadingZeroes:
-      case Operation::kCountTrailingZeroes:
-      case Operation::kExtract:
-      case Operation::kMemoryRead:
+      case InputImmediate::kind:
+      case Not::kind:
+      case PopulationCount::kind:
+      case Parity::kind:
+      case CountLeadingZeroes::kind:
+      case CountTrailingZeroes::kind:
+      case Extract::kind:
         return Exactly(1, op);
-      case Operation::kRegisterCondition:
-      case Operation::kPreservedCondition:
-      case Operation::kCopyCondition:
-      case Operation::kDecodeCondition:
-      case Operation::kHintCondition:
-      case Operation::kMemoryWrite:
+      case RegisterCondition::kind:
+      case PreservedCondition::kind:
+      case CopyCondition::kind:
+      case DecodeCondition::kind:
+      case HintCondition::kind:
         return Exactly(2, op);
-      case Operation::kSelect:
+      case Select::kind:
         return Exactly((1 << op->operands[0]->size) + 1, op);
-      case Operation::kConcat:
+      case Concat::kind:
         return MoreThan(2, op);
       // TODO(lukas): LLVMOperation can actually have a variety of arities, but
       //              that will be quite complicated to check here.
-      case Operation::kLLVMOperation:
-      case Operation::kVerifyInstruction:
-      case Operation::kOnlyOneCondition:
-      case Operation::kCircuit:
+      case LLVMOperation::kind:
+      case VerifyInstruction::kind:
+      case OnlyOneCondition::kind:
+      case Circuit::kind:
+      case Or::kind:
         return Not(0, op);
-      case Operation::kReadMemoryCondition:
-        return Undef(op);
       default:
         LOG(FATAL) << "Cannot verify " << op->Name();
         return false;
@@ -136,17 +133,17 @@ struct Verifier {
     std::unordered_map<Operation *, VerifyInstruction *> ctx;
     for (auto verif : circuit->Attr<VerifyInstruction>()) {
       for (auto op : verif->operands) {
-        if (op->op_code == Operation::kHintCondition) {
+        if (op->op_code == HintCondition::kind) {
           ctx[op] = verif;
 
-          if (op->operands[HintCondition::kHint]->op_code != Operation::kHint) {
+          if (op->operands[HintCondition::kFixed]->op_code != Hint::kind) {
             ss << "HINT_CHECK hint operand is not HINT";
             status = false;
           }
 
           bool found_hint = false;
           for (auto hint : op->operands) {
-            if (hint->op_code == Operation::kHint) {
+            if (hint->op_code == Hint::kind) {
               if (found_hint) {
                 _warnings << "HINT_CHECK has at least two direct HINT operands!\n";
               }
@@ -170,7 +167,7 @@ struct Verifier {
   using hint_users_t = std::unordered_map<Operation *, std::unordered_set<Operation *>>;
   void CollectHintUsers(Operation *op, hint_users_t &collected ) {
     for (auto child : op->operands) {
-      if (child->op_code == Operation::kHint) {
+      if (child->op_code == Hint::kind) {
         collected[child].insert(op);
       } else {
         CollectHintUsers(child, collected);
