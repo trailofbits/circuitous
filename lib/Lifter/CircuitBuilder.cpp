@@ -527,13 +527,14 @@ std::vector<llvm::Instruction *> Circuit0::LowerDstRegs(std::vector<llvm::Value 
 
 std::vector<llvm::Value *> Circuit0::HandleDstRegs(
     llvm::IRBuilder<> &ir,
+    llvm::Value *current_ebit,
     std::vector<llvm::Instruction *> &dst_regs, ISEL_view isel, State &state)
 {
   // Comparisons on whether or not the resulting
   // register after the semantic has executed matches the next state of that
   // register.
   std::vector<llvm::Value *> params;
-  for (auto [reg, _, expected_reg_val] : surface.reg_to_args) {
+  for (auto [reg, input_reg, expected_reg_val] : surface.reg_to_args) {
     llvm::Value *original_val = state.load(ir, reg);
     llvm::Value *reg_val = original_val;
     // We need to keep track which operand we are about to handle so we can index into
@@ -588,9 +589,12 @@ std::vector<llvm::Value *> Circuit0::HandleDstRegs(
         reg_val = ir.CreateSelect(eq, full_val, reg_val);
       }
     }
-
-    auto eq_func = intrinsics::OutputCheck::CreateFn(ctx.module(), reg_val->getType());
-    params.push_back(ir.CreateCall(eq_func, {reg_val, expected_reg_val}));
+    CHECK_NOTNULL(current_ebit);
+    CHECK_NOTNULL(input_reg);
+    CHECK_NOTNULL(reg_val);
+    // If error bit is raised we are not moving anywhere
+    auto guard = ir.CreateSelect(current_ebit, input_reg, reg_val);
+    params.push_back(intrinsics::make_outcheck(ir, {guard, expected_reg_val}));
   }
   return params;
 }
@@ -633,8 +637,12 @@ void Circuit0::InjectSemantic(
   auto [ebit_in, ebit_out] = surface.fetch_ebits();
   auto current_err = err::synthesise_current(ir, begin, end);
   if (!current_err) {
+    // This instruction cannot raise error bit -> input error bit
+    // cannot be set.
     params.push_back(ir.CreateICmpEQ(ebit_in, ir.getFalse()));
+    current_err = ir.getFalse();
   } else {
+    // Error bit is saturated, so we need to `or` input and current.
     current_err = ir.CreateOr(ebit_in, current_err);
   }
   params.push_back(intrinsics::make_outcheck(ir, {ebit_in, ebit_out}));
@@ -657,7 +665,7 @@ void Circuit0::InjectSemantic(
   auto dst_regs = LowerDstRegs(dst_intrinsics);
   // LowerDstRegs may have added some instructions.
   ir.SetInsertPoint(inst_block);
-  auto additional_checks = HandleDstRegs(ir, dst_regs, isel, state);
+  auto additional_checks = HandleDstRegs(ir, current_err, dst_regs, isel, state);
   params.insert(params.end(), additional_checks.begin(), additional_checks.end());
 
   // Call the instruction verification function. This returns `1` iff we
