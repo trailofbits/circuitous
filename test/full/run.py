@@ -13,6 +13,7 @@ import tools.tc as TC
 
 import simple
 import basic
+import ebit_test
 import tools.model_test as mp
 
 circuitous_prefix = os.environ.get("CIRCUITOUS_BUILD_DIR", "../../build")
@@ -149,11 +150,13 @@ class Interpret(SimulateCWDMixin):
 
   def run_case(self, case, ir, parent):
     args = [self.binary,
-            "--derive",
+            case.run_mode,
             "--log_dir", self.test_dir,
             "--singular_current", case.input.as_json_file(case.name, self.test_dir),
             "--export_derived", self.locate(case.name + ".result.json"),
             "--ir_in", ir]
+    if case.run_mode == '--verify':
+      args += [ "--singular_next", case.expected.as_json_file(case.name + "next", self.test_dir)]
     if dbg_verbose:
       args += ["--dot_out", self.locate(case.name + ".result.dot")]
       args += ["--logtostderr"]
@@ -208,7 +211,10 @@ class Comparator(SimulateCWDMixin):
   def compare(self, tc):
     out = {}
     for case in tc.cases:
-      accept, msg = self.compare_case(case.input, case.simulated, case.expected)
+      if case.run_mode == "--verify":
+        accept, msg = self.compare_verify(case.input, case.simulated, case.expected)
+      else:
+        accept, msg = self.compare_case(case.input, case.simulated, case.expected)
       out[case.name] = TestResult(TestResult.ok if accept else TestResult.fail, msg)
       if not out[case.name]:
         msg = out[case.name].msg
@@ -224,6 +230,15 @@ class Comparator(SimulateCWDMixin):
         out[case.name].msg = msg
     return out
 
+  def compare_verify(self, input, after, expected):
+    assert not after, after.registers
+    assert after._ebit is None
+    if expected.result == after.result:
+      return True, ""
+    if expected.result:
+      return False, "Should accept, but did not."
+    return False, "Should not accept, but did."
+
   def compare_case(self, input, after, expected):
     accept = True
     message = ""
@@ -235,6 +250,10 @@ class Comparator(SimulateCWDMixin):
         accept = False
         message += "Register " + reg + " (expected != actual): " + \
                    hex(e_val) + " != " + hex(val) + "\n"
+
+    if after._ebit != expected._ebit:
+      accept =  False
+      message += "ebits do not match"
 
     skipped = []
     for reg in expected.registers.keys():
@@ -376,6 +395,8 @@ def fetch_test(sets):
   for x in simple.circuitous_tests:
     result.update(x)
   for x in basic.circuitous_tests:
+    result.update(x)
+  for x in ebit_test.circuitous_tests:
     result.update(x)
   return result
 
