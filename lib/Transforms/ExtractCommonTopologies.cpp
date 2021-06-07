@@ -98,10 +98,10 @@ struct ECT {
     for (auto [op, verifications] : op_uses) {
       (void) verifications;
       switch (op->op_code) {
-        case Operation::kInputRegister:
-        case Operation::kInputImmediate:
-        case Operation::kHint:
-        case Operation::kConstant: break;
+        case InputRegister::kind:
+        case InputImmediate::kind:
+        case Hint::kind:
+        case Constant::kind: break;
         default: all_leaves = false; break;
       }
     }
@@ -221,7 +221,7 @@ struct ECT {
     for (auto verification : circuit->Attr<VerifyInstruction>()) {
       for (auto op : verification->operands) {
         if (IsOneOf<RegisterCondition, HintCondition>(op)) {
-          auto value = op->operands[RegisterCondition::kDynamicRegisterValue];
+          auto value = op->operands[RegisterCondition::kDynamic];
 
           // NOTE(pag): Here we exclude "trivial" transitions, i.e. where the
           //            transition value is a single thing and not actually
@@ -458,7 +458,7 @@ struct HintCheckReduce {
   // `HINT_CHECK( H0, H1 ), HINT_CHECK( H1, H2 ), ... HINT_CHECK( Hn, A )`
   // return `A`.
   Operation *Traverse(Operation *hint_check, Operation *ctx) {
-      auto dyn_val = hint_check->operands[HintCondition::kDynamicValue];
+      auto dyn_val = hint_check->operands[HintCondition::kDynamic];
       if (!Is<Hint>(dyn_val)) {
         return dyn_val;
       }
@@ -475,12 +475,12 @@ struct HintCheckReduce {
   Operation *HintCheckEnd(Operation *hint) {
     for (auto user : hint->users) {
       LOG(INFO) << print::FullNames().Hash(user);
-      if (user->op_code == Operation::kHintCondition &&
-          Is<Hint>(user->operands[HintCondition::kDynamicValue])) {
+      if (user->op_code == HintCondition::kind &&
+          Is<Hint>(user->operands[HintCondition::kDynamic])) {
         CHECK(user->users.size() == 1);
         if (auto dyn_val = Traverse(user, user->users[0])) {
           LOG(INFO) << "Actually setting something";
-          user->ReplaceUse(dyn_val, HintCondition::kDynamicValue);
+          user->ReplaceUse(dyn_val, HintCondition::kDynamic);
         }
       }
     }
