@@ -52,13 +52,8 @@ namespace {
 
 }  // namespace
 
-
 const uint32_t LLVMOperation::kInvalidLLVMPredicate =
     static_cast<uint32_t>(llvm::CmpInst::BAD_ICMP_PREDICATE);
-
-Operation::Operation(unsigned op_code_, unsigned size_)
-    : op_code(op_code_),
-      size(size_) {}
 
 bool Operation::Equals(const Operation *that) const {
   if (this == that) {
@@ -79,13 +74,13 @@ bool Operation::Equals(const Operation *that) const {
   return true;
 }
 
-std::string Operation::Name(void) const {
-  return to_string(op_code);
+std::string Operation::Name() const {
+  LOG(FATAL) << op_code << " does not provide Name() method override.";
 }
 
 LLVMOperation::LLVMOperation(unsigned llvm_opcode_, unsigned llvm_predicate_,
                              unsigned size_)
-    : Operation(Operation::kLLVMOperation, size_),
+    : Operation(size_, LLVMOperation::kind),
       llvm_op_code(llvm_opcode_),
       llvm_predicate(llvm_predicate_) {}
 
@@ -99,7 +94,7 @@ LLVMOperation::LLVMOperation(llvm::Instruction *inst)
     return ss.str(); \
   }
 
-std::string LLVMOperation::Name(void) const {
+std::string LLVMOperation::Name() const {
   std::stringstream ss;
   ss << "LLVM_" << llvm::Instruction::getOpcodeName(llvm_op_code);
   if (llvm_predicate != LLVMOperation::kInvalidLLVMPredicate) {
@@ -146,9 +141,7 @@ bool LLVMOperation::Equals(const Operation *that_) const {
   return this->Operation::Equals(that_);
 }
 
-STREAM_NAME(Undefined, "UNDEF_" << size)
-
-std::string Constant::Name(void) const {
+std::string Constant::Name() const {
   std::stringstream ss;
   ss << "CONST_" << size << "_";
   for (auto i = 0U; i < size; ++i) {
@@ -164,15 +157,6 @@ bool Constant::Equals(const Operation *that_) const {
   return this->Operation::Equals(that_);
 }
 
-std::string BitOperation::Name(void) const {
-  if (this->operands.size() == 0) {
-    return StreamName(to_string(this->op_code), "_", "IS_INVALID");
-  }
-  return StreamName(to_string(op_code), "_", this->operands[0]->size);
-}
-
-STREAM_NAME(Extract, "EXTRACT_" << high_bit_exc << "_" << low_bit_inc)
-
 bool Extract::Equals(const Operation *that_) const {
   if (this == that_) {
     return true;
@@ -185,79 +169,10 @@ bool Extract::Equals(const Operation *that_) const {
   return this->Operation::Equals(that_);
 }
 
-std::string Parity::Name() const {
-  CHECK(operands.size() != 0);
-  return StreamName(to_string(this->op_code), "_", operands[0]-size);
-}
-
-STREAM_NAME(ReadMemoryCondition, "CHECK_MEM_READ_ADDR_" << operands[0]->size)
-
-STREAM_NAME(InputImmediate, "INPUT_IMMEDIATE_" << size)
 bool InputImmediate::Equals(const Operation *other) const {
   return this->Operation::Equals(other);
 }
 
-
-STREAM_NAME(InputRegister, "INPUT_REGISTER_" << reg_name << "_" << size)
-bool InputRegister::Equals(const Operation *that_) const {
-  return RegEquals<InputRegister>(*this, that_);
-}
-
-STREAM_NAME(OutputRegister, "OUTPUT_REGISTER_" << reg_name << "_" << size)
-bool OutputRegister::Equals(const Operation *that_) const {
-  return RegEquals<OutputRegister>(*this, that_);
-}
-
-std::string RegisterCondition::Name() const {
-  CHECK_EQ(operands.size(), 2);
-  auto out_reg = operands[kOutputRegister];
-  return StreamName(to_string(this->op_code), "_", out_reg->Name(), "_", out_reg->size);
-}
-
-STREAM_NAME(HintCondition, "HINT_CHECK_" << operands[kHint]->size)
-
-STREAM_NAME(
-    PreservedCondition,
-    "PRESERVED_REGISTER_CHECK_"
-        << dynamic_cast<OutputRegister *>(operands[kOutputRegister])->reg_name
-        << "_" << operands[kOutputRegister]->size)
-
-STREAM_NAME(
-    CopyCondition,
-    "COPIED_REGISTER_CHECK_"
-        << dynamic_cast<OutputRegister *>(operands[kOutputRegister])->reg_name
-        << "_" << operands[kOutputRegister]->size)
-
-STREAM_NAME(Hint, "HINT_" << size)
-
-STREAM_NAME(InputInstructionBits, "INSTRUCTION_BITS_" << size)
-
-std::string DecodeCondition::Name() const {
-  auto suffix = (operands.size()) ? std::to_string(operands[0]->size) : "NO_OPS";
-  return StreamName(to_string(this->op_code), "_", suffix);
-}
-
-STREAM_NAME(VerifyInstruction, "ALL_OF_" << operands.size())
-
-STREAM_NAME(OnlyOneCondition, "ONE_OF_" << operands.size())
-
-std::string MemoryOp::Name() const {
-  return StreamName(to_string(this->op_code), "_", std::to_string(byte_count));
-}
-
-std::string Select::Name() const {
-  return StreamName(to_string(this->op_code), "_", std::to_string(bits));
-}
-
-std::string ErrorFlag::Name() const {
-  return StreamName(to_string(this->op_code));
-}
-
-Circuit::~Circuit(void) {
-  // TODO(lukas): Maybe somethign is needed here?
-}
-
-Circuit::Circuit(void)
-    : Condition(Operation::kCircuit) {}
+Circuit::Circuit() : Operation(1u, Circuit::kind)  {}
 
 }  // namespace circuitous
