@@ -50,7 +50,7 @@ bool MergeByBytes(Circuit *circuit) {
   for (auto verif : circuit->Attr<VerifyInstruction>()) {
     std::unordered_set<Operation *> decodes;
     for (auto decode : verif->operands) {
-      if (decode->op_code == Operation::kDecodeCondition) {
+      if (decode->op_code == DecodeCondition::kind) {
         decodes.insert(decode);
       }
     }
