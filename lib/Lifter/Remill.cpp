@@ -306,6 +306,10 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     return VisitGenericIntrinsic<Select>(call, fn, bits, size);
   }
 
+  Operation *VisitOrIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
+    return VisitGenericIntrinsic<Or>(call, fn);
+  }
+
   Operation *VisitConcat(llvm::CallInst *call, llvm::Function *fn) {
     auto args = CallArgs(call);
     if (args.size() == 1) {
@@ -385,6 +389,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
     if (intrinsics::HintCheck::IsIntrinsic(fn)) {
       return VisitHintCheckIntrinsics(call, fn);
+    }
+    if (intrinsics::Or::IsIntrinsic(fn)) {
+      return VisitOrIntrinsic(call, fn);
     }
     LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(call);
   }
