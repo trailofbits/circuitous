@@ -10,31 +10,31 @@ void Base_<S>::SetNodeVal(Operation *op, const value_type &val) {
 template<typename S>
 auto Base_<S>::GetNodeVal(Operation *op) const -> value_type {
   auto iter{this->node_values.find(op)};
-  CHECK(iter != this->node_values.end());
+  CHECK(iter != this->node_values.end()) << op->Name();
   return iter->second;
 }
 
 template<typename S>
-void Base_<S>::VisitOperation(Operation *op) {
+void Base_<S>::Visit(Operation *op) {
   LOG(FATAL) << "Unhandled operation: " << op->Name() << " " << op->id();
 }
 
 template<typename S>
-void OpSem<S>::VisitConstant(Constant *op) {
+void OpSem<S>::Visit(Constant *op) {
   std::string bits{op->bits.rbegin(), op->bits.rend()};
   self().SetNodeVal(op, llvm::APInt(op->size, bits, /*radix=*/2U));
 }
 
 template<typename S>
-void OpSem<S>::VisitUndefined(Undefined *op) {
-  // TODO(surovic): See VisitOutputRegister()
+void OpSem<S>::Visit(Undefined *op) {
+  // TODO(surovic): See Visit()
   if (!this->node_values.count(op)) {
     self().SetNodeVal(op, this->Undef());
   }
 }
 
 template<typename S>
-void OpSem<S>::VisitExtract(Extract *op) {
+void OpSem<S>::Visit(Extract *op) {
   auto extract = [&](Extract *op) {
     auto pos{ op->low_bit_inc };
     auto num{ op->high_bit_exc - pos };
@@ -46,7 +46,7 @@ void OpSem<S>::VisitExtract(Extract *op) {
 // TODO(lukas): Some non-align cases most likely need some extra handling
 //              which is currently not happening? Investigate.
 template<typename S>
-void OpSem<S>::VisitConcat(Concat *op) {
+void OpSem<S>::Visit(Concat *op) {
 
   auto concat = [&](Concat *op) {
     llvm::APInt build{ op->size, 0, false };
@@ -61,7 +61,7 @@ void OpSem<S>::VisitConcat(Concat *op) {
 }
 
 template<typename S>
-void OpSem<S>::VisitNot(Not *op) {
+void OpSem<S>::Visit(Not *op) {
 
   auto negate = [&](Not *op) {
     // NOTE(lukas): To avoid confusion the copy is here explicitly, since `negate` does
@@ -74,7 +74,7 @@ void OpSem<S>::VisitNot(Not *op) {
 }
 
 template<typename S>
-void OpSem<S>::VisitLLVMOperation(LLVMOperation *op) {
+void OpSem<S>::Visit(LLVMOperation *op) {
 
   auto lhs = [&](){ return *self().GetNodeVal(op->operands[0]); };
   auto rhs = [&](){ return *self().GetNodeVal(op->operands[1]); };
@@ -135,7 +135,7 @@ void OpSem<S>::VisitLLVMOperation(LLVMOperation *op) {
 }
 
 template<typename S>
-void OpSem<S>::VisitSelect(Select *op) {
+void OpSem<S>::Visit(Select *op) {
   auto select = [&](Select *op) {
     auto selector = self().get( ( *op )[ 0 ] );
     return self().get( ( *op )[ selector->getLimitedValue() + 1 ] );
@@ -144,7 +144,7 @@ void OpSem<S>::VisitSelect(Select *op) {
 }
 
 template<typename S>
-void OpSem<S>::VisitParity(Parity *op) {
+void OpSem<S>::Visit(Parity *op) {
   auto parity = [&](Parity *op) {
     return llvm::APInt(1, self().get( op, 0 )->countPopulation() % 2 );
   };
@@ -152,7 +152,7 @@ void OpSem<S>::VisitParity(Parity *op) {
 }
 
 template<typename S>
-void OpSem<S>::VisitPopulationCount(PopulationCount *op) {
+void OpSem<S>::Visit(PopulationCount *op) {
   auto popcount = [&](PopulationCount *op) {
     return llvm::APInt(op->size, self().get(op, 0)->countPopulation());
   };
@@ -160,7 +160,20 @@ void OpSem<S>::VisitPopulationCount(PopulationCount *op) {
 }
 
 template<typename S>
-void Base_<S>::VisitCircuit(Circuit *op) {
+void OpSem<S>::Visit(Or *op) {
+  auto or_ = [&](Or *or_) {
+    for (const auto &child : or_->operands) {
+      if (self().get(child) == this->TrueVal()) {
+        return this->TrueVal();
+      }
+    }
+    return this->FalseVal();
+  };
+  return safe(op, or_);
+}
+
+template<typename S>
+void Base_<S>::Visit(Circuit *op) {
   self().SetNodeVal(op, self().GetNodeVal(op->operands[0]));
 }
 
