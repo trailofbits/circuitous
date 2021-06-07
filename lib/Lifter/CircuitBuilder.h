@@ -186,6 +186,7 @@ struct Circuit0 {
     std::vector<llvm::Instruction *> LowerDstRegs(std::vector<llvm::Value *> &dsts);
     std::vector<llvm::Value *> HandleDstRegs(
         llvm::IRBuilder<> &ir,
+        llvm::Value *current_ebit,
         std::vector<llvm::Instruction *> &dst_regs,
         ISEL_view isel,
         State &state);
