@@ -5,11 +5,15 @@
 #pragma once
 
 
+#include <algorithm>
 #include <cstddef>
 #include <functional>
 #include <iterator>
 #include <map>
+#include <set>
+#include <memory>
 #include <optional>
+#include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -25,13 +29,59 @@ namespace circuitous {
   struct Rule
   {
     using Id = typename Graph::Id;
-
-    using Place = typename Pattern::Place;
-    using PlaceHasher = PlaceHasher< Place >;
+    using Place = ASTNode::Place;
 
     // substitution mapping from places (variables) to equality classes
-    using Substitution = std::unordered_map<Place, Id, PlaceHasher>;
-    using Substitutions = std::vector< Substitution >;
+    struct Substitution
+    {
+      using value_type = std::pair< Id, bool >;
+
+      Substitution(size_t size) : _mapping(size, 0) , _matched(size, false) {}
+
+      bool test(size_t idx) const
+      {
+        return _matched[idx];
+      }
+
+      void set(size_t idx, Id id)
+      {
+        _matched[idx] = true;
+        _mapping[idx] = id;
+      }
+
+      bool try_set(Place place, Id id)
+      {
+        auto idx = place.ref();
+        if (!test(idx))
+          return false;
+        set(idx, id);
+        return true;
+      }
+
+      Id id(size_t idx) const
+      {
+        assert(test(idx));
+        return _mapping[idx];
+      }
+
+      size_t size() const { return _mapping.size(); }
+
+      value_type get(size_t idx) const
+      {
+        return { _mapping[idx], _matched[idx] };
+      }
+
+      friend bool operator<(const Substitution &a, const Substitution &b)
+      {
+        return std::tie(a._mapping, a._matched) < std::tie(b._mapping, b._matched);
+      }
+
+    private:
+      std::vector< Id > _mapping;
+      std::vector< bool > _matched;
+    };
+
+    using Substitutions = std::set< Substitution >;
 
     // Result of matched nodes rooting in the given equality class
     using EClassMatch = std::pair< Id, Substitutions >;
@@ -43,14 +93,14 @@ namespace circuitous {
 
     struct EGraphMatcher
     {
-      using PatternNode = typename Pattern::ASTNodePtr;
+      using PatternNode = ASTNodePtr;
       using ENode = typename Graph::ENode;
       using EClass = typename Graph::EClass;
       using Id = typename Graph::Id;
 
-      using constant_t = typename Pattern::Constant;
-      using place_t    = typename Pattern::Place;
-      using op_t       = typename Pattern::Op;
+      using Constant = ASTNode::Constant;
+      using Place    = ASTNode::Place;
+      using Op       = ASTNode::Op;
 
       EGraphMatcher(const Graph &egraph, const Pattern &pattern)
         : _egraph(egraph), _pattern(pattern)
@@ -62,12 +112,13 @@ namespace circuitous {
 
       using MatchResult = std::optional< Substitutions >;
 
-      static MatchResult empty_match(bool is_matched)
+      MatchResult empty_match(bool is_matched)
       {
         if (is_matched)
-          return Substitutions{};
+          return Substitutions{Substitution(_pattern.places)};
         return std::nullopt;
       }
+
       static MatchResult unmatched() { return std::nullopt; }
 
       MatchResult match(const EClass &eclass) { return match(eclass, _pattern.value); }
@@ -75,15 +126,14 @@ namespace circuitous {
       MatchResult match(const EClass &eclass, const PatternNode &pattern)
       {
         // performs union of all matches on the root nodes in the given eclass
-        // TODO(Heno): maybe we may have duplicits and we need to filter them out
         MatchResult result = unmatched();
         for (const auto *node : eclass.nodes) {
           if (auto &&subs = match(node, pattern)) {
+            // TODO(Heno): check all places are matched
             if (!result)
               result = std::move(subs);
             else
-              result->insert(result->end(), std::make_move_iterator(subs->begin())
-                                          , std::make_move_iterator(subs->end()));
+              result->merge(std::move(subs.value()));
           }
         }
         return result;
@@ -92,18 +142,19 @@ namespace circuitous {
       MatchResult match_one(const ENode *root, const PatternNode &pattern)
       {
         return std::visit( overloaded {
-          [&] (const constant_t &con) -> MatchResult {
+          [&] (const Constant &con) -> MatchResult {
             if (auto node_con = root->constant())
               return empty_match(node_con == con);
             return unmatched();
           },
-          [&] (const place_t &plc) -> MatchResult {
+          [&] (const Place &plc) -> MatchResult {
             auto id = _egraph.find(root);
-            Substitution sub{{plc, id}};
+            Substitution sub( _pattern.places );
+            sub.set(plc.ref(), id);
             return Substitutions{sub};
           },
-          [&] (const op_t &op) -> MatchResult {
-            return empty_match(root->name() == op.name);
+          [&] (const Op &op) -> MatchResult {
+            return empty_match(root->name() == op);
           },
           [&] (const auto&) -> MatchResult { return unmatched(); /* unsupported kind */ },
         }, pattern->value );
@@ -117,16 +168,14 @@ namespace circuitous {
 
         if (pattern->children.empty())
           return head;
-        // // TODO(Heno) match size
 
-        // match children
-        std::vector< Substitutions > results;
+        std::vector< Substitutions > children;
 
         auto child = root->children.begin();
         for (const auto &node : pattern->children) {
           auto child_class = _egraph.eclass(*child);
           if (auto &&sub = match(child_class, node)) {
-            results.push_back(std::move(sub.value()));
+            children.push_back(std::move(sub.value()));
           } else {
             return unmatched();
           }
@@ -135,7 +184,7 @@ namespace circuitous {
 
         Substitutions product = head.value();
         // make product of all matches from all children
-        for (auto &&child : results) {
+        for (auto &&child : children) {
           if (child.empty())
             continue;
 
@@ -149,15 +198,17 @@ namespace circuitous {
             std::optional< Substitution > partial;
             // make product of all alternatives with all alreadz processed children
             for (const auto &matched : product) {
-              for (const auto &[plc, id] : substitution) {
-                // we need to check whether matches between children do not conflict
-                auto found = matched.find(plc);
-                // match not yet present
-                if (found == matched.end()) {
+              for (size_t idx = 0; idx < substitution.size(); ++idx) {
+                auto [id, set] = substitution.get(idx);
+                if (!set)
+                  continue;
+                // check whether matches between children do not conflict
+                // placeholder no yet matched
+                if (!matched.test(idx)) {
                   partial = matched;
-                  partial->emplace(plc, id);
-                // already matched && does not conflict with other children match
-                } else if (found->second == id) {
+                  partial->set(idx, id);
+                // already matched and does not conflict with other children match
+                } else if (matched.id(idx) == id) {
                   partial = matched;
                 }
                 // otherwise we skip match
@@ -165,13 +216,11 @@ namespace circuitous {
             }
 
             if (partial.has_value())
-              next.push_back(std::move(partial.value()));
+              next.insert(std::move(partial.value()));
           }
           std::swap(product, next);
         }
 
-        // std::cout << "merged alternatives\n";
-        // print_substitutions(product, std::cout);
         return product;
       }
 
@@ -183,10 +232,9 @@ namespace circuitous {
           out << "empty substitutions\n";
         for (const auto &sub : substitutions) {
           out << "alternative " << i++ << '\n';
-          if (sub.empty())
-            out << "empty\n";
-          for (const auto &[place, id] : sub) {
-            out << place.name << " -> " << id << '\n';
+          for (size_t i = 0; i < sub.size(); ++i) {
+            if (sub.test(i))
+              out << i << " -> " << sub.id(i) << '\n';
           }
         }
       }
@@ -194,8 +242,6 @@ namespace circuitous {
     private:
       const Graph &_egraph;
       const Pattern &_pattern;
-
-      //std::unordered_map< Place, Id, PlaceHasher > _matched_places;
     };
 
     struct Matcher
