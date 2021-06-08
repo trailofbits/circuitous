@@ -97,15 +97,12 @@ namespace circuitous {
     egraph.make_node("add", {a, b});
 
     auto madd = Rule("addition to mult", "(op_add ?x ?x)", "(op_mul 2 ?x)");
-    // CHECK(count_matches(madd.match(egraph)) == 0);
+    CHECK(count_matches(madd.match(egraph)) == 0);
 
     egraph.merge(a, b);
     egraph.rebuild();
 
-    egraph.dump("egraph.dot");
-
-    auto m = madd.match(egraph);
-    CHECK(count_matches(m)== 1);
+    CHECK(count_matches(madd.match(egraph)) == 1);
   }
 
 } // namespace circuitous
