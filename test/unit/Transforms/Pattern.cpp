@@ -7,6 +7,7 @@
  */
 
 #include <doctest/doctest.h>
+#include <support/EGraph.hpp>
 #include <circuitous/Transforms/Pattern.hpp>
 #include <optional>
 #include <variant>
@@ -66,5 +67,15 @@ namespace circuitous {
     CHECK(fails(parser, "())"));
 
     CHECK(fails(parser, "5val"));
+  }
+
+  TEST_CASE("Pattern Places") {
+    using Places = Pattern::Places;
+    CHECK(Pattern("?x").places == Places{ {"x"} });
+    CHECK(Pattern("(op_mul ?x ?y)").places == Places{ {"x"}, {"y"} });
+    CHECK(Pattern("(op_mul ?x ?x)").places == Places{ {"x"} });
+    CHECK(Pattern("(?x ?y ?z)").places == Places{ {"x"}, {"y"}, {"z"} });
+    CHECK(Pattern("(op_add (op_mul 1 ?x) ?y)").places == Places{ {"x"}, {"y"} });
+    CHECK(Pattern("(op_add (op_mul 1 ?x) ?x)").places == Places{ {"x"} });
   }
 } // namespace circuitous
