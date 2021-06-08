@@ -21,24 +21,9 @@
 
 namespace circuitous {
 
-  template< typename Place >
-  struct PlaceHasher
-  {
-    std::size_t operator()(const Place &plc) const
-    {
-      return std::hash<std::string>()(plc.name);
-    }
-  };
-
-  // Substitution(const place_t &plc, Id id)
-  // {
-  //   mapping.emplace(plc, id);
-  // }
-
   template< typename Graph >
   struct Rule
   {
-    using Pattern = Pattern< Graph >;
     using Id = typename Graph::Id;
 
     using Place = typename Pattern::Place;
