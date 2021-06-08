@@ -11,12 +11,14 @@
 #include <circuitous/Transforms/Pattern.hpp>
 #include <optional>
 #include <variant>
+#include "circuitous/IR/IR.h"
 
-namespace circuitous {
+namespace circuitous::eqsat {
 
-  using Parser = PatternParser<int>;
-  using Place = Parser::Place;
-  using Op = Parser::Op;
+  using Parser = PatternParser;
+  using Constant = ASTNode::Constant;
+  using Place    = ASTNode::Place;
+  using Op       = ASTNode::Op;
 
   template< typename T, typename Parsed  >
   T get(const Parsed &node)
@@ -29,14 +31,15 @@ namespace circuitous {
   {
     return get< T, Parsed, Is... >(val->children[I]);
   }
+
   template< typename T, unsigned ...Indices >
-  T parse(const Parser &p, std::string_view str)
+  T parse(Parser &p, std::string_view str)
   {
     auto val = p.parse(str);
     return get< T, decltype(val), Indices... >(val);
   }
 
-  bool fails(const Parser &parser, std::string_view str)
+  bool fails(Parser &parser, std::string_view str)
   {
     return parser.parse(str) == nullptr;
   }
@@ -44,20 +47,30 @@ namespace circuitous {
   TEST_CASE("Pattern Simple Parse") {
     Parser parser;
 
-    CHECK(parse< int >(parser, "5") == 5);
-    CHECK(parse< int >(parser, "-15") == -15);
+    CHECK(parse< Constant >(parser, "5") == 5);
+    CHECK(parse< Constant >(parser, "-15") == -15);
 
-    CHECK(parse< Op >(parser, "(op_add 1 2)").name == "add");
-    CHECK(parse< int, 0 >(parser, "(op_add 1 2)") == 1 );
-    CHECK(parse< int, 1 >(parser, "(op_add 1 2)") == 2 );
+    CHECK(parse< Op >(parser, "(op_add 1 2)") == "add");
+    auto a = parse< Constant, 0 >(parser, "(op_add 1 2)");
+    CHECK(a == 1);
+    auto b = parse< Constant, 1 >(parser, "(op_add 1 2)");
+    CHECK(b == 2);
 
-    CHECK(parse< Place >(parser, "?x").name == "x");
+    CHECK(parse< Place >(parser, "?x") == 0);
 
-    CHECK(parse< Op >(parser, "(op_add (op_mul 1 ?x) 3)").name == "add" );
-    CHECK(parse< Op, 0 >(parser, "(op_add (op_mul 1 ?x) 3)").name == "mul" );
-    CHECK(parse< int, 0, 0 >(parser, "(op_add (op_mul 1 ?x) 3)") == 1 );
-    CHECK(parse< Place, 0, 1 >(parser, "(op_add (op_mul 1 ?x) 3)").name == "x" );
-    CHECK(parse< int, 1 >(parser, "(op_add (op_mul 1 ?x) 3)") == 3 );
+    CHECK(parse< Op >(parser, "(op_add (op_mul 1 ?x) 3)") == "add" );
+
+    auto c = parse< Op, 0 >(parser, "(op_add (op_mul 1 ?x) 3)");
+    CHECK(c == "mul");
+
+    auto d = parse< Constant, 0, 0 >(parser, "(op_add (op_mul 1 ?x) 3)");
+    CHECK(d == 1);
+
+    auto e = parse< Place, 0, 1 >(parser, "(op_add (op_mul 1 ?x) 3)");
+    CHECK(e == 0);
+
+    auto f = parse< Constant, 1 >(parser, "(op_add (op_mul 1 ?x) 3)");
+    CHECK(f == 3);
 
     CHECK(fails(parser, "?-7"));
     CHECK(fails(parser, "?7"));
@@ -71,11 +84,12 @@ namespace circuitous {
 
   TEST_CASE("Pattern Places") {
     using Places = Pattern::Places;
-    CHECK(Pattern("?x").places == Places{ {"x"} });
-    CHECK(Pattern("(op_mul ?x ?y)").places == Places{ {"x"}, {"y"} });
-    CHECK(Pattern("(op_mul ?x ?x)").places == Places{ {"x"} });
-    CHECK(Pattern("(?x ?y ?z)").places == Places{ {"x"}, {"y"}, {"z"} });
-    CHECK(Pattern("(op_add (op_mul 1 ?x) ?y)").places == Places{ {"x"}, {"y"} });
-    CHECK(Pattern("(op_add (op_mul 1 ?x) ?x)").places == Places{ {"x"} });
+    CHECK(Pattern("?x").places == 1);
+    CHECK(Pattern("(op_mul ?x ?y)").places == 2);
+    CHECK(Pattern("(op_mul ?x ?x)").places == 1);
+    CHECK(Pattern("(?x ?y ?z)").places == 3);
+    CHECK(Pattern("(op_add (op_mul 1 ?x) ?y)").places == 2);
+    CHECK(Pattern("(op_add (op_mul 1 ?x) ?x)").places == 1);
   }
-} // namespace circuitous
+
+} // namespace circuitous::eqsat
