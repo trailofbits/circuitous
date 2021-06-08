@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <circuitous/Util/StrongType.h>
 
 #include <algorithm>
 #include <cctype>
@@ -11,7 +12,6 @@
 #include <vector>
 #include <optional>
 #include <variant>
-#include <list>
 #include <string>
 #include <charconv>
 #include <string_view>
@@ -19,43 +19,45 @@
 
 namespace circuitous {
 
-  template< typename Constant_ >
-  struct PatternParser
+  struct ASTNode;
+  using ASTNodePtr = std::unique_ptr< ASTNode >;
+
+  struct ASTNode
   {
+    struct constant_tag;
+    using Constant = strong_type< int64_t, constant_tag >;
 
-    using Constant = Constant_;
-    using Name = std::string;
-    struct Place
-    {
-      Place(std::string name) : name(std::move(name)) {}
+    struct placeholder_tag;
+    using Place = strong_type< size_t, placeholder_tag >;
 
-      bool operator==(const Place &) const = default;
+    struct name_tag;
+    using Name = strong_type< std::string, name_tag >;
 
-      std::string name;
-    };
+    struct op_tag;
+    using Op = strong_type< std::string, op_tag >;
 
-    struct Op
-    {
-      Op(std::string name) : name(std::move(name)) {}
-
-      bool operator==(const Op &) const = default;
-
-      std::string name;
-    };
+    using Places = std::vector< ASTNode::Place >;
 
     using Value = std::variant< Constant, Op, Name, Place >;
 
-    struct ASTNode;
-    using ASTNodePtr = std::unique_ptr< ASTNode >;
+    ASTNode(const Value &value) : value(value) {}
+    ASTNode(Value &&value) : value(std::move(value)) {}
 
-    struct ASTNode
-    {
-      ASTNode(const Value &value) : value(value) {}
-      ASTNode(Value &&value) : value(value) {}
+    Value value;
+    std::vector< ASTNodePtr > children;
+  };
 
-      Value value;
-      std::vector< ASTNodePtr > children;
-    };
+  template< typename Kind, typename ...Args >
+  ASTNodePtr make_node( Args && ...args )
+  {
+    return std::make_unique< ASTNode >( Kind( std::forward<Args>(args)... ) );
+  }
+
+  struct PatternParser
+  {
+    using Constant = ASTNode::Constant;
+    using Place    = ASTNode::Place;
+    using Op       = ASTNode::Op;
 
     using ParseResult = std::pair< ASTNodePtr, std::string_view >;
 
@@ -78,21 +80,17 @@ namespace circuitous {
       return res;
     }
 
-    ASTNodePtr parse(std::string_view pattern) const
+    ASTNodePtr parse(std::string_view pattern)
     {
+      _places.clear(); // reset places memoty on each parse
+
       auto &&[val, str] = parse_pattern(pattern);
       if (ltrim(str).empty())
         return std::move(val);
       return nullptr;
     }
 
-    template< typename Kind, typename ...Args >
-    auto make_node( Args && ...args ) const
-    {
-      return std::make_unique< ASTNode >( Kind( std::forward<Args>(args)... ) );
-    }
-
-    ParseResult parse_pattern(std::string_view str) const
+    ParseResult parse_pattern(std::string_view str)
     {
       str = ltrim(str);
       if (str.empty())
@@ -114,7 +112,7 @@ namespace circuitous {
       return parse_error();
     }
 
-    ParseResult parse_list(std::string_view str) const
+    ParseResult parse_list(std::string_view str)
     {
       str = ltrim(str);
       if (str.empty())
@@ -123,7 +121,7 @@ namespace circuitous {
         return parse_error("empty list");
 
       auto [head, tail] = parse_pattern(str);
-      if (tail.empty() || (!std::isblank( tail[0] ) && tail[0] != ')') )
+      if (tail.empty() || (!std::isblank(tail[0]) && tail[0] != ')') )
         return parse_error();
 
       if (!head)
@@ -143,8 +141,8 @@ namespace circuitous {
 
     ParseResult parse_constant(std::string_view str) const
     {
-      Constant con;
-      auto [rest, err] = std::from_chars(str.data(), str.data() + str.size(), con);
+      ASTNode::Constant con;
+      auto [rest, err] = std::from_chars(str.data(), str.data() + str.size(), con.ref());
       if (err == std::errc()) {
         auto count = size_t(std::distance(str.data(), rest));
         return { make_node< Constant >(con), str.substr(count)};
@@ -181,35 +179,39 @@ namespace circuitous {
       return parse_error();
     }
 
-    ParseResult parse_placeholder(std::string_view str) const
+    ParseResult parse_placeholder(std::string_view str)
     {
       str.remove_prefix(1); // remove '?' prefix
       if (auto parsed_name = parse_name(str)) {
         auto &&[name, rest] = parsed_name.value();
-        return { make_node< Place >(name), rest };
+        auto [it, _] = _places.try_emplace(name, _places.size());
+        return { make_node< Place >(it->second), rest };
       }
       return parse_error();
     }
+
+    std::size_t seen_places() const { return _places.size(); }
+
+  private:
+    std::unordered_map< std::string, ASTNode::Place > _places;
   };
 
-  template < typename Graph >
   struct Pattern
   {
-    using Parser = PatternParser<int>;
-    using ASTNodePtr = Parser::ASTNodePtr;
-    using Value = Parser::Value;
-    using Place = Parser::Place;
-    using Constant = Parser::Constant;
-    using Op = Parser::Op;
+    using Parser = PatternParser;
+    using Place  = ASTNode::Place;
+    using Places = ASTNode::Places;
 
-    Pattern(std::string_view pattern) : value(parse(pattern)) { assert(value); }
-
-    static ASTNodePtr parse(std::string_view pattern)
+    Pattern(std::string_view pattern)
     {
-      return Parser().parse(pattern);
+      Parser parser;
+      value = parser.parse(pattern);
+      assert( value );
+      places = parser.seen_places();
     }
 
     ASTNodePtr value;
+    std::size_t places;
   };
 
 } // namespace circuitous
