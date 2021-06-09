@@ -156,7 +156,7 @@ namespace circuitous::run {
     // Must be called in `safe` context.
     auto lhs(Operation *op) { return *self().get(op, 0); }
     auto rhs(Operation *op) { return *self().get(op, 1); }
-    bool is_zero(const llvm::APInt &i) { return i.toString(16, false) == "0"; }
+    bool is_zero(const llvm::APInt &i) { return i.isNullValue(); }
 
     void Visit(BSelect *op_) {
       auto sel = [&](auto op) {
@@ -198,11 +198,20 @@ namespace circuitous::run {
     void Visit(ZExt *op) { safe(op, [&](auto o){ return lhs(o).zext(o->size);   } ); }
     void Visit(SExt *op) { safe(op, [&](auto o){ return lhs(o).sext(o->size);  } ); }
 
-    void Visit(Icmp_ult *op) { safe(op, [&](auto o){ return this->BoolVal(lhs(o).ult(rhs(o))); } ); }
-    void Visit(Icmp_slt *op) { safe(op, [&](auto o){ return this->BoolVal(lhs(o).slt(rhs(o))); } ); }
-    void Visit(Icmp_ugt *op) { safe(op, [&](auto o){ return this->BoolVal(lhs(o).ugt(rhs(o))); } ); }
-    void Visit(Icmp_eq *op) { safe(op, [&](auto o){ return this->BoolVal(lhs(o) == rhs(o)); } ); }
-    void Visit(Icmp_ne *op) { safe(op, [&](auto o){ return this->BoolVal(lhs(o) != rhs(o)); } ); }
+    auto bv(bool b) { return this->BoolVal(b); }
+
+    void Visit(Icmp_ult *op) { safe(op, [&](auto o){ return bv(lhs(o).ult(rhs(o))); } ); }
+    void Visit(Icmp_slt *op) { safe(op, [&](auto o){ return bv(lhs(o).slt(rhs(o))); } ); }
+    void Visit(Icmp_ugt *op) { safe(op, [&](auto o){ return bv(lhs(o).ugt(rhs(o))); } ); }
+
+    void Visit(Icmp_uge *op) { safe(op, [&](auto o){ return bv(lhs(o).uge(rhs(o))); } ); }
+    void Visit(Icmp_ule *op) { safe(op, [&](auto o){ return bv(lhs(o).ule(rhs(o))); } ); }
+    void Visit(Icmp_sgt *op) { safe(op, [&](auto o){ return bv(lhs(o).sgt(rhs(o))); } ); }
+    void Visit(Icmp_sge *op) { safe(op, [&](auto o){ return bv(lhs(o).sge(rhs(o))); } ); }
+    void Visit(Icmp_sle *op) { safe(op, [&](auto o){ return bv(lhs(o).sle(rhs(o))); } ); }
+
+    void Visit(Icmp_eq *op) { safe(op, [&](auto o){ return bv(lhs(o) == rhs(o)); } ); }
+    void Visit(Icmp_ne *op) { safe(op, [&](auto o){ return bv(lhs(o) != rhs(o)); } ); }
   };
 
   #include "Base.tpp"
