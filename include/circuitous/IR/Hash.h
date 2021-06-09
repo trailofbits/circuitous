@@ -10,7 +10,7 @@
 
 namespace circuitous {
 
-class Operation;
+struct Operation;
 
 class HashVisitor {
  public:

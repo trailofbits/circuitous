@@ -2,7 +2,7 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/Circuit.hpp>
 
 #include <ostream>
 #include <iostream>
@@ -29,12 +29,7 @@ void PrintJSON(std::ostream &os, Circuit *circuit) {
     os << "\"op_code\":" << std::dec << static_cast<unsigned>(op->op_code)
        << ",";
 
-    if (auto llvm_op = dynamic_cast<circuitous::LLVMOperation *>(op)) {
-      os << "\"node_type\":{\"LLVMOp\":{";
-      os << "\"llvm_opcode\":" << std::dec << llvm_op->llvm_op_code;
-      os << ",\"llvm_pred\":" << std::dec << llvm_op->llvm_predicate << "}},";
-
-    } else if (auto extract_op = dynamic_cast<circuitous::Extract *>(op)) {
+    if (auto extract_op = dynamic_cast<circuitous::Extract *>(op)) {
       os << "\"node_type\":{\"ExtractOp\":{";
       os << "\"high\":" << std::dec << extract_op->high_bit_exc;
       os << ",\"low\":" << std::dec << extract_op->low_bit_inc << "}},";

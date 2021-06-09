@@ -2,7 +2,7 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/Circuit.hpp>
 
 #include <ostream>
 
@@ -28,13 +28,7 @@ void PrintPython(std::ostream &os, Circuit *circuit) {
        << "  operations['v" << std::hex << id << "'].append(" << std::dec
        << op->size << ")\n";
 
-    if (auto llvm_op = dynamic_cast<circuitous::LLVMOperation *>(op); llvm_op) {
-      os << "  operations['v" << std::hex << id << "'].append(" << std::dec
-         << llvm_op->llvm_op_code << ")\n"
-         << "  operations['v" << std::hex << id << "'].append(" << std::dec
-         << llvm_op->llvm_predicate << ")\n";
-
-    } else if (auto extract_op = dynamic_cast<circuitous::Extract *>(op);
+   if (auto extract_op = dynamic_cast<circuitous::Extract *>(op);
                extract_op) {
       os << "  operations['v" << std::hex << id << "'].append(" << std::dec
          << extract_op->high_bit_exc << ")\n"

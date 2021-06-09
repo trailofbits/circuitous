@@ -3,7 +3,7 @@
  */
 
 #include <circuitous/IR/Hash.h>
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/Circuit.hpp>
 #include <circuitous/Printers.h>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
@@ -18,27 +18,6 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-
-#if 0
-#  define DEBUG_WRITE(str) \
-    do { \
-      for (auto i = 0u; str[i]; ++i) { \
-        Write(static_cast<int8_t>(str[i])); \
-      } \
-    } while (false)
-
-#  define DEBUG_READ(str) \
-    do { \
-      int8_t ch; \
-      for (auto i = 0u; str[i]; ++i) { \
-        Read(ch); \
-        CHECK_EQ(static_cast<char>(ch), str[i]); \
-      } \
-    } while (false)
-#else
-  #define DEBUG_READ(...)
-  #define DEBUG_WRITE(...)
-#endif
 
 namespace circuitous {
 namespace {
@@ -145,9 +124,6 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
   void Visit(InputImmediate *op) { write(op->size, op->operands); }
 
   void Visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc, op->operands[0]); }
-  void Visit(LLVMOperation *op) {
-    write(op->size, op->llvm_op_code, op->llvm_predicate, op->operands);
-  }
   void Visit(Select *op) { write(op->size, op->bits, op->operands); }
   void Visit(InputErrorFlag *op) {}
   void Visit(OutputErrorFlag *op) {}
@@ -158,9 +134,47 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
   std::unordered_set<uint64_t> written;
 };
 
-struct DeserializeVisitor : FileConfig, DVisitor<DeserializeVisitor> {
+
+namespace detail {
+
+  template< typename D, typename T >
+  struct inject {
+    Operation *Visit(T *, uint64_t id) {
+      auto &self = static_cast< D & >( *this );
+      return self.template with_ops< T >(id, self.template read<unsigned>());
+    }
+  };
+
+  template< typename D, typename ... Ts >
+  struct unfolder {};
+
+  template< typename D, typename T >
+  struct unfolder< D, T > : inject< D, T > { using inject< D, T >::Visit; };
+
+  template< typename D, typename T, typename ...Ts >
+  struct unfolder< D, T, Ts... > : inject< D, T >, unfolder<D, Ts... >
+  {
+    using inject< D, T >::Visit;
+    using unfolder< D, Ts... >::Visit;
+  };
+
+  template< typename D, typename L > struct inject_visitors {};
+  template< typename D, typename ... Ts >
+  struct inject_visitors< D, tl::TL< Ts ... > > : unfolder< D, Ts ... > {};
+
+} // namespace detail
+
+// Inject deserializers of former llvm-operation
+template< typename D >
+using DeserializeComputational = detail::inject_visitors< D, llvm_ops_t >;
+
+struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
+                            DeserializeComputational< DeserializeVisitor >
+{
   using Selector = FileConfig::Selector;
- public:
+
+  using DeserializeComputational< DeserializeVisitor >::Visit;
+
   explicit DeserializeVisitor(std::istream &is_, Circuit *circuit_)
       : is(is_),
         circuit(circuit_)
@@ -279,8 +293,12 @@ struct DeserializeVisitor : FileConfig, DVisitor<DeserializeVisitor> {
     return make_op<T>(id, read<std::string, unsigned>());
   }
 
-  Operation *Visit(InputRegister *, uint64_t id) { return reg_like_<InputRegister>(id); }
-  Operation *Visit(OutputRegister *, uint64_t id) { return reg_like_<OutputRegister>(id); }
+  Operation *Visit(InputRegister *, uint64_t id) {
+    return reg_like_<InputRegister>(id);
+  }
+  Operation *Visit(OutputRegister *, uint64_t id) {
+    return reg_like_<OutputRegister>(id);
+  }
 
   Operation *Visit(InputImmediate *, uint64_t id) {
     auto op = make_op<InputImmediate>(id, read<unsigned>());
@@ -300,23 +318,19 @@ struct DeserializeVisitor : FileConfig, DVisitor<DeserializeVisitor> {
     return op;
   }
 
-  Operation *Visit(LLVMOperation *, uint64_t id) {
-    auto [size, llvm_op, llvm_pred] = read<unsigned, unsigned, unsigned>();
-    auto op = circuit->Adopt<LLVMOperation>(id, llvm_op, llvm_pred, size);
-    ReadOps(op);
-    return op;
-  }
-
   Operation *Visit(Select *, uint64_t id) {
-    //auto op = make_op<Select>(id, read<uint32_t, uint32_t>());
     auto [size, bits] = read<unsigned, unsigned>();
     auto op = circuit->Adopt<Select>(id, bits, size);
     ReadOps(op);
     return op;
   }
 
-  Operation *Visit(InputErrorFlag *, uint64_t id) { return circuit->Adopt<InputErrorFlag>(id); }
-  Operation *Visit(OutputErrorFlag *, uint64_t id) { return circuit->Adopt<OutputErrorFlag>(id); }
+  Operation *Visit(InputErrorFlag *, uint64_t id) {
+    return circuit->Adopt<InputErrorFlag>(id);
+  }
+  Operation *Visit(OutputErrorFlag *, uint64_t id) {
+    return circuit->Adopt<OutputErrorFlag>(id);
+  }
 
 
   template<typename T>
