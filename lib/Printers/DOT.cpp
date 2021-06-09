@@ -2,7 +2,7 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/Circuit.hpp>
 
 #include <ostream>
 #include <unordered_map>
@@ -109,7 +109,7 @@ struct Printer : UniqueVisitor<Printer> {
 
   void Node(Operation *op) {
 
-    if (auto lop = dynamic_cast<LLVMOperation *>(op); lop && lop->llvm_op_code == llvm::BinaryOperator::Add) {
+    if (auto lop = dynamic_cast<Add *>(op)) {
       os << NodeID(op) << " [fillcolor=red;style=filled;label = " << '"'
         << "{ " << AsID(NodeID(op)) << " " << op->Name();
     } else {

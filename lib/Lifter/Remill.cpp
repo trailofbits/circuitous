@@ -2,7 +2,7 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Lifter.hpp>
 
 #pragma clang diagnostic push
@@ -411,6 +411,55 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
   }
 
+
+  Operation *HandleLLVMOP(llvm::Instruction *inst) {
+    auto module = inst->getParent()->getParent()->getParent();
+    const auto &dl = module->getDataLayout();
+    auto size = static_cast<uint32_t>(dl.getTypeSizeInBits(inst->getType()));
+
+    auto handle_predicate = [&](llvm::Instruction *inst_) -> Operation *{
+      auto cmp = llvm::dyn_cast< llvm::CmpInst >( inst_ );
+      CHECK(cmp);
+
+      switch (cmp->getPredicate()) {
+        case llvm::CmpInst::ICMP_ULT: return impl->Create<Icmp_ult>(size);
+        case llvm::CmpInst::ICMP_SLT: return impl->Create<Icmp_slt>(size);
+        case llvm::CmpInst::ICMP_UGT: return impl->Create<Icmp_ugt>(size);
+        case llvm::CmpInst::ICMP_EQ:  return impl->Create<Icmp_eq>(size);
+        case llvm::CmpInst::ICMP_NE:  return impl->Create<Icmp_ne>(size);
+        default: LOG(FATAL) << "Cannot lower llvm predicate " << cmp->getPredicate();
+      }
+    };
+
+    auto op_code = inst->getOpcode();
+    switch (op_code) {
+      case llvm::Instruction::OtherOps::Select: return impl->Create<BSelect>(size);
+      case llvm::BinaryOperator::Add: return impl->Create<Add>(size);
+      case llvm::BinaryOperator::Sub: return impl->Create<Sub>(size);
+      case llvm::BinaryOperator::Mul: return impl->Create<Mul>(size);
+
+      case llvm::BinaryOperator::UDiv: return impl->Create<UDiv>(size);
+      case llvm::BinaryOperator::SDiv: return impl->Create<SDiv>(size);
+
+      case llvm::BinaryOperator::And: return impl->Create<CAnd>(size);
+      case llvm::BinaryOperator::Or: return impl->Create<COr>(size);
+      case llvm::BinaryOperator::Xor: return impl->Create<CXor>(size);
+
+      case llvm::BinaryOperator::Shl: return impl->Create<Shl>(size);
+      case llvm::BinaryOperator::LShr: return impl->Create<LShr>(size);
+      case llvm::BinaryOperator::AShr: return impl->Create<AShr>(size);
+
+      case llvm::BinaryOperator::Trunc: LOG(INFO) << size; return impl->Create<Trunc>(size);
+      case llvm::BinaryOperator::ZExt: return impl->Create<ZExt>(size);
+      case llvm::BinaryOperator::SExt: return impl->Create<SExt>(size);
+      case llvm::BinaryOperator::ICmp: return handle_predicate(inst);
+
+      default :
+        LOG(FATAL) << "Cannot lower llvm inst: "
+                   << llvm::Instruction::getOpcodeName(op_code);
+    }
+  }
+
   void VisitSelect(llvm::Function *func, llvm::Instruction *val) {
     auto &op = val_to_op[val];
     if (op) {
@@ -449,7 +498,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
         return;
       }
 
-      op = impl->Create<LLVMOperation>(val);
+      op = HandleLLVMOP(val);
       op->AddUse(cond_op);
 
       // True side is undefined; convert it into a defined value that is not
@@ -501,7 +550,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
 
     } else {
-      op = impl->Create<LLVMOperation>(val);
+      op = HandleLLVMOP(val);
       op->AddUse(lhs_op);
       op->AddUse(rhs_op);
     }
@@ -522,7 +571,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       const auto num_bits = dl.getTypeSizeInBits(val->getType());
       op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
     } else {
-      op = impl->Create<LLVMOperation>(val);
+      op = HandleLLVMOP(val);
       op->AddUse(op0);
     }
   }

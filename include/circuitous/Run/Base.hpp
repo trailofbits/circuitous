@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Verify.hpp>
 
 #include <circuitous/Run/Trace.hpp>
@@ -148,11 +148,61 @@ namespace circuitous::run {
     void Visit(Concat *op);
     void Visit(Extract *op);
     void Visit(Not *op);
-    void Visit(LLVMOperation *op);
     void Visit(Select *op);
     void Visit(Parity *op);
     void Visit(PopulationCount *op);
     void Visit(Or *op);
+
+    // Must be called in `safe` context.
+    auto lhs(Operation *op) { return *self().get(op, 0); }
+    auto rhs(Operation *op) { return *self().get(op, 1); }
+    bool is_zero(const llvm::APInt &i) { return i.toString(16, false) == "0"; }
+
+    void Visit(BSelect *op_) {
+      auto sel = [&](auto op) {
+        return (self().get(op, 0)->getBoolValue()) ? self().get(op, 1) : self().get(op, 2);
+      };
+      safe(op_, sel);
+    }
+
+    void Visit(Add *op) { safe(op, [&](auto o){ return lhs(o) + rhs(o); } ); }
+    void Visit(Sub *op) { safe(op, [&](auto o){ return lhs(o) - rhs(o); } ); }
+    void Visit(Mul *op) { safe(op, [&](auto o){ return lhs(o) * rhs(o); } ); }
+
+    void Visit(UDiv *op) {
+      auto div = [&](auto o) {
+        return (is_zero(rhs(o))) ? this->Undef() : std::make_optional( lhs(o).udiv(rhs(o)) );
+      };
+      safe(op, div);
+    }
+    void Visit(SDiv *op) {
+      auto div = [&](auto o) {
+        return (is_zero(rhs(o))) ? this->Undef() : std::make_optional( lhs(o).sdiv(rhs(o)) );
+      };
+      safe(op, div);
+    }
+
+    void Visit(CAnd *op) { safe(op, [&](auto o){ return lhs(o) & rhs(o); } ); }
+    void Visit(COr *op) { safe(op, [&](auto o){ return lhs(o) | rhs(o); } ); }
+    void Visit(CXor *op) { safe(op, [&](auto o){ return lhs(o) ^ rhs(o); } ); }
+
+
+
+    void Visit(Shl *op) { safe(op, [&](auto o){ return lhs(o) << rhs(o); } ); }
+    void Visit(LShr *op) { safe(op, [&](auto o){ return lhs(o).lshr(rhs(o)); } ); }
+    void Visit(AShr *op) { safe(op, [&](auto o){ return lhs(o).ashr(rhs(o)); } ); }
+
+    void Visit(Trunc *op) {
+      safe(op, [&](auto o){ return lhs(o).trunc(o->size); } );
+    }
+    void Visit(ZExt *op) { safe(op, [&](auto o){ return lhs(o).zext(o->size);   } ); }
+    void Visit(SExt *op) { safe(op, [&](auto o){ return lhs(o).sext(o->size);  } ); }
+
+    void Visit(Icmp_ult *op) { safe(op, [&](auto o){ return this->BoolVal(lhs(o).ult(rhs(o))); } ); }
+    void Visit(Icmp_slt *op) { safe(op, [&](auto o){ return this->BoolVal(lhs(o).slt(rhs(o))); } ); }
+    void Visit(Icmp_ugt *op) { safe(op, [&](auto o){ return this->BoolVal(lhs(o).ugt(rhs(o))); } ); }
+    void Visit(Icmp_eq *op) { safe(op, [&](auto o){ return this->BoolVal(lhs(o) == rhs(o)); } ); }
+    void Visit(Icmp_ne *op) { safe(op, [&](auto o){ return this->BoolVal(lhs(o) != rhs(o)); } ); }
   };
 
   #include "Base.tpp"

@@ -3,7 +3,7 @@
  */
 
 #include <circuitous/IR/Hash.h>
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/Circuit.hpp>
 #include <circuitous/Util/BitManipulation.h>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wconversion"
@@ -26,7 +26,6 @@ class HashVisitor::Impl : public Visitor<HashVisitor::Impl> {
   uint64_t Lookup(Operation *op);
 
   void VisitOperation(Operation *op);
-  void VisitLLVMOperation(LLVMOperation *op);
   void VisitConstant(Constant *op);
   void VisitInputRegister(InputRegister *op);
   void VisitOutputRegister(OutputRegister *op);
@@ -48,22 +47,6 @@ void HashVisitor::Impl::VisitOperation(Operation *op) {
   uint64_t hash = kStringHasher(op->Name());
   for (auto sub_op : op->operands) {
     hash ^= RotateRight64(hash, 33u) * Lookup(sub_op);
-  }
-  op_hash.emplace(op, hash);
-}
-
-void HashVisitor::Impl::VisitLLVMOperation(LLVMOperation *op) {
-  uint64_t hash = kStringHasher(op->Name());
-  if (llvm::Instruction::isCommutative(op->op_code) ||
-      llvm::CmpInst::ICMP_EQ == op->llvm_predicate ||
-      llvm::CmpInst::ICMP_NE == op->llvm_predicate) {
-    for (auto sub_op : op->operands) {
-      hash ^= Lookup(sub_op);
-    }
-  } else {
-    for (auto sub_op : op->operands) {
-      hash ^= RotateRight64(hash, 33u) * Lookup(sub_op);
-    }
   }
   op_hash.emplace(op, hash);
 }

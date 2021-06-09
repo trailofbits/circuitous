@@ -4,7 +4,7 @@
 
 #pragma pragma once
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/Circuit.hpp>
 
 #include <deque>
 #include <sstream>

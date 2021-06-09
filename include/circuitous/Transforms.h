@@ -22,7 +22,7 @@
 
 namespace circuitous {
 
-class Circuit;
+struct Circuit;
 
 // Look for uses of population count that operates on a zero-extended value, and
 // change it to operate on the original value.

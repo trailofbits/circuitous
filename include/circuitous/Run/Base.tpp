@@ -74,67 +74,6 @@ void OpSem<S>::Visit(Not *op) {
 }
 
 template<typename S>
-void OpSem<S>::Visit(LLVMOperation *op) {
-
-  auto lhs = [&](){ return *self().GetNodeVal(op->operands[0]); };
-  auto rhs = [&](){ return *self().GetNodeVal(op->operands[1]); };
-  auto str = [&](auto val) { return val.toString(16, false); };
-  auto is_zero = [&](auto val) { return str(val) == "0"; };
-
-  auto predicate = [&](LLVMOperation *op) {
-    switch (op->llvm_predicate) {
-      case llvm::CmpInst::ICMP_ULT: return lhs().ult(rhs());
-      case llvm::CmpInst::ICMP_SLT: return lhs().slt(rhs());
-      case llvm::CmpInst::ICMP_UGT: return lhs().ugt(rhs());
-      case llvm::CmpInst::ICMP_EQ: return lhs() == rhs();
-      case llvm::CmpInst::ICMP_NE: return lhs() != rhs();
-
-      default: LOG(FATAL) << "Unknown LLVM predicate: " << op->Name() << " " << op->id();
-    }
-    return false;
-  };
-
-
-  auto semantics = [&](LLVMOperation *op) -> value_type {
-    switch (op->llvm_op_code) {
-      case llvm::Instruction::OtherOps::Select:
-          return (self().get(op, 0)->getBoolValue()) ? self().get(op, 1) : self().get(op, 2);
-
-      case llvm::BinaryOperator::Add: return { lhs() + rhs() };
-      case llvm::BinaryOperator::Sub: return { lhs() - rhs() };
-      case llvm::BinaryOperator::Mul: return { lhs() * rhs() };
-
-      // TODO(lukas): Eventually it should not be possible for division by `0` to happen
-      //              as circuits may raise & xor error_bit in.
-      case llvm::BinaryOperator::UDiv:
-          return (is_zero(rhs())) ? this->Undef() : std::make_optional( lhs().udiv(rhs()) );
-      case llvm::BinaryOperator::SDiv:
-          return (is_zero(rhs())) ? this->Undef() : std::make_optional( lhs().sdiv(rhs()) );
-
-      case llvm::BinaryOperator::And: return { lhs() & rhs() };
-      case llvm::BinaryOperator::Or: return  { lhs() | rhs() };
-      case llvm::BinaryOperator::Xor: return { lhs() ^ rhs() };
-
-      case llvm::BinaryOperator::Shl: return  { lhs() << rhs()    };
-      case llvm::BinaryOperator::LShr: return { lhs().lshr(rhs()) };
-      case llvm::BinaryOperator::AShr: return { lhs().ashr(rhs()) };
-
-      case llvm::BinaryOperator::Trunc: return { lhs().trunc(op->size) };
-      case llvm::BinaryOperator::ZExt: return  { lhs().zext(op->size)  };
-      case llvm::BinaryOperator::SExt: return  { lhs().sext(op->size)  };
-
-      case llvm::BinaryOperator::ICmp: return { this->BoolVal(predicate(op)) };
-
-      default: LOG(FATAL) << "Unknown LLVM operation: " << op->Name() << " " << op->id();
-    }
-    return {};
-  };
-
-  auto llvm_op = [&](LLVMOperation *op) { return semantics(op); };
-  safe(op, llvm_op);
-}
-
-template<typename S>
 void OpSem<S>::Visit(Select *op) {
   auto select = [&](Select *op) {
     auto selector = self().get( ( *op )[ 0 ] );

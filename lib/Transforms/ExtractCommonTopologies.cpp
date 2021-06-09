@@ -15,6 +15,8 @@
 #include <unordered_map>
 
 namespace circuitous {
+
+  /**
 namespace impl {
 
 struct ECT {
@@ -496,15 +498,18 @@ struct HintCheckReduce {
 
 }  // namespace impl
 
+**/
+
 // Look for common topological structures and extract them so that they are
 // shared by multiple different expressions.
 bool ExtractCommonTopologies(Circuit *circuit) {
-  return impl::ECT().ExtractCommonTopologies(circuit);
+  return circuit;
+  //return impl::ECT().ExtractCommonTopologies(circuit);
 }
 
 bool DependencyBreaker(Circuit *circuit) {
-  impl::DependencyBreaker().Run(circuit);
-  return true;
+  //impl::DependencyBreaker().Run(circuit);
+  return circuit;
 }
 
 }  // namespace circuitous

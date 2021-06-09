@@ -11,7 +11,7 @@
 #include <memory>
 #include <unordered_map>
 
-#include "circuitous/IR/IR.h"
+#include <circuitous/IR/Circuit.hpp>
 
 namespace circuitous {
 namespace {
@@ -37,7 +37,6 @@ class IRToSMTVisitor : public UniqueVisitor<IRToSMTVisitor> {
   void VisitConstant(Constant *op);
   void VisitHint(Hint *op);
   void VisitUndefined(Undefined *op);
-  void VisitLLVMOperation(LLVMOperation *op);
   void VisitNot(Not *op);
   void VisitExtract(Extract *op);
   void VisitConcat(Concat *op);
@@ -136,6 +135,8 @@ void IRToSMTVisitor::VisitUndefined(Undefined *op) {
   InsertZ3Expr(op, z3_ctx.bv_const("Undef", op->size));
 }
 
+// TODO(lukas): Reflect the removal of `LLVMOperation`.
+#if 0
 void IRToSMTVisitor::VisitLLVMOperation(LLVMOperation *op) {
   DLOG(INFO) << "VisitLLVMOperation: " << op->Name();
   auto lhs{[this, op] { return GetZ3Expr(op->operands[0]); }};
@@ -215,6 +216,7 @@ void IRToSMTVisitor::VisitLLVMOperation(LLVMOperation *op) {
     default: LOG(FATAL) << "Unsupported LLVMOperation: " << op->Name(); break;
   }
 }
+#endif
 
 void IRToSMTVisitor::VisitNot(Not *op) {
   LOG(FATAL) << "VisitNot: " << op->Name();
