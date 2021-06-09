@@ -82,18 +82,25 @@ struct Verifier {
         return Exactly((1 << op->operands[0]->size) + 1, op);
       case Concat::kind:
         return MoreThan(2, op);
-      // TODO(lukas): LLVMOperation can actually have a variety of arities, but
-      //              that will be quite complicated to check here.
-      case LLVMOperation::kind:
       case VerifyInstruction::kind:
       case OnlyOneCondition::kind:
       case Circuit::kind:
       case Or::kind:
         return Not(0, op);
-      default:
-        LOG(FATAL) << "Cannot verify " << op->Name();
-        return false;
     }
+    if (is_specialization<Computational>(op->op_code)) {
+      switch (op->op_code) {
+        case Trunc::kind:
+        case ZExt::kind:
+        case SExt::kind:
+          return Exactly(1, op);
+        case BSelect::kind:
+          return Exactly(3, op);
+        default:
+          return Exactly(2, op);
+      }
+    }
+    LOG(FATAL) << "Cannot verify kind: " << op->op_code;
   }
 
   bool Verify(Operation *op) {

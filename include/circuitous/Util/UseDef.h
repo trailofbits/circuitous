@@ -20,8 +20,6 @@
 
 namespace circuitous {
 
-class Operation;
-
 // Class that owns all the memory for nodes of type `Value`.
 // Other classes should operate on raw pointers
 // It is not strictly enforced, but it is expected `Value` inherits

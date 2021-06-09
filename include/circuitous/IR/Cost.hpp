@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/Circuit.hpp>
 
 #include <unordered_map>
 #include <map>
@@ -22,10 +22,8 @@ namespace circuitous {
 struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
   using parent = UniqueVisitor<RawNodesCounter_>;
 
-  // We want it ordered, so we can do diff effectively
-  // The key type is important! We use it later as
-  // overload resolution in diff. Refactor!
-  std::map<uint64_t, uint64_t> nodes;
+  // TODO(lukas): Clean up after LLVMOperation removal.
+  std::map<uint32_t, uint64_t> nodes;
   std::map<uint32_t, uint64_t> llvm_ops;
 
   void Process(Operation *op) {
@@ -35,13 +33,6 @@ struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
 
   void Visit(Operation *op) {
     Process(op);
-    op->Traverse(*this);
-  }
-
-  void Visit(LLVMOperation *op) {
-    Process(op);
-    const auto &[it, _] = llvm_ops.try_emplace(op->llvm_op_code, 0);
-    ++it->second;
     op->Traverse(*this);
   }
 
@@ -93,12 +84,6 @@ struct Printer {
     ss << "Node counts:" << std::endl;
     for (auto &[op_code, count] : self.nodes) {
       ss << " " << to_string(op_code) << " " << count << std::endl;
-
-      if (op_code == LLVMOperation::kind) {
-        for (auto &[llvm_op, count] : self.llvm_ops) {
-          ss << "\t " << llvm::Instruction::getOpcodeName(llvm_op) << " " << count << std::endl;
-        }
-      }
     }
     ss << std::endl;
   }

@@ -11,8 +11,8 @@
 
 namespace circuitous {
 
-class Circuit;
-class Operation;
+struct Circuit;
+struct Operation;
 
 void PrintDOT(std::ostream &os, Circuit *circuit,
               const std::unordered_map<Operation *, std::string> & = {});

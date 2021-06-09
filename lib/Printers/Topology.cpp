@@ -2,7 +2,7 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/Circuit.hpp>
 #include <circuitous/Printers.h>
 
 #include <ostream>
@@ -30,14 +30,6 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
     case InputImmediate::kind:
     case Hint::kind:
       os << 'V' << op->size;
-      break;
-    case LLVMOperation::kind:
-      os << "(L" << op->size;
-      for (auto sub_op : op->operands) {
-        os << ' ';
-        PrintTopology(os, sub_op, max_depth, accept);
-      }
-      os << ')';
       break;
     case Extract::kind:
       os << "(E" << op->size << ' ';

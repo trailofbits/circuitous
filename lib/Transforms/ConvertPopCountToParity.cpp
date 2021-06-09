@@ -14,7 +14,8 @@ namespace circuitous {
 // Look for uses of the population count instruction that look like they are
 // actually computing the parity of some bits, and then replace that computation
 // with a parity node.
-bool ConvertPopCountToParity(Circuit *circuit) {
+bool ConvertPopCountToParity(Circuit *circuit) { return circuit; }
+  /**
   const auto num_pop_counts = circuit->Attr<PopulationCount>().Size();
 
   // Look for `popcount & 1`, which is testing is the result of doing a
@@ -66,5 +67,6 @@ bool ConvertPopCountToParity(Circuit *circuit) {
 
   return 0u < circuit->RemoveUnused<LLVMOperation>();
 }
+**/
 
 }  // namespace circuitous
