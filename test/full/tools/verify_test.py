@@ -28,6 +28,7 @@ class VerifyTest(Test):
           case.expected = MicroxGen().get(case.input)
         except Exception as e:
           print("Microx fail in: " + self.name + " case " + case.name)
+          print("Bytes: " + case.input.bytes)
           raise e
       case.expected = case.expected.mutate(self.e_mutators[idx])
       case.expected.result = result
