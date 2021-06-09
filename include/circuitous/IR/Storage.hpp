@@ -130,6 +130,16 @@ namespace circuitous {
       return op;
     }
 
+    template<typename ...Args>
+    Operation *Create(uint32_t kind, Args &&...args) {
+      Operation *out;
+      auto create = [&](auto op) {
+        using raw_t = std::decay_t< decltype( op ) >;
+        out = this->Create< raw_t >( std::forward< Args >( args )... );
+      };
+      return out;
+    }
+
     template<typename T, typename ...Args>
     T* Adopt(uint64_t id, Args &&...args) {
       auto op = Attr<T>().Create(std::forward<Args>(args)...);
@@ -143,7 +153,7 @@ namespace circuitous {
       Operation *out;
       auto adopt = [&](auto op) {
         using raw_t = std::decay_t< decltype( op ) >;
-        out = this->Create< raw_t >( std::forward< Args >( args )... );
+        out = this->Adopt< raw_t >( id, std::forward< Args >( args )... );
       };
       return out;
     }
