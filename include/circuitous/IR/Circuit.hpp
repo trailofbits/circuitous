@@ -40,7 +40,7 @@ namespace circuitous {
 
 
     std::string Name() const override { return "circuit"; }
-    Circuit() : Operation(1u, kind) {}
+    Circuit() : Operation(this->bool_size, kind) {}
   };
 
 

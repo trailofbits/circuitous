@@ -30,6 +30,7 @@ namespace circuitous {
 struct Operation : public Node<Operation> {
  public:
   static constexpr uint32_t kind = 0;
+  static constexpr uint32_t bool_size = 1u;
 
   virtual ~Operation() = default;
 
@@ -390,7 +391,7 @@ struct EnforceCtx : Operation {
 // output register itself.
 struct RegisterCondition final : EnforceCtx, make_kind< Constraint, tag_fragment< 0 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
-  RegisterCondition() : EnforceCtx(1u, kind) {}
+  RegisterCondition() : EnforceCtx(this->bool_size, kind) {}
   std::string op_code_str() const override { return "register_condition"; }
   std::string Name() const override { return "register_condition." + EnforceCtx::suffix_(); }
 };
@@ -399,7 +400,7 @@ struct RegisterCondition final : EnforceCtx, make_kind< Constraint, tag_fragment
 // output register itself.
 struct HintCondition final : EnforceCtx, make_kind< Constraint, tag_fragment< 1 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
-  HintCondition() : EnforceCtx(1u, kind) {}
+  HintCondition() : EnforceCtx(this->bool_size, kind) {}
   std::string op_code_str() const override { return "hint_condition"; }
   std::string Name() const override { return "hint_condition." + EnforceCtx::suffix_(); }
 };
@@ -407,7 +408,7 @@ struct HintCondition final : EnforceCtx, make_kind< Constraint, tag_fragment< 1 
 // Says that we are preserving the value of a register.
 struct PreservedCondition final : EnforceCtx, make_kind< Constraint, tag_fragment< 2 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
-  PreservedCondition() : EnforceCtx(1u, kind) {}
+  PreservedCondition() : EnforceCtx(this->bool_size, kind) {}
   std::string op_code_str() const override { return "preserved_condition"; }
   std::string Name() const override { return "preserved_condition." + EnforceCtx::suffix_(); }
 };
@@ -415,7 +416,7 @@ struct PreservedCondition final : EnforceCtx, make_kind< Constraint, tag_fragmen
 // Says that we are moving one register to a different register.
 struct CopyCondition final : EnforceCtx, make_kind< Constraint, tag_fragment< 3 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
-  CopyCondition() : EnforceCtx(1u, kind) {}
+  CopyCondition() : EnforceCtx(this->bool_size, kind) {}
   std::string op_code_str() const override { return "copy_condition"; }
   std::string Name() const override { return "copy_condition." + EnforceCtx::suffix_(); }
 };
@@ -423,7 +424,7 @@ struct CopyCondition final : EnforceCtx, make_kind< Constraint, tag_fragment< 3 
 #define make_bool_op(cls, idx) \
 struct cls final : Operation, make_kind< BoolOp, tag_fragment< idx > > { \
   static constexpr uint32_t kind = apply(Operation::kind); \
-  cls() : Operation(1u, kind) {} \
+  cls() : Operation(this->bool_size, kind) {} \
   std::string op_code_str() const override { return #cls; } \
   std::string Name() const override { return #cls; } \
 };
