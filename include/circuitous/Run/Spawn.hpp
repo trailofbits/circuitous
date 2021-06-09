@@ -130,10 +130,6 @@ namespace circuitous::run {
         auto x = state.Pop();
         Dispatch(x);
       }
-      for (auto x : current->operands) {
-        LOG(INFO) << to_string(x->op_code) << " " << x->id()
-                  << " " << this->node_values.count(x);
-      }
       if (auto res = this->GetNodeVal(current)) {
         return *res == this->TrueVal();
       }
