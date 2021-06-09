@@ -21,8 +21,7 @@
 
 DECLARE_string(arch);
 DECLARE_string(os);
-DEFINE_string(binary_in, "",
-              "Path to a file containing only machine code instructions.");
+
 DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
@@ -111,10 +110,6 @@ std::unique_ptr<circuitous::Circuit> LoadCircuit() {
   auto make_circuit = [&](auto buf) {
     return circuitous::Circuit::make_circuit(FLAGS_arch, FLAGS_os, buf, choose_opts());
   };
-
-  if (!FLAGS_binary_in.empty()) {
-    return make_circuit(FLAGS_binary_in);
-  }
 
   if (!FLAGS_bytes_in.empty()) {
     std::vector<uint8_t> buf;
