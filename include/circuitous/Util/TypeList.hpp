@@ -40,20 +40,6 @@ namespace circuitous::tl {
       return sizeof...( Es );
     }
 
-    /**
-    template< template< typename > class F, typename L >
-    constexpr auto apply_( L l ) {
-      if constexpr ( size_(  l ) == 0 ) {
-        return std::declval< L >();
-      } else {
-        using head = typename front_< L >::type;
-        using tail = typename pop_front_< L >::type;
-        using t_tail = decltype( apply_< F >( tail{} ) );
-        return typename push_front_< typename F< head >::type, t_tail >::type{};
-      }
-    }
-    **/
-
     template< template< typename > class F, typename ... Es >
     struct apply_< F, TL< Es ... > >{
       using type = TL< typename F< Es >::type ... >;
@@ -79,7 +65,6 @@ namespace circuitous::tl {
   using merge = typename detail::merge_< L1, L2 >::type;
 
   template< typename L, template< typename > class F >
-  //using apply = decltype( detail::apply_< F >( std::declval< L >() ) );
   using apply = typename detail::apply_< F, L >::type;
 
   template< typename L > using materialized = detail::materialize_< L >;
