@@ -657,23 +657,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
 }  // namespace
 
-auto Circuit::make_circuit(
-    const std::string &arch_name, const std::string &os_name,
-    const std::string &file_name, const Optimizations &opts)
--> circuit_ptr_t
-{
-  auto maybe_buff = llvm::MemoryBuffer::getFile(file_name, -1, false);
-  if (remill::IsError(maybe_buff)) {
-    LOG(ERROR) << remill::GetErrorString(maybe_buff) << std::endl;
-    return nullptr;
-  }
-
-  const auto buff = remill::GetReference(maybe_buff)->getBuffer();
-  return make_circuit(arch_name, os_name, buff, opts);
-}
 
 auto Circuit::make_circuit(
-    const std::string &arch_name, const std::string &os_name,
+    std::string_view arch_name, std::string_view os_name,
     std::string_view bytes, const Optimizations &opts)
 -> circuit_ptr_t
 {
@@ -684,12 +670,12 @@ auto Circuit::make_circuit(
 }
 
 auto Circuit::make_circuit(
-    const std::string &arch_name, const std::string &os_name,
+    std::string_view arch_name, std::string_view os_name,
     const llvm::StringRef &buff, const Optimizations &opts)
 -> circuit_ptr_t
 {
 
-  circuitous::Ctx ctx{ os_name, arch_name };
+  circuitous::Ctx ctx{ std::string(os_name), std::string(arch_name) };
   circuitous::CircuitBuilder builder(ctx);
   builder.reduce_imms = opts.reduce_imms;
 
