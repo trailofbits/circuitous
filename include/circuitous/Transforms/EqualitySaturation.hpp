@@ -23,7 +23,7 @@
 
 #include <circuitous/Transforms/Pattern.hpp>
 
-namespace circuitous {
+namespace circuitous::eqsat {
 
   template< typename Graph >
   struct Rule
@@ -339,4 +339,4 @@ namespace circuitous {
 
   };
 
-} // namespace circuitous
+} // namespace circuitous::eqsat

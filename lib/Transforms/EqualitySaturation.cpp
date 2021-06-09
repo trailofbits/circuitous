@@ -17,6 +17,7 @@
 #include <vector>
 
 namespace circuitous {
+namespace eqsat {
 
   using CircuitEGraph = EGraph< ENode< Operation* > >;
 
@@ -110,16 +111,22 @@ namespace circuitous {
   };
 
   using DefaultRunner = EqSatRunner< CircuitEGraph, BasicRulesScheduler >;
-  using CircuitRules = Rules< CircuitEGraph >;
+  using CircuitRewriteRules = Rules< CircuitEGraph >;
+
+} // namespace eqsat
 
   bool EqualitySaturation(Circuit *circuit)
   {
+    using GraphBuilder = eqsat::EGraphBuilder;
+    using Runner = eqsat::DefaultRunner;
+    using RewriteRules = eqsat::CircuitRewriteRules;
+
     LOG(INFO) << "Start equality saturation";
 
-    EGraphBuilder ebuilder;
-    auto runner = DefaultRunner( ebuilder.build(circuit) );
+    GraphBuilder ebuilder;
+    auto runner = Runner( ebuilder.build(circuit) );
 
-    auto rules = CircuitRules();
+    RewriteRules rules;
     runner.run(rules);
 
     LOG(INFO) << "Equality saturation stopped";
