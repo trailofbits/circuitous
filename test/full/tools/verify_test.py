@@ -24,7 +24,11 @@ class VerifyTest(Test):
     for idx, case in enumerate(self.cases):
       result = True if case.expected.result is None else case.expected.result
       if not self.manual_gen:
-        case.expected = MicroxGen().get(case.input)
+        try:
+          case.expected = MicroxGen().get(case.input)
+        except Exception as e:
+          print("Microx fail in: " + self.name + " case " + case.name)
+          raise e
       case.expected = case.expected.mutate(self.e_mutators[idx])
       case.expected.result = result
       case.run_mode = '--verify'
