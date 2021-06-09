@@ -22,8 +22,10 @@ namespace circuitous {
 struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
   using parent = UniqueVisitor<RawNodesCounter_>;
 
+  // Maps kind -> number of times it was seen
+  using operation_occurences_t = std::map< uint32_t, uint64_t >;
+  operation_occurences_t nodes;
   // TODO(lukas): Clean up after LLVMOperation removal.
-  std::map<uint32_t, uint64_t> nodes;
   std::map<uint32_t, uint64_t> llvm_ops;
 
   void Process(Operation *op) {
