@@ -18,7 +18,6 @@
 #include <utility>
 #include <vector>
 #include <string>
-#include <span>
 #include <string_view>
 
 #include <circuitous/Transforms/Pattern.hpp>
