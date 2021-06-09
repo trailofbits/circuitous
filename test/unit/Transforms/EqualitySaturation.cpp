@@ -15,7 +15,7 @@
 
 #include <fstream>
 
-namespace circuitous {
+namespace circuitous::eqsat {
 
   unsigned count_matches(auto matches) {
     auto eclass_match_count = [] (unsigned sum, auto &eclass_match) {
@@ -24,33 +24,32 @@ namespace circuitous {
     };
     return std::accumulate(matches.begin(), matches.end(), unsigned(0), eclass_match_count);
   }
+
+  using TestRule = Rule< TestGraph >;
+
   TEST_CASE("EGraph Pattern Matching")
   {
-    using Rule = circuitous::Rule< TestGraph >;
-
     TestGraph egraph;
 
     auto idx = egraph.make_leaf("x");
     auto idy = egraph.make_leaf("1");
     egraph.make_node("mul", {idx, idy});
 
-    auto imul = Rule("identity multiplication", "(op_mul ?x 1)", "?x");
+    auto imul = TestRule("identity multiplication", "(op_mul ?x 1)", "?x");
     CHECK(imul.match(egraph).size() == 1);
 
-    auto zmul = Rule("zero multiplication", "(op_mul ?x 0)", "0");
+    auto zmul = TestRule("zero multiplication", "(op_mul ?x 0)", "0");
     CHECK(zmul.match(egraph).size() == 0);
 
-    auto cmul = Rule("commutativity multiplication", "(op_mul ?x ?y)", "(op_mul ?y ?x)");
+    auto cmul = TestRule("commutativity multiplication", "(op_mul ?x ?y)", "(op_mul ?y ?x)");
     CHECK(cmul.match(egraph).size() == 1);
 
-    auto id = Rule("id", "?x", "?x");
+    auto id = TestRule("id", "?x", "?x");
     CHECK(id.match(egraph).size() == 3);
   }
 
   TEST_CASE("EGraph Pattern Matching Addition")
   {
-    using Rule = circuitous::Rule< TestGraph >;
-
     TestGraph egraph;
 
     auto idx  = egraph.make_leaf("x");
@@ -61,7 +60,7 @@ namespace circuitous {
     auto idv  = egraph.make_leaf("v");
     auto ida2 = egraph.make_node("add", {idu, idv});
 
-    auto cadd = Rule("commutativity addition", "(op_add ?x ?y)", "(op_add ?y ?x)");
+    auto cadd = TestRule("commutativity addition", "(op_add ?x ?y)", "(op_add ?y ?x)");
     CHECK(count_matches(cadd.match(egraph)) == 2);
 
     egraph.merge(ida1, ida2);
@@ -72,8 +71,6 @@ namespace circuitous {
 
   TEST_CASE("EGraph Pattern Matching Multilayer")
   {
-    using Rule = circuitous::Rule< TestGraph >;
-
     TestGraph egraph;
 
     auto a  = egraph.make_leaf("a");
@@ -82,21 +79,19 @@ namespace circuitous {
     auto add1 = egraph.make_node("add", {z, a});
     egraph.make_node("add", {b, add1});
 
-    auto cadd = Rule("addition", "(op_add ?x (op_add 0 ?y))", "(op_add ?x ?y)");
+    auto cadd = TestRule("addition", "(op_add ?x (op_add 0 ?y))", "(op_add ?x ?y)");
     CHECK(count_matches(cadd.match(egraph)) == 1);
   }
 
   TEST_CASE("EGraph Match Same Classes")
   {
-    using Rule = circuitous::Rule< TestGraph >;
-
     TestGraph egraph;
 
     auto a  = egraph.make_leaf("a");
     auto b  = egraph.make_leaf("b");
     egraph.make_node("add", {a, b});
 
-    auto madd = Rule("addition to mult", "(op_add ?x ?x)", "(op_mul 2 ?x)");
+    auto madd = TestRule("addition to mult", "(op_add ?x ?x)", "(op_mul 2 ?x)");
     CHECK(count_matches(madd.match(egraph)) == 0);
 
     egraph.merge(a, b);
@@ -105,4 +100,4 @@ namespace circuitous {
     CHECK(count_matches(madd.match(egraph)) == 1);
   }
 
-} // namespace circuitous
+} // namespace circuitous::eqsat
