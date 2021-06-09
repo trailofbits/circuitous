@@ -59,8 +59,6 @@ class MicroxGen:
     m.add_map(code)
     e = microx.Process(o, m)
 
-    e.execute(t, 1)
-
     out = State()
 
     try:
