@@ -422,11 +422,16 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       CHECK(cmp);
 
       switch (cmp->getPredicate()) {
+        case llvm::CmpInst::ICMP_EQ:  return impl->Create<Icmp_eq>(size);
+        case llvm::CmpInst::ICMP_NE:  return impl->Create<Icmp_ne>(size);
         case llvm::CmpInst::ICMP_ULT: return impl->Create<Icmp_ult>(size);
         case llvm::CmpInst::ICMP_SLT: return impl->Create<Icmp_slt>(size);
         case llvm::CmpInst::ICMP_UGT: return impl->Create<Icmp_ugt>(size);
-        case llvm::CmpInst::ICMP_EQ:  return impl->Create<Icmp_eq>(size);
-        case llvm::CmpInst::ICMP_NE:  return impl->Create<Icmp_ne>(size);
+        case llvm::CmpInst::ICMP_UGE:  return impl->Create<Icmp_uge>(size);
+        case llvm::CmpInst::ICMP_ULE:  return impl->Create<Icmp_ule>(size);
+        case llvm::CmpInst::ICMP_SGT:  return impl->Create<Icmp_sgt>(size);
+        case llvm::CmpInst::ICMP_SGE:  return impl->Create<Icmp_sge>(size);
+        case llvm::CmpInst::ICMP_SLE:  return impl->Create<Icmp_sle>(size);
         default: LOG(FATAL) << "Cannot lower llvm predicate " << cmp->getPredicate();
       }
     };
