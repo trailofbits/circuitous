@@ -250,18 +250,24 @@ declare_llvm_op(Icmp_slt, 12)
 declare_llvm_op(Icmp_ugt, 13)
 declare_llvm_op(Icmp_eq, 14)
 declare_llvm_op(Icmp_ne, 15)
+declare_llvm_op(Icmp_uge, 16)
+declare_llvm_op(Icmp_ule, 17)
+declare_llvm_op(Icmp_sgt, 18)
+declare_llvm_op(Icmp_sge, 19)
+declare_llvm_op(Icmp_sle, 20)
 
-declare_llvm_op(BSelect, 16)
+declare_llvm_op(BSelect, 21)
 
-declare_llvm_op(CAnd, 17);
-declare_llvm_op(COr, 18);
-declare_llvm_op(CXor, 19);
+declare_llvm_op(CAnd, 22);
+declare_llvm_op(COr, 23);
+declare_llvm_op(CXor, 24);
 
 #undef declare_llvm_op
 
 using llvm_ops_t = tl::TL<
     Add, Sub, Mul, UDiv, SDiv, Shl, LShr, AShr, Trunc, ZExt, SExt,
-    Icmp_ult, Icmp_slt, Icmp_ugt, Icmp_eq, Icmp_ne,
+    Icmp_ult, Icmp_slt, Icmp_ugt, Icmp_eq, Icmp_ne, Icmp_uge, Icmp_ule,
+    Icmp_sgt, Icmp_sge, Icmp_sle,
     BSelect,
     CAnd, COr, CXor
 >;
