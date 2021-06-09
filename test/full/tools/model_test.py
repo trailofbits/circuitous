@@ -22,7 +22,11 @@ class ModelTest(Test):
     super().generate(**kwargs)
     for idx, case in enumerate(self.cases):
       result = True if case.expected.result is None else case.expected.result
-      case.expected = MicroxGen().get(case.input).mutate(self.e_mutators[idx])
+      try:
+        case.expected = MicroxGen().get(case.input).mutate(self.e_mutators[idx])
+      except Exception as e:
+        print("Microx fail in: " + self.name + " case " + case.name)
+        raise e
       case.expected.result = result
     return self
 
