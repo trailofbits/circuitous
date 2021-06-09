@@ -17,7 +17,7 @@
 #include <string_view>
 #include <iostream>
 
-namespace circuitous {
+namespace circuitous::eqsat {
 
   struct ASTNode;
   using ASTNodePtr = std::unique_ptr< ASTNode >;
@@ -214,4 +214,4 @@ namespace circuitous {
     std::size_t places;
   };
 
-} // namespace circuitous
+} // namespace circuitous::eqsat
