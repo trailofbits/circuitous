@@ -23,19 +23,13 @@ namespace circuitous {
 
     using circuit_ptr_t = std::unique_ptr<Circuit>;
 
-
-    static circuit_ptr_t make_circuit(const std::string &arch_name,
-                                      const std::string &os_name,
-                                      const std::string &file_name,
-                                      const Optimizations &opts={});
-
-    static circuit_ptr_t make_circuit(const std::string &arch_name,
-                                      const std::string &os_name,
+    static circuit_ptr_t make_circuit(std::string_view arch_name,
+                                      std::string_view os_name,
                                       const llvm::StringRef &bytes,
                                       const Optimizations &opts={});
 
-    static circuit_ptr_t make_circuit(const std::string &arch_name,
-                                      const std::string &os_name,
+    static circuit_ptr_t make_circuit(std::string_view arch_name,
+                                      std::string_view os_name,
                                       std::string_view bytes,
                                       const Optimizations &opts={});
     void Serialize(std::ostream &os);
