@@ -35,7 +35,7 @@ macro(settings_main)
   # compiler and linker flags
   #
   option(ENABLE_IPO
-    "Enable Interprocedural Optimization, aka Link Time Optimization (LTO)" ON
+    "Enable Interprocedural Optimization, aka Link Time Optimization (LTO)" OFF
   )
 
   if(ENABLE_IPO)
