@@ -26,6 +26,7 @@ class ModelTest(Test):
         case.expected = MicroxGen().get(case.input).mutate(self.e_mutators[idx])
       except Exception as e:
         print("Microx fail in: " + self.name + " case " + case.name)
+        print("Bytes: " + case.input.bytes)
         raise e
       case.expected.result = result
     return self
