@@ -85,7 +85,7 @@ namespace circuitous::eqsat {
     {
       _places.clear(); // reset places memoty on each parse
 
-      auto &&[val, str] = parse_pattern(pattern);
+      auto [val, str] = parse_pattern(pattern);
       if (ltrim(str).empty())
         return std::move(val);
       return nullptr;
@@ -130,7 +130,7 @@ namespace circuitous::eqsat {
 
       auto rest = tail;
       while (!rest.empty() && rest[0] != ')') {
-        auto &&[child, next] = parse_pattern(rest);
+        auto [child, next] = parse_pattern(rest);
         if (!child || next.empty())
           return parse_error();
         head->children.push_back(std::move(child));
@@ -174,7 +174,7 @@ namespace circuitous::eqsat {
     {
       str.remove_prefix(3); // remove 'op_' prefix
       if (auto parsed_name = parse_name(str)) {
-        auto &&[name, rest] = parsed_name.value();
+        auto [name, rest] = parsed_name.value();
         return { make_node< Op >(name), rest };
       }
       return parse_error();
@@ -184,7 +184,7 @@ namespace circuitous::eqsat {
     {
       str.remove_prefix(1); // remove '?' prefix
       if (auto parsed_name = parse_name(str)) {
-        auto &&[name, rest] = parsed_name.value();
+        auto [name, rest] = parsed_name.value();
         auto [it, _] = _places.try_emplace(name, _places.size());
         return { make_node< Place >(it->second), rest };
       }
