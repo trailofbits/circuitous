@@ -90,7 +90,19 @@ jobs:
         shell: bash
         run: |
           apt-get update
-          apt-get install -y clang g++-11
+          apt-get install -y software-properties-common
+
+          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
+
+          add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-12 main"
+
+          apt-get update
+          apt-get install -y clang-12 libstdc++-10-dev
+
+          update-alternatives \
+            --install /usr/bin/clang clang /usr/bin/clang-12 10 \
+            --slave   /usr/bin/clang++ clang++ /usr/bin/clang++-12
+
 
       - name: Clone the circuitous repository
         uses: actions/checkout@v2
@@ -189,6 +201,8 @@ jobs:
           mkdir circuitous_build && cd circuitous_build
 
           cmake \
+              -DCMAKE_C_COMPILER=clang-12 \
+              -DCMAKE_CXX_COMPILER=clang++-12 \
               -DCMAKE_VERBOSE_MAKEFILE=true \
               -DVCPKG_ROOT="${{ steps.cxxcommon_installer.outputs.PATH }}" \
               -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
