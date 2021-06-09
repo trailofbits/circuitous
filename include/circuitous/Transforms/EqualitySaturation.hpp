@@ -105,7 +105,7 @@ namespace circuitous::eqsat {
         : _egraph(egraph), _pattern(pattern)
       {}
 
-      // helper for patter visitor
+      // helper for pattern visitor
       template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
       template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
@@ -127,7 +127,7 @@ namespace circuitous::eqsat {
         // performs union of all matches on the root nodes in the given eclass
         MatchResult result = unmatched();
         for (const auto *node : eclass.nodes) {
-          if (auto &&subs = match(node, pattern)) {
+          if (auto subs = match(node, pattern)) {
             // TODO(Heno): check all places are matched
             if (!result)
               result = std::move(subs);
@@ -173,7 +173,7 @@ namespace circuitous::eqsat {
         auto child = root->children.begin();
         for (const auto &node : pattern->children) {
           auto child_class = _egraph.eclass(*child);
-          if (auto &&sub = match(child_class, node)) {
+          if (auto sub = match(child_class, node)) {
             children.push_back(std::move(sub.value()));
           } else {
             return unmatched();
@@ -183,7 +183,7 @@ namespace circuitous::eqsat {
 
         Substitutions product = head.value();
         // make product of all matches from all children
-        for (auto &&child : children) {
+        for (auto child : children) {
           if (child.empty())
             continue;
 
@@ -256,7 +256,7 @@ namespace circuitous::eqsat {
           EGraphMatcher matcher(egraph, _pattern);
 
           // pattern matches with a root in the eclass
-          if (auto &&substitutions = matcher.match(eclass))
+          if (auto substitutions = matcher.match(eclass))
             matches.emplace_back( id, std::move(substitutions.value()) );
         }
         return matches;
@@ -298,7 +298,7 @@ namespace circuitous::eqsat {
 
     void apply(Graph &egraph) const
     {
-      auto matches = mathc(egraph);
+      auto matches = match(egraph);
       apply(egraph, matches);
     }
 
