@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstring>
 #include <memory>
 #include <vector>
 #include <optional>
