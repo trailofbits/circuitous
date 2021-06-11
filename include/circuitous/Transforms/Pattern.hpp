@@ -15,6 +15,7 @@
 #include <variant>
 #include <string>
 #include <charconv>
+#include <unordered_map>
 #include <string_view>
 #include <iostream>
 
@@ -206,12 +207,12 @@ namespace circuitous::eqsat {
     Pattern(std::string_view pattern)
     {
       Parser parser;
-      value = parser.parse(pattern);
+      ast = parser.parse(pattern);
       assert( value );
       places = parser.seen_places();
     }
 
-    ASTNodePtr value;
+    ASTNodePtr ast;
     std::size_t places;
   };
 
