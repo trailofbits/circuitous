@@ -294,8 +294,10 @@ namespace circuitous::eqsat {
     {
       const auto &[id, substitutions] = match;
       // TODO(Heno): perform once for all substitutions
-      for (const auto &sub : substitutions)
-        _builder.synthesize(_pattern, sub);
+      for (const auto &sub : substitutions) {
+        auto patch = _builder.synthesize(_pattern, sub);
+        egraph.merge(id, patch);
+      }
     }
 
   private:
