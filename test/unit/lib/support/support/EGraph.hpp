@@ -8,10 +8,17 @@
 
 #include <doctest/doctest.h>
 #include <circuitous/ADT/EGraph.hpp>
+#include <circuitous/Transforms/Pattern.hpp>
+
+#include <glog/logging.h>
 
 #include <fstream>
+#include <string>
 
 namespace circuitous {
+
+  template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+  template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
   struct TestGraph : EGraph< ENode< std::string> >
   {
@@ -35,5 +42,43 @@ namespace circuitous {
 
   using TestENode = TestGraph::ENode;
   using Id = TestGraph::Id;
+
+  struct TestGraphBuilder
+  {
+    using Constant = eqsat::ASTNode::Constant;
+    using Place    = eqsat::ASTNode::Place;
+    using Op       = eqsat::ASTNode::Op;
+
+    using PatternNode = eqsat::ASTNodePtr;
+
+    TestGraphBuilder(TestGraph *graph) : _graph(graph) {}
+
+    template< typename Substitutions >
+    Id synthesize(const PatternNode &ast, const Substitutions &subs) const
+    {
+
+      std::vector< Id > args;
+      for (const auto &child : ast->children)
+        args.push_back(synthesize(child, subs));
+
+      auto node = std::visit( overloaded {
+        [&] (const Constant &con) -> Id { return _graph->make_leaf( std::to_string(con.ref()) ); },
+        [&] (const Place &plc)    -> Id { return subs.id(plc.ref()); },
+        [&] (const Op &op)        -> Id { return _graph->make_node(op.ref(), args); },
+        [&] (const auto&)         -> Id { LOG(FATAL) << "unsupported node"; },
+      }, ast->value);
+
+      return node;
+    }
+
+    template< typename Pattern, typename Substitution >
+    Id synthesize(const Pattern &pattern, const Substitution &sub) const
+    {
+      assert(subs.size() == pattern.places);
+      return synthesize(pattern.ast, sub);
+    }
+
+    TestGraph *_graph;
+  };
 
 } // namesapce circuitous
