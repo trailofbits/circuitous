@@ -20,306 +20,338 @@
 #include <string>
 #include <string_view>
 
+#include <circuitous/IR/IR.h>
+#include <llvm/BinaryFormat/Dwarf.h>
 #include <circuitous/Transforms/Pattern.hpp>
 
 namespace circuitous::eqsat {
 
+  // helper for pattern visitor
+  template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
+  template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
+
+  // substitution mapping from places (variables) to equality classes
   template< typename Graph >
-  struct Rule
+  struct Substitution
   {
     using Id = typename Graph::Id;
     using Place = ASTNode::Place;
 
-    // substitution mapping from places (variables) to equality classes
-    struct Substitution
+    using value_type = std::pair< Id, bool >;
+
+    Substitution(size_t size) : _mapping(size, 0) , _matched(size, false) {}
+
+    bool test(size_t idx) const
     {
-      using value_type = std::pair< Id, bool >;
+      return _matched[idx];
+    }
 
-      Substitution(size_t size) : _mapping(size, 0) , _matched(size, false) {}
+    void set(size_t idx, Id id)
+    {
+      _matched[idx] = true;
+      _mapping[idx] = id;
+    }
 
-      bool test(size_t idx) const
-      {
-        return _matched[idx];
-      }
+    bool try_set(Place place, Id id)
+    {
+      auto idx = place.ref();
+      if (!test(idx))
+        return false;
+      set(idx, id);
+      return true;
+    }
 
-      void set(size_t idx, Id id)
-      {
-        _matched[idx] = true;
-        _mapping[idx] = id;
-      }
+    Id id(size_t idx) const
+    {
+      assert(test(idx));
+      return _mapping[idx];
+    }
 
-      bool try_set(Place place, Id id)
-      {
-        auto idx = place.ref();
-        if (!test(idx))
-          return false;
-        set(idx, id);
-        return true;
-      }
+    size_t size() const { return _mapping.size(); }
 
-      Id id(size_t idx) const
-      {
-        assert(test(idx));
-        return _mapping[idx];
-      }
+    value_type get(size_t idx) const
+    {
+      return { _mapping[idx], _matched[idx] };
+    }
 
-      size_t size() const { return _mapping.size(); }
+    friend bool operator<(const Substitution &a, const Substitution &b)
+    {
+      return std::tie(a._mapping, a._matched) < std::tie(b._mapping, b._matched);
+    }
 
-      value_type get(size_t idx) const
-      {
-        return { _mapping[idx], _matched[idx] };
-      }
+  private:
+    std::vector< Id > _mapping;
+    std::vector< bool > _matched;
+  };
 
-      friend bool operator<(const Substitution &a, const Substitution &b)
-      {
-        return std::tie(a._mapping, a._matched) < std::tie(b._mapping, b._matched);
-      }
+  template< typename Graph >
+  using Substitutions = std::set< Substitution< Graph > >;
 
-    private:
-      std::vector< Id > _mapping;
-      std::vector< bool > _matched;
-    };
+  // Result of matched nodes rooting in the given equality class
+  template< typename Graph >
+  using EClassMatch = std::pair< typename Graph::Id, Substitutions< Graph > >;
 
-    using Substitutions = std::set< Substitution >;
+  template< typename Graph >
+  using Matches = std::vector< EClassMatch< Graph > >;
 
-    // Result of matched nodes rooting in the given equality class
-    using EClassMatch = std::pair< Id, Substitutions >;
-    using Matches = std::vector< EClassMatch >;
+  template< typename Graph >
+  struct EGraphMatcher
+  {
+    using PatternNode = ASTNodePtr;
+    using ENode = typename Graph::ENode;
+    using EClass = typename Graph::EClass;
+    using Id = typename Graph::Id;
 
-    Rule(std::string_view name, std::string_view lhs, std::string_view rhs)
-      : name(name), _lhs(Pattern(lhs)), _rhs(Pattern(rhs))
+    using Constant = ASTNode::Constant;
+    using Place    = ASTNode::Place;
+    using Op       = ASTNode::Op;
+
+    using Substitution = Substitution< Graph >;
+    using Substitutions = Substitutions< Graph >;
+
+    EGraphMatcher(const Graph &egraph, const Pattern &pattern)
+      : _egraph(egraph), _pattern(pattern)
     {}
 
-    struct EGraphMatcher
+    using MatchResult = std::optional< Substitutions >;
+
+    MatchResult empty_match(bool is_matched)
     {
-      using PatternNode = ASTNodePtr;
-      using ENode = typename Graph::ENode;
-      using EClass = typename Graph::EClass;
-      using Id = typename Graph::Id;
+      if (is_matched)
+        return Substitutions{Substitution(_pattern.places)};
+      return std::nullopt;
+    }
 
-      using Constant = ASTNode::Constant;
-      using Place    = ASTNode::Place;
-      using Op       = ASTNode::Op;
+    static MatchResult unmatched() { return std::nullopt; }
 
-      EGraphMatcher(const Graph &egraph, const Pattern &pattern)
-        : _egraph(egraph), _pattern(pattern)
-      {}
+    MatchResult match(const EClass &eclass) { return match(eclass, _pattern.ast); }
 
-      // helper for pattern visitor
-      template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
-      template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
-
-      using MatchResult = std::optional< Substitutions >;
-
-      MatchResult empty_match(bool is_matched)
-      {
-        if (is_matched)
-          return Substitutions{Substitution(_pattern.places)};
-        return std::nullopt;
-      }
-
-      static MatchResult unmatched() { return std::nullopt; }
-
-      MatchResult match(const EClass &eclass) { return match(eclass, _pattern.value); }
-
-      MatchResult match(const EClass &eclass, const PatternNode &pattern)
-      {
-        // performs union of all matches on the root nodes in the given eclass
-        MatchResult result = unmatched();
-        for (const auto *node : eclass.nodes) {
-          if (auto subs = match(node, pattern)) {
-            // TODO(Heno): check all places are matched
-            if (!result)
-              result = std::move(subs);
-            else
-              result->merge(std::move(subs.value()));
-          }
+    MatchResult match(const EClass &eclass, const PatternNode &pattern)
+    {
+      // performs union of all matches on the root nodes in the given eclass
+      MatchResult result = unmatched();
+      for (const auto *node : eclass.nodes) {
+        if (auto subs = match(node, pattern)) {
+          // TODO(Heno): check all places are matched
+          if (!result)
+            result = std::move(subs);
+          else
+            result->merge(std::move(subs.value()));
         }
-        return result;
       }
+      return result;
+    }
 
-      MatchResult match_one(const ENode *root, const PatternNode &pattern)
-      {
-        return std::visit( overloaded {
-          [&] (const Constant &con) -> MatchResult {
-            if (auto node_con = root->constant())
-              return empty_match(node_con == con);
-            return unmatched();
-          },
-          [&] (const Place &plc) -> MatchResult {
-            auto id = _egraph.find(root);
-            Substitution sub( _pattern.places );
-            sub.set(plc.ref(), id);
-            return Substitutions{sub};
-          },
-          [&] (const Op &op) -> MatchResult {
-            return empty_match(root->name() == op);
-          },
-          [&] (const auto&) -> MatchResult { return unmatched(); /* unsupported kind */ },
-        }, pattern->value );
-      }
-
-      MatchResult match(const ENode *root, const PatternNode &pattern)
-      {
-        auto head = match_one(root, pattern);
-        if (!head)
+    MatchResult match_one(const ENode *root, const PatternNode &pattern)
+    {
+      return std::visit( overloaded {
+        [&] (const Constant &con) -> MatchResult {
+          if (auto node_con = root->constant())
+            return empty_match(node_con == con);
           return unmatched();
+        },
+        [&] (const Place &plc) -> MatchResult {
+          auto id = _egraph.find(root);
+          Substitution sub( _pattern.places );
+          sub.set(plc.ref(), id);
+          return Substitutions{sub};
+        },
+        [&] (const Op &op) -> MatchResult {
+          return empty_match(root->name() == op);
+        },
+        [&] (const auto&) -> MatchResult { return unmatched(); /* unsupported kind */ },
+      }, pattern->value );
+    }
 
-        if (pattern->children.empty())
-          return head;
+    MatchResult match(const ENode *root, const PatternNode &pattern)
+    {
+      auto head = match_one(root, pattern);
+      if (!head)
+        return unmatched();
 
-        std::vector< Substitutions > children;
+      if (pattern->children.empty())
+        return head;
 
-        auto child = root->children.begin();
-        for (const auto &node : pattern->children) {
-          auto child_class = _egraph.eclass(*child);
-          if (auto sub = match(child_class, node)) {
-            children.push_back(std::move(sub.value()));
-          } else {
-            return unmatched();
-          }
-          ++child;
+      std::vector< Substitutions > children;
+
+      auto child = root->children.begin();
+      for (const auto &node : pattern->children) {
+        auto child_class = _egraph.eclass(*child);
+        if (auto sub = match(child_class, node)) {
+          children.push_back(std::move(sub.value()));
+        } else {
+          return unmatched();
+        }
+        ++child;
+      }
+
+      Substitutions product = head.value();
+      // make product of all matches from all children
+      for (auto child : children) {
+        if (child.empty())
+          continue;
+
+        if (product.empty()) {
+          product = std::move(child);
+          continue;
         }
 
-        Substitutions product = head.value();
-        // make product of all matches from all children
-        for (auto child : children) {
-          if (child.empty())
-            continue;
-
-          if (product.empty()) {
-            product = std::move(child);
-            continue;
-          }
-
-          Substitutions next;
-          for (const auto &substitution : child) {
-            std::optional< Substitution > partial;
-            // make product of all alternatives with all alreadz processed children
-            for (const auto &matched : product) {
-              for (size_t idx = 0; idx < substitution.size(); ++idx) {
-                auto [id, set] = substitution.get(idx);
-                if (!set)
-                  continue;
-                // check whether matches between children do not conflict
-                // placeholder no yet matched
-                if (!matched.test(idx)) {
-                  partial = matched;
-                  partial->set(idx, id);
-                // already matched and does not conflict with other children match
-                } else if (matched.id(idx) == id) {
-                  partial = matched;
-                }
-                // otherwise we skip match
+        Substitutions next;
+        for (const auto &substitution : child) {
+          std::optional< Substitution > partial;
+          // make product of all alternatives with all alreadz processed children
+          for (const auto &matched : product) {
+            for (size_t idx = 0; idx < substitution.size(); ++idx) {
+              auto [id, set] = substitution.get(idx);
+              if (!set)
+                continue;
+              // check whether matches between children do not conflict
+              // placeholder no yet matched
+              if (!matched.test(idx)) {
+                partial = matched;
+                partial->set(idx, id);
+              // already matched and does not conflict with other children match
+              } else if (matched.id(idx) == id) {
+                partial = matched;
               }
+              // otherwise we skip match
             }
-
-            if (partial.has_value())
-              next.insert(std::move(partial.value()));
           }
-          std::swap(product, next);
-        }
 
-        return product;
+          if (partial.has_value())
+            next.insert(std::move(partial.value()));
+        }
+        std::swap(product, next);
       }
 
-      template< typename stream >
-      static void print_substitutions(const Substitutions &substitutions, stream &out)
-      {
-        int i = 0;
-        if (substitutions.empty())
-          out << "empty substitutions\n";
-        for (const auto &sub : substitutions) {
-          out << "alternative " << i++ << '\n';
-          for (size_t i = 0; i < sub.size(); ++i) {
-            if (sub.test(i))
-              out << i << " -> " << sub.id(i) << '\n';
-          }
-        }
-      }
+      return product;
+    }
 
-    private:
-      const Graph &_egraph;
-      const Pattern &_pattern;
-    };
-
-    struct Matcher
+    template< typename stream >
+    static void print_substitutions(const Substitutions &substitutions, stream &out)
     {
-      Matcher(Pattern &&pattern) : _pattern(std::move(pattern)) {}
-
-      Matches match(const Graph &egraph) const
-      {
-        // TODO(Heno): add operation caching to egraph
-
-        Matches matches;
-        for (const auto &[id, eclass] : egraph.classes()) {
-          EGraphMatcher matcher(egraph, _pattern);
-
-          // pattern matches with a root in the eclass
-          if (auto substitutions = matcher.match(eclass))
-            matches.emplace_back( id, std::move(substitutions.value()) );
-        }
-        return matches;
-      }
-
-    private:
-      Pattern _pattern;
-    };
-
-    struct Applier
-    {
-      Applier(Pattern &&pattern) : _pattern(std::move(pattern)) {}
-
-      void apply_on_matches(Graph &egraph, const Matches &matches) const
-      {
-        for (const auto &match : matches) {
-          apply_on(egraph, match);
+      int i = 0;
+      if (substitutions.empty())
+        out << "empty substitutions\n";
+      for (const auto &sub : substitutions) {
+        out << "alternative " << i++ << '\n';
+        for (size_t i = 0; i < sub.size(); ++i) {
+          if (sub.test(i))
+            out << i << " -> " << sub.id(i) << '\n';
         }
       }
+    }
 
-      void apply_on(Graph &egraph, const EClassMatch &match) const
-      {
+  private:
+    const Graph &_egraph;
+    const Pattern &_pattern;
+  };
 
-      }
+  template< typename Graph >
+  struct Matcher
+  {
+    using Matches = Matches< Graph >;
 
-    private:
-      Pattern _pattern;
-    };
+    Matcher(const Pattern &pattern) : _pattern(pattern) {}
 
     Matches match(const Graph &egraph) const
     {
-      return _lhs.match(egraph);
+      // TODO(Heno): add operation caching to egraph
+
+      Matches matches;
+      for (const auto &[id, eclass] : egraph.classes()) {
+        EGraphMatcher matcher(egraph, _pattern);
+
+        // pattern matches with a root in the eclass
+        if (auto substitutions = matcher.match(eclass))
+          matches.emplace_back( id, std::move(substitutions.value()) );
+      }
+      return matches;
     }
 
-    void apply(Graph &egraph, const Matches &matches) const
+  private:
+    const Pattern &_pattern;
+  };
+
+  template< typename Graph, typename Builder >
+  struct Applier
+  {
+    using Matches = Matches< Graph >;
+    using EClassMatch = EClassMatch< Graph >;
+
+    Applier(const Pattern &pattern, Builder builder)
+      : _pattern(pattern), _builder(builder)
+    {}
+
+    void apply_on_matches(Graph &egraph, const Matches &matches) const
     {
-      _rhs.apply_on_matches(egraph, matches);
+      for (const auto &match : matches) {
+        apply_on(egraph, match);
+      }
     }
 
-    void apply(Graph &egraph) const
+    void apply_on(Graph &egraph, const EClassMatch &match) const
+    {
+      const auto &[id, substitutions] = match;
+      // TODO(Heno): perform once for all substitutions
+      for (const auto &sub : substitutions)
+        _builder.synthesize(_pattern, sub);
+    }
+
+  private:
+    const Pattern &_pattern;
+    Builder _builder;
+  };
+
+  template< typename Graph >
+  struct Rule
+  {
+    Rule(std::string_view name, std::string_view lhs_, std::string_view rhs_)
+      : name(name), lhs(lhs_), rhs(rhs_)
+    {}
+
+    using Matches = Matches< Graph >;
+
+    Matches match(const Graph &egraph) const
+    {
+      using Matcher = Matcher< Graph >;
+
+      return Matcher(lhs).match(egraph);
+    }
+
+    template< typename Builder >
+    void apply(Graph &egraph, Builder builder, const Matches &matches) const
+    {
+      using Applier = Applier< Graph, Builder >;
+
+      Applier(rhs, builder).apply_on_matches(egraph, matches);
+    }
+
+    template< typename Builder >
+    void apply(Graph &egraph, Builder builder) const
     {
       auto matches = match(egraph);
-      apply(egraph, matches);
+      apply(egraph, builder, matches);
     }
 
     const std::string name;
-
-  private:
     // Rewrite rule 'lhs -> rhs' that allows to match
     // left-hand-side and replace it with right-hand-side
-    Matcher _lhs;
-    Applier _rhs;
+    Pattern lhs;
+    Pattern rhs;
   };
+
 
   template< typename Graph >
   using Rules = std::vector< Rule< Graph > >;
 
-
-  template< typename Graph >
+  template< typename Graph, typename Builder >
   struct BasicRulesScheduler
   {
     using Rule = Rule< Graph >;
-    using Matches = typename Rule::Matches;
+    using Matches = Matches< Graph >;
+
+    BasicRulesScheduler(Builder &builder) : _builder(builder) {}
 
     Matches match_rule(const Graph &egraph, const Rule &rule) const
     {
@@ -328,7 +360,7 @@ namespace circuitous::eqsat {
 
     void apply_rule(Graph &egraph, const Rule &rule, const Matches &matches) const
     {
-      rule.apply(egraph, matches);
+      rule.apply(egraph, _builder, matches);
     }
 
     void apply_rule(Graph &egraph, const Rule &rule) const
@@ -336,6 +368,8 @@ namespace circuitous::eqsat {
       rule.apply(egraph);
     }
 
+  private:
+    Builder _builder;
   };
 
 } // namespace circuitous::eqsat
