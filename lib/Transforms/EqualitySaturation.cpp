@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <vector>
+#include <span>
 
 namespace circuitous {
 namespace eqsat {
@@ -45,6 +46,64 @@ namespace eqsat {
     }
   };
 
+  template< typename Graph >
+  struct PatternCircuitBuilder
+  {
+    using Constant = ASTNode::Constant;
+    using Place    = ASTNode::Place;
+    using Op       = ASTNode::Op;
+
+    using Id       = typename Graph::Id;
+
+    using PatternNode = ASTNodePtr;
+
+    PatternCircuitBuilder(Circuit *circuit_) : circuit(circuit_) {}
+
+    Operation* constant(const Constant &con) const
+    {
+      return nullptr;
+    }
+
+    Operation* operation(const Op &op, std::span< Operation * > args) const
+    {
+      auto res = [&] () -> Operation* {
+        LOG(FATAL) << "unsupported operation";
+      } ();
+
+      for (auto arg : args)
+        res->AddUse(arg);
+
+      return res;
+    }
+
+    template< typename Substitutions >
+    Operation *synthesize(const PatternNode &ast, const Substitutions &subs) const
+    {
+      // TODO(Heno): addnodes to egraph
+      std::vector< Operation* > args;
+      for (const auto &child : ast->children)
+        args.push_back(synthesize(child, subs));
+
+      auto node = std::visit( overloaded {
+        [&] (const Constant &con) -> Operation* { return constant(con); },
+        [&] (const Place &plc)    -> Operation* { return nullptr; /* TODO(Heno) */ },
+        [&] (const Op &op)        -> Operation* { return operation(op, args); },
+        [&] (const auto&)         -> Operation* { return nullptr; },
+      }, ast->value);
+
+      return node;
+    }
+
+    template< typename Pattern, typename Substitutions >
+    Id synthesize(const Pattern &pattern, const Substitutions &subs) const
+    {
+      CHECK(subs.size() == pattern.places);
+      return 0;
+    }
+
+    Circuit *circuit;
+  };
+
 
   // Runner orchestrates a whole equality saturation
   template< typename Graph, template< typename > typename Scheduler >
@@ -54,8 +113,13 @@ namespace eqsat {
     using Rules = Rules< Graph >;
     using RulesScheduler = Scheduler< Graph >;
     using Matches = typename Rule::Matches;
+    using PatternCircuitBuilder = PatternCircuitBuilder< Graph >;
 
-    EqSatRunner(Graph &&egraph) : _egraph(std::move(egraph)) {}
+    EqSatRunner(Circuit *circuit)
+      : _egraph(EGraphBuilder().build(circuit))
+      , _builder(circuit)
+      , _scheduler(_builder)
+    {}
 
     // return value of equality saturation
     enum class stop_reason
@@ -106,11 +170,14 @@ namespace eqsat {
     const Graph& egraph() const { return _egraph; }
 
   private:
-    RulesScheduler _scheduler;
     Graph _egraph;
+    PatternCircuitBuilder _builder;
+    RulesScheduler _scheduler;
   };
 
-  using DefaultRunner = EqSatRunner< CircuitEGraph, BasicRulesScheduler >;
+  template< typename Graph >
+  using Scheduler = BasicRulesScheduler< Graph, PatternCircuitBuilder< Graph > >;
+  using DefaultRunner = EqSatRunner< CircuitEGraph, Scheduler >;
   using CircuitRewriteRules = Rules< CircuitEGraph >;
 
 } // namespace eqsat
@@ -123,8 +190,7 @@ namespace eqsat {
 
     LOG(INFO) << "Start equality saturation";
 
-    GraphBuilder ebuilder;
-    auto runner = Runner( ebuilder.build(circuit) );
+    auto runner = Runner(circuit);
 
     RewriteRules rules;
     runner.run(rules);
