@@ -74,7 +74,7 @@ namespace circuitous {
     template< typename Pattern, typename Substitution >
     Id synthesize(const Pattern &pattern, const Substitution &sub) const
     {
-      assert(subs.size() == pattern.places);
+      CHECK(sub.size() == pattern.places.size());
       return synthesize(pattern.ast, sub);
     }
 
