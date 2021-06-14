@@ -74,6 +74,11 @@ namespace circuitous::eqsat {
       return { _mapping[idx], _matched[idx] };
     }
 
+    bool fully_matched() const
+    {
+      return std::all_of(_matched.begin(), _matched.end(), [](bool v) { return v; });
+    }
+
     friend bool operator<(const Substitution &a, const Substitution &b)
     {
       return std::tie(a._mapping, a._matched) < std::tie(b._mapping, b._matched);
@@ -124,7 +129,18 @@ namespace circuitous::eqsat {
 
     static MatchResult unmatched() { return std::nullopt; }
 
-    MatchResult match(const EClass &eclass) { return match(eclass, _pattern.ast); }
+    MatchResult match(const EClass &eclass)
+    {
+      if (auto result = match(eclass, _pattern.ast)) {
+        // filter out non-fully matched substitutions
+        std::erase_if(result.value(), [](const auto &sub) {
+          return !sub.fully_matched();
+        });
+        return result;
+      }
+
+      return std::nullopt;
+    }
 
     MatchResult match(const EClass &eclass, const PatternNode &pattern)
     {
@@ -132,7 +148,6 @@ namespace circuitous::eqsat {
       MatchResult result = unmatched();
       for (const auto *node : eclass.nodes) {
         if (auto subs = match(node, pattern)) {
-          // TODO(Heno): check all places are matched
           if (!result)
             result = std::move(subs);
           else
@@ -185,6 +200,20 @@ namespace circuitous::eqsat {
         }
       }
 
+      auto merge = [] (auto lhs, const auto &rhs) -> std::optional< Substitution > {
+        for (size_t idx = 0; idx < rhs.size(); ++idx) {
+          if (auto [id, set] = rhs.get(idx); set) {
+            if (!lhs.test(idx)) {
+              lhs.set(idx, id);
+            } else {
+              if (lhs.id(idx) != id)
+                return std::nullopt;
+            }
+          }
+        }
+        return lhs;
+      };
+
       Substitutions product = head.value();
       // make product of all matches from all children
       for (auto child : children) {
@@ -197,31 +226,12 @@ namespace circuitous::eqsat {
         }
 
         Substitutions next;
+        // make product of all alternatives with all already processed children
         for (const auto &substitution : child) {
-          std::optional< Substitution > partial;
-          // make product of all alternatives with all already processed children
           for (const auto &matched : product) {
-            for (size_t idx = 0; idx < substitution.size(); ++idx) {
-              auto [id, set] = substitution.get(idx);
-              if (!set) {
-                partial = matched;
-                continue;
-              }
-              // check whether matches between children do not conflict
-              // placeholder no yet matched
-              if (!matched.test(idx)) {
-                partial = matched;
-                partial->set(idx, id);
-              // already matched and does not conflict with other children match
-              } else if (matched.id(idx) == id) {
-                partial = matched;
-              }
-              // otherwise we skip match
-            }
+            if (auto prod = merge(matched, substitution))
+              next.insert(std::move(prod.value()));
           }
-
-          if (partial.has_value())
-            next.insert(std::move(partial.value()));
         }
         std::swap(product, next);
       }
@@ -268,6 +278,7 @@ namespace circuitous::eqsat {
         if (auto substitutions = matcher.match(eclass))
           matches.emplace_back( id, std::move(substitutions.value()) );
       }
+
       return matches;
     }
 
