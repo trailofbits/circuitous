@@ -97,7 +97,7 @@ namespace eqsat {
     template< typename Pattern, typename Substitutions >
     Id synthesize(const Pattern &pattern, const Substitutions &subs) const
     {
-      CHECK(subs.size() == pattern.places);
+      CHECK(subs.size() == pattern.places.size());
       return 0;
     }
 
