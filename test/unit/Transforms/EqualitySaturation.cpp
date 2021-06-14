@@ -100,4 +100,30 @@ namespace circuitous::eqsat {
     CHECK(count_matches(madd.match(egraph)) == 1);
   }
 
+  TEST_CASE("EGraph Pattern Rewrite Commutativity")
+  {
+    TestGraph egraph;
+    TestGraphBuilder builder(&egraph);
+
+    auto idx = egraph.make_leaf("x");
+    auto idy = egraph.make_leaf("y");
+    auto ida = egraph.make_node("add", {idx, idy});
+
+    auto cadd = TestRule("commutativity addition", "(op_add ?x ?y)", "(op_add ?y ?x)");
+
+    cadd.apply(egraph, builder);
+    egraph.rebuild();
+
+    auto additions = egraph.eclass(ida);
+    CHECK(additions.size() == 2);
+
+    CHECK(additions.nodes[0]->children[0] == idx);
+    CHECK(additions.nodes[0]->children[1] == idy);
+
+    CHECK(additions.nodes[1]->children[0] == idy);
+    CHECK(additions.nodes[1]->children[1] == idx);
+
+    egraph.dump("egraph.dot");
+  }
+
 } // namespace circuitous::eqsat
