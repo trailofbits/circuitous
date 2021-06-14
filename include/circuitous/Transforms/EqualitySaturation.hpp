@@ -63,7 +63,7 @@ namespace circuitous::eqsat {
 
     Id id(size_t idx) const
     {
-      assert(test(idx));
+      CHECK(test(idx));
       return _mapping[idx];
     }
 

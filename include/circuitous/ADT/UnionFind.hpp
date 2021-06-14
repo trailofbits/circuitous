@@ -5,7 +5,6 @@
 #pragma once
 
 #include <cstdint>
-#include <cassert>
 #include <vector>
 
 namespace circuitous {
@@ -21,13 +20,13 @@ namespace circuitous {
 
     [[nodiscard]] inline Id& parent(Id id) noexcept
     {
-      assert( _parents.size() > id );
+      CHECK( _parents.size() > id );
       return _parents[id];
     }
 
     [[nodiscard]] inline Id parent(Id id) const noexcept
     {
-      assert( _parents.size() > id );
+      CHECK( _parents.size() > id );
       return _parents[id];
     }
 
@@ -56,9 +55,9 @@ namespace circuitous {
 
     inline Id merge(Id a, Id b) noexcept
     {
-      assert(a == parent(a));
-      assert(b == parent(b));
-      assert(a != b);
+      CHECK(a == parent(a));
+      CHECK(b == parent(b));
+      CHECK(a != b);
 
       parent(b) = a;
       return a;
