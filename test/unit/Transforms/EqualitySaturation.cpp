@@ -122,8 +122,32 @@ namespace circuitous::eqsat {
 
     CHECK(additions.nodes[1]->children[0] == idy);
     CHECK(additions.nodes[1]->children[1] == idx);
+  }
 
-    egraph.dump("egraph.dot");
+  TEST_CASE("EGraph Pattern Rewrite Operation")
+  {
+    TestGraph egraph;
+    TestGraphBuilder builder(&egraph);
+
+    auto idx = egraph.make_leaf("x");
+    auto ida = egraph.make_node("add", {idx, idx});
+
+    auto rule = TestRule("addition to multiplication", "(op_add ?x ?x)", "(op_mul ?x 2)");
+    CHECK(count_matches(rule.match(egraph)) == 1);
+
+    rule.apply(egraph, builder);
+    egraph.rebuild();
+
+    auto ops = egraph.eclass(ida);
+
+    CHECK(ops.size() == 2);
+    CHECK(ops.nodes[0]->term == "add");
+    CHECK(ops.nodes[0]->children[0] == idx);
+    CHECK(ops.nodes[0]->children[1] == idx);
+
+    CHECK(ops.nodes[1]->term == "mul");
+    CHECK(ops.nodes[1]->children[0] == idx);
+    CHECK(ops.nodes[1]->children[1] != idx);
   }
 
 } // namespace circuitous::eqsat
