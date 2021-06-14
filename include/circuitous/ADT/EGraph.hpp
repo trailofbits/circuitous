@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
-#include <cassert>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -159,7 +158,7 @@ namespace circuitous {
       }
 
       auto new_id = _unions.merge(a, b);
-      assert(new_id == a);
+      CHECK_EQ(new_id, a);
 
       _pending.push_back(new_id);
 

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <circuitous/Util/StrongType.h>
+#include <glog/logging.h>
 
 #include <algorithm>
 #include <cctype>
@@ -211,7 +212,7 @@ namespace circuitous::eqsat {
     {
       Parser parser;
       ast = parser.parse(pattern, map);
-      assert( value );
+      CHECK(ast);
       places = parser.places();
     }
 
