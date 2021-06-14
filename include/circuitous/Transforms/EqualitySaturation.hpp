@@ -118,7 +118,7 @@ namespace circuitous::eqsat {
     MatchResult empty_match(bool is_matched)
     {
       if (is_matched)
-        return Substitutions{Substitution(_pattern.places)};
+        return Substitutions{Substitution(_pattern.places.size())};
       return std::nullopt;
     }
 
@@ -152,7 +152,7 @@ namespace circuitous::eqsat {
         },
         [&] (const Place &plc) -> MatchResult {
           auto id = _egraph.find(root);
-          Substitution sub( _pattern.places );
+          Substitution sub( _pattern.places.size() );
           sub.set(plc.ref(), id);
           return Substitutions{sub};
         },
@@ -309,7 +309,7 @@ namespace circuitous::eqsat {
   struct Rule
   {
     Rule(std::string_view name, std::string_view lhs_, std::string_view rhs_)
-      : name(name), lhs(lhs_), rhs(rhs_)
+      : name(name), lhs(lhs_), rhs(rhs_, lhs.places)
     {}
 
     using Matches = Matches< Graph >;
