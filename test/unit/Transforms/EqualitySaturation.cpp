@@ -36,16 +36,16 @@ namespace circuitous::eqsat {
     egraph.make_node("mul", {idx, idy});
 
     auto imul = TestRule("identity multiplication", "(op_mul ?x 1)", "?x");
-    CHECK(imul.match(egraph).size() == 1);
+    CHECK(count_matches(imul.match(egraph)) == 1);
 
     auto zmul = TestRule("zero multiplication", "(op_mul ?x 0)", "0");
-    CHECK(zmul.match(egraph).size() == 0);
+    CHECK(count_matches(zmul.match(egraph)) == 0);
 
     auto cmul = TestRule("commutativity multiplication", "(op_mul ?x ?y)", "(op_mul ?y ?x)");
-    CHECK(cmul.match(egraph).size() == 1);
+    CHECK(count_matches(cmul.match(egraph)) == 1);
 
     auto id = TestRule("id", "?x", "?x");
-    CHECK(id.match(egraph).size() == 3);
+    CHECK(count_matches(id.match(egraph)) == 3);
   }
 
   TEST_CASE("EGraph Pattern Matching Addition")
@@ -144,6 +144,64 @@ namespace circuitous::eqsat {
     CHECK(ops.nodes[0]->term == "add");
     CHECK(ops.nodes[0]->children[0] == idx);
     CHECK(ops.nodes[0]->children[1] == idx);
+
+    CHECK(ops.nodes[1]->term == "mul");
+    CHECK(ops.nodes[1]->children[0] == idx);
+    CHECK(ops.nodes[1]->children[1] != idx);
+  }
+
+  TEST_CASE("EGraph Pattern Rewrite Simplification")
+  {
+    TestGraph egraph;
+    TestGraphBuilder builder(&egraph);
+
+    auto idx = egraph.make_leaf("x");
+    auto idy = egraph.make_leaf("1");
+    auto root = egraph.make_node("mul", {idx, idy});
+
+    auto imul = TestRule("identity multiplication", "(op_mul ?x 1)", "?x");
+    CHECK(imul.match(egraph).size() == 1);
+
+    imul.apply(egraph, builder);
+    egraph.rebuild();
+
+    auto ops = egraph.eclass(root);
+
+    CHECK(ops.size() == 2);
+    CHECK(ops.nodes[0]->term == "x");
+
+    CHECK(ops.nodes[1]->term == "mul");
+    CHECK(ops.nodes[1]->children[0] == idx);
+    CHECK(ops.nodes[1]->children[1] == idy);
+  }
+
+  TEST_CASE("EGraph Pattern Rewrite Chain")
+  {
+    TestGraph egraph;
+    TestGraphBuilder builder(&egraph);
+
+    auto idx = egraph.make_leaf("x");
+    auto idy = egraph.make_leaf("1");
+    auto mul = egraph.make_node("mul", {idx, idy});
+    auto root = egraph.make_node("add", {idx, mul});
+
+    auto imul = TestRule("identity multiplication", "(op_mul ?x 1)", "?x");
+    CHECK(imul.match(egraph).size() == 1);
+    imul.apply(egraph, builder);
+
+    auto atom = TestRule("addition to multiplication", "(op_add ?x ?x)", "(op_mul ?x 2)");
+    CHECK(atom.match(egraph).size() == 1);
+    atom.apply(egraph, builder);
+
+    egraph.rebuild();
+    egraph.dump("egraph.dot");
+
+    auto ops = egraph.eclass(root);
+
+    CHECK(ops.size() == 2);
+    CHECK(ops.nodes[0]->term == "add");
+    CHECK(ops.nodes[0]->children[0] == idx);
+    CHECK(ops.nodes[0]->children[0] == idx);
 
     CHECK(ops.nodes[1]->term == "mul");
     CHECK(ops.nodes[1]->children[0] == idx);
