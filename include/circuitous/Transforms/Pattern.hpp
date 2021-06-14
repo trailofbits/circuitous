@@ -62,6 +62,7 @@ namespace circuitous::eqsat {
     using Op       = ASTNode::Op;
 
     using ParseResult = std::pair< ASTNodePtr, std::string_view >;
+    using PlacesMap = std::unordered_map< std::string, Place >;
 
     ParseResult parse_error(std::string_view msg = "") const
     {
@@ -82,9 +83,9 @@ namespace circuitous::eqsat {
       return res;
     }
 
-    ASTNodePtr parse(std::string_view pattern)
+    ASTNodePtr parse(std::string_view pattern, PlacesMap map = {})
     {
-      _places.clear(); // reset places memoty on each parse
+      _places = map;
 
       auto [val, str] = parse_pattern(pattern);
       if (ltrim(str).empty())
@@ -192,28 +193,30 @@ namespace circuitous::eqsat {
       return parse_error();
     }
 
-    std::size_t seen_places() const { return _places.size(); }
+    PlacesMap places() const { return _places; }
 
   private:
-    std::unordered_map< std::string, ASTNode::Place > _places;
+    PlacesMap _places;
   };
 
   struct Pattern
   {
     using Parser = PatternParser;
+    using PlacesMap = Parser::PlacesMap;
+
     using Place  = ASTNode::Place;
     using Places = ASTNode::Places;
 
-    Pattern(std::string_view pattern)
+    Pattern(std::string_view pattern, PlacesMap map = {})
     {
       Parser parser;
-      ast = parser.parse(pattern);
+      ast = parser.parse(pattern, map);
       assert( value );
-      places = parser.seen_places();
+      places = parser.places();
     }
 
     ASTNodePtr ast;
-    std::size_t places;
+    PlacesMap places;
   };
 
 } // namespace circuitous::eqsat

@@ -84,12 +84,12 @@ namespace circuitous::eqsat {
 
   TEST_CASE("Pattern Places") {
     using Places = Pattern::Places;
-    CHECK(Pattern("?x").places == 1);
-    CHECK(Pattern("(op_mul ?x ?y)").places == 2);
-    CHECK(Pattern("(op_mul ?x ?x)").places == 1);
-    CHECK(Pattern("(?x ?y ?z)").places == 3);
-    CHECK(Pattern("(op_add (op_mul 1 ?x) ?y)").places == 2);
-    CHECK(Pattern("(op_add (op_mul 1 ?x) ?x)").places == 1);
+    CHECK(Pattern("?x").places.size() == 1);
+    CHECK(Pattern("(op_mul ?x ?y)").places.size() == 2);
+    CHECK(Pattern("(op_mul ?x ?x)").places.size() == 1);
+    CHECK(Pattern("(?x ?y ?z)").places.size() == 3);
+    CHECK(Pattern("(op_add (op_mul 1 ?x) ?y)").places.size() == 2);
+    CHECK(Pattern("(op_add (op_mul 1 ?x) ?x)").places.size() == 1);
   }
 
 } // namespace circuitous::eqsat
