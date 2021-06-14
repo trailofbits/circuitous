@@ -168,21 +168,21 @@ namespace circuitous::eqsat {
       auto head = match_one(root, pattern);
       if (!head)
         return unmatched();
-
       if (pattern->children.empty())
         return head;
 
       std::vector< Substitutions > children;
-
-      auto child = root->children.begin();
-      for (const auto &node : pattern->children) {
-        auto child_class = _egraph.eclass(*child);
-        if (auto sub = match(child_class, node)) {
-          children.push_back(std::move(sub.value()));
-        } else {
-          return unmatched();
+      {
+        auto child = root->children.begin();
+        for (const auto &node : pattern->children) {
+          auto child_class = _egraph.eclass(*child);
+          if (auto sub = match(child_class, node)) {
+            children.push_back(std::move(sub.value()));
+          } else {
+            return unmatched();
+          }
+          ++child;
         }
-        ++child;
       }
 
       Substitutions product = head.value();
@@ -199,12 +199,14 @@ namespace circuitous::eqsat {
         Substitutions next;
         for (const auto &substitution : child) {
           std::optional< Substitution > partial;
-          // make product of all alternatives with all alreadz processed children
+          // make product of all alternatives with all already processed children
           for (const auto &matched : product) {
             for (size_t idx = 0; idx < substitution.size(); ++idx) {
               auto [id, set] = substitution.get(idx);
-              if (!set)
+              if (!set) {
+                partial = matched;
                 continue;
+              }
               // check whether matches between children do not conflict
               // placeholder no yet matched
               if (!matched.test(idx)) {
