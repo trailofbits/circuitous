@@ -219,24 +219,6 @@ namespace circuitous::eqsat {
       CHECK(ops.nodes[1]->children[0] == x);
       CHECK(ops.nodes[1]->children[1] != x);
     }
-
-    TEST_CASE("alu-hint")
-    {
-      TestGraph egraph;
-      TestGraphBuilder builder(&egraph);
-
-      auto a = egraph.make_leaf("a");
-      auto b = egraph.make_leaf("b");
-      egraph.make_node("add", {a, b});
-      egraph.make_node("sub", {a, b});
-
-      auto rule = TestRule("alu-with-hint", "(op_add ?x ?y)", "(op_alu ?x ?y hint); (op_eq hint 0)");
-      CHECK(rule.match(egraph).size() == 1);
-      rule.apply(egraph, builder);
-
-      egraph.dump("egraph.dot");
-    }
   }
-
 
 } // namespace circuitous::eqsat
