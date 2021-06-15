@@ -135,9 +135,17 @@ void Base_<S>::set_input_state(const trace::Entry &in) {
   self().SetNodeVal(inst_bits, in.get_inst_bits(inst_bits->size));
 
   self().SetNodeVal(circuit->input_ebit(), in.get_ebit());
+  self().SetNodeVal(circuit->input_timestamp(), in.get_timestamp());
   for (auto &[name, val] : in.regs) {
     if (auto reg = circuit->input_reg(name)) {
       self().SetNodeVal(reg, llvm::APInt(reg->size, val));
+    }
+  }
+
+
+  for (auto hint : circuit->Attr<Memory>()) {
+    if (auto val = in.get_mem_hint(std::to_string(hint->mem_idx))) {
+      self().SetNodeVal(hint, *val);
     }
   }
 }
@@ -145,6 +153,7 @@ void Base_<S>::set_input_state(const trace::Entry &in) {
 template<typename S>
 void Base_<S>::set_output_state(const trace::Entry &out) {
   self().SetNodeVal(circuit->output_ebit(), out.get_ebit());
+  self().SetNodeVal(circuit->output_timestamp(), out.get_timestamp());
   for (auto &[name, val] : out.regs) {
     if (auto reg = circuit->output_reg(name)) {
       self().SetNodeVal(reg, llvm::APInt(reg->size, val));
@@ -165,5 +174,6 @@ trace::Entry Base_<S>::get_output_state() const {
     out.regs[op->reg_name] = get(op)->getLimitedValue();
   }
   out.ebit = get(circuit->output_ebit()) == TrueVal();
+  out.timestamp = get(circuit->output_timestamp())->getLimitedValue();
   return out;
 }
