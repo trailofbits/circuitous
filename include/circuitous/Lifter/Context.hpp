@@ -165,9 +165,11 @@ namespace circuitous {
         if (keep.count(&fn)) {
           continue;
         }
-        if (fn.isDeclaration()
-            || fn.getName().startswith("__remill")
-            || fn.getName().startswith("__circuitous"))
+        if (fn.isDeclaration()) {
+          continue;
+        }
+
+        if (fn.getName().startswith("__remill") || fn.getName().startswith("__circuitous"))
         {
           continue;
         }
@@ -177,6 +179,14 @@ namespace circuitous {
         fn->replaceAllUsesWith(llvm::UndefValue::get(fn->getType()));
         fn->eraseFromParent();
       }
+
+      std::vector<llvm::GlobalValue *> gv_to_erase;
+      for (auto &gv : module()->globals()) {
+        if (gv.getName().startswith("ISEL_")) {
+          gv_to_erase.push_back(&gv);
+        }
+      }
+      for (auto gv : gv_to_erase) { gv->eraseFromParent(); }
     }
 
     Ctx(const std::string &os_name, const std::string &arch_name)
