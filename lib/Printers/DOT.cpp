@@ -57,13 +57,13 @@ class DOTPrinter : public UniqueVisitor<DOTPrinter> {
     os << "</TD>";
   }
 
-  void VisitOperation(Operation *op) {
+  void Visit(Operation *op) {
     op->Traverse(*this);
     PrintNodeName(op);
     PrintOperands(op);
   }
 
-  void VisitCircuit(Circuit *op) {
+  void Visit(Circuit *op) {
     os << "digraph {\n"
        << "node [shape=plain];\n";
     op->Traverse(*this);
@@ -140,7 +140,7 @@ struct Printer : UniqueVisitor<Printer> {
     os << "node [shape=record];";
   }
 
-  void VisitOperation(Operation *op) {
+  void Visit(Operation *op) {
     op->Traverse(*this);
     Node(op);
     for (std::size_t i = 0; i < op->operands.size(); ++i) {
@@ -148,7 +148,7 @@ struct Printer : UniqueVisitor<Printer> {
     }
   }
 
-  void VisitCircuit(Circuit *op) {
+  void Visit(Circuit *op) {
     Init();
     op->Traverse(*this);
     Node(op);

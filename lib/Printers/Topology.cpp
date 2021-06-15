@@ -28,7 +28,7 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
     case OutputRegister::kind:
     case InputInstructionBits::kind:
     case InputImmediate::kind:
-    case Hint::kind:
+    case Advice::kind:
       os << 'V' << op->size;
       break;
     case Extract::kind:
@@ -52,9 +52,9 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       PrintTopology(os, op->operands[0], max_depth, accept);
       os << ')';
       break;
-    case RegisterCondition::kind:
-    case PreservedCondition::kind:
-    case CopyCondition::kind:
+    case RegConstraint::kind:
+    case PreservedConstraint::kind:
+    case CopyConstraint::kind:
     case DecodeCondition::kind:
       os << "(=";
       for (auto sub_op : op->operands) {
