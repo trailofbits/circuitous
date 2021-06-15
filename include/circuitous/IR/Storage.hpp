@@ -207,13 +207,16 @@ namespace circuitous {
       return nullptr;
     }
 
-    InputInstructionBits *input_inst_bits() { return fetch_singular<InputInstructionBits>(); }
-    InputErrorFlag *input_ebit() { return fetch_singular<InputErrorFlag>(); }
-    OutputErrorFlag *output_ebit() { return fetch_singular<OutputErrorFlag>(); }
+    auto input_inst_bits() { return fetch_singular<InputInstructionBits>(); }
+    auto input_ebit() { return fetch_singular<InputErrorFlag>(); }
+    auto output_ebit() { return fetch_singular<OutputErrorFlag>(); }
+
+    auto input_timestamp() { return fetch_singular<InputTimestamp>(); }
+    auto output_timestamp() { return fetch_singular<OutputTimestamp>(); }
 
     using cstr_ref = const std::string &;
-    InputRegister *input_reg(cstr_ref name) { return fetch_reg<InputRegister>(name); }
-    OutputRegister *output_reg(cstr_ref name) { return fetch_reg<OutputRegister>(name); }
+    auto input_reg(cstr_ref name) { return fetch_reg<InputRegister>(name); }
+    auto output_reg(cstr_ref name) { return fetch_reg<OutputRegister>(name); }
   };
 
 
