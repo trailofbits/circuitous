@@ -24,6 +24,7 @@ namespace circuitous {
   struct Surface : Names {
     struct ErrorBit { static constexpr uint8_t size = 1; } ebit;
     struct InstructionBits { static constexpr uint8_t size = kMaxNumInstBits; } inst_bits;
+    struct Timestamp { static constexpr uint8_t size = 64; } timestamp;
 
     using types_t = std::vector<llvm::Type *>;
 
@@ -38,7 +39,10 @@ namespace circuitous {
     std::vector<llvm::Argument *> inst_bytes;
     llvm::Value *pc = nullptr;
     llvm::Function *circuit_fn = nullptr;
+
     std::tuple<llvm::Value *, llvm::Value *> ebits;
+    std::tuple<llvm::Value *, llvm::Value *> timestamps;
+    uint8_t aliens_size = 5;
 
     Surface(CtxRef &ctx_) : ctx(ctx_) {}
 
@@ -48,7 +52,7 @@ namespace circuitous {
     }
 
     types_t Aliens() const {
-      return { type(inst_bits), type(ebit), type(ebit) };
+      return { type(inst_bits), type(ebit), type(ebit), type(timestamp), type(timestamp) };
     }
 
     void BindRegArgs(const std::string &base, llvm::Function *fn, uint32_t a, uint32_t b) {
@@ -74,26 +78,44 @@ namespace circuitous {
       return llvm::FunctionType::get(ir.getInt1Ty(), params_types, false);
     }
 
+    uint64_t copy_aliens(std::vector<llvm::Type *> &types) {
+      for (std::size_t i = 0; i < aliens_size; ++i) {
+        types.push_back(remill::NthArgument(circuit_fn, i)->getType());
+      }
+      return aliens_size;
+    }
+
+    uint8_t create_aliens(llvm::Function *fn) {
+      remill::NthArgument(circuit_fn, 0)->setName(instruction_bits());
+      inst_bytes.push_back(remill::NthArgument(circuit_fn, 0));
+
+      auto ebit_name = [&](auto &mut) { return this->build(this->flag, "ebit", mut); };
+      auto t_name = [&](auto &mut) { return this->build(timestamp_type, "timestamp", mut); };
+
+      auto name_pair = [&](std::size_t idx, auto namer) {
+        remill::NthArgument(fn, idx)->setName(namer(this->in));
+        remill::NthArgument(fn, idx + 1)->setName(namer(this->out));
+        return std::make_tuple(remill::NthArgument(circuit_fn, idx),
+                               remill::NthArgument(circuit_fn, idx + 1));
+      };
+
+      ebits = name_pair(1, ebit_name);
+      timestamps = name_pair(3, t_name);
+
+      return aliens_size;
+    }
+
     llvm::Function *Create(const std::string &name) {
       auto linkage = llvm::GlobalValue::ExternalLinkage;
       circuit_fn = llvm::Function::Create(FnT(FullType()), linkage, name, ctx.module());
       circuit_fn->addFnAttr(llvm::Attribute::ReadNone);
 
-      remill::NthArgument(circuit_fn, 0)->setName(instruction_bits());
-      inst_bytes.push_back(remill::NthArgument(circuit_fn, 0));
-
-      auto ebit_name = [&](auto &mut) {
-        return this->build(this->flag, "ebit", mut);
-      };
-      remill::NthArgument(circuit_fn, 1)->setName(ebit_name(this->in));
-      remill::NthArgument(circuit_fn, 2)->setName(ebit_name(this->out));
-      ebits = std::make_tuple(remill::NthArgument(circuit_fn, 1),
-                              remill::NthArgument(circuit_fn, 2));
+      auto alien_size = create_aliens(circuit_fn);
 
       // The rest of arguments should be the registers in/out pairs
-      CHECK((circuit_fn->arg_size() - 3) % 2 == 0);
+      CHECK((circuit_fn->arg_size() - alien_size) % 2 == 0);
       for (std::size_t i = 0; i < ctx.regs().size(); ++i) {
-        uint32_t arg_idx = static_cast<uint32_t>(i * 2) + 3;
+        uint32_t arg_idx = static_cast<uint32_t>(i * 2) + alien_size;
         BindRegArgs(ctx.regs()[i]->name, circuit_fn, arg_idx, arg_idx + 1);
 
         reg_to_args.emplace_back(ctx.regs()[i],
@@ -116,9 +138,8 @@ namespace circuitous {
       return nullptr;
     }
 
-    auto fetch_ebits() {
-      return ebits;
-    }
+    auto fetch_ebits() { return ebits; }
+    auto fetch_timestamps() { return timestamps; }
 
     // Checks that once ebit is set it is not lowered
     // `ebit_it -> ebit_out` which can be rewritten
@@ -126,6 +147,13 @@ namespace circuitous {
     auto saturation_property(llvm::IRBuilder<> &ir) {
       auto [ebit_in, ebit_out] = fetch_ebits();
       return ir.CreateOr(ir.CreateNot(ebit_in), ebit_out);
+    }
+
+    // Checks that input.timestamp + 1 == output.timestamp
+    auto timestamp_property(llvm::IRBuilder<> &ir) {
+      auto [ts_in, ts_out] = fetch_timestamps();
+      auto inc =  ir.CreateAdd(ts_in, ir.getInt64(1));
+      return intrinsics::make_outcheck(ir, {inc, ts_out});
     }
   };
 
@@ -153,7 +181,6 @@ struct Circuit0 {
 
     Circuit0(CtxRef &ctx_) : ctx(ctx_), surface(ctx) {}
 
-    llvm::FunctionType *FnT();
     llvm::Function *GetFn();
     llvm::Function *Create();
 
