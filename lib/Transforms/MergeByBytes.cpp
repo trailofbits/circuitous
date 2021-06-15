@@ -143,7 +143,7 @@ struct DAGifier : UniqueVisitor<DAGifier<Hasher>> {
       InputRegister,
       OutputRegister,
       Constant,
-      Hint,
+      Advice,
       InputInstructionBits
      >(circuit);
   }
