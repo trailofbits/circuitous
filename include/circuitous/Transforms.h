@@ -46,7 +46,7 @@ bool EqualitySaturation(Circuit *circuit);
 // Merge all of the hint inputs into a single "wide" input hint that is of
 // sufficient size to support all verifiers. In place of the individual hints,
 // the verifiers pull out slices of wide hint value with an EXTRACT.
-bool MergeHints(Circuit *circuit);
+bool MergeAdvices(Circuit *circuit);
 
 bool MergeByBytes(Circuit *circuit);
 bool DAGify(Circuit *circuit);
@@ -63,7 +63,7 @@ struct KnownPasses {
     {"extractcommon", { 3, &ExtractCommonTopologies } },
     {"depbreaker", { 4, &DependencyBreaker } },
     {"eqsat", {5, &EqualitySaturation } },
-    {"mergehints", { 99, &MergeHints } }
+    {"mergehints", { 99, &MergeAdvices } }
   };
 
   static std::string PassName(pass_t pass) {

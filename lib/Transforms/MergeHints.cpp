@@ -15,16 +15,16 @@ namespace circuitous {
 // Merge all of the hint inputs into a single "wide" input hint that is of
 // sufficient size to support all verifiers. In place of the individual hints,
 // the verifiers pull out slices of wide hint value with an EXTRACT.
-bool MergeHints(Circuit *circuit) {
+bool MergeAdvices(Circuit *circuit) {
 
   // Create a mapping of instructions to the hints that they use.
-  std::unordered_map<VerifyInstruction *, std::vector<Hint *>> used_hints;
+  std::unordered_map<VerifyInstruction *, std::vector<Advice *>> used_hints;
   for (auto inst_check : circuit->Attr<VerifyInstruction>()) {
     auto &inst_hints = used_hints[inst_check];
 
     std::function<void(Operation *)> visit;
     visit = [&] (Operation *op) {
-      if (auto hint = dynamic_cast<Hint *>(op); hint) {
+      if (auto hint = dynamic_cast<Advice *>(op); hint) {
         inst_hints.push_back(hint);
       } else {
         for (auto sub_op : op->operands) {
@@ -46,7 +46,7 @@ bool MergeHints(Circuit *circuit) {
     hints.erase(it, hints.end());
 
     std::stable_sort(hints.begin(), hints.end(),
-                     [] (Hint *a, Hint *b) {
+                     [] (Advice *a, Advice *b) {
                        return a->size > b->size;
                      });
 
@@ -64,10 +64,10 @@ bool MergeHints(Circuit *circuit) {
 
   // If the same hint is used by the two instructions then we want to have them
   // use the same extraction.
-  std::unordered_map<Hint *, Extract *> prev_extract;
+  std::unordered_map<Advice *, Extract *> prev_extract;
   std::vector<bool> used_bits;
 
-  const auto wide_hint = circuit->Create<Hint>(max_size);
+  const auto wide_hint = circuit->Create<Advice>(max_size);
   for (auto &[inst_check, hints] : used_hints) {
 
     used_bits.clear();
