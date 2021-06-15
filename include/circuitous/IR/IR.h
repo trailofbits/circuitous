@@ -175,6 +175,20 @@ struct ErrorFlag : Operation, make_kind< LeafValue, tag_fragment< 4 >, meta_frag
 using InputErrorFlag = Input< ErrorFlag >;
 using OutputErrorFlag = Output< ErrorFlag >;
 
+template< typename meta_fragment_ >
+struct Timestamp : Operation, make_kind< LeafValue, tag_fragment< 7 >, meta_fragment_ > {
+  using make_kind< LeafValue, tag_fragment< 7 >, meta_fragment_ >::apply;
+  static constexpr uint32_t kind = apply(Operation::kind);
+
+  Timestamp(uint32_t size_ = 64u) : Operation(size_, kind) {}
+
+  std::string op_code_str() const override { return "timestamp"; }
+  std::string Name() const override { return "timestamp"; }
+};
+
+using InputTimestamp = Input< Timestamp >;
+using OutputTimestamp = Output< Timestamp >;
+
 // An undefined value.
 struct Undefined final : Operation, make_kind< LeafValue, tag_fragment< 2 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
@@ -184,6 +198,16 @@ struct Undefined final : Operation, make_kind< LeafValue, tag_fragment< 2 > > {
   std::string Name() const override { return "undefined"; }
 };
 
+struct Memory : Operation, make_kind< LeafValue, tag_fragment< 8 > > {
+  static constexpr uint32_t kind = apply(Operation::kind);
+  static constexpr uint32_t default_size = 208;
+
+  explicit Memory(uint32_t mem_idx_) : Operation(default_size, kind), mem_idx(mem_idx_) {}
+  std::string op_code_str() const override { return "memory"; }
+  std::string Name() const override { return "memory"; }
+
+  uint32_t mem_idx = 0;
+};
 
 struct Constant final : Operation, make_kind< LeafValue, tag_fragment< 1 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
@@ -391,6 +415,12 @@ struct EnforceCtx : Operation {
     }
     return fixed()->Name() + "." + std::to_string(fixed()->size);
   }
+};
+
+struct MemoryConstraint : Operation {
+  using Operation::Operation;
+
+  enum : uint8_t { kFixed = 0u, kSize = 1u, kAddr = 2u, kTS = 3u, kValue = 4u };
 };
 
 // A comparison between the proposed output value of a register, and the
