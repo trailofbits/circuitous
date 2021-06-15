@@ -381,89 +381,34 @@ namespace data {
   // If no argument is passed, instruction bits are considered to be an operand
   // in the lowering phase.
   // Data are reordered to fit endiannity as expected on instruction bits.
-  struct Extract : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.extract";
-  };
 
-  // Used to compared extracted parts of instruction bits with expected values
-  struct BitCompare : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.bitcompare";
-  };
+  #define sccc_prefix(what) static constexpr const char *fn_prefix = what
 
-  // Reorder w.r.t to endiannity
-  struct ByteSwap : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.byteswap";
-  };
+  struct Extract : dot_seperator { sccc_prefix("__circuitous.extract"); };
+  struct BitCompare : dot_seperator { sccc_prefix("__circuitous.bitcompare"); };
+  struct ByteSwap : dot_seperator { sccc_prefix("__circuitous.byteswap"); };
+  struct Xor { sccc_prefix("__circuitous.xor"); };
+  struct Or : dot_seperator { sccc_prefix("__circuitous.or"); };
+  struct And : dot_seperator { sccc_prefix("__circuitous.and"); };
+  struct VerifyInst { sccc_prefix("__circuitous.verify_inst"); };
+  struct ExtractRaw : dot_seperator { sccc_prefix("__circuitous.raw_extract"); };
+  struct Eq : dot_seperator { sccc_prefix("__circuitous.icmp_eq"); };
+  struct Select : dot_seperator { sccc_prefix("__circuitous.select"); };
+  struct InputImmediate : dot_seperator { sccc_prefix("__circuitous.input_imm"); };
+  struct AllocateDst : dot_seperator { sccc_prefix("__circuitous.allocate_dst"); };
+  struct Concat : dot_seperator { sccc_prefix("__circuitous.concat"); };
+  struct BreakPoint : dot_seperator { sccc_prefix("__circuitous.breakpoint"); };
+  struct Identity : dot_seperator { sccc_prefix("__circuitous.id"); };
+  struct Advice : dot_seperator { sccc_prefix("__circuitous.advice"); };
+  struct AdviceConstraint : dot_seperator { sccc_prefix("__circuitous.check_advice"); };
+  struct OutputCheck : dot_seperator { sccc_prefix("__circuitous.out_check"); };
+  struct Transport : dot_seperator { sccc_prefix("__circuitous.transport"); };
+  struct Error : dot_seperator { sccc_prefix("__circuitous.error"); };
+  struct Memory : dot_seperator { sccc_prefix("__circuitous.memory"); };
 
-  // xor of all arguments - must have at least one argument.
-  struct Xor {
-    static constexpr const char *fn_prefix = "__circuitous.xor";
-  };
+  struct ReadConstraint : dot_seperator { sccc_prefix("__circuitous.memread"); };
+  struct WriteConstraint : dot_seperator { sccc_prefix("__circuitous.memwrite"); };
 
-  struct Or : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.or";
-  };
-
-  struct And : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.and";
-  };
-
-  // Top-level semantics that defines "a context" of a single instruction.
-  struct VerifyInst {
-    static constexpr const char *fn_prefix = "__circuitous.verify_inst";
-  };
-
-  struct ExtractRaw : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.raw_extract";
-  };
-
-  struct Eq : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.icmp_eq";
-  };
-
-  struct Select : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.select";
-  };
-
-  struct InputImmediate : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.input_imm";
-  };
-
-  struct AllocateDst : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.allocate_dst";
-  };
-
-  struct Concat : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.concat";
-  };
-
-  struct BreakPoint : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.breakpoint";
-  };
-
-  struct Identity : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.id";
-  };
-
-  struct Hint : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.hint";
-  };
-
-  struct HintCheck : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.check_hint";
-  };
-
-  struct OutputCheck : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.out_check";
-  };
-
-  struct Transport : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.transport";
-  };
-
-  struct Error : dot_seperator {
-    static constexpr const char *fn_prefix = "__circuitous.error";
-  };
 } //namespace data
 
 // Intrinsic declaration. Overall, they all try to provide the following unified API
