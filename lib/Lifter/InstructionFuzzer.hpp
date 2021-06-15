@@ -464,13 +464,14 @@ struct InstructionFuzzer {
         case OpType::kTypeAddress: {
           auto &s_addr = shadow_inst.Add<shadowinst::Address>();
           DistributeAddr(op_bits[i], i, *s_addr.address);
+          break;
         }
         default:
           shadow_inst.operands.emplace_back();
           break;
       }
     }
-
+    CHECK(shadow_inst.operands.size() == rinst.operands.size());
     ResolveHusks(shadow_inst);
     PopulateTranslationTables(shadow_inst);
     LOG(INFO) << shadow_inst.to_string();
