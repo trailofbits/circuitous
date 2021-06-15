@@ -44,7 +44,7 @@ namespace circuitous {
     }
 
     template<typename CB>
-    auto match_d(uint32_t kind, CB cb) {
+    auto match_d(uint32_t kind, CB cb) -> decltype( cb( std::declval< OP * >() ) ) {
       if (kind == OP::kind) {
         cb(static_cast<OP *>(nullptr));
       }
@@ -124,7 +124,7 @@ namespace circuitous {
     }
 
     template<typename T, typename ...Args>
-    T* Create(Args &&...args) {
+    auto Create(Args &&...args) {
       auto op = Attr<T>().Create(std::forward<Args>(args)...);
       op->_id = ++ids;
       return op;
@@ -132,11 +132,20 @@ namespace circuitous {
 
     template<typename ...Args>
     Operation *Create(uint32_t kind, Args &&...args) {
-      Operation *out;
+      Operation *out = nullptr;
+
+      // NOTE(lukas): Templated lambda crashes my local clang
       auto create = [&](auto op) {
-        using raw_t = std::decay_t< decltype( op ) >;
-        out = this->Create< raw_t >( std::forward< Args >( args )... );
+        using raw_t = std::remove_pointer_t< std::decay_t< decltype( op ) > >;
+        // Down the line we will invoke `raw_t( std::forward< Args >(args) ... )`
+        // and since ctors are not uniform, the invocation may not be well-formed
+        // which leads to compile error.
+        if constexpr ( std::is_constructible_v< raw_t, Args ... > ) {
+          out = this->Create< raw_t >( std::forward< Args >( args ) ... );
+        }
       };
+
+      this->match_d( kind, create );
       return out;
     }
 
@@ -152,8 +161,10 @@ namespace circuitous {
     Operation *Adopt(uint64_t id, uint32_t kind, Args &&...args) {
       Operation *out;
       auto adopt = [&](auto op) {
-        using raw_t = std::decay_t< decltype( op ) >;
-        out = this->Adopt< raw_t >( id, std::forward< Args >( args )... );
+        using raw_t = std::remove_pointer_t< std::decay_t< decltype( op ) > >;
+        if constexpr ( std::is_constructible_v< raw_t, Args ... > ) {
+          out = this->Adopt< raw_t >( id, std::forward< Args >( args )... );
+        }
       };
       return out;
     }
