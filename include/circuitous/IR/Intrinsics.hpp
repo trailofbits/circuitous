@@ -299,6 +299,26 @@ namespace impl {
     }
   };
 
+  template<typename Self_t, uint32_t allocated_size>
+  struct BucketAllocator : ParseInts<Self_t, 2>
+  {
+    using Parent = ParseInts<Self_t, 2>;
+
+    static std::string Name(uint32_t id) {
+      std::stringstream ss;
+      ss << Self_t::fn_prefix << Self_t::separator << id << Self_t::separator << allocated_size;
+      return ss.str();
+    }
+
+    static llvm::Function *CreateFn(llvm::Module *module, uint32_t id) {
+      llvm::IRBuilder<> ir(module->getContext());
+      auto r_type = ir.getIntNTy(allocated_size);
+      auto fn_t = llvm::FunctionType::get(r_type, {}, false);
+      auto callee = module->getOrInsertFunction(Name(id), fn_t);
+      return Parent::melt(llvm::cast<llvm::Function>(callee.getCallee()));
+    }
+  };
+
   template<typename Self_t>
   struct VarArg : EncodeSize<Self_t, VarArg> {
     using Parent = EncodeSize<Self_t, VarArg>;
@@ -468,8 +488,8 @@ struct Concat : impl::VarArg<data::Concat> {};
 //              if optimizer is called (may merge multiple instances).
 struct BreakPoint : impl::Predicate<data::BreakPoint> {};
 
-struct Hint : impl::Allocator<data::Hint> {};
-struct HintCheck : impl::BinaryPredicate<data::HintCheck> {};
+struct Advice : impl::Allocator<data::Advice> {};
+struct AdviceConstraint : impl::BinaryPredicate<data::AdviceConstraint> {};
 
 // Has always `2 ** n + 1` operands and following prototype
 // `iX select.N(iN selecort, iX v_1, iX v_2, ..., iX_(v ** n))`
@@ -515,7 +535,98 @@ struct Identity : impl::Identity<data::Identity> {};
 
 struct Transport : impl::Identity<data::Transport> {};
 
+// hint, size, addr, ts, value
+struct ReadConstraint : impl::Predicate<data::ReadConstraint> {};
+struct WriteConstraint : impl::Predicate<data::WriteConstraint> {};
+
 struct Error : impl::Identity<data::Error> {};
+
+struct Memory : impl::BucketAllocator<data::Memory, 16 + 64 + 64 + 64> {
+
+  struct Parsed {
+    // 1 bit
+    llvm::Value *used;
+    // 1 bit
+    llvm::Value *mode;
+    // 6 bit reserved
+
+    // 4 bit id
+    llvm::Value *id;
+
+    // 4 bit
+    llvm::Value *size;
+
+    // 8 bytes
+    llvm::Value *addr;
+    // 8 bytes
+    llvm::Value *value;
+    // 8 bytes
+    llvm::Value *timestamp;
+  };
+
+  struct Validator {
+    llvm::IRBuilder<> &ir;
+    const Parsed &parsed;
+
+    Validator(llvm::IRBuilder<> &ir_, const Parsed &parsed_) : ir( ir_ ), parsed( parsed_ ) {}
+
+    auto iN(uint64_t size, uint64_t val) {
+      return ir.getIntN(static_cast< uint32_t >(size), val);
+    }
+    auto make_cmp(llvm::Value *a, llvm::Value *b) { return ir.CreateICmpEQ(a, b); }
+
+    auto read_flag() { return ir.getInt1(0u); }
+    auto write_flag() { return ir.getInt1(0u); }
+
+    auto read() { return ir.CreateICmpEQ(parsed.mode, read_flag()); }
+    auto written() { return ir.CreateICmpEQ(parsed.mode, write_flag()); }
+
+    auto used() { return ir.CreateICmpEQ(parsed.used, ir.getTrue()); }
+    auto unused() { return ir.CreateICmpEQ(parsed.used, ir.getFalse()); }
+
+    auto size(uint64_t expected) { return ir.CreateICmpEQ(parsed.size, iN(4, expected)); }
+
+    auto addr(llvm::Value *a) { return ir.CreateICmpEQ(parsed.addr, a); }
+
+    auto value(llvm::Value *v) { return make_cmp(parsed.value, v); }
+    auto ts(llvm::Value *t) { return make_cmp(parsed.timestamp, t); }
+
+    auto check_read(uint64_t size_, llvm::Value *addr_, llvm::Value *ts_) {
+      return impl::implement_call< And >(
+          ir, { used(), read(), size(size_), addr(addr_), ts(ts_) });
+    }
+
+    auto check_write(uint64_t size_, llvm::Value *addr_, llvm::Value *ts_, llvm::Value *val) {
+      return impl::implement_call< And >(
+          ir, { used(), read(), size(size_), addr(addr_), ts(ts_), value(val) });
+    }
+
+  };
+
+  template< typename Extractor >
+  static Parsed parse(llvm::IRBuilder<> &ir, llvm::CallInst *call, Extractor extract_) {
+    auto current = 0u;
+    auto extract = [&](auto size) {
+      auto out = extract_( ir, call, current, size );
+      current += size;
+      return out;
+    };
+
+    CHECK(IsIntrinsic(call->getCalledFunction()));
+    Parsed out;
+    out.used = extract( 1u );
+    out.mode = extract( 1u );
+    extract( 6u );
+    out.value = extract( 4u );
+    out.size = extract( 4u );
+
+    out.addr = extract( 64u  );
+    out.value = extract( 64u );
+    out.timestamp = extract( 64u );
+
+    return out;
+  }
+};
 
 /* Helper functions to make creation of intrinsic calls easier for the user
  * C - container holding arguments
@@ -593,15 +704,25 @@ static inline auto make_breakpoint(llvm::IRBuilder<> &ir) {
 
 template<typename ...Args>
 auto make_hint(llvm::IRBuilder<> &ir, Args &&...args) {
-  return impl::implement_call<Hint>(ir, {}, std::forward<Args>(args)...);
+  return impl::implement_call<Advice>(ir, {}, std::forward<Args>(args)...);
 }
 
 template<typename C = std::vector<llvm::Value *>>
 auto make_hintcheck(llvm::IRBuilder<> &ir, const C &c_args) {
   CHECK_EQ(c_args.size(), 2) << "make_hintcheck expects 2 call args.";
   CHECK(c_args[0]->getType() == c_args[1]->getType());
-  return impl::implement_call<HintCheck>(ir, c_args, c_args[0]->getType());
+  return impl::implement_call<AdviceConstraint>(ir, c_args, c_args[0]->getType());
 }
+
+template<typename C = std::vector<llvm::Value *>, typename ...Args>
+auto make_read_constraint(llvm::IRBuilder<> &ir, const C &c_args, Args &&... args) {
+  return impl::implement_call<ReadConstraint>(ir, c_args, std::forward<Args>(args)...);
+}
+template<typename C = std::vector<llvm::Value *>, typename ...Args>
+auto make_write_constraint(llvm::IRBuilder<> &ir, const C &c_args, Args &&... args) {
+  return impl::implement_call<WriteConstraint>(ir, c_args, std::forward<Args>(args)...);
+}
+
 
 template<typename C = std::vector<llvm::Value *>, typename ...Args>
 auto make_select(llvm::IRBuilder<> &ir, const C &c_args, Args &&... args) {
@@ -613,6 +734,11 @@ auto make_outcheck(llvm::IRBuilder<> &ir, const C &c_args) {
   CHECK_EQ(c_args.size(), 2) << "make_outcheck expects 2 call args,.";
   CHECK(c_args[0]->getType() == c_args[1]->getType());
   return impl::implement_call<OutputCheck>(ir, c_args, c_args[0]->getType());
+}
+
+template<typename ...Args>
+auto make_memory(llvm::IRBuilder<> &ir, Args &&...args) {
+  return impl::implement_call<Memory>(ir, {}, std::forward<Args>(args)...);
 }
 
 template<typename T, typename ... Ts>
