@@ -306,11 +306,8 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   // after all input registers.
   std::vector<llvm::Type *> circuit1_arg_types;
   std::vector<const remill::Register *> new_regs;
-  auto i = 0u;
 
-  circuit1_arg_types.push_back(remill::NthArgument(circuit0_func, 0)->getType());
-  circuit1_arg_types.push_back(remill::NthArgument(circuit0_func, 1)->getType());
-  circuit1_arg_types.push_back(remill::NthArgument(circuit0_func, 2)->getType());
+  auto alien_size = circuit0.surface.copy_aliens(circuit1_arg_types);
 
   for (auto in_reg : deps.read_registers) {
     new_regs.push_back(ctx.arch()->RegisterByName(in_reg->getName().str()));
@@ -331,13 +328,13 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   circuit1_func->addFnAttr(llvm::Attribute::ReadNone);
   LOG(INFO) << "Synthetized circuit_1";
 
-  for (std::size_t i = 0; i < 3; ++i) {
+  std::size_t i = 0;
+  for (; i < alien_size; ++i) {
     CopyArgName(circuit1_func, circuit0_func, i);
   }
 
   // Rename the parameters to correspond with our input/output registers.
   // i = num_instruction_parts;
-  i = 3u;
   for (auto in_reg : deps.read_registers) {
     remill::NthArgument(circuit1_func, i++)->setName(in_reg->getName());
   }
@@ -353,9 +350,9 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
 
   std::vector<llvm::Value *> args;
 
-  args.push_back(remill::NthArgument(circuit1_func, 0));
-  args.push_back(remill::NthArgument(circuit1_func, 1));
-  args.push_back(remill::NthArgument(circuit1_func, 2));
+  for (std::size_t j = 0; j < alien_size; ++j ) {
+    args.push_back(remill::NthArgument(circuit1_func, j));
+  }
 
   // Build up an argument list to call circuit0_func from circuit1_func. We
   // pass through the arguments associated with registers that the above
@@ -444,21 +441,6 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   }
 
   return circuit1_func;
-}
-
-llvm::FunctionType *Circuit0::FnT() {
-  llvm::IRBuilder<> ir(*ctx.llvm_ctx());
-  Surface{ ctx }.Create(name);
-
-  auto param_types = Surface{ ctx }.Aliens();
-    // The remaining parameters will be input/output registers for verification.
-  for (auto reg : ctx.regs()) {
-    const auto reg_type = IntegralRegisterType(*ctx.module(), reg);
-    param_types.push_back(reg_type);
-    param_types.push_back(reg_type);
-  }
-
-  return llvm::FunctionType::get(ir.getInt1Ty(), param_types, false);
 }
 
 llvm::Function *Circuit0::GetFn() {

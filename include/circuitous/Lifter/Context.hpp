@@ -27,7 +27,7 @@ namespace remill {
 namespace circuitous {
 
   struct Names {
-    // TODO(lukas): This may deserve its own headet, so we do not have to include
+    // TODO(lukas): This may deserve its own header, so we do not have to include
     //              everything from here if only metadata names are requested.
     struct meta {
       static constexpr const char *verify_args = "circuitous.verify_fn_args";
@@ -37,10 +37,12 @@ namespace circuitous {
     static constexpr const char *in = "in";
     static constexpr const char *out = "out";
     static constexpr const char sep = '.';
+
     static constexpr const char *reg_type_ = "register";
     static constexpr const char *mem_type  = "memory";
     static constexpr const char *flag = "flag";
     static constexpr const char *bits = "bits";
+    static constexpr const char *timestamp_type = "timestamp";
 
     enum class mut_t : uint8_t {
       in = 0x1,
@@ -50,6 +52,7 @@ namespace circuitous {
     static constexpr uint8_t tied_c = 0x1 + 0x2;
 
     using meta_t = std::vector<std::string>;
+    // [type, name, i/o (mut_t), metdata]
     using parsed_t = std::tuple<std::string, std::string, std::string, std::string>;
 
     static uint8_t _cast_mut(const std::string &mut) {
