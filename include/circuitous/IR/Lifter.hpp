@@ -197,9 +197,9 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     llvm::Value * hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
 
     if (hidden_imm->getType() != constant_imm->getType()) {
-      LOG(INFO) << "Coercing immediate operand of type"
+      LOG(INFO) << "Coercing immediate operand of type "
                 << remill::LLVMThingToString(hidden_imm->getType())
-                << "to type"
+                << " to type "
                 << remill::LLVMThingToString(constant_imm->getType());
       // NOTE(lukas): SExt used as it should be generally safer (we want to preserve)
       //              the sign bit.
