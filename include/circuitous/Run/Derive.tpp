@@ -61,7 +61,7 @@ void IOSem<S>::Visit(InputInstructionBits *op) {
 }
 
 template<typename S>
-void IOSem<S>::Visit(Hint *op) {
+void IOSem<S>::Visit(Advice *op) {
   LOG(FATAL) << "Output values should not be visited in derivation mode.";
 }
 
@@ -76,16 +76,22 @@ void CSem<S>::Visit(DecodeCondition *op) {
 }
 
 template<typename S>
-void CSem<S>::Visit(RegisterCondition *op) { return this-> handle_cond(op); }
+void CSem<S>::Visit(ReadConstraint *op) { return this-> handle_cond(op); }
 
 template<typename S>
-void CSem<S>::Visit(PreservedCondition *op) { return this->handle_cond(op); }
+void CSem<S>::Visit(WriteConstraint *op) { return this-> handle_cond(op); }
 
 template<typename S>
-void CSem<S>::Visit(CopyCondition *op) { return this->handle_cond(op); }
+void CSem<S>::Visit(RegConstraint *op) { return this-> handle_cond(op); }
 
 template<typename S>
-void CSem<S>::Visit(HintCondition *op) { return this->handle_cond(op); }
+void CSem<S>::Visit(PreservedConstraint *op) { return this->handle_cond(op); }
+
+template<typename S>
+void CSem<S>::Visit(CopyConstraint *op) { return this->handle_cond(op); }
+
+template<typename S>
+void CSem<S>::Visit(AdviceConstraint *op) { return this->handle_cond(op); }
 
 template<typename S>
 void CSem<S>::Visit(VerifyInstruction *op) {
