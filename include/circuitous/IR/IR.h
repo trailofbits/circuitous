@@ -73,6 +73,11 @@ bool is_specialization(uint32_t derived) {
   return relevant == T::kind;
 }
 
+template<typename ...Ts>
+bool is_one_of(Operation *op) {
+  return (is_specialization<Ts>(op->op_code) || ...);
+}
+
 template< typename Base, Base root_, uint8_t position_ >
 struct kind_fragment {
   static constexpr Base root = root_;
@@ -226,10 +231,10 @@ struct Constant final : Operation, make_kind< LeafValue, tag_fragment< 1 > > {
   const std::string bits;
 };
 
-struct Hint final : Operation, make_kind< LeafValue, tag_fragment< 5 > > {
+struct Advice final : Operation, make_kind< LeafValue, tag_fragment< 5 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
 
-  inline explicit Hint(unsigned size_) : Operation(size_, kind) {}
+  inline explicit Advice(unsigned size_) : Operation(size_, kind) {}
 
   std::string op_code_str() const override { return "hint"; }
   std::string Name() const override { return "hint"; }
@@ -243,6 +248,14 @@ struct InputInstructionBits : Operation, make_kind< LeafValue, tag_fragment< 6 >
   std::string op_code_str() const override { return "instruction_bits"; }
   std::string Name() const override { return "instruction_bits"; }
 };
+
+using leaf_values_ts = tl::make_list<
+    InputInstructionBits, Advice, Constant, Undefined,
+    InputTimestamp, OutputTimestamp,
+    InputErrorFlag, OutputErrorFlag,
+    InputRegister, OutputRegister, Memory
+>;
+
 
 /* LLVMOP */
 
@@ -425,36 +438,50 @@ struct MemoryConstraint : Operation {
 
 // A comparison between the proposed output value of a register, and the
 // output register itself.
-struct RegisterCondition final : EnforceCtx, make_kind< Constraint, tag_fragment< 0 > > {
+struct RegConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 0 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
-  RegisterCondition() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "register_condition"; }
-  std::string Name() const override { return "register_condition." + EnforceCtx::suffix_(); }
+  RegConstraint() : EnforceCtx(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "register_constraint"; }
+  std::string Name() const override { return "register_constraint." + EnforceCtx::suffix_(); }
 };
 
 // A comparison between the proposed output value of a register, and the
 // output register itself.
-struct HintCondition final : EnforceCtx, make_kind< Constraint, tag_fragment< 1 > > {
+struct AdviceConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 1 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
-  HintCondition() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "hint_condition"; }
-  std::string Name() const override { return "hint_condition." + EnforceCtx::suffix_(); }
+  AdviceConstraint() : EnforceCtx(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "hint_constraint"; }
+  std::string Name() const override { return "hint_constraint." + EnforceCtx::suffix_(); }
 };
 
 // Says that we are preserving the value of a register.
-struct PreservedCondition final : EnforceCtx, make_kind< Constraint, tag_fragment< 2 > > {
+struct PreservedConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 2 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
-  PreservedCondition() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "preserved_condition"; }
-  std::string Name() const override { return "preserved_condition." + EnforceCtx::suffix_(); }
+  PreservedConstraint() : EnforceCtx(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "preserved_constraint"; }
+  std::string Name() const override { return "preserved_constraint." + EnforceCtx::suffix_(); }
 };
 
 // Says that we are moving one register to a different register.
-struct CopyCondition final : EnforceCtx, make_kind< Constraint, tag_fragment< 3 > > {
+struct CopyConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 3 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
-  CopyCondition() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "copy_condition"; }
-  std::string Name() const override { return "copy_condition." + EnforceCtx::suffix_(); }
+  CopyConstraint() : EnforceCtx(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "copy_constraint"; }
+  std::string Name() const override { return "copy_constraint." + EnforceCtx::suffix_(); }
+};
+
+struct WriteConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 4 > > {
+  static constexpr uint32_t kind = apply(Operation::kind);
+  WriteConstraint() : MemoryConstraint(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "write_constraint"; }
+  std::string Name() const override { return "write_constraint"; }
+};
+
+struct ReadConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 5 > > {
+  static constexpr uint32_t kind = apply(Operation::kind);
+  ReadConstraint() : MemoryConstraint(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "read_constraint"; }
+  std::string Name() const override { return "read_constraint"; }
 };
 
 #define make_bool_op(cls, idx) \
@@ -469,21 +496,23 @@ make_bool_op(DecodeCondition, 0)
 make_bool_op(VerifyInstruction, 1)
 make_bool_op(Or, 2)
 make_bool_op(OnlyOneCondition, 3)
+make_bool_op(And, 4)
 
 #undef make_bool_op
 
 using generic_list_t =
 tl::TL<
-  Constant, Undefined, Not, Concat,
+  Not, Concat,
   CountLeadingZeroes, CountTrailingZeroes, Extract, PopulationCount,
-  Parity, InputRegister, InputImmediate,  OutputRegister, InputInstructionBits,
-  RegisterCondition, PreservedCondition, CopyCondition, DecodeCondition,
+  Parity, InputImmediate,
+  RegConstraint, PreservedConstraint, CopyConstraint, DecodeCondition,
+  ReadConstraint, WriteConstraint,
   VerifyInstruction, OnlyOneCondition,
-  Hint, HintCondition, Select,
-  InputErrorFlag, OutputErrorFlag, Or
+  AdviceConstraint, Select, And,
+  Or
 >;
 
-using node_list_t = tl::merge< generic_list_t, llvm_ops_t >;
+using node_list_t = tl::merge< generic_list_t, llvm_ops_t, leaf_values_ts >;
 
 // TODO(lukas): This is just a hotfix, ideally we want the type list
 //              will all the nodes to carry names.
