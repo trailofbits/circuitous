@@ -343,13 +343,13 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   Operation *VisitIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
     auto name = fn->getName();
     if (name.startswith("__remill_read_memory_")) {
-      return CreateMemoryRead(call, SizeFromSuffix(name));
+      LOG(FATAL) << "__remill_read_memory_* should not be present!";
     }
     if (name.startswith("__remill_undefined_")) {
       return impl->Create<Undefined>(SizeFromSuffix(name));
     }
     if (name.startswith("__remill_write_memory_")) {
-      LOG(FATAL) << "Memory write intrinsics not yet supported";
+      LOG(FATAL) << "__remill_write_memory_* should not be present!";
     }
     if (intrinsics::Extract::IsIntrinsic(fn)) {
       return VisitExtractIntrinsic(fn);
