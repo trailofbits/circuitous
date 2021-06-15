@@ -124,7 +124,7 @@ namespace circuitous {
       node->update_children([&](auto child) { return _unions.find_compress(child); });
     }
 
-    Id add(ENode &&node)
+    std::pair< Id, ENode* > add(ENode &&node)
     {
       canonicalize(&node);
       // allocate new egraph node
@@ -138,7 +138,7 @@ namespace circuitous {
         _classes[child].parents.push_back(enode.get());
       }
 
-      return id;
+      return {id, enode.get()};
     }
 
     Id find(Id id) const { return _unions.find(id); }

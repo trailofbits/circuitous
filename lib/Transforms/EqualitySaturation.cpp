@@ -33,7 +33,8 @@ namespace eqsat {
         for (const auto &child : op->operands) {
           node.children.push_back(add_node_recurse(child, egraph));
         }
-        return egraph.add(std::move(node));
+        auto [id, _] = egraph.add(std::move(node));
+        return id;
     }
 
     CircuitEGraph build(Circuit *circuit)
