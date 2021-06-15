@@ -125,8 +125,11 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
 
   void Visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc, op->operands[0]); }
   void Visit(Select *op) { write(op->size, op->bits, op->operands); }
+  void Visit(Memory *op) { write(op->size, op->mem_idx); }
   void Visit(InputErrorFlag *op) {}
   void Visit(OutputErrorFlag *op) {}
+  void Visit(InputTimestamp *op) {}
+  void Visit(OutputTimestamp *op) {}
 
  private:
   std::ostream &os;
@@ -306,6 +309,12 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
     return op;
   }
 
+  Operation *Visit(Memory *, uint64_t id) {
+    auto [size, mem_id] = read<unsigned, unsigned>();
+    CHECK(size == Memory::default_size);
+    return circuit->Adopt<Memory>(id, mem_id);
+  }
+
   Operation *Visit(Constant *, uint64_t id) {
     auto [size, bits] = read<unsigned, std::string>();
     return circuit->Adopt<Constant>(id, std::move(bits), size);
@@ -331,7 +340,12 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
   Operation *Visit(OutputErrorFlag *, uint64_t id) {
     return circuit->Adopt<OutputErrorFlag>(id);
   }
-
+  Operation *Visit(InputTimestamp *, uint64_t id) {
+    return circuit->Adopt<InputTimestamp>(id);
+  }
+  Operation *Visit(OutputTimestamp *, uint64_t id) {
+    return circuit->Adopt<OutputTimestamp>(id);
+  }
 
   template<typename T>
   auto make_generic(uint64_t id) { return with_ops<T>(id, read<unsigned>()); }
@@ -358,14 +372,19 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
   DECODE_CONDITION(Parity)
   DECODE_GENERIC(CountLeadingZeroes)
   DECODE_GENERIC(CountTrailingZeroes)
-  DECODE_CONDITION(HintCondition)
-  DECODE_CONDITION(RegisterCondition)
-  DECODE_CONDITION(PreservedCondition)
-  DECODE_CONDITION(CopyCondition)
+
+  DECODE_CONDITION(AdviceConstraint)
+  DECODE_CONDITION(RegConstraint)
+  DECODE_CONDITION(PreservedConstraint)
+  DECODE_CONDITION(CopyConstraint)
+  DECODE_CONDITION(ReadConstraint)
+  DECODE_CONDITION(WriteConstraint)
+
   DECODE_GENERIC(InputInstructionBits)
   DECODE_CONDITION(DecodeCondition)
-  DECODE_GENERIC(Hint)
+  DECODE_GENERIC(Advice)
   DECODE_CONDITION(Or)
+  DECODE_CONDITION(And)
   DECODE_CONDITION(VerifyInstruction)
   DECODE_CONDITION(OnlyOneCondition)
 
@@ -450,8 +469,8 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
     }
   }
 
-  std::unordered_map<std::string, PreservedCondition *> preserved_regs;
-  for (auto cond : circuit->Attr<PreservedCondition>()) {
+  std::unordered_map<std::string, PreservedConstraint *> preserved_regs;
+  for (auto cond : circuit->Attr<PreservedConstraint>()) {
     auto lhs = dynamic_cast<InputRegister *>(cond->operands[0]);
     auto rhs = dynamic_cast<OutputRegister *>(cond->operands[1]);
     CHECK_NOTNULL(lhs);
@@ -475,14 +494,14 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
     for (auto op : verify->operands) {
       OutputRegister *out_reg = nullptr;
 
-      if (auto transition = dynamic_cast<RegisterCondition *>(op); transition) {
+      if (auto transition = dynamic_cast<RegConstraint *>(op); transition) {
         out_reg = dynamic_cast<OutputRegister *>(transition->operands[1]);
 
-      } else if (auto preserved = dynamic_cast<PreservedCondition *>(op);
+      } else if (auto preserved = dynamic_cast<PreservedConstraint *>(op);
                  preserved) {
         out_reg = dynamic_cast<OutputRegister *>(preserved->operands[1]);
 
-      } else if (auto copied = dynamic_cast<CopyCondition *>(op); copied) {
+      } else if (auto copied = dynamic_cast<CopyConstraint *>(op); copied) {
         out_reg = dynamic_cast<OutputRegister *>(copied->operands[1]);
       }
 
@@ -499,7 +518,7 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
       if (!seen_reg_names.count(name)) {
         auto &cond = preserved_regs[name];
         if (!cond) {
-          cond = circuit->Create<PreservedCondition>();
+          cond = circuit->Create<PreservedConstraint>();
           cond->AddUse(in_regs[name]);
           cond->AddUse(out_regs[name]);
         }
