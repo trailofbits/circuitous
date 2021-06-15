@@ -53,6 +53,16 @@ namespace circuitous::tl {
       using type = TL< Rhs ..., Lhs ... >;
     };
 
+    template< typename L, typename H, typename ...Tail >
+    auto merge() {
+      using current = typename merge_< L, H >::type;
+      if constexpr ( sizeof...(Tail) == 0 ) {
+        return current{};
+      } else {
+        return merge< current, Tail ... >();
+      }
+    }
+
 
   } // namespace detail
 
@@ -61,8 +71,8 @@ namespace circuitous::tl {
   template< typename H, typename L >
   using push_front = typename detail::push_front_< H, L >::type;
 
-  template< typename L1, typename L2 >
-  using merge = typename detail::merge_< L1, L2 >::type;
+  template< typename ... Ls >
+  using merge = decltype( detail::merge< Ls ... >() );
 
   template< typename L, template< typename > class F >
   using apply = typename detail::apply_< F, L >::type;
@@ -72,6 +82,8 @@ namespace circuitous::tl {
   template<typename L>
   static constexpr uint32_t size = detail::size_( L{} );
 
+  template< typename ...Ts >
+  using make_list = TL< Ts ... >;
 
   namespace test {
 
