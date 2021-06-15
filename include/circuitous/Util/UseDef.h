@@ -51,7 +51,8 @@ struct DefList {
   using value_type = Value *;
 
   template<typename ...Args>
-  Value *Create(Args &&...args) {
+  auto Create(Args &&...args)
+  -> std::enable_if_t< std::is_constructible_v< Value, Args ...>, Value* > {
     auto new_def = new Value(std::forward<Args>(args)...);
     defs.emplace(new_def);
     return new_def;
