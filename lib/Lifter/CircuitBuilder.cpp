@@ -209,8 +209,8 @@ auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) -> C
   folder.run();
 
   remill::VerifyModule(ctx.module());
-  intrinsics::disable_opts<intrinsics::Select, intrinsics::Hint>(ctx.module());
-  intrinsics::enable_opts<intrinsics::VerifyInst, intrinsics::HintCheck>(ctx.module());
+  intrinsics::disable_opts<intrinsics::Select, intrinsics::Advice>(ctx.module());
+  intrinsics::enable_opts<intrinsics::VerifyInst, intrinsics::AdviceConstraint>(ctx.module());
 
   OptimizeSilently(ctx.arch(), ctx.module(), {circuit0_func});
   remill::VerifyModule(ctx.module());

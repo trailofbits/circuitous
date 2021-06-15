@@ -156,12 +156,6 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     val_to_op[freeze] = val_to_op[arg];
   }
 
-  // Create an `size`-bit memory read.
-  Operation *CreateMemoryRead(llvm::CallInst *read_call, unsigned size) {
-    // TODO(lukas): Implement.
-    LOG(FATAL) << "Not implemented";
-  }
-
   static unsigned SizeFromSuffix(llvm::StringRef name) {
     if (name.endswith("_8")) {
       return 8u;
@@ -277,7 +271,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   }
 
   Operation *VisitOutputCheckIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
-    return VisitGenericIntrinsic<RegisterCondition>(call, fn);
+    return VisitGenericIntrinsic<RegConstraint>(call, fn);
   }
 
   Operation *VisitXor(llvm::CallInst *call, llvm::Function *fn) {
@@ -292,13 +286,13 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     return VisitGenericIntrinsic<VerifyInstruction>(call, fn);
   }
 
-  Operation *VisitHintCheckIntrinsics(llvm::CallInst *call, llvm::Function *fn) {
-    return VisitGenericIntrinsic<HintCondition>(call, fn);
+  Operation *VisitAdviceConstraintIntrinsics(llvm::CallInst *call, llvm::Function *fn) {
+    return VisitGenericIntrinsic<AdviceConstraint>(call, fn);
   }
 
-  Operation *VisitHintIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
-    auto [size] = intrinsics::Hint::ParseArgs<uint32_t>(fn);
-    return VisitGenericIntrinsic<Hint>(call, fn, size);
+  Operation *VisitAdviceIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
+    auto [size] = intrinsics::Advice::ParseArgs<uint32_t>(fn);
+    return VisitGenericIntrinsic<Advice>(call, fn, size);
   }
 
   Operation *VisitSelectIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
@@ -384,14 +378,27 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     if (intrinsics::VerifyInst::IsIntrinsic(fn)) {
       return VisitVerifyInst(call, fn);
     }
-    if (intrinsics::Hint::IsIntrinsic(fn)) {
-      return VisitHintIntrinsic(call, fn);
+    if (intrinsics::Advice::IsIntrinsic(fn)) {
+      return VisitAdviceIntrinsic(call, fn);
     }
-    if (intrinsics::HintCheck::IsIntrinsic(fn)) {
-      return VisitHintCheckIntrinsics(call, fn);
+    if (intrinsics::AdviceConstraint::IsIntrinsic(fn)) {
+      return VisitAdviceConstraintIntrinsics(call, fn);
     }
     if (intrinsics::Or::IsIntrinsic(fn)) {
       return VisitOrIntrinsic(call, fn);
+    }
+    if (intrinsics::Memory::IsIntrinsic(fn)) {
+      auto [id, _] = intrinsics::Memory::ParseArgs< uint32_t >(fn);
+      return VisitGenericIntrinsic< Memory >(call, fn, id);
+    }
+    if (intrinsics::And::IsIntrinsic(fn)) {
+      return VisitGenericIntrinsic<And>(call, fn);
+    }
+    if (intrinsics::ReadConstraint::IsIntrinsic(fn)) {
+      return VisitGenericIntrinsic<ReadConstraint>(call, fn);
+    }
+    if (intrinsics::WriteConstraint::IsIntrinsic(fn)) {
+      return VisitGenericIntrinsic<WriteConstraint>(call, fn);
     }
     LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(call);
   }
