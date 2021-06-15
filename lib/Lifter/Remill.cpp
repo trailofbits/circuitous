@@ -708,6 +708,9 @@ auto Circuit::make_circuit(
   importer.Emplace<InputErrorFlag>(remill::NthArgument(circuit_func, 1));
   importer.Emplace<OutputErrorFlag>(remill::NthArgument(circuit_func, 2));
 
+  importer.Emplace<InputTimestamp>(remill::NthArgument(circuit_func, 3));
+  importer.Emplace<OutputTimestamp>(remill::NthArgument(circuit_func, 4));
+
   auto num_input_regs = 0u;
   auto num_output_regs = 0u;
   for (auto &arg : circuit_func->args()) {
