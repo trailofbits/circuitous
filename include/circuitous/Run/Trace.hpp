@@ -31,7 +31,7 @@ namespace circuitous::run::trace {
 
     // TOOD(lukas): Once we support it
     std::unordered_map<std::string, uint64_t> hints;
-    std::unordered_map<std::string, uint64_t> mem_hints;
+    std::unordered_map<std::string, std::string> mem_hints;
 
     std::string to_string(uint8_t indent = 0, bool skip_header=true) const {
       std::stringstream ss;
@@ -51,10 +51,26 @@ namespace circuitous::run::trace {
       return ss.str();
     }
 
+    std::optional< llvm::APInt > get_mem_hint(const std::string &key) const {
+      // TODO(lukas): I do not want to include from `IR` here.
+      //              It would probably help to pull out all constants into
+      //              separate lightweight header.
+      auto it = mem_hints.find(key);
+      if (it == mem_hints.end()) {
+        //CHECK(llvm::APInt(208, "0", 10).getBitWidth() == 208);
+        //return llvm::APInt(208, "0", 10);
+        return {};
+      }
+      return { llvm::APInt(208, it->second, 10) };
+    }
+
     llvm::APInt get_inst_bits(uint32_t size) const {
       return llvm::APInt(size, inst_bits, /* radix = */ 16U);
     }
     llvm::APInt get_ebit() const { return (ebit) ? llvm::APInt(1, 1) : llvm::APInt(1, 0); }
+    llvm::APInt get_timestamp() const {
+      return llvm::APInt(64, timestamp);
+    }
   };
 
   struct Trace {
@@ -106,6 +122,10 @@ namespace circuitous::run::trace {
     for (const auto &[reg, val] : unwrap(entry.getObject("regs"))) {
       auto raw = unwrap(val.getAsString());
       state.regs[reg.str()] = std::strtoull(raw.data(), nullptr, 10);
+    }
+
+    for (const auto &[mem_hint, val] : unwrap(entry.getObject("mem_hints"))) {
+      state.mem_hints[mem_hint.str()] = unwrap(val.getAsString());
     }
     return state;
   }

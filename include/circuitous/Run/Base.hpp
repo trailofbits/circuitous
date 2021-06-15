@@ -311,6 +311,9 @@ namespace circuitous::run {
 
     void Visit(VerifyInstruction *op);
     void Visit(OnlyOneCondition *op);
+
+    void Visit(ReadConstraint *op);
+    void Visit(WriteConstraint *op);
   };
 
   #include <circuitous/Run/Derive.tpp>

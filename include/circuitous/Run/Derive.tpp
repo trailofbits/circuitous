@@ -6,12 +6,13 @@
 
 template<typename S>
 void Ctx_<S>::init() {
-  init<OutputRegister, OutputErrorFlag>();
+  init<OutputRegister, OutputErrorFlag, OutputTimestamp>();
   S::init();
 }
 
 template<typename S>
 void Ctx_<S>::derive_cond(Operation *op) {
+  CHECK(op->operands.size() == 2);
   auto ireg{op->operands[0]};
   auto oreg{op->operands[1]};
 
