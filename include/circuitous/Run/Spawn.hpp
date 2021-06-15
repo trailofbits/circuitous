@@ -87,13 +87,13 @@ namespace circuitous::run {
     void init() {
       parent_t::init();
 
-      for (auto hint : circuit->template Attr<Hint>()) {
+      for (auto hint : circuit->template Attr<Advice>()) {
         if (this->node_values.count(hint)) {
           continue;
         }
         if (state.collector.op_to_ctxs[hint].count(current)) {
           for (auto user : hint->users) {
-            if (user->op_code == HintCondition::kind) {
+            if (user->op_code == AdviceConstraint::kind) {
               state.Notify(user);
             }
           }
@@ -116,7 +116,29 @@ namespace circuitous::run {
         }
         if (state.collector.op_to_ctxs[oreg].count(current)) {
           for (auto user : oreg->users) {
-            if (user->op_code == RegisterCondition::kind) {
+            if (user->op_code == RegConstraint::kind) {
+              state.Notify(user);
+            }
+          }
+        }
+      }
+      for (auto oreg : circuit->template Attr<OutputTimestamp>()) {
+        if (this->node_values.count(oreg)) {
+          continue;
+        }
+        if (state.collector.op_to_ctxs[oreg].count(current)) {
+          for (auto user : oreg->users) {
+            state.Notify(user);
+          }
+        }
+      }
+      for (auto oreg : circuit->template Attr<Memory>()) {
+        if (this->node_values.count(oreg)) {
+          continue;
+        }
+        if (state.collector.op_to_ctxs[oreg].count(current)) {
+          for (auto user : oreg->users) {
+            if (is_one_of<ReadConstraint, WriteConstraint>(user)) {
               state.Notify(user);
             }
           }

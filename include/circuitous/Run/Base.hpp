@@ -152,6 +152,7 @@ namespace circuitous::run {
     void Visit(Parity *op);
     void Visit(PopulationCount *op);
     void Visit(Or *op);
+    void Visit(And *op);
 
     // Must be called in `safe` context.
     auto lhs(Operation *op) { return *self().get(op, 0); }
@@ -286,7 +287,7 @@ namespace circuitous::run {
     // Output semantics
     void Visit(OutputRegister *op);
     void Visit(OutputErrorFlag *op);
-    void Visit(Hint *op);
+    void Visit(Advice *op);
   };
 
   template<typename Next>
@@ -303,10 +304,11 @@ namespace circuitous::run {
 
     // Condition semantics
     void Visit(DecodeCondition *op);
-    void Visit(RegisterCondition *op);
-    void Visit(PreservedCondition *op);
-    void Visit(CopyCondition *op);
-    void Visit(HintCondition *op);
+    void Visit(RegConstraint *op);
+    void Visit(PreservedConstraint *op);
+    void Visit(CopyConstraint *op);
+    void Visit(AdviceConstraint *op);
+
     void Visit(VerifyInstruction *op);
     void Visit(OnlyOneCondition *op);
   };
