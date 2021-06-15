@@ -112,6 +112,19 @@ void OpSem<S>::Visit(Or *op) {
 }
 
 template<typename S>
+void OpSem<S>::Visit(And *op) {
+  auto and_ = [&](And *or_) {
+    for (const auto &child : or_->operands) {
+      if (self().get(child) == this->FalseVal()) {
+        return this->FalseVal();
+      }
+    }
+    return this->TrueVal();
+  };
+  return safe(op, and_);
+}
+
+template<typename S>
 void Base_<S>::Visit(Circuit *op) {
   self().SetNodeVal(op, self().GetNodeVal(op->operands[0]));
 }
