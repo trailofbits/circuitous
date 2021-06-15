@@ -32,7 +32,7 @@ static inline bool IsLeafNode(Operation *op) {
     case InputRegister::kind:
     case OutputRegister::kind:
     case Constant::kind:
-    case Hint::kind:
+    case Advice::kind:
     case Undefined::kind:
     case InputInstructionBits::kind:
       return true;
@@ -47,11 +47,11 @@ bool Is(Operation *op) {
 }
 
 // Return number of HINT users that
-static inline std::size_t HintUsers(Operation *hint) {
-  CHECK(Is<Hint>(hint));
+static inline std::size_t AdviceUsers(Operation *hint) {
+  CHECK(Is<Advice>(hint));
   std::size_t users = 0;
   for (auto user : hint->users) {
-    if (!Is<HintCondition>(user)) {
+    if (!Is<AdviceConstraint>(user)) {
       ++users;
     }
   }

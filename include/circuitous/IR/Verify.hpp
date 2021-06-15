@@ -60,7 +60,7 @@ struct Verifier {
       case InputRegister::kind:
       case OutputRegister::kind:
       case InputInstructionBits::kind:
-      case Hint::kind:
+      case Advice::kind:
       case InputErrorFlag::kind:
       case OutputErrorFlag::kind:
         return Exactly(0, op);
@@ -72,12 +72,16 @@ struct Verifier {
       case CountTrailingZeroes::kind:
       case Extract::kind:
         return Exactly(1, op);
-      case RegisterCondition::kind:
-      case PreservedCondition::kind:
-      case CopyCondition::kind:
+      case RegConstraint::kind:
+      case PreservedConstraint::kind:
+      case CopyConstraint::kind:
       case DecodeCondition::kind:
-      case HintCondition::kind:
+      case AdviceConstraint::kind:
         return Exactly(2, op);
+      case ReadConstraint::kind:
+        return Exactly(4, op);
+      case WriteConstraint::kind:
+        return Exactly(5, op);
       case Select::kind:
         return Exactly((1 << op->operands[0]->size) + 1, op);
       case Concat::kind:
@@ -86,7 +90,11 @@ struct Verifier {
       case OnlyOneCondition::kind:
       case Circuit::kind:
       case Or::kind:
+      case And::kind:
         return Not(0, op);
+    }
+    if (is_specialization<LeafValue>(op->op_code)) {
+      return Exactly(0, op);
     }
     if (is_specialization<Computational>(op->op_code)) {
       switch (op->op_code) {
@@ -112,18 +120,18 @@ struct Verifier {
     return status;
   }
 
-  void VerifyHints(Circuit *circuit) {
-    status &= VerifyHintChecks(circuit);
-    status &= VerifyHintUsers(circuit);
-    status &= VerifyHintCtxs(circuit);
+  void VerifyAdvices(Circuit *circuit) {
+    status &= VerifyAdviceChecks(circuit);
+    status &= VerifyAdviceUsers(circuit);
+    status &= VerifyAdviceCtxs(circuit);
   }
 
-  bool VerifyHintCtxs(Circuit *circuit) {
+  bool VerifyAdviceCtxs(Circuit *circuit) {
     CtxCollector collector;
     collector.Run(circuit);
 
     bool out = true;
-    for (auto hint_check : circuit->Attr<HintCondition>()) {
+    for (auto hint_check : circuit->Attr<AdviceConstraint>()) {
       if (collector.op_to_ctxs[hint_check].size() != 1) {
         _warnings << "HINT_CHECK is member of multiple contexts.\n";
         out &= true;
@@ -134,29 +142,29 @@ struct Verifier {
 
   // We try to check if there is not a HINT with more than one HINT_CHECK
   // in the same context, since that is an error.
-  bool VerifyHintChecks(Circuit *circuit) {
+  bool VerifyAdviceChecks(Circuit *circuit) {
     bool out = true;
     std::unordered_map<Operation *, std::unordered_set<VerifyInstruction *>> hint_to_ctxs;
     std::unordered_map<Operation *, VerifyInstruction *> ctx;
     for (auto verif : circuit->Attr<VerifyInstruction>()) {
       for (auto op : verif->operands) {
-        if (op->op_code == HintCondition::kind) {
+        if (op->op_code == AdviceConstraint::kind) {
           ctx[op] = verif;
 
-          if (op->operands[HintCondition::kFixed]->op_code != Hint::kind) {
+          if (op->operands[AdviceConstraint::kFixed]->op_code != Advice::kind) {
             ss << "HINT_CHECK hint operand is not HINT";
             status = false;
           }
 
           bool found_hint = false;
           for (auto hint : op->operands) {
-            if (hint->op_code == Hint::kind) {
+            if (hint->op_code == Advice::kind) {
               if (found_hint) {
                 _warnings << "HINT_CHECK has at least two direct HINT operands!\n";
               }
               found_hint = true;
               if (hint_to_ctxs[hint].count(verif)) {
-                ss << "Hint is under two hint checks in the same context!\n";
+                ss << "Advice is under two hint checks in the same context!\n";
                 status = false;
               }
             }
@@ -172,19 +180,19 @@ struct Verifier {
   }
 
   using hint_users_t = std::unordered_map<Operation *, std::unordered_set<Operation *>>;
-  void CollectHintUsers(Operation *op, hint_users_t &collected ) {
+  void CollectAdviceUsers(Operation *op, hint_users_t &collected ) {
     for (auto child : op->operands) {
-      if (child->op_code == Hint::kind) {
+      if (child->op_code == Advice::kind) {
         collected[child].insert(op);
       } else {
-        CollectHintUsers(child, collected);
+        CollectAdviceUsers(child, collected);
       }
     }
   }
 
-  bool VerifyHintUsers(Operation *circuit) {
+  bool VerifyAdviceUsers(Operation *circuit) {
     hint_users_t collected;
-    CollectHintUsers(circuit, collected);
+    CollectAdviceUsers(circuit, collected);
 
     bool out = true;
     for (auto &[hint, users] : collected) {
@@ -233,7 +241,7 @@ struct Verifier {
 static inline std::tuple<bool, std::string, std::string> VerifyCircuit(Circuit *circuit) {
   Verifier verifier;
   verifier.Verify(circuit);
-  verifier.VerifyHints(circuit);
+  verifier.VerifyAdvices(circuit);
   verifier.VerifyIDs(circuit);
   return {verifier.status, verifier.Report(), verifier._warnings.str() };
 }
