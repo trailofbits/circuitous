@@ -35,7 +35,7 @@ class IRToSMTVisitor : public UniqueVisitor<IRToSMTVisitor> {
   void VisitInputRegister(InputRegister *op);
   void VisitOutputRegister(OutputRegister *op);
   void VisitConstant(Constant *op);
-  void VisitHint(Hint *op);
+  void VisitAdvice(Advice *op);
   void VisitUndefined(Undefined *op);
   void VisitNot(Not *op);
   void VisitExtract(Extract *op);
@@ -44,11 +44,11 @@ class IRToSMTVisitor : public UniqueVisitor<IRToSMTVisitor> {
   void VisitPopulationCount(PopulationCount *op);
   void VisitCountLeadingZeroes(CountLeadingZeroes *op);
   void VisitCountTrailingZeroes(CountTrailingZeroes *op);
-  void VisitRegisterCondition(RegisterCondition *op);
-  void VisitPreservedCondition(PreservedCondition *op);
-  void VisitCopyCondition(CopyCondition *op);
+  void VisitRegConstraint(RegConstraint *op);
+  void VisitPreservedConstraint(PreservedConstraint *op);
+  void VisitCopyConstraint(CopyConstraint *op);
   void VisitDecodeCondition(DecodeCondition *op);
-  void VisitHintCondition(HintCondition *op);
+  void VisitAdviceConstraint(AdviceConstraint *op);
   void VisitOnlyOneCondition(OnlyOneCondition *op);
   void VisitVerifyInstruction(VerifyInstruction *op);
   void VisitCircuit(Circuit *op);
@@ -124,9 +124,9 @@ void IRToSMTVisitor::VisitConstant(Constant *op) {
   InsertZ3Expr(op, z3_ctx.bv_val(op->size, bits.get()));
 }
 
-void IRToSMTVisitor::VisitHint(Hint *op) {
-  DLOG(INFO) << "VisitHint: " << op->Name();
-  auto name = "Hint" + std::to_string(reinterpret_cast<uint64_t>(op));
+void IRToSMTVisitor::VisitAdvice(Advice *op) {
+  DLOG(INFO) << "VisitAdvice: " << op->Name();
+  auto name = "Advice" + std::to_string(reinterpret_cast<uint64_t>(op));
   InsertZ3Expr(op, z3_ctx.bv_const(name.c_str(), op->size));
 }
 
@@ -261,21 +261,21 @@ void IRToSMTVisitor::VisitCountTrailingZeroes(CountTrailingZeroes *op) {
   LOG(FATAL) << "VisitCountTrailingZeroes: " << op->Name();
 }
 
-void IRToSMTVisitor::VisitRegisterCondition(RegisterCondition *op) {
-  DLOG(INFO) << "VisitRegisterCondition: " << op->Name();
+void IRToSMTVisitor::VisitRegConstraint(RegConstraint *op) {
+  DLOG(INFO) << "VisitRegConstraint: " << op->Name();
   auto val = GetZ3Expr(op->operands[0]);
   auto reg = GetZ3Expr(op->operands[1]);
   InsertZ3Expr(op, Z3BVCast(val == reg));
 }
 
-void IRToSMTVisitor::VisitPreservedCondition(PreservedCondition *op) {
-  DLOG(INFO) << "VisitPreservedCondition: " << op->Name();
+void IRToSMTVisitor::VisitPreservedConstraint(PreservedConstraint *op) {
+  DLOG(INFO) << "VisitPreservedConstraint: " << op->Name();
   auto ireg = GetZ3Expr(op->operands[0]);
   auto oreg = GetZ3Expr(op->operands[1]);
   InsertZ3Expr(op, Z3BVCast(ireg == oreg));
 }
 
-void IRToSMTVisitor::VisitCopyCondition(CopyCondition *op) {
+void IRToSMTVisitor::VisitCopyConstraint(CopyConstraint *op) {
   DLOG(INFO) << "VisitCopyCondition: " << op->Name();
   auto ireg = GetZ3Expr(op->operands[0]);
   auto oreg = GetZ3Expr(op->operands[1]);
@@ -298,8 +298,8 @@ void IRToSMTVisitor::VisitOnlyOneCondition(OnlyOneCondition *op) {
   InsertZ3Expr(op, result);
 }
 
-void IRToSMTVisitor::VisitHintCondition(HintCondition *op) {
-  DLOG(INFO) << "VisitHintCondition: " << op->Name();
+void IRToSMTVisitor::VisitAdviceConstraint(AdviceConstraint *op) {
+  DLOG(INFO) << "VisitAdviceConstraint: " << op->Name();
   auto real = GetZ3Expr(op->operands[0]);
   auto hint = GetZ3Expr(op->operands[1]);
   InsertZ3Expr(op, Z3BVCast(real == hint));
