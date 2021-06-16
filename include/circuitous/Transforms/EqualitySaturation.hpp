@@ -21,7 +21,6 @@
 #include <string_view>
 
 #include <circuitous/IR/IR.h>
-#include <llvm/BinaryFormat/Dwarf.h>
 #include <circuitous/Transforms/Pattern.hpp>
 
 namespace circuitous::eqsat {
