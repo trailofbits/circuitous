@@ -95,6 +95,12 @@ namespace circuitous::run {
       }
     }
 
+    void set_memory(uint64_t addr, const std::string &val) {
+      for (auto &[_, runner] : runners) {
+        runner.set_memory(addr, val);
+      }
+    }
+
     template<typename T, typename ...Ts>
     void init() {
       for (auto c : circuit->Attr<T>()) {
