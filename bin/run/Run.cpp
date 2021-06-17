@@ -103,6 +103,11 @@ void run() {
 
     llvm::json::Object output_obj;
     llvm::json::Object output_regs_obj;
+    llvm::json::Object output_mem_hints;
+
+    auto as_str = [](const auto &what) -> std::string {
+      return std::to_string(what->getLimitedValue());
+    };
 
     if (run.acceptor) {
       for (auto [reg, val] : run.acceptor->template get_derived<circuitous::OutputRegister>()) {
@@ -112,11 +117,29 @@ void run() {
       for (auto [_, val] : run.acceptor->template get_derived<circuitous::OutputErrorFlag>()) {
         output_obj["ebit"] = (val == llvm::APInt(1, 1));
       }
+      output_obj["timestamp"] = as_str(run.acceptor->get(circuit->output_timestamp()));
+
+      auto str = [](auto val) {
+        return val.toString(10, false);
+      };
+
+      for (const auto &val : run.acceptor->get_derived_mem()) {
+        llvm::json::Object mem_hint;
+        mem_hint["used"]  = str(val.used);
+        mem_hint["mode"]  = str(val.mode);
+        mem_hint["id"]    = str(val.id);
+        mem_hint["size"]  = str(val.size);
+        mem_hint["addr"]  = str(val.addr);
+        mem_hint["value"] = str(val.value);
+        mem_hint["ts"]    = str(val.timestamp);
+        output_mem_hints[str(val.id)] = std::move(mem_hint);
+      }
     }
 
     // Serialize
     output_obj["regs"] = std::move(output_regs_obj);
     output_obj["result"] = result;
+    output_obj["mem_hints"] = std::move(output_mem_hints);
     output << llvm::json::Value(std::move(output_obj));
   }
 
