@@ -11,6 +11,7 @@
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/SelectFold.hpp>
 #include <circuitous/Lifter/Error.hpp>
+#include <circuitous/Lifter/Memory.hpp>
 #include <circuitous/IR/Lifter.hpp>
 
 #include <remill/BC/Compat/CallSite.h>
@@ -623,7 +624,13 @@ void Circuit0::InjectSemantic(
   auto selects = intrinsics::collect<intrinsics::Select>(begin, end);
 
   auto fragments_size = params.size();
+  params.push_back(surface.timestamp_property(ir));
   params.push_back(surface.saturation_property(ir));
+
+  auto [i_ts, _] = surface.fetch_timestamps();
+  auto mem_checks = mem::synthetize_memory(i_ts, begin, end);
+
+  params.insert(params.end(), mem_checks.begin(), mem_checks.end());
 
   auto [ebit_in, ebit_out] = surface.fetch_ebits();
   auto current_err = err::synthesise_current(ir, begin, end);
