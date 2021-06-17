@@ -10,6 +10,7 @@
 #pragma clang diagnostic ignored "-Wconversion"
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Function.h>
+#include <llvm/ADT/iterator_range.h>
 #pragma clang diagnostic pop
 
 #include <cstdint>
