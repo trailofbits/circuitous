@@ -2,7 +2,7 @@
 
 from tools.byte_generator import intel
 from tools.model_test import ModelTest, Test
-from tools.tc import State, S, MS, if_has
+from tools.tc import State, S, MS
 
 test_adc = {
   ModelTest("adc").tags({"min", "adc"})
@@ -257,7 +257,7 @@ test_rcl = {
 
 test_ip = {
   Test("ip.update").bytes("ba12000000").tags({"min", "ip"})
-  .case(I = S(0x100).RDX(0x0).RIP(0x1000), E = S(0x100).RDX(0x12).RIP(0x1005), R = True)
+  .case(I = S(0x100).RDX(0x0).RIP(0x1000), E = S(0x100).RDX(0x12).RIP(0x1005).ts(1), R = True)
 }
 
 test_all = {
