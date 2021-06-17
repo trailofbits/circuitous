@@ -263,6 +263,15 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
       auto callee = call->getCalledFunction();
 
       CHECK(intrinsics::is_any(callee));
+
+      if (intrinsics::one_of< intrinsics::ReadConstraint,
+                              intrinsics::WriteConstraint >(callee))
+      {
+        for (auto i = 0u; i < call->getNumArgOperands(); ++i) {
+          deps.Visit(call->getArgOperandUse(i));
+        }
+      }
+
       // We need to do something special only for `OutputCheck`.
       if (!intrinsics::OutputCheck::IsIntrinsic(callee)) {
         continue;
