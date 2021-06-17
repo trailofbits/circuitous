@@ -35,6 +35,7 @@ DEFINE_string(singular_next, "", "Path to next entry in a singular form.");
 DEFINE_string(export_derived, "", "Path to store derived values into.");
 
 DEFINE_string(traces, "", "Path to traces");
+DEFINE_string(memory, "", "addr,hex_val");
 
 
 DEFINE_bool(derive, false, "Derive mode");
@@ -84,6 +85,13 @@ void run() {
   if (auto next_trace = load_singular(FLAGS_singular_next)) {
     run.set_output_state(*next_trace);
   }
+
+  if (!FLAGS_memory.empty()) {
+    llvm::StringRef s_ref(FLAGS_memory);
+    auto [addr, val] = s_ref.split(',');
+    run.set_memory(std::strtoull(addr.data(), nullptr, 16), val.str());
+  }
+
   auto result = run.Run();
 
   if (!FLAGS_export_derived.empty()) {
