@@ -41,15 +41,15 @@ namespace circuitous {
       const auto val = use->get();
 
       // Bottom out at an argument; it should be an input register.
-      if (auto arg_val = llvm::dyn_cast<llvm::Argument>(val); arg_val) {
+      if (auto arg_val = llvm::dyn_cast<llvm::Argument>(val)) {
         self->VisitArgument(*use, arg_val);
+        continue;
+      }
 
       // Instruction; follow the dependency chain.
-      } else if (auto inst_val = llvm::dyn_cast<llvm::Instruction>(val);
-                inst_val) {
+      if (auto inst_val = llvm::dyn_cast<llvm::Instruction>(val)) {
         if (self->VisitInstruction(*use, inst_val)) {
-          if (auto call_val = llvm::dyn_cast<llvm::CallInst>(inst_val);
-              call_val) {
+          if (auto call_val = llvm::dyn_cast<llvm::CallInst>(inst_val)) {
             for (auto &op_use : call_val->arg_operands()) {
               work_list.push_back(&op_use);
             }
