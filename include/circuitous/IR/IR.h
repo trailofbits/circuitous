@@ -434,6 +434,15 @@ struct MemoryConstraint : Operation {
   using Operation::Operation;
 
   enum : uint8_t { kFixed = 0u, kSize = 1u, kAddr = 2u, kTS = 3u, kValue = 4u };
+
+  auto hint_arg() const  { return operands[kFixed]; }
+  auto size_arg() const { return operands[kSize]; }
+  auto addr_arg() const { return operands[kAddr]; }
+  auto ts_arg() const { return operands[kTS]; }
+  auto val_arg() const { return operands[kValue]; }
+  auto mem_idx() const {
+    return dynamic_cast< Memory * >( hint_arg() )->mem_idx;
+  }
 };
 
 // A comparison between the proposed output value of a register, and the
