@@ -81,6 +81,9 @@ void run() {
 
   if (auto current_trace = load_singular(FLAGS_singular_current)) {
     run.set_input_state(*current_trace);
+    for (auto [addr, data] : current_trace->initial_memory) {
+      run.set_memory(addr, data);
+    }
   }
   if (auto next_trace = load_singular(FLAGS_singular_next)) {
     run.set_output_state(*next_trace);
