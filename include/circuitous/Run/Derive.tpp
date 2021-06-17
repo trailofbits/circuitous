@@ -77,10 +77,113 @@ void CSem<S>::Visit(DecodeCondition *op) {
 }
 
 template<typename S>
-void CSem<S>::Visit(ReadConstraint *op) { return this-> handle_cond(op); }
+void CSem<S>::Visit(ReadConstraint *op_) {
+
+  auto exec = [&](ReadConstraint *op) -> value_type {
+    for (auto i = 1u; i < op->operands.Size(); ++i) {
+      if (!this->GetNodeVal(op->operands[i])) {
+        return {};
+      }
+    }
+
+    // Is hint supplied?
+    if (this->supplied.count(op->hint_arg())) {
+      auto parsed = this->deconstruct(*this->get(op->hint_arg()));
+
+      intrinsics::Memory::Parsed< llvm::APInt > args {
+        this->TrueVal(),
+        this->FalseVal(),
+
+        parsed.id,
+        *this->get(op->size_arg()),
+        *this->get(op->addr_arg()),
+        parsed.value,
+        *this->get(op->ts_arg())
+      };
+
+      return this->BoolVal(args == parsed);
+    }
+
+    auto addr = this->get(op->addr_arg())->getLimitedValue();
+    auto size = this->get(op->size_arg())->getLimitedValue();
+
+    CHECK(this->defined(addr, size));
+
+    llvm::APInt val { intrinsics::Memory::allocated_size, 0, false };
+
+    val.insertBits(this->TrueVal(), 0);
+    val.insertBits(this->FalseVal(), 1);
+    val.insertBits(llvm::APInt(4, op->mem_idx(), false), 8);
+    val.insertBits(*this->get(op->size_arg()), 12);
+
+    val.insertBits(*this->get(op->addr_arg()), 16);
+    val.insertBits(*this->load(addr, size), 16 + 64);
+    val.insertBits(*this->get(op->ts_arg()), 16 + 128);
+
+    self().SetNodeVal(op->hint_arg(), val);
+    return this->TrueVal();
+  }(op_);
+
+  if (!exec && !this->supplied.count(op_->hint_arg())) {
+    self().SetNodeVal(op_->hint_arg(), {});
+  }
+  self().SetNodeVal(op_, exec);
+}
 
 template<typename S>
-void CSem<S>::Visit(WriteConstraint *op) { return this-> handle_cond(op); }
+void CSem<S>::Visit(WriteConstraint *op_) {
+  auto exec = [&](WriteConstraint *op) -> value_type {
+    for (auto i = 1u; i < op->operands.Size(); ++i) {
+      if (!this->GetNodeVal(op->operands[i])) {
+        return {};
+      }
+    }
+
+    // Is hint supplied?
+    if (this->supplied.count(op->hint_arg())) {
+      auto parsed = this->deconstruct(*this->get(op->hint_arg()));
+
+      intrinsics::Memory::Parsed< llvm::APInt > args {
+        this->TrueVal(),
+        this->FalseVal(),
+
+        parsed.id,
+        *this->get(op->size_arg()),
+        *this->get(op->addr_arg()),
+        *this->get(op->val_arg()),
+        *this->get(op->ts_arg())
+      };
+
+      return this->BoolVal(args == parsed);
+    }
+
+    llvm::APInt val { intrinsics::Memory::allocated_size, 0, false };
+
+    val.insertBits(this->TrueVal(), 0);
+    val.insertBits(this->TrueVal(), 1);
+    val.insertBits(llvm::APInt(4, op->mem_idx(), false), 8);
+    val.insertBits(*this->get(op->size_arg()), 12);
+
+    val.insertBits(*this->get(op->addr_arg()), 16);
+    val.insertBits(*this->get(op->val_arg()), 16 + 64);
+    val.insertBits(*this->get(op->ts_arg()), 16 + 128);
+
+    self().SetNodeVal(op->hint_arg(), val);
+    return this->TrueVal();
+  }(op_);
+
+  if (exec) {
+    auto addr = this->get(op_->addr_arg())->getLimitedValue();
+    auto value = *this->get(op_->val_arg());
+    this->store(addr, value);
+  }
+
+  if (!exec && !this->supplied.count(op_->hint_arg())) {
+    self().SetNodeVal(op_->hint_arg(), {});
+  }
+
+  self().SetNodeVal(op_, exec);
+}
 
 template<typename S>
 void CSem<S>::Visit(RegConstraint *op) { return this-> handle_cond(op); }
