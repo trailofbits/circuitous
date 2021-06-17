@@ -3,7 +3,7 @@
 from tools.byte_generator import intel
 from tools.model_test import ModelTest
 from tools.verify_test import VerifyTest
-from tools.tc import State, S, MS, if_has
+from tools.tc import State, S, MS
 
 _verify_test = {
   VerifyTest("selftest").tags({"selftest"})
