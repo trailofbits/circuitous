@@ -73,7 +73,8 @@ namespace circuitous {
         }
         // This can be triggered since in the gather step we skipped all
         // selects that are incomplete.
-        LOG(FATAL) << "Selec does not have a compatible blueprint!";
+        blueprints.push_back(select);
+        return select;
       };
 
       std::unordered_map<blueprint_t, uint64_t> out;
