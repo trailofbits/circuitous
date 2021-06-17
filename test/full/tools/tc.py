@@ -4,6 +4,8 @@ import copy
 import json
 import os
 
+from itertools import permutations
+
 # Add methods same as register names to the State to make configuration easier
 _regs = [ "RIP", "RSP", "RBP",
           "RAX", "RBX", "RCX", "RDX", "RSI", "RDI",
@@ -14,67 +16,241 @@ _a_regs = ["AL", "AH"]
 _aflags = ["AF", "CF", "OF", "ZF", "PF", "SF"]
 _all_regs = _regs + _aflags + _e_regs + _b_regs + _a_regs
 
-class State:
-  __slots__ = ('registers', 'bytes', 'result', 'undefined', '_ebit', 'timestamp')
+class MemHint:
+  READ = 0
+  WRITE = 1
+  __slots__ = ('used','addr', 'value', 'type', 'size')
 
-  def __init__(self, default_val = None, default_rip = 0x1000):
+  def __init__(self, addr_, val_, type_, size_):
+    assert isinstance(addr_, int)
+    assert isinstance(val_, int)
+    assert isinstance(type_, int)
+    assert isinstance(size_, int)
+
+    self.used = 1
+    self.addr = addr_
+    self.value = val_
+
+    assert type_ in [MemHint.READ, MemHint.WRITE]
+    self.type = type_
+
+    self.size = size_
+
+  def zero_hint():
+    x = MemHint(None, None, MemHint.READ, None)
+    x.used = False
+    return x
+
+  def get_unused(self):
+    return "0"
+
+  def get(self):
+    out  = self.ts << (64 + 64 + 8)
+    out += self.value << (64 + 8)
+    out += self.addr << 8
+    out += (self.size << 4) + (self.mode << 1) + 1
+    return str(out)
+
+  def __eq__(self, other):
+    if other is None:
+      return False
+
+    if other.used != self.used:
+      return False
+
+    if self.used == False:
+      return True
+
+    return self.addr == other.addr \
+           and self.value == other.value \
+           and self.type == other.type \
+           and self.size == other.size
+
+  def __str__(self):
+    if self.used == False:
+      return "[ unused ]"
+
+    out = "[ "
+    out += "READ " if self.type == MemHint.READ else "WRITE: "
+    out += hex(self.addr) + " := "
+    out += str(self.value) + " , "
+    out += str(self.size) + " ]"
+    return out
+
+def split_hints(hints):
+  write = []
+  read = []
+  unused = []
+  for h in hints:
+    if h.used == False:
+      unused.append(h)
+    elif h.type == MemHint.READ:
+      read.append(h)
+    elif h.type == MemHint.WRITE:
+      write.append(h)
+    else:
+      assert False
+  return (unused, read, write)
+
+def permute_compare(fst, snd):
+  if len(fst) == 0 and len(snd) == 0:
+    return True
+  eqs = 0
+  for tmp in permutations(snd):
+    if tmp == tuple(fst):
+      eqs += 1
+  return eqs == 1
+
+#TODO(lukas): Handle unused better
+def compare_hints(fst, snd):
+  assert fst is not None and snd is not None
+  _, fst_read, fst_write = split_hints(fst)
+  _, snd_read, snd_write = split_hints(snd)
+  reads = permute_compare(fst_read, snd_read)
+  writes = permute_compare(fst_write, snd_write)
+  return reads and writes
+
+
+class MemInput:
+  __slots__ = ('entries')
+
+  def __init__(self):
+    self.entries = []
+
+  def add(self, addr, data, **kwargs):
+    assert isinstance(data, str)
+    bytes = []
+    for i in range(0, len(data), 2):
+      bytes.append(int(data[i] + data[i + 1], 16))
+    r = kwargs.get('r', False)
+    w = kwargs.get('w', False)
+    e = kwargs.get('e', False)
+    self.entries.append((addr, bytes, (r, w, e)))
+
+  def get(self):
+    out = {}
+    for addr, data, _ in self.entries:
+      out[hex(addr)[2:]] = "".join([f"{x:02x}" for x in data])
+    return out
+
+
+class StateBase:
+  __slots__ = ('registers', '_ebit', 'timestamp', 'undefined', 'mem_hints',
+               'memory')
+
+  def __init__(self):
     self.registers = {}
-    self.bytes = None
-    self.result = None
-    for x in _regs + _aflags:
-      self.registers[x] = default_val
-    self.registers["RIP"] = default_rip
-    self._ebit = False
-    self.undefined = set()
-    self.timestamp = 0
-
-  def disarm(self):
-    self.registers = None
     self._ebit = None
     self.timestamp = None
+    self.undefined = set()
+    self.mem_hints = []
 
-  def __bool__(self):
-    return self.registers is not None \
-           or self._ebit is not None \
-           or self.timestamp is not None
+    self.memory = None
+
+  def set_reg(self, reg, val):
+    self.registers[reg] = val
+    if reg in self.undefined:
+      self.undefined.remove(reg)
+    return self
+
+  def unset_reg(self, reg):
+    if reg in self.registers:
+      self.registers.pop(reg)
+    self.undefined.add(reg)
+    return self
+
+  def ebit(self, val) :
+    self._ebit = val
+    return self
+
+  def ts(self, val) :
+    self.timestamp = val
+    return self
 
   def aflags(self, val):
     for flag in _aflags:
       self.registers[flag] = val
     return self
 
+  def mem_hint(self, val):
+    self.mem_hints.append(val)
+    return self
+
+  def mem(self, addr, data, **kwargs):
+    if self.memory is None:
+      self.memory = MemInput()
+    self.memory.add(addr, data, **kwargs)
+    return self
+
+  def rmem(self, addr, data): return self.mem(addr, data, r=True)
+  def rwmem(self, addr, data): return self.mem(addr, data, r=True, w=True)
+  def emem(self, addr, data): return self.mem(addr, data, e=True)
+
+
+class State(StateBase):
+
+  __slots__ = ('bytes', 'result')
+
+  def __init__(self, default_val = None, default_rip = 0x1000):
+    super().__init__()
+    for x in _regs + _aflags:
+      self.set_reg(x, default_val)
+    self.set_reg("RIP", default_rip)
+    self.ebit(False)
+    self.ts(0)
+
+    self.bytes = None
+    self.result = None
+
+  def disarm(self):
+    self.registers = None
+    self._ebit = None
+    self.timestamp = None
+    self.mem_hints = None
+
+  def __bool__(self):
+    return self.registers is not None \
+           or self.ebit is not None \
+           or self.timestamp is not None
+
   def mutate(self, other):
     mutated = copy.deepcopy(self)
+
     for reg, val in other.registers.items():
       mutated.set_reg(reg, val)
-    for reg in other.removed:
+
+    for reg in other.undefined:
       mutated.registers.pop(reg)
       mutated.undefined.add(reg)
+
     if other._ebit is not None:
       mutated._ebit = other._ebit
 
-    return mutated
+    if other.timestamp is not None:
+      mutated.timestamp = other.timestamp
 
-  def set_reg(self, reg, value):
-    self.registers[reg] = value
-    return self
+    if other.memory is not None:
+      mutated.memory = other.memory
+    return mutated
 
   def set_bytes(self, bytes_):
     self.bytes = bytes_
-    return self
-
-  def ebit(self, val):
-    self._ebit = val
     return self
 
   def get(self):
     out = {"inst_bits" : self.bytes if self.bytes is not None else "0",
            "ebit" : self._ebit,
            "timestamp" : self.timestamp,
-           "regs" : {}}
+           "regs" : {},
+           "mem_hints": {},
+           "memory": {}}
     for reg, val in self.registers.items():
       if val is not None:
         out["regs"][reg] = str(val)
+    #for id, hint in self.mem_hints.items():
+    #  out["mem_hints"][id] = hint.get()
+    if self.memory is not None:
+      out["memory"] = self.memory.get()
     return out
 
   def as_json_file(self, prefix="def.", dir=None):
@@ -84,31 +260,8 @@ class State:
       json.dump(self.get(), out)
     return path
 
-
-class Mutator:
-  __slots__ = ('registers', 'removed', '_ebit')
-
-  def __init__(self):
-    self.registers = {}
-    self.removed = set()
-    self._ebit = None
-
-  def set_reg(self, reg, val):
-    self.registers[reg] = val
-    return self
-
-  def unset(self, reg):
-    self.removed.add(reg)
-    return self
-
-  def aflags(self, val):
-    for flag in _aflags:
-      self.registers[flag] = val
-    return self
-
-  def ebit(self, val):
-    self._ebit = val
-    return self
+class Mutator(StateBase):
+  pass
 
 def MS():
   return Mutator()
@@ -119,56 +272,7 @@ def S(x = None):
 for reg in _regs + _aflags:
   setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))
   setattr(Mutator, reg, lambda s,v,r=reg : s.set_reg(r, v))
-  setattr(Mutator, "u" + reg, lambda s,r=reg : s.unset(r))
-
-
-class Acceptance():
-  def generate(self, case, **kwargs):
-    return self.should_accept(case, **kwargs)
-
-class AcceptByLiftOpts(Acceptance):
-  __slots__ = ('opts', 'val')
-
-  def __init__(self, opts_, val_):
-    if isinstance(opts_, list):
-      self.opts = opts_
-    else:
-      self.opts = [opts_]
-    self.val = val_
-
-  def should_accept(self, case, **kwargs):
-    lift_args = kwargs.get('lift')
-    assert lift_args is not None
-    valid = self.is_valid(lift_args)
-    return valid, self.val
-
-class HasLiftArgs(AcceptByLiftOpts):
-  def is_valid(self, lift_args):
-    return all(x in lift_args for x in self.opts)
-
-class HasNotLiftArgs(AcceptByLiftOpts):
-  def is_valid(self, lift_args):
-    return all(x not in lift_args for x in self.opts)
-
-class Accept(Acceptance):
-  def should_accept(self, case, **kwargs):
-    return True, True;
-
-class Reject(Acceptance):
-  def should_accept(self, case, **kwargs):
-    return True, False;
-
-def if_has(what, val):
-  return HasLiftArgs(what, val)
-
-def if_nhas(what, val):
-  return HasNotLiftArgs(what, val)
-
-def accept():
-  return Accept()
-
-def reject():
-  return Reject()
+  setattr(Mutator, "u" + reg, lambda s,r=reg : s.unset_reg(r))
 
 class TestCase:
   __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated', '_result_generator',
