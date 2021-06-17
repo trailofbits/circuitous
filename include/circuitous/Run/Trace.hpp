@@ -33,6 +33,8 @@ namespace circuitous::run::trace {
     std::unordered_map<std::string, uint64_t> hints;
     std::unordered_map<std::string, std::string> mem_hints;
 
+    std::unordered_map<uint64_t, std::string> initial_memory;
+
     std::string to_string(uint8_t indent = 0, bool skip_header=true) const {
       std::stringstream ss;
       std::string prefix(indent * 2, ' ');
@@ -126,6 +128,16 @@ namespace circuitous::run::trace {
 
     for (const auto &[mem_hint, val] : unwrap(entry.getObject("mem_hints"))) {
       state.mem_hints[mem_hint.str()] = unwrap(val.getAsString());
+    }
+
+    // There are some optional args, so if we are done we can return
+    if (!entry.getObject("memory")) {
+      return state;
+    }
+
+    for (const auto &[addr_, mem] : unwrap(entry.getObject("memory"))) {
+      auto addr = std::strtoull(addr_.str().c_str(), nullptr, 16);
+      state.initial_memory[addr] = unwrap(mem.getAsString());
     }
     return state;
   }
