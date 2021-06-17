@@ -84,6 +84,17 @@ namespace circuitous::run {
       }
     }
 
+    void set_memory(uint64_t addr, const std::string &data) {
+      CHECK(data.size() % 2 == 0);
+      uint64_t offset = 0;
+      for (std::size_t i = 0; i < data.size(); i += 2) {
+        auto str = data.substr(i, 2);
+        auto val = llvm::APInt(8, str, 16);
+        this->store(addr + offset, val);
+        ++offset;
+      }
+    }
+
     void init() {
       parent_t::init();
 

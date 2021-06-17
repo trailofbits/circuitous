@@ -8,6 +8,7 @@
 #include <circuitous/IR/Verify.hpp>
 
 #include <circuitous/Run/Trace.hpp>
+#include <circuitous/IR/Intrinsics.hpp>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
@@ -22,8 +23,56 @@
 
 namespace circuitous::run {
 
+  // TODO(lukas): Most likely it will be required for this to be an attribute
+  //              as we will need to move/copy it between `Spawn` classes.
+  struct HasMemory {
+    using raw_value_type = llvm::APInt;
+    using value_type = std::optional<raw_value_type>;
+
+    std::unordered_map<uint64_t, raw_value_type> memory;
+
+    template< typename U >
+    bool defined(uint64_t addr, U size) {
+      for (auto i = 0u; i < size; ++i) {
+        if (!memory.count(addr + i)) {
+          return false;
+        }
+      }
+      return true;
+    }
+
+    template< typename U >
+    value_type load(uint64_t addr, U size_) {
+      U size = size_;
+      if (!defined(addr, size)) {
+        return {};
+      }
+
+      llvm::APInt build{ static_cast< uint32_t >(size * 8), 0, false };
+      for (auto i = 0u; i < size; ++i) {
+        build.insertBits( memory[addr + i], i * 8 );
+      }
+      return build;
+    }
+
+    void store(uint64_t addr, raw_value_type val) {
+      CHECK( val.getBitWidth() % 8 == 0 )
+          << "Cannot store val that has unalinged bw such as " << val.getBitWidth();
+
+      for (auto i = 0u; i < val.getBitWidth(); i += 8) {
+        memory[addr + i] = val.extractBits(8, i);
+      }
+    }
+
+    using Parsed = intrinsics::Memory::Parsed<llvm::APInt>;
+
+    Parsed deconstruct(const llvm::APInt &value);
+    llvm::APInt construct(const Parsed &parsed);
+
+  };
+
   template<typename Self>
-  struct Base_ : public Visitor<Self> {
+  struct Base_ : public Visitor<Self>, HasMemory {
     using raw_value_type = llvm::APInt;
     // If no value is held <=> value is undefined
     using value_type = std::optional<raw_value_type>;
@@ -252,6 +301,16 @@ namespace circuitous::run {
         return verify_cond(op);
       }
       return derive_cond(op);
+    }
+
+
+    std::vector<HasMemory::Parsed> get_derived_mem() {
+      std::vector<HasMemory::Parsed> out;
+      for (auto op : this->circuit->template Attr<Memory>()) {
+        // TODO(lukas): Check if memory was derived or supplied
+        out.push_back(this->deconstruct(*this->get(op)));
+      }
+      return out;
     }
 
     template<typename T>
