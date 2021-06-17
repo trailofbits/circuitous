@@ -183,6 +183,18 @@ class Interpret(SimulateCWDMixin):
         case.simulated.set_reg(reg, int(val, 10))
       case.simulated.result = result["result"]
       case.simulated._ebit = result.get("ebit")
+      mt = result.get("timestamp")
+      for _, hint in result["mem_hints"].items():
+        if (int(hint["used"]) == 0):
+          continue
+        mh = TC.MemHint(
+          int(hint["addr"]),
+          int(hint["value"]),
+          int(hint["mode"]),
+          int(hint["size"])
+        )
+        case.simulated.mem_hint(mh)
+      case.simulated.timestamp = mt if mt is None else int(mt)
 
 
 class TestResult:
@@ -231,8 +243,6 @@ class Comparator(SimulateCWDMixin):
     return out
 
   def compare_verify(self, input, after, expected):
-    assert not after, after.registers
-    assert after._ebit is None
     if expected.result == after.result:
       return True, ""
     if expected.result:
@@ -251,9 +261,22 @@ class Comparator(SimulateCWDMixin):
         message += "Register " + reg + " (expected != actual): " + \
                    hex(e_val) + " != " + hex(val) + "\n"
 
+    if after.timestamp != expected.timestamp:
+      accept = False
+      message += "timestamp: " + str(after.timestamp) + " != " + str(expected.timestamp)
+      message += "\n"
+
     if after._ebit != expected._ebit:
       accept =  False
-      message += "ebits do not match"
+      message += "ebits do not match \n"
+
+    if not TC.compare_hints(after.mem_hints, expected.mem_hints):
+      accept = False
+      message += "mem_hints do not match\n---\n"
+      message += "".join(str(x) for x in after.mem_hints) + "\n"
+      message += "---\n"
+      message += "".join(str(x) for x in expected.mem_hints) + "\n"
+      message += "---\n"
 
     skipped = []
     for reg in expected.registers.keys():
