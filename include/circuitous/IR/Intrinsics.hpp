@@ -300,10 +300,12 @@ namespace impl {
     }
   };
 
-  template<typename Self_t, uint32_t allocated_size>
+  template<typename Self_t, uint32_t allocated_size_>
   struct BucketAllocator : ParseInts<Self_t, 2>
   {
     using Parent = ParseInts<Self_t, 2>;
+
+    static constexpr uint32_t allocated_size = allocated_size_;
 
     static std::string Name(uint32_t id) {
       std::stringstream ss;
@@ -544,32 +546,36 @@ struct Error : impl::Identity<data::Error> {};
 
 struct Memory : impl::BucketAllocator<data::Memory, 16 + 64 + 64 + 64> {
 
+  template<typename V>
   struct Parsed {
     // 1 bit
-    llvm::Value *used;
+    V used;
     // 1 bit
-    llvm::Value *mode;
+    V mode;
     // 6 bit reserved
 
     // 4 bit id
-    llvm::Value *id;
+    V id;
 
     // 4 bit
-    llvm::Value *size;
+    V size;
 
     // 8 bytes
-    llvm::Value *addr;
+    V addr;
     // 8 bytes
-    llvm::Value *value;
+    V value;
     // 8 bytes
-    llvm::Value *timestamp;
+    V timestamp;
+
+    bool operator==(const Parsed< V > &other) const = default;
   };
 
+  template< typename P >
   struct Validator {
     llvm::IRBuilder<> &ir;
-    const Parsed &parsed;
+    const P &parsed;
 
-    Validator(llvm::IRBuilder<> &ir_, const Parsed &parsed_) : ir( ir_ ), parsed( parsed_ ) {}
+    Validator(llvm::IRBuilder<> &ir_, const P &parsed_) : ir( ir_ ), parsed( parsed_ ) {}
 
     auto iN(uint64_t size, uint64_t val) {
       return ir.getIntN(static_cast< uint32_t >(size), val);
@@ -604,21 +610,42 @@ struct Memory : impl::BucketAllocator<data::Memory, 16 + 64 + 64 + 64> {
 
   };
 
-  template< typename Extractor >
-  static Parsed parse(llvm::IRBuilder<> &ir, llvm::CallInst *call, Extractor extract_) {
+  // TODO(lukas): This two can probably be merged (easily) if reserved bits
+  //              got their attribute.
+  template< typename V, typename Inserter >
+  static void construct(const Parsed< V > &parsed, Inserter &insert_) {
     auto current = 0u;
-    auto extract = [&](auto size) {
-      auto out = extract_( ir, call, current, size );
+    auto exec = [&](auto elem, auto size) {
+      insert_(elem, current, size);
+      current += size;
+    };
+
+    exec(parsed.used, 1u);
+    exec(parsed.mode, 1u);
+
+    current += 6;
+
+    exec(parsed.id, 4u);
+    exec(parsed.size, 4u);
+    exec(parsed.addr, 64u);
+    exec(parsed.value, 64u);
+    exec(parsed.timestamp, 64u);
+  }
+
+  template< typename V = llvm::Value *, typename Extractor >
+  static Parsed< V > parse(V call, Extractor extract_) {
+    auto current = 0u;
+    auto extract = [&](auto size) -> V {
+      auto out = extract_( call, current, size );
       current += size;
       return out;
     };
 
-    CHECK(IsIntrinsic(call->getCalledFunction()));
-    Parsed out;
+    Parsed< V > out;
     out.used = extract( 1u );
     out.mode = extract( 1u );
-    extract( 6u );
-    out.value = extract( 4u );
+    std::ignore = extract( 6u );
+    out.id = extract( 4u );
     out.size = extract( 4u );
 
     out.addr = extract( 64u  );
