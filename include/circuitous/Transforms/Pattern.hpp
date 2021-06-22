@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <circuitous/Util/StrongType.h>
+#include <circuitous/Util/StrongType.hpp>
 #include <glog/logging.h>
 
 #include <algorithm>
