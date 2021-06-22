@@ -8,9 +8,10 @@
 
 namespace circ {
 
-  template< typename underlying_t, typename tag >
+  template< typename underlying, typename tag >
   struct strong_type
   {
+    using underlying_t = underlying;
     constexpr strong_type() : _value() {}
 
     explicit constexpr strong_type(const underlying_t &value) : _value(value) {}
