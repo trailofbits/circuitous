@@ -427,19 +427,23 @@ namespace circuitous::shadowinst {
     }
 
     template<typename ...Args>
-    void Replace(std::size_t idx, remill::Operand::Type type, Args && ...args) {
+    auto &Replace(std::size_t idx, remill::Operand::Type type, Args && ...args) {
       switch(type) {
         case remill::Operand::Type::kTypeRegister: {
           operands[idx] = Operand::As<Reg>(std::forward<Args>(args)...);
-          break;
+          return operands[idx];
         }
         case remill::Operand::Type::kTypeImmediate : {
           operands[idx] = Operand::As<Immediate>(std::forward<Args>(args)...);
-          break;
+          return operands[idx];
+        }
+        case remill::Operand::Type::kTypeAddress : {
+          operands[idx] = Operand::As<Address>(std::forward<Args>(args)...);
+          return operands[idx];
         }
         default :
           LOG(FATAL)
-            << "Cannot replace shadow operand with type that is neither reg nor imm.";
+            << "Cannot replace shadow operand with type that is neither reg, addr nor imm.";
       }
     }
 
