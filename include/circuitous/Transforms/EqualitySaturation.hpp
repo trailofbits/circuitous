@@ -23,7 +23,7 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/Transforms/Pattern.hpp>
 
-namespace circuitous::eqsat {
+namespace circ::eqsat {
 
   // helper for pattern visitor
   template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
@@ -386,4 +386,4 @@ namespace circuitous::eqsat {
     Builder _builder;
   };
 
-} // namespace circuitous::eqsat
+} // namespace circ::eqsat

@@ -21,7 +21,7 @@
 #include <llvm/ADT/APInt.h>
 #pragma clang diagnostic pop
 
-namespace circuitous::run {
+namespace circ::run {
 
   // TODO(lukas): Most likely it will be required for this to be an attribute
   //              as we will need to move/copy it between `Spawn` classes.
@@ -411,4 +411,4 @@ namespace circuitous::run {
   template<typename S>
   using VBase = verify::Base<OpSem<Base_<S>>>;
 
-} // namespace circuitous::run
+} // namespace circ::run

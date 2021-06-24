@@ -9,7 +9,7 @@
 #include <llvm/IR/Instruction.h>
 #pragma clang diagnostic pop
 
-namespace circuitous {
+namespace circ {
 
 // Look for uses of population count that operates on a zero-extended value, and
 // change it to operate on the original value.
@@ -42,4 +42,4 @@ bool StrengthReducePopulationCount(Circuit *circuit) {
   return circuit;
 }
 
-}  // namespace circuitous
+}  // namespace circ

@@ -13,7 +13,7 @@
 
 #include <circuitous/IR/Circuit.hpp>
 
-namespace circuitous {
+namespace circ {
 namespace {
 
 class IRToSMTVisitor : public UniqueVisitor<IRToSMTVisitor> {
@@ -445,7 +445,7 @@ z3::expr ElimNot(z3::context &ctx, const z3::expr &e) {
 
 void PrintSMT(std::ostream &os, Circuit *circuit, bool bit_blast) {
   z3::context ctx;
-  circuitous::IRToSMTVisitor smt(ctx);
+  circ::IRToSMTVisitor smt(ctx);
   z3::solver solver(ctx);
 
   // Convert `circuit` to a z3::expr
@@ -480,4 +480,4 @@ void PrintSMT(std::ostream &os, Circuit *circuit, bool bit_blast) {
   os << solver.to_smt2();
 }
 
-}  // namespace circuitous
+}  // namespace circ

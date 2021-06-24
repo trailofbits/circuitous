@@ -12,7 +12,7 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/IR/Shapes.hpp>
 
-namespace circuitous {
+namespace circ {
 
 // Really simple structural verifier
 struct Verifier {

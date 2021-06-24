@@ -9,7 +9,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace circuitous {
+namespace circ {
 
 struct Circuit;
 struct Operation;
@@ -21,4 +21,4 @@ void PrintJSON(std::ostream &os, Circuit *circuit);
 void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
                    std::function<bool(Operation *)> accept);
 void PrintSMT(std::ostream &os, Circuit *circuit, bool bit_blast);
-}  // namespace circuitous
+}  // namespace circ

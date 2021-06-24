@@ -7,7 +7,7 @@
 #include <cstdint>
 #include <vector>
 
-namespace circuitous {
+namespace circ {
 
   struct UnionFind {
     using Id = std::uint64_t;
@@ -67,4 +67,4 @@ namespace circuitous {
     std::vector< Id > _parents;
   };
 
-} // namespace circuitous
+} // namespace circ

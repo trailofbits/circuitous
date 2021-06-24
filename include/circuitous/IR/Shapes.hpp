@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace circuitous {
+namespace circ {
 
 template<typename T, typename ...Ts>
 bool IsOneOf(Operation *op) {
@@ -273,5 +273,5 @@ static inline std::unordered_set<Operation *> GetContexts(Operation *op) {
   return collector.collected;
 }
 
-} // namespace circuitous
+} // namespace circ
 

@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace circuitous {
+namespace circ {
 
   struct SelectFolder : private intrinsics::Select {
     using blueprint_t = llvm::CallInst *;

@@ -8,7 +8,7 @@
 #include <cstdint>
 #include <memory>
 
-namespace circuitous {
+namespace circ {
 
 struct Operation;
 
@@ -40,4 +40,4 @@ struct IdentityHasher {
   void Reset() {}
 };
 
-}  // namespace circuitous
+}  // namespace circ

@@ -24,7 +24,7 @@ namespace remill {
   class Operand;
 }
 
-namespace circuitous {
+namespace circ {
 
   struct Names {
     // TODO(lukas): This may deserve its own header, so we do not have to include
@@ -270,4 +270,4 @@ namespace circuitous {
     {}
   };
 
-} // namespace circuitous
+} // namespace circ

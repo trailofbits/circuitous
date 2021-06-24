@@ -14,7 +14,7 @@
 #include <string>
 #include <unordered_map>
 
-namespace circuitous {
+namespace circ {
 namespace {
 
 static const std::hash<std::string> kStringHasher = {};
@@ -96,4 +96,4 @@ void HashVisitor::Reset(void) {
 
 uint64_t IdentityHasher::operator[](Operation *op) { return op->id(); }
 
-}  // namespace circuitous
+}  // namespace circ

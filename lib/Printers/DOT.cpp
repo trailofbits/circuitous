@@ -17,7 +17,7 @@
 #include <llvm/IR/Module.h>
 #pragma clang diagnostic pop
 
-namespace circuitous {
+namespace circ {
 namespace {
 
 static const char *const kBeginDOTNode =
@@ -166,8 +166,8 @@ struct Printer : UniqueVisitor<Printer> {
 
 void PrintDOT(std::ostream &os, Circuit *circuit,
               const std::unordered_map<Operation *, std::string> &node_values) {
-  circuitous::dot::Printer dot_os(os, node_values);
+  circ::dot::Printer dot_os(os, node_values);
   dot_os.Visit(circuit);
 }
 
-}  // namespace circuitous
+}  // namespace circ

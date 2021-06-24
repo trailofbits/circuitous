@@ -30,7 +30,7 @@
 #include <llvm/IR/Module.h>
 #pragma clang diagnostic pop
 
-namespace circuitous {
+namespace circ {
 
   void OptimizeSilently(
     const remill::Arch *arch, llvm::Module *module,
@@ -237,8 +237,8 @@ namespace circuitous {
     }
 
     void IdentifyImms(InstSelections &insts) {
-      circuitous::IdentifyImms(ctx._arch, insts);
+      circ::IdentifyImms(ctx._arch, insts);
     }
 
   };
-}
+} // namespace circ

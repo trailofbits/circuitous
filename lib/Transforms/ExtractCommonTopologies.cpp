@@ -14,7 +14,7 @@
 #include <sstream>
 #include <unordered_map>
 
-namespace circuitous {
+namespace circ {
 
   /**
 namespace impl {
@@ -512,4 +512,4 @@ bool DependencyBreaker(Circuit *circuit) {
   return circuit;
 }
 
-}  // namespace circuitous
+}  // namespace circ

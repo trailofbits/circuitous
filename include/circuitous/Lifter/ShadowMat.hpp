@@ -24,7 +24,7 @@
 #include <llvm/IR/Function.h>
 #pragma clang diagnostic pop
 
-namespace circuitous::shadowinst {
+namespace circ::shadowinst {
 
   using values_t = std::vector<llvm::Value *>;
   using annotated_values = std::unordered_map<std::string, values_t>;
@@ -224,4 +224,4 @@ namespace circuitous::shadowinst {
     return std::make_tuple(cond, select);
   }
 
-} // namespace circuitous::shadowinst
+} // namespace circ::shadowinst

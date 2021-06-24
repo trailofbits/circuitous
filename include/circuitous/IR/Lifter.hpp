@@ -27,7 +27,7 @@
 #include <utility>
 #include <vector>
 
-namespace circuitous {
+namespace circ {
 
 // Adds knowledge of a `shadowinst::Instruction` to a class that
 // inherits from it.
@@ -475,4 +475,4 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
   }
 };
 
-} // namespace circuitous
+} // namespace circ

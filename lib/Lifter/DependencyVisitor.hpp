@@ -12,7 +12,7 @@
 #include <sstream>
 #include <circuitous/Lifter/Context.hpp>
 
-namespace circuitous {
+namespace circ {
 
   // Keeps track of instruction dependencies.
   template <typename T>
@@ -102,4 +102,4 @@ namespace circuitous {
     std::set<llvm::Argument *> written_registers;
   };
 
-}  // namespace circuitous
+}  // namespace circ

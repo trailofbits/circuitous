@@ -10,7 +10,7 @@
 #include <tuple>
 #include <vector>
 
-namespace circuitous::err {
+namespace circ::err {
 
   static inline bool is_div(llvm::BinaryOperator *op) {
     auto op_code = op->getOpcode();
@@ -68,4 +68,4 @@ namespace circuitous::err {
     return intrinsics::make_or(ir, args);
   }
 
-} // namespace circuitous::err
+} // namespace circ::err

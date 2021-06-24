@@ -30,7 +30,7 @@
 
 #include <sstream>
 
-namespace circuitous {
+namespace circ {
 namespace {
 
 // `v.name = u.name`
@@ -750,4 +750,4 @@ auto Surface::Regs() const -> types_t {
   return params_types;
 }
 
-}  // namespace circuitous
+}  // namespace circ

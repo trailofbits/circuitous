@@ -13,7 +13,7 @@
 #include <variant>
 #include "circuitous/IR/IR.h"
 
-namespace circuitous::eqsat {
+namespace circ::eqsat {
 
   using Parser = PatternParser;
   using Constant = ASTNode::Constant;
@@ -92,4 +92,4 @@ namespace circuitous::eqsat {
     CHECK(Pattern("(op_add (op_mul 1 ?x) ?x)").places.size() == 1);
   }
 
-} // namespace circuitous::eqsat
+} // namespace circ::eqsat

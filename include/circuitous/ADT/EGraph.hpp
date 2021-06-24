@@ -16,7 +16,7 @@
 
 #include <circuitous/ADT/UnionFind.hpp>
 
-namespace circuitous {
+namespace circ {
 
   template< typename Term_ >
   struct ENode
@@ -288,4 +288,4 @@ namespace circuitous {
     out << "}\n";
   }
 
-} // namespace circuitous
+} // namespace circ

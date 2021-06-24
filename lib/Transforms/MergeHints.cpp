@@ -10,7 +10,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace circuitous {
+namespace circ {
 
 // Merge all of the hint inputs into a single "wide" input hint that is of
 // sufficient size to support all verifiers. In place of the individual hints,
@@ -127,4 +127,4 @@ bool MergeAdvices(Circuit *circuit) {
   return true;
 }
 
-}  // namespace circuitous
+}  // namespace circ

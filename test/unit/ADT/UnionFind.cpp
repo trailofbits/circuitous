@@ -9,7 +9,7 @@
 #include <doctest/doctest.h>
 #include <circuitous/ADT/UnionFind.hpp>
 
-using UnionFind = circuitous::UnionFind;
+using UnionFind = circ::UnionFind;
 
 TEST_CASE("UnionFind simple") {
   auto union_find = UnionFind();
