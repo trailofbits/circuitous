@@ -20,7 +20,7 @@
 #include <string_view>
 #include <iostream>
 
-namespace circuitous::eqsat {
+namespace circ::eqsat {
 
   struct ASTNode;
   using ASTNodePtr = std::unique_ptr< ASTNode >;
@@ -220,4 +220,4 @@ namespace circuitous::eqsat {
     PlacesMap places;
   };
 
-} // namespace circuitous::eqsat
+} // namespace circ::eqsat

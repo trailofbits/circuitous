@@ -43,7 +43,7 @@ namespace {
 
 static const std::hash<std::string> kStringHasher;
 
-void TopologySpecificIRPrinter(circuitous::Circuit *circuit) {
+void TopologySpecificIRPrinter(circ::Circuit *circuit) {
   std::unordered_map<uint64_t, std::ofstream> streams;
   LOG(INFO) << "Veryfing before serialization";
   VerifyCircuit(circuit);
@@ -100,15 +100,15 @@ struct DefaultLog {
   }
 };
 
-std::unique_ptr<circuitous::Circuit> LoadCircuit() {
+std::unique_ptr<circ::Circuit> LoadCircuit() {
   auto choose_opts = [&](){
-    circuitous::Optimizations out;
+    circ::Optimizations out;
     out.reduce_imms = FLAGS_reduce_imms;
     return out;
   };
 
   auto make_circuit = [&](auto buf) {
-    return circuitous::Circuit::make_circuit(FLAGS_arch, FLAGS_os, buf, choose_opts());
+    return circ::Circuit::make_circuit(FLAGS_arch, FLAGS_os, buf, choose_opts());
   };
 
   if (!FLAGS_bytes_in.empty()) {
@@ -132,7 +132,7 @@ std::unique_ptr<circuitous::Circuit> LoadCircuit() {
       LOG(ERROR) << "Error while opening input IR file.";
       return {};
     }
-    return circuitous::Circuit::Deserialize(is);
+    return circ::Circuit::Deserialize(is);
 
   }
   LOG(WARNING) << "Expected one of `--binary_in` or `--ir_in` or `--bytes_int`" << std::endl;
@@ -141,7 +141,7 @@ std::unique_ptr<circuitous::Circuit> LoadCircuit() {
 
 // Optimize the circuit.
 template<typename Optimizer>
-void Optimize(circuitous::Circuit *circuit) {
+void Optimize(circ::Circuit *circuit) {
   Optimizer opt_manager;
 
   // Populate by default passes we want to always run
@@ -177,11 +177,11 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "Debug dumping before optimizations -- debug.* family.";
     VerifyCircuit("Verifying.", circuit.get());
     std::ofstream os("debug.json");
-    circuitous::PrintJSON(os, circuit.get());
+    circ::PrintJSON(os, circuit.get());
     os.flush();
 
     std::ofstream dos("debug.dot");
-    circuitous::PrintDOT(dos, circuit.get());
+    circ::PrintDOT(dos, circuit.get());
     dos.flush();
     LOG(INFO) << "Debug dumping finished.";
   }
@@ -190,9 +190,9 @@ int main(int argc, char *argv[]) {
   LOG(INFO) << "Debug mode: " << FLAGS_dbg;
 
   if (FLAGS_dbg) {
-    Optimize<circuitous::DebugOptimizer<DefaultLog>>(circuit.get());
+    Optimize<circ::DebugOptimizer<DefaultLog>>(circuit.get());
   } else {
-    Optimize<circuitous::DefaultOptimizer<DefaultLog>>(circuit.get());
+    Optimize<circ::DefaultOptimizer<DefaultLog>>(circuit.get());
   }
 
 
@@ -218,7 +218,7 @@ int main(int argc, char *argv[]) {
         if (!is.good()) {
           LOG(FATAL) << "Error while re-checking.";
         }
-        auto x = circuitous::Circuit::Deserialize(is);
+        auto x = circ::Circuit::Deserialize(is);
         VerifyCircuit("Verifyinh loaded.", x.get(), "Reload test successful.");
       }
     }
@@ -230,7 +230,7 @@ int main(int argc, char *argv[]) {
     }
     LOG(INFO) << "Printing JSON";
     std::ofstream os(FLAGS_json_out);
-    circuitous::PrintJSON(os, circuit.get());
+    circ::PrintJSON(os, circuit.get());
     LOG(INFO) << "Done";
   }
 
@@ -241,7 +241,7 @@ int main(int argc, char *argv[]) {
 
     LOG(INFO) << "Printing dot";
     std::ofstream os(FLAGS_dot_out);
-    circuitous::PrintDOT(os, circuit.get());
+    circ::PrintDOT(os, circuit.get());
     LOG(INFO) << "Done";
   }
 
@@ -252,7 +252,7 @@ int main(int argc, char *argv[]) {
 
     LOG(INFO) << "Printing python";
     std::ofstream os(FLAGS_python_out);
-    circuitous::PrintPython(os, circuit.get());
+    circ::PrintPython(os, circuit.get());
     LOG(INFO) << "Done";
   }
 
@@ -262,7 +262,7 @@ int main(int argc, char *argv[]) {
     }
     LOG(INFO) << "Printing smt";
     std::ofstream os(FLAGS_smt_out);
-    circuitous::PrintSMT(os, circuit.get(), false);
+    circ::PrintSMT(os, circuit.get(), false);
     LOG(INFO) << "Done.";
   }
 

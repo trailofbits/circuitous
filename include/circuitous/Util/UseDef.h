@@ -18,7 +18,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace circuitous {
+namespace circ {
 
 // Class that owns all the memory for nodes of type `Value`.
 // Other classes should operate on raw pointers

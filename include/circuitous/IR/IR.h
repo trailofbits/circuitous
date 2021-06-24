@@ -24,7 +24,7 @@ class Function;
 class Instruction;
 class StringRef;
 }  // namespace llvm
-namespace circuitous {
+namespace circ {
 
 // A general instruction.
 struct Operation : public Node<Operation> {
@@ -540,4 +540,4 @@ static inline std::string to_string(Kind kind) {
   return fragment_as_str(kind);
 }
 
-}  // namespace circuitous
+}  // namespace circ

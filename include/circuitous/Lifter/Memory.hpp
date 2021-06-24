@@ -4,7 +4,7 @@
 
 #pragma once
 
-namespace circuitous::mem {
+namespace circ::mem {
 
   // Returns `[explicit_errors, implicit_erros]`
   template<typename R = llvm::iterator_range<llvm::BasicBlock::iterator>>
@@ -138,4 +138,4 @@ namespace circuitous::mem {
   }
 
 
-} // namespace circuitous::mem
+} // namespace circ::mem

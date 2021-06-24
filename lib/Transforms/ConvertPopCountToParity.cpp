@@ -9,7 +9,7 @@
 #include <llvm/IR/Instruction.h>
 #pragma clang diagnostic pop
 
-namespace circuitous {
+namespace circ {
 
 // Look for uses of the population count instruction that look like they are
 // actually computing the parity of some bits, and then replace that computation
@@ -69,4 +69,4 @@ bool ConvertPopCountToParity(Circuit *circuit) { return circuit; }
 }
 **/
 
-}  // namespace circuitous
+}  // namespace circ

@@ -15,7 +15,7 @@
 #include <llvm/IR/Verifier.h>
 #pragma clang diagnostic pop
 
-namespace circuitous {
+namespace circ {
 
 struct Flattener {
   llvm::Function *func;
@@ -263,4 +263,4 @@ struct Flattener {
 }; // struct Flattener
 
 
-} // namespace circuitous
+} // namespace circ

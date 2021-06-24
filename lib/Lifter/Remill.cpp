@@ -31,7 +31,7 @@
 
 #include "CircuitBuilder.h"
 
-namespace circuitous {
+namespace circ {
 namespace {
 
 auto CallArgs(llvm::CallInst *call) {
@@ -687,8 +687,8 @@ auto Circuit::make_circuit(
 -> circuit_ptr_t
 {
 
-  circuitous::Ctx ctx{ std::string(os_name), std::string(arch_name) };
-  circuitous::CircuitBuilder builder(ctx);
+  circ::Ctx ctx{ std::string(os_name), std::string(arch_name) };
+  circ::CircuitBuilder builder(ctx);
   builder.reduce_imms = opts.reduce_imms;
 
   const auto arch = builder.ctx.arch();
@@ -743,4 +743,4 @@ auto Circuit::make_circuit(
   return impl;
 }
 
-}  // namespace circuitous
+}  // namespace circ

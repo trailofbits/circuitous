@@ -19,7 +19,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace circuitous {
+namespace circ {
 namespace {
 
 struct FileConfig {
@@ -533,4 +533,4 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   return circuit;
 }
 
-}  // namespace circuitous
+}  // namespace circ

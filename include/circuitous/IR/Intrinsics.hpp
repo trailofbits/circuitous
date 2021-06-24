@@ -16,7 +16,7 @@
 #include <cstdint>
 #include <utility>
 
-namespace circuitous::intrinsics {
+namespace circ::intrinsics {
 
 /* Typically with each intrinsic we want to do a fixed set of operations:
  *  - Create
@@ -818,4 +818,4 @@ std::vector<llvm::CallInst *> collect(llvm::Value *from, llvm::Value *to) {
   return collect<T>({ begin, end });
 }
 
-} // namespace circuitous::intrinsics
+} // namespace circ::intrinsics

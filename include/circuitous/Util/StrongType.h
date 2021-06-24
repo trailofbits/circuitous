@@ -6,7 +6,7 @@
 
 #include <compare>
 
-namespace circuitous {
+namespace circ {
 
   template< typename underlying_t, typename tag >
   struct strong_type
@@ -50,15 +50,15 @@ namespace circuitous {
   private:
     underlying_t _value;
   };
-} // namespace circuitous
+} // namespace circ
 
 namespace std {
   template< typename underlying_t, typename tag >
-  struct hash< circuitous::strong_type< underlying_t, tag > >
+  struct hash< circ::strong_type< underlying_t, tag > >
   {
     using underlying_hash = std::hash<underlying_t>;
 
-    size_t operator()(const circuitous::strong_type< underlying_t, tag > &a) const noexcept
+    size_t operator()(const circ::strong_type< underlying_t, tag > &a) const noexcept
     {
       return underlying_hash{}(static_cast< const underlying_t& >(a));
     }

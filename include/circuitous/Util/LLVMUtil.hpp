@@ -20,7 +20,7 @@
 #include <llvm/Support/raw_os_ostream.h>
 #pragma clang diagnostic pop
 
-namespace circuitous {
+namespace circ {
 
   static inline void EraseFn(llvm::Module *module, const std::string &fn_name) {
     if (auto fn = module->getFunction(fn_name)) {
@@ -97,4 +97,4 @@ namespace circuitous {
     return llvm::UndefValue::get(val->getType()) == val;
   }
 
-} // namespace circuitous
+} // namespace circ

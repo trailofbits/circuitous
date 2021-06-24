@@ -7,7 +7,7 @@
 #include <set>
 #include <unordered_map>
 
-namespace circuitous {
+namespace circ {
 
 using inst_set_t = std::unordered_set<Operation *>;
 using decode_bucket_t = std::vector<inst_set_t>;
@@ -163,4 +163,4 @@ bool DAGify(Circuit *circuit) {
   return true;
 }
 
-} // namespace circuitous
+} // namespace circ

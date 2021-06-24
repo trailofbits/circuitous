@@ -12,7 +12,7 @@
 
 #include <fstream>
 
-namespace circuitous {
+namespace circ {
 
   TEST_CASE("EGraph Merge Leaf Nodes")
   {
@@ -137,4 +137,4 @@ namespace circuitous {
     CHECK(egraph.eclass(idp).size() == 1);
     CHECK(egraph.eclass(idm).size() == 1);
   }
-} // namespace circuitous
+} // namespace circ
