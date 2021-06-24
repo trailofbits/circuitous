@@ -178,6 +178,13 @@ namespace circuitous::shadowinst {
       }
       return {};
     }
+
+    template<typename T>
+    static auto is_empty(const std::optional<T> &x)
+    -> std::enable_if_t< std::is_base_of_v< has_regions, T >, bool >
+    {
+      return !x || x->empty();
+    }
   };
 
   struct Reg : has_regions {
@@ -254,8 +261,10 @@ namespace circuitous::shadowinst {
     Address() = default;
 
     bool empty() const {
-      return !(base_reg.has_value() || index_reg.has_value()
-             || scale.has_value() || displacement.has_value());
+      return has_regions::is_empty(base_reg) &&
+             has_regions::is_empty(index_reg) &&
+             has_regions::is_empty(scale) &&
+             has_regions::is_empty(displacement);
     }
 
     template<typename CB>
