@@ -10,7 +10,7 @@
 #include <remill/BC/Optimizer.h>
 
 #include "Flatten.hpp"
-#include "InstructionFuzzer.hpp"
+#include <circuitous/Fuzz/InstructionFuzzer.hpp>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
