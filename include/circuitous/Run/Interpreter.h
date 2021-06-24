@@ -7,7 +7,7 @@
 #include <circuitous/Run/Base.hpp>
 #include <circuitous/Run/Spawn.hpp>
 
-namespace circuitous::run {
+namespace circ::run {
 
   struct BasicInterpreter : DBase<BasicInterpreter> {
     using parent_t = DBase<BasicInterpreter>;
@@ -62,8 +62,7 @@ namespace circuitous::run {
     Circuit *circuit;
 
     CtxCollector collector;
-    State init_state{ collector };
-    std::unordered_map<VerifyInstruction *, Spawn> runners;
+    std::vector< std::pair< VerifyInstruction *, Spawn > > runners;
 
     Spawn *acceptor = nullptr;
 
@@ -71,15 +70,8 @@ namespace circuitous::run {
       collector.Run(circuit);
 
       for (auto vi : circuit->Attr<VerifyInstruction>()) {
-        runners.insert( std::make_pair( vi, Spawn(circuit, vi, init_state) ) );
-      }
-    }
-
-    void SetNodeVal(Operation *op, const value_type &val) {
-      //this->parent_t::SetNodeVal(op, val);
-      init_state.SetNodeVal(op);
-      for (auto &[_, runner] : runners) {
-        runner.SetNodeVal(op, val);
+        Spawn spawn{ circuit, vi, &collector };
+        runners.emplace_back( vi, std::move(spawn) );
       }
     }
 
@@ -143,4 +135,4 @@ namespace circuitous::run {
   using DQueueInterpreter = QueueInterpreter<DSpawn>;
   using VQueueInterpreter =  QueueInterpreter<VSpawn>;
 
-}  // namespace circuitous::run
+}  // namespace circ::run
