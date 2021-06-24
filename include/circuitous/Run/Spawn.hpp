@@ -9,17 +9,98 @@
 #include <deque>
 #include <unordered_map>
 
-namespace circuitous::run {
+namespace circ::run {
+
+  struct MemoryOrdering {
+    using mem_ops_t = std::unordered_set< Operation * >;
+    using level_t = std::tuple< uint32_t, mem_ops_t >;
+    using constraints_t = std::vector< level_t >;
+
+    Circuit *circuit;
+    CtxCollector *collector;
+    VerifyInstruction *current;
+
+    constraints_t constraints;
+    uint32_t allowed = 0;
+
+    void extend(uint32_t desired) {
+      if (desired < constraints.size()) {
+        return;
+      }
+      constraints.resize(desired + 1);
+    }
+
+    template< typename MO >
+    void init() {
+      for (auto op : circuit->Attr< MO >()) {
+        if (collector->op_to_ctxs[op].count(current)) {
+          auto idx = op->mem_idx();
+          extend(idx);
+          auto &[count, ops] = constraints[idx];
+          ++count;
+          ops.insert(op);
+        }
+
+      }
+    }
+
+    bool raise_level() {
+      ++allowed;
+      LOG(INFO) << "Raising level";
+      return true;
+    }
+
+    bool do_enable(Operation *op, uint64_t mem_idx) {
+      CHECK_EQ(mem_idx, allowed);
+      auto &[count, ops] = constraints[mem_idx];
+      if (!ops.count(op)) {
+        return false;
+      }
+      --count;
+      ops.erase(op);
+      if (count == 0) {
+        return raise_level();
+      }
+      return false;
+    }
+
+    std::optional< uint64_t > mem_idx(Operation *op) {
+      if (!is_one_of<ReadConstraint, WriteConstraint>(op)) {
+        return {};
+      }
+      if (auto x = dynamic_cast<WriteConstraint *>(op)) { return x->mem_idx(); }
+      if (auto x = dynamic_cast<ReadConstraint *>(op)) { return x->mem_idx(); }
+      LOG(FATAL) << "Unreachable";
+    }
+
+    bool enable(Operation *op) {
+      if (auto mi = mem_idx(op)) {
+        return do_enable(op, *mi);
+      }
+      return false;
+    }
+
+    MemoryOrdering(Circuit *circuit_, CtxCollector *collector_, VerifyInstruction *c_)
+        : circuit(circuit_), collector(collector_), current(c_)
+    {
+      init<WriteConstraint>();
+      init<ReadConstraint>();
+    }
+
+  };
 
   struct State {
-    std::deque<Operation *> todo;
-    std::unordered_map<Operation *, uint64_t> blocked;
+    std::deque< Operation * > todo;
+    std::unordered_map< uint64_t, std::vector< Operation * > > waiting;
+    std::unordered_map< Operation *, uint64_t > blocked;
 
-    CtxCollector &collector;
+    MemoryOrdering mem_order;
 
-    State(CtxCollector &collector_) : collector(collector_) {}
+    State(MemoryOrdering mem_order_)
+      : mem_order(std::move(mem_order_))
+    {}
     State(const State &) = default;
-    State(State &&) = delete;
+    State(State &&) = default;
 
     State& operator=(State) = delete;
 
@@ -30,21 +111,42 @@ namespace circuitous::run {
     }
 
     void Push(Operation *op) {
-      todo.push_back(op);
+      if (!is_one_of<ReadConstraint, WriteConstraint>(op)) {
+        return todo.push_back(op);
+      }
+      auto mem_idx = mem_order.mem_idx(op);
+      if (*mem_idx == mem_order.allowed) {
+        return todo.push_back(op);
+      }
+      waiting[*mem_idx].push_back(op);
     }
 
     void Notify(Operation *op) {
       auto [it, inserted] = blocked.emplace(op, op->operands.size());
       if (it->second <= 1) {
         Push(it->first);
+        it->second = 0;
+        return;
       }
       --it->second;
+    }
+
+    void notify_mem(Operation *op) {
+      if (!mem_order.enable(op)) {
+        return;
+      }
+
+      for (auto x : waiting[mem_order.allowed]) {
+        Push(x);
+      }
+      waiting[mem_order.allowed].clear();
     }
 
     void SetNodeVal(Operation *op) {
       for (auto user : op->users) {
         Notify(user);
       }
+      notify_mem(op);
     }
   };
 
@@ -57,21 +159,33 @@ namespace circuitous::run {
     using parent_t = Base;
 
     VerifyInstruction *current;
+    CtxCollector *collector;
     State state;
 
     Spawn(Circuit *circuit_, VerifyInstruction *current_,
-          const State &state_)
-        : parent_t(circuit_), current(current_), state(state_)
+          CtxCollector *collector_)
+        : parent_t(circuit_), current(current_),
+          collector(collector_),
+          state(MemoryOrdering(circuit_, collector_, current_))
     {}
 
-    Spawn(const Spawn &) = default;
-    Spawn(Spawn &&) = delete;
+    Spawn(const Spawn &) = delete;
+    Spawn(Spawn &&) = default;
 
     Spawn &operator=(Spawn) = delete;
 
     void SetNodeVal(Operation *op, const value_type &val) {
-      if (node_values.count(op) && node_values[op].has_value()) {
-        CHECK(node_values[op] == val);
+      if (node_values.count(op)) {
+        CHECK(node_values[op] == val)
+            << op->op_code_str() << " already has value "
+            << node_values[op]->toString(16, false) << " "
+            << node_values[op]->getBitWidth()
+            << " yet we try to set "
+            << val->toString(16, false) << " " << val->getBitWidth();
+        return;
+      }
+      // This node is not used in current context, just skip.
+      if (!collector->op_to_ctxs[op].count(current)) {
         return;
       }
       this->parent_t::SetNodeVal(op, val);
@@ -79,7 +193,7 @@ namespace circuitous::run {
     }
 
     void Dispatch(Operation *op) {
-      if (state.collector.op_to_ctxs[op].count(current)) {
+      if (collector->op_to_ctxs[op].count(current)) {
         parent_t::Dispatch(op);
       }
     }
@@ -102,7 +216,7 @@ namespace circuitous::run {
         if (this->node_values.count(hint)) {
           continue;
         }
-        if (state.collector.op_to_ctxs[hint].count(current)) {
+        if (collector->op_to_ctxs[hint].count(current)) {
           for (auto user : hint->users) {
             if (user->op_code == AdviceConstraint::kind) {
               state.Notify(user);
@@ -115,7 +229,7 @@ namespace circuitous::run {
         if (this->node_values.count(oreg)) {
           continue;
         }
-        if (state.collector.op_to_ctxs[oreg].count(current)) {
+        if (collector->op_to_ctxs[oreg].count(current)) {
           for (auto user : oreg->users) {
             state.Notify(user);
           }
@@ -125,7 +239,7 @@ namespace circuitous::run {
         if (this->node_values.count(oreg)) {
           continue;
         }
-        if (state.collector.op_to_ctxs[oreg].count(current)) {
+        if (collector->op_to_ctxs[oreg].count(current)) {
           for (auto user : oreg->users) {
             if (user->op_code == RegConstraint::kind) {
               state.Notify(user);
@@ -137,7 +251,7 @@ namespace circuitous::run {
         if (this->node_values.count(oreg)) {
           continue;
         }
-        if (state.collector.op_to_ctxs[oreg].count(current)) {
+        if (collector->op_to_ctxs[oreg].count(current)) {
           for (auto user : oreg->users) {
             state.Notify(user);
           }
@@ -147,7 +261,7 @@ namespace circuitous::run {
         if (this->node_values.count(oreg)) {
           continue;
         }
-        if (state.collector.op_to_ctxs[oreg].count(current)) {
+        if (collector->op_to_ctxs[oreg].count(current)) {
           for (auto user : oreg->users) {
             if (is_one_of<ReadConstraint, WriteConstraint>(user)) {
               state.Notify(user);
@@ -157,12 +271,42 @@ namespace circuitous::run {
       }
     }
 
+    std::string op_name(Operation *op) {
+      std::stringstream ss;
+      ss << op->op_code_str() << " " << op->id();
+      return ss.str();
+    }
+
+    std::string ctx_stats() {
+      std::stringstream ss;
+      ss << "Undef:" << std::endl;
+
+      for (auto op : current->operands) {
+        if (!this->has_value(op)) {
+          ss << "\t" << op_name(op);
+        }
+      }
+
+      ss << "Details:" << std::endl;
+      for (auto op : current->operands) {
+        ss << "\t" << op_name(op) << " ";
+        if (!this->has_value(op)) {
+          ss << "{} " << state.blocked[op];
+        } else {
+          ss << this->GetNodeVal(op)->toString(10, false);
+        }
+        ss << std::endl;
+      }
+      return ss.str();
+    }
+
     bool Run() {
       init();
       while (!state.todo.empty()) {
         auto x = state.Pop();
         Dispatch(x);
       }
+      LOG(INFO) << ctx_stats();
       if (auto res = this->GetNodeVal(current)) {
         return *res == this->TrueVal();
       }
@@ -183,4 +327,4 @@ namespace circuitous::run {
   static_assert(valid_interpreter<DSpawn>());
   static_assert(valid_interpreter<VSpawn>());
 
-} // namespace circuitous::run
+} // namespace circ::run
