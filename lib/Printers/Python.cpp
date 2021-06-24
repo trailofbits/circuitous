@@ -6,7 +6,7 @@
 
 #include <ostream>
 
-namespace circuitous {
+namespace circ {
 
 void PrintPython(std::ostream &os, Circuit *circuit) {
   os << "def circuit():\n"
@@ -15,11 +15,11 @@ void PrintPython(std::ostream &os, Circuit *circuit) {
      << "'\n"
      << "  operations[result] = []\n";
 
-  circuit->ForEachOperation([&](circuitous::Operation *op) {
+  circuit->ForEachOperation([&](circ::Operation *op) {
     os << "  operations['v" << op->id() << "'] = []\n";
   });
 
-  auto do_op = [&](circuitous::Operation *op) {
+  auto do_op = [&](circ::Operation *op) {
     const auto id = op->id();
     os << "  operations['v" << std::hex << id << "'].append(\"" << op->Name()
        << "\")\n"
@@ -28,7 +28,7 @@ void PrintPython(std::ostream &os, Circuit *circuit) {
        << "  operations['v" << std::hex << id << "'].append(" << std::dec
        << op->size << ")\n";
 
-   if (auto extract_op = dynamic_cast<circuitous::Extract *>(op);
+   if (auto extract_op = dynamic_cast<circ::Extract *>(op);
                extract_op) {
       os << "  operations['v" << std::hex << id << "'].append(" << std::dec
          << extract_op->high_bit_exc << ")\n"
@@ -51,4 +51,4 @@ void PrintPython(std::ostream &os, Circuit *circuit) {
      << std::dec;
 }
 
-}  // namespace circuitous
+}  // namespace circ

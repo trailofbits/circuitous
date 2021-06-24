@@ -15,7 +15,7 @@
 
 #include <fstream>
 
-namespace circuitous::eqsat {
+namespace circ::eqsat {
 
   unsigned count_matches(auto matches) {
     auto eclass_match_count = [] (unsigned sum, auto &eclass_match) {
@@ -221,4 +221,4 @@ namespace circuitous::eqsat {
     }
   }
 
-} // namespace circuitous::eqsat
+} // namespace circ::eqsat

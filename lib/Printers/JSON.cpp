@@ -7,7 +7,7 @@
 #include <ostream>
 #include <iostream>
 
-namespace circuitous {
+namespace circ {
 
 void PrintJSON(std::ostream &os, Circuit *circuit) {
   auto id = [](Operation *op) -> std::string {
@@ -20,7 +20,7 @@ void PrintJSON(std::ostream &os, Circuit *circuit) {
   os << "[\"" << id(circuit) << "\",\n";
   os << "{\n";
   auto sep = "";
-  auto do_op = [&](circuitous::Operation *op) {
+  auto do_op = [&](circ::Operation *op) {
     CHECK(op);
     os << sep;
     os << "\"" << id(op) << "\":{";
@@ -29,7 +29,7 @@ void PrintJSON(std::ostream &os, Circuit *circuit) {
     os << "\"op_code\":" << std::dec << static_cast<unsigned>(op->op_code)
        << ",";
 
-    if (auto extract_op = dynamic_cast<circuitous::Extract *>(op)) {
+    if (auto extract_op = dynamic_cast<circ::Extract *>(op)) {
       os << "\"node_type\":{\"ExtractOp\":{";
       os << "\"high\":" << std::dec << extract_op->high_bit_exc;
       os << ",\"low\":" << std::dec << extract_op->low_bit_inc << "}},";
@@ -56,4 +56,4 @@ void PrintJSON(std::ostream &os, Circuit *circuit) {
      << std::dec;
 }
 
-}  // namespace circuitous
+}  // namespace circ

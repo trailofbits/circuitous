@@ -7,7 +7,7 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/IR/Storage.hpp>
 
-namespace circuitous {
+namespace circ {
 
   // We can try to do some optimizations, but we want to be
   // able to toggle them (if for nothing we want to be able to
@@ -121,4 +121,4 @@ namespace circuitous {
     std::unordered_set<Operation *> seen_ops;
   };
 
-} // namespace circuitous
+} // namespace circ

@@ -21,7 +21,7 @@
 
 #include <remill/Arch/Instruction.h>
 
-namespace circuitous::shadowinst {
+namespace circ::shadowinst {
 
   static inline std::string to_binary(const std::string &bytes) {
     std::stringstream ss;
@@ -535,4 +535,4 @@ namespace circuitous::shadowinst {
 
   };
 
-} // namespace circuitous::shadowinst
+} // namespace circ::shadowinst

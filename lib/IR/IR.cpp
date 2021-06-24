@@ -16,7 +16,7 @@
 #include <sstream>
 #include <unordered_map>
 
-namespace circuitous {
+namespace circ {
 
 namespace {
 
@@ -102,4 +102,4 @@ bool InputImmediate::Equals(const Operation *other) const {
   return this->Operation::Equals(other);
 }
 
-}  // namespace circuitous
+}  // namespace circ

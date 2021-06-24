@@ -17,7 +17,7 @@
 #include <vector>
 #include <span>
 
-namespace circuitous {
+namespace circ {
 namespace eqsat {
 
   using CircuitEGraph = EGraph< ENode< Operation* > >;

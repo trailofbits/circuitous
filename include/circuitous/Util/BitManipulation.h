@@ -4,7 +4,7 @@
 
 #include <cstdint>
 
-namespace circuitous {
+namespace circ {
 
 inline static uint64_t RotateRight64(uint64_t val, unsigned rot) {
 #ifdef __has_builtin
@@ -32,4 +32,4 @@ inline static unsigned CountLeadingZeroes64(uint64_t val) {
   }
 }
 
-}  // namespace circuitous
+}  // namespace circ

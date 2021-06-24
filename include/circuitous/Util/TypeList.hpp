@@ -6,7 +6,7 @@
 
 #include <type_traits>
 
-namespace circuitous::tl {
+namespace circ::tl {
 
   template< typename ... Es >
   struct TL {};
@@ -112,4 +112,4 @@ namespace circuitous::tl {
 
   } // namespace test
 
-} // namespace circuitous::tl
+} // namespace circ::tl

@@ -20,7 +20,7 @@
 #include <llvm/CodeGen/IntrinsicLowering.h>
 #pragma clang diagnostic pop
 
-namespace circuitous {
+namespace circ {
 
   struct InstrinsicHandler {
     using functions_t = std::vector<llvm::Function *>;
@@ -167,4 +167,4 @@ namespace circuitous {
     return true;
   }
 
-} // namespace circuitous
+} // namespace circ

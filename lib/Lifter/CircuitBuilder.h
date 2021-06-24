@@ -18,7 +18,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace circuitous {
+namespace circ {
   static constexpr const uint32_t kMaxNumBytesRead = 16u;
 
   struct Surface : Names {
@@ -291,4 +291,4 @@ class CircuitBuilder {
   //llvm::Function *verify_inst_func{nullptr};
 };
 
-}  // namespace circuitous
+}  // namespace circ

@@ -17,7 +17,7 @@
 
 #include <fstream>
 
-namespace circuitous::run::trace {
+namespace circ::run::trace {
 
   struct Entry {
     // `trace_id` is used to identify traces from batches
@@ -165,4 +165,4 @@ namespace circuitous::run::trace {
     return out;
   }
 
-} // namespace circuitous::run::trace
+} // namespace circ::run::trace

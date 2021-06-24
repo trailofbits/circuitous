@@ -20,7 +20,7 @@
 #include <glog/logging.h>
 #pragma clang diagnostic pop
 
-namespace circuitous {
+namespace circ {
 
 struct Circuit;
 
@@ -196,4 +196,4 @@ using DebugOptimizer = ManagerAPI<Defensive<Logger, WithHistory<Manager>>>;
 template<typename Logger>
 using DefaultOptimizer = ManagerAPI<Defensive<Logger, Manager>>;
 
-}  // namespace circuitous
+}  // namespace circ

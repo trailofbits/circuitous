@@ -7,7 +7,7 @@
 
 #include <ostream>
 
-namespace circuitous {
+namespace circ {
 
 void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
                    std::function<bool(Operation *)> accept) {
@@ -94,4 +94,4 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
   }
 }
 
-}  // namespace circuitous
+}  // namespace circ

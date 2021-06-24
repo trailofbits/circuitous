@@ -17,7 +17,7 @@
 #include <llvm/IR/Instructions.h>
 #pragma clang diagnostic pop
 
-namespace circuitous {
+namespace circ {
 
 struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
   using parent = UniqueVisitor<RawNodesCounter_>;
@@ -142,4 +142,4 @@ static inline std::string GetStats(Operation *op) {
   return ss.str();
 }
 
-} // namespace circuitous
+} // namespace circ

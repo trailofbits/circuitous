@@ -51,9 +51,9 @@ auto load_circ(const std::string &path) {
   }
 
   // Deserialize circuit from binary IR file
-  auto circuit = circuitous::Circuit::Deserialize(ir);
+  auto circuit = circ::Circuit::Deserialize(ir);
 
-  const auto &[status, msg, warnings] = circuitous::VerifyCircuit(circuit.get());
+  const auto &[status, msg, warnings] = circ::VerifyCircuit(circuit.get());
   if (!status) {
     LOG(FATAL) << "Loaded IR is not valid -- Aborting.\n" << msg;
   }
@@ -65,11 +65,11 @@ auto load_circ(const std::string &path) {
   return circuit;
 }
 
-auto load_singular(const std::string &path) -> std::optional<circuitous::run::trace::Entry> {
+auto load_singular(const std::string &path) -> std::optional<circ::run::trace::Entry> {
   if (path.empty()) {
     return {};
   }
-  using namespace circuitous::run::trace;
+  using namespace circ::run::trace;
   return std::make_optional(get_entry(0ul, load_json(path)));
 }
 
@@ -113,11 +113,11 @@ void run() {
     };
 
     if (run.acceptor) {
-      for (auto [reg, val] : run.acceptor->template get_derived<circuitous::OutputRegister>()) {
+      for (auto [reg, val] : run.acceptor->template get_derived<circ::OutputRegister>()) {
         CHECK(val);
         output_regs_obj[reg->reg_name] = std::to_string(val->getLimitedValue());
       }
-      for (auto [_, val] : run.acceptor->template get_derived<circuitous::OutputErrorFlag>()) {
+      for (auto [_, val] : run.acceptor->template get_derived<circ::OutputErrorFlag>()) {
         output_obj["ebit"] = (val == llvm::APInt(1, 1));
       }
       output_obj["timestamp"] = as_str(run.acceptor->get(circuit->output_timestamp()));
@@ -148,12 +148,12 @@ void run() {
 
   //store_old_trace(FLAGS_json_out, run.get_output_state(), result);
   if (!FLAGS_dot_out.empty() && run.acceptor) {
-    std::unordered_map<circuitous::Operation *, std::string> values;
+    std::unordered_map<circ::Operation *, std::string> values;
     for (auto &[op, val] : run.values()) {
       values[op] = val.toString(16, false);
     }
     std::ofstream os(FLAGS_dot_out);
-    circuitous::PrintDOT(os, circuit.get(), values);
+    circ::PrintDOT(os, circuit.get(), values);
   }
 }
 
@@ -185,9 +185,9 @@ int main(int argc, char *argv[]) {
     return 1;
   }
   if (FLAGS_verify) {
-    run<circuitous::run::VQueueInterpreter>();
+    run<circ::run::VQueueInterpreter>();
   } else if (FLAGS_derive) {
-    run<circuitous::run::DQueueInterpreter>();
+    run<circ::run::DQueueInterpreter>();
   }
 
   return 0;
