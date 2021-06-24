@@ -79,12 +79,24 @@ namespace circuitous::shadowinst {
     return out;
   }
 
+  using bits_t = std::vector< bool >;
+
+  struct ordered_bits_t {
+    bits_t data;
+
+    explicit ordered_bits_t(const bits_t &data_) {
+      data.reserve(data_.size());
+      data.insert(data.end(), data_.rbegin(), data_.rend());
+    }
+  };
+
   struct has_regions {
     region_t regions;
 
     has_regions() = default;
 
-    has_regions(const std::vector<bool> &bits) {
+    has_regions(const ordered_bits_t &bits_) {
+      auto &bits = bits_.data;
       for (std::size_t i = 0; i < bits.size(); ++i) {
         if (!bits[i]) {
           continue;
@@ -98,6 +110,8 @@ namespace circuitous::shadowinst {
         regions.emplace(offset, count);
       }
     }
+
+    has_regions(const bits_t &bits) : has_regions(ordered_bits_t(bits)) {}
 
     std::size_t region_bitsize() const {
       std::size_t acc = 0;
