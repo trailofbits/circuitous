@@ -459,8 +459,8 @@ struct RegConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 0 
 struct AdviceConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 1 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   AdviceConstraint() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "hint_constraint"; }
-  std::string Name() const override { return "hint_constraint." + EnforceCtx::suffix_(); }
+  std::string op_code_str() const override { return "advice_constraint"; }
+  std::string Name() const override { return "advice_constraint." + EnforceCtx::suffix_(); }
 };
 
 // Says that we are preserving the value of a register.
