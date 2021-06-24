@@ -481,6 +481,11 @@ class Test:
     self.cases.append(case)
     return self
 
+  def scases(self, compiler, insts, **kwargs):
+    for x in insts:
+      self.case(run_bytes = compiler([x]), **kwargs)
+    return self
+
   def tags(self, tags_):
     if isinstance(tags_, str):
       self._tags.add(tags_)
