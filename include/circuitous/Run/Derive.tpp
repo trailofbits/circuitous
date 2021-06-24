@@ -107,7 +107,13 @@ void CSem<S>::Visit(ReadConstraint *op_) {
     auto addr = this->get(op->addr_arg())->getLimitedValue();
     auto size = this->get(op->size_arg())->getLimitedValue();
 
-    CHECK(this->defined(addr, size));
+    if (!this->defined(addr, size)) {
+      std::stringstream ss;
+      ss << "Memory at " << std::hex << addr << " is not defined with size: " << size;
+      LOG(WARNING) << ss.str();
+      self().SetNodeVal(op->hint_arg(), {});
+      return this->FalseVal();
+    }
 
     llvm::APInt val { intrinsics::Memory::allocated_size, 0, false };
 
