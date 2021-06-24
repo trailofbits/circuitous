@@ -148,10 +148,14 @@ class MemInput:
     self.entries = []
 
   def add(self, addr, data, **kwargs):
-    assert isinstance(data, str)
-    bytes = []
-    for i in range(0, len(data), 2):
-      bytes.append(int(data[i] + data[i + 1], 16))
+    if isinstance(data, str):
+      bytes = []
+      for i in range(0, len(data), 2):
+        bytes.append(int(data[i] + data[i + 1], 16))
+    elif isinstance(data, list):
+      bytes = data
+    else:
+      assert False
     r = kwargs.get('r', False)
     w = kwargs.get('w', False)
     e = kwargs.get('e', False)
@@ -162,6 +166,10 @@ class MemInput:
     for addr, data, _ in self.entries:
       out[hex(addr)[2:]] = "".join([f"{x:02x}" for x in data])
     return out
+
+  def extend(self, other):
+    self.entries += other.entries
+    return self
 
 
 class StateBase:
@@ -204,6 +212,12 @@ class StateBase:
 
   def mem_hint(self, val):
     self.mem_hints.append(val)
+    return self
+
+  def mig(self, gen):
+    if self.memory is None:
+      self.memory = MemInput()
+    self.memory.extend(gen.generated)
     return self
 
   def mem(self, addr, data, **kwargs):
@@ -300,9 +314,28 @@ def S(x = None):
   return State(x)
 
 for reg in _regs + _aflags:
+  def s_reg_mem(self, reg, value, size, **kwargs):
+    self.set_reg(reg, value)
+    self.mig(MIG().mem_(value, size, **kwargs))
+    return self
+
+  def s_reg_rmem(reg):
+    def tmp(self, value, size=0x100):
+      return s_reg_mem(self, reg, value, size, r=True)
+    return tmp
+
+  def s_reg_wrmem(reg):
+    def tmp(self, value, size=0x100):
+      return s_reg_mem(self, reg, value, size, r=True, w=True)
+    return tmp
+
+  setattr(StateBase, "rm_" + reg, s_reg_rmem(reg))
+  setattr(StateBase, "wrm_" + reg, s_reg_wrmem(reg))
+
   setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))
   setattr(Mutator, reg, lambda s,v,r=reg : s.set_reg(r, v))
   setattr(Mutator, "u" + reg, lambda s,r=reg : s.unset_reg(r))
+
 
 class TestCase:
   __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated', '_result_generator',
