@@ -72,14 +72,14 @@ class MicroxGen:
     m = microx.Memory(o, 64)
 
     size = 0x1000
-    code = microx.ArrayMemoryMap(o, rip, rip + size, can_write=False, can_execute=True)
+    code = microx.ArrayMemoryMap(o, rip, rip + size, can_write=True, can_execute=True)
     m.add_map(code)
 
     #TODO(lukas): Stack & other memory
     if input.memory is not None:
       for region in input.memory.entries:
         addr, bytes, (r, w, e) = region
-        assert len(bytes) < size
+        assert len(bytes) <= size
         aligned_addr = (addr >> 12) << 12
         amm = microx.ArrayMemoryMap(o, aligned_addr, aligned_addr + size,
                                     can_read=r, can_write=w, can_execute=e)
