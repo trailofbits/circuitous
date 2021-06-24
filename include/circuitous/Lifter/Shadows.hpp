@@ -403,6 +403,11 @@ namespace circuitous::shadowinst {
     // TODO(lukas): See if ^ cannot be relaxed, as it is a propbable source of errors.
     std::deque<Operand> operands;
 
+    // Some instructions can depend on the same parts
+    // of encoding - we want to keep track of those
+    using operand_ctx_t = std::tuple< std::size_t, Operand * >;
+    std::vector< std::vector< operand_ctx_t > > deps;
+
     auto size() const { return operands.size(); }
     const auto &operator[](std::size_t idx) const { return operands[idx]; }
     auto &operator[](std::size_t idx) { return operands[idx]; }
