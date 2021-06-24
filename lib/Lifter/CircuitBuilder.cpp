@@ -4,7 +4,6 @@
 
 #include "CircuitBuilder.h"
 #include "DependencyVisitor.hpp"
-#include "InstructionFuzzer.hpp"
 
 #include "Flatten.hpp"
 
