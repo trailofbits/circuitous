@@ -3,6 +3,7 @@
 import copy
 import json
 import os
+import random
 
 from itertools import permutations
 
@@ -110,6 +111,35 @@ def compare_hints(fst, snd):
   writes = permute_compare(fst_write, snd_write)
   return reads and writes
 
+
+class MI_gen:
+  __slot__ = ('seed', 'generated')
+
+  def __init__(self, seed_=None):
+    seed_ = seed_ if seed_ is not None else 42
+    self.seed = seed_
+    self.generated = MemInput()
+
+    random.seed(self.seed)
+
+  def data(self, size):
+    out = []
+    for _ in range(size):
+      out.append(random.randint(0, 16))
+    return out
+
+  def mem_(self, addr, size, **kwargs):
+    self.generated.add(addr, self.data(size), **kwargs)
+    return self
+
+  def r(self, addr, size):
+    return self.mem_(addr, size, r=True)
+
+  def rw(self, addr, size):
+    return self.mem_(addr, size, r=True, w=True)
+
+
+def MIG(seed=None): return MI_gen(seed)
 
 class MemInput:
   __slots__ = ('entries')
