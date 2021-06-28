@@ -38,12 +38,12 @@ namespace circ::eqsat {
       egraph.make_node("mul", {x, y});
 
       SUBCASE("multiplication identity") {
-        auto rule = TestRule("multiplication identity", "(op_mul ?x 1)", "?x");
+        auto rule = TestRule("multiplication identity", "(op_mul ?x 1)", "(?x)");
         CHECK(count_matches(rule.match(egraph)) == 1);
       }
 
       SUBCASE("zero multiplication") {
-        auto rule = TestRule("zero multiplication", "(op_mul ?x 0)", "0");
+        auto rule = TestRule("zero multiplication", "(op_mul ?x 0)", "(0)");
         CHECK(count_matches(rule.match(egraph)) == 0);
       }
 
@@ -53,7 +53,7 @@ namespace circ::eqsat {
       }
 
       SUBCASE("identity") {
-        auto rule = TestRule("id", "?x", "?x");
+        auto rule = TestRule("id", "(?x)", "(?x)");
         CHECK(count_matches(rule.match(egraph)) == 3);
       }
     }
@@ -172,7 +172,7 @@ namespace circ::eqsat {
       auto y = egraph.make_leaf("1");
       auto root = egraph.make_node("mul", {x, y});
 
-      auto rule = TestRule("multiplicative identity", "(op_mul ?x 1)", "?x");
+      auto rule = TestRule("multiplicative identity", "(op_mul ?x 1)", "(?x)");
       CHECK(rule.match(egraph).size() == 1);
 
       rule.apply(egraph, builder);
@@ -198,7 +198,7 @@ namespace circ::eqsat {
       auto mul = egraph.make_node("mul", {x, y});
       auto root = egraph.make_node("add", {x, mul});
 
-      auto imul = TestRule("multiplicative identity", "(op_mul ?x 1)", "?x");
+      auto imul = TestRule("multiplicative identity", "(op_mul ?x 1)", "(?x)");
       CHECK(imul.match(egraph).size() == 1);
       imul.apply(egraph, builder);
 

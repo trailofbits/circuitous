@@ -1,4 +1,4 @@
- // Copyright 2020, Trail of Bits. All rights reserved.
+ // Copyright 2021, Trail of Bits. All rights reserved.
 
 #pragma once
 
@@ -10,43 +10,49 @@
 #include <concepts>
 #include <tuple>
 
-namespace circuitous::parser
+#include <circuitous/Util/FixedString.hpp>
+#include <circuitous/Util/ConstExprVector.hpp>
+
+namespace circ::parser
 {
+  template< typename T >
+  concept integral = std::is_integral_v<T>;
+
+  template< typename F, typename... Args >
+  concept invocable = requires(F &&f, Args&& ...args) {
+    std::invoke(std::forward<F>(f), std::forward<Args>(args)...);
+  };
+
   using parse_input_t = std::string_view;
+
+  template< typename P >
+  concept Parser = invocable<P, parse_input_t >;
 
   template< typename T >
   using parse_result_t = std::optional< std::pair< T, std::string_view > >;
 
-  template< typename P >
-  using opt_pair_parse_t = std::invoke_result_t< P, parse_input_t >;
+  template< Parser P >
+  using parse_invoke_result = std::invoke_result_t< P, parse_input_t >;
 
-  template< typename P >
-  using pair_parse_t = typename opt_pair_parse_t< P >::value_type;
+  template< Parser P >
+  using parse_result_type = typename parse_invoke_result< P >::value_type;
 
-  template< typename P >
-  using parse_t = typename pair_parse_t< P >::first_type;
+  template< Parser P >
+  using parse_type = typename parse_result_type< P >::first_type;
 
   template< typename P, typename T >
-  concept parser = requires(P &&p) {
-    { p(std::declval< parse_input_t >()) } -> std::same_as< parse_result_t< T > >;
-  };
+  concept parser = Parser< P > &&
+    std::is_same_v< parse_invoke_result< P >, parse_result_t< T > >;
 
   template< typename T >
   using parser_t = auto (*)( parse_input_t ) -> parse_result_t< T >;
 
-  template < class T >
-  concept integral = std::is_integral_v<T>;
+  constexpr const auto& result(const auto &p) { return p->first; }
+  constexpr auto& result(auto &p) { return p->first; }
 
-  template< typename P >
-  constexpr const auto& result(const P &p) { return p->first; }
+  constexpr parse_input_t rest(const auto &p) { return p->second; }
 
-  template< typename P >
-  constexpr auto& result(P &p) { return p->first; }
-
-  template< typename P >
-  constexpr parse_input_t rest(const P &p) { return p->second; }
-
-  template< typename F, typename P, typename T = std::result_of_t<F(parse_t<P>)> >
+  template< typename F, typename P, typename T = std::invoke_result_t< F, parse_type<P> > >
   constexpr parser<T> auto fmap(F &&f, P &&p)
   {
     return [f = std::forward< F >(f), p = std::forward< P >(p)] (parse_input_t in)
@@ -60,10 +66,9 @@ namespace circuitous::parser
     };
   }
 
-
   template< typename P, typename F,
-            typename T =  std::result_of_t< F(parse_t<P>, parse_input_t) > >
-  constexpr auto bind(P&& p, F&& f)
+            typename T =  std::invoke_result_t< F, parse_type<P>, parse_input_t > >
+  constexpr parser<T> auto bind(P&& p, F&& f)
   {
     return [=] (parse_input_t in) -> T {
       if (auto res = p(in)) {
@@ -78,7 +83,7 @@ namespace circuitous::parser
   constexpr parser<T> auto lift(T &&t)
   {
     return [t = std::forward< T >(t)] (parse_input_t in) -> parse_result_t< T > {
-      return {{std::move(t), in}};
+      return {{t, in}};
     };
   }
 
@@ -100,7 +105,7 @@ namespace circuitous::parser
   }
 
   template< typename P1, typename P2,
-            typename T = std::enable_if_t< std::is_same_v< parse_t<P1>, parse_t<P2> > > >
+            typename T = std::enable_if_t< std::is_same_v< parse_type<P1>, parse_type<P2> > > >
   constexpr parser<T> auto operator|(P1&& p1, P2&& p2)
   {
     return [=] (parse_input_t in) {
@@ -111,7 +116,7 @@ namespace circuitous::parser
   }
 
   template< typename P1, typename P2, typename F,
-            typename T = std::result_of_t< F(parse_t<P1>, parse_t<P2>) > >
+            typename T = std::invoke_result_t< F, parse_type<P1>, parse_type<P2> > >
   constexpr parser<T> auto combine(P1 &&p1, P2 &&p2, F&& f)
   {
     return [=] (parse_input_t in) -> parse_result_t< T > {
@@ -123,7 +128,7 @@ namespace circuitous::parser
   }
 
   template< typename P1, typename P2,
-            typename L = parse_t<P1>, typename R = parse_t<P2> >
+            typename L = parse_type<P1>, typename R = parse_type<P2> >
   constexpr parser<R> auto operator<(P1 &&p1, P2 &&p2)
   {
     return combine(std::forward<P1>(p1),
@@ -132,7 +137,7 @@ namespace circuitous::parser
   }
 
   template< typename P1, typename P2,
-            typename L = parse_t<P1>, typename R = parse_t<P2> >
+            typename L = parse_type<P1>, typename R = parse_type<P2> >
   constexpr parser<L> auto operator>(P1 &&p1, P2 &&p2)
   {
     return combine(std::forward<P1>(p1),
@@ -140,7 +145,7 @@ namespace circuitous::parser
                    [] (const auto& l, auto) { return l; });
   }
 
-  template< typename P, typename T = parse_t<P> >
+  template< typename P, typename T = parse_type<P> >
   constexpr parser<T> auto option(T &&def, P &&p)
   {
     return [p = std::forward<P>(p), def = std::forward<T>(def)] (parse_input_t in)
@@ -318,9 +323,10 @@ namespace circuitous::parser
   constexpr bool isupper(char c) noexcept { return 'A' <= c && c <= 'Z'; }
   constexpr bool isalpha(char c) noexcept { return islower(c) || isupper(c); }
 
-  constexpr parser<char> auto char_parser(auto &&predicate)
+  template< typename Pred >
+  constexpr parser<char> auto char_parser(Pred &&predicate)
   {
-    return [predicate = std::move(predicate)] (parse_input_t in)
+    return [predicate = std::forward<Pred>(predicate)] (parse_input_t in)
       -> parse_result_t<char>
     {
       if (in.empty())
@@ -337,9 +343,10 @@ namespace circuitous::parser
     return char_parser(isalpha);
   }
 
-  constexpr auto skip(auto &&predicate)
+  template< typename Pred >
+  constexpr auto skip(Pred &&predicate)
   {
-    auto parser = char_parser(std::move(predicate));
+    auto parser = char_parser(std::forward<Pred>(predicate));
     return many(parser, std::monostate{}, [] (auto m, auto) { return m; });
   }
 
@@ -365,7 +372,7 @@ namespace circuitous::parser
     constexpr static inline void tests()
     {
       using namespace std::literals;
-
+      using namespace circ::meta;
       {
         constexpr auto p = char_parser('+')("+"sv);
         static_assert( p && result(p) == '+' );
@@ -431,4 +438,4 @@ namespace circuitous::parser
     }
   } // anonynmous namespace
 
-} // namespace circuitous::parser
+} // namespace circ::parser

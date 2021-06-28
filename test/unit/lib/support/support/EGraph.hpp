@@ -24,9 +24,9 @@ namespace circ {
   using StringNode = ENode< std::string >;
   struct TestGraph : EGraph< StringNode >
   {
-    auto make_leaf(const std::string &expr)
+    auto make_leaf(std::string_view atom)
     {
-      auto candidate = ENode(expr);
+      auto candidate = ENode(std::string(atom));
       auto constant = candidate.constant();
 
       if (constant) {
@@ -44,9 +44,9 @@ namespace circ {
       return id;
     }
 
-    auto make_node(const std::string &expr, std::vector<Id> children)
+    auto make_node(std::string_view atom, std::vector<Id> children)
     {
-      ENode node(expr);
+      ENode node((std::string(atom)));
       node.children = std::move(children);
       auto [id, _] = add(std::move(node));
       return id;
@@ -65,37 +65,27 @@ namespace circ {
 
   struct TestGraphBuilder
   {
-    using Constant = eqsat::ASTNode::Constant;
-    using Place    = eqsat::ASTNode::Place;
-    using Op       = eqsat::ASTNode::Op;
-
-    using PatternNode = eqsat::ASTNodePtr;
+    using constant  = eqsat::constant;
+    using place     = eqsat::place;
+    using operation = eqsat::operation;
 
     TestGraphBuilder(TestGraph *graph) : _graph(graph) {}
 
-    template< typename Substitutions >
-    Id synthesize(const PatternNode &ast, const Substitutions &subs) const
+    Id synthesize(const eqsat::pattern &pat, const auto &substitutions, const auto &places) const
     {
-
       std::vector< Id > args;
-      for (const auto &child : ast->children)
-        args.push_back(synthesize(child, subs));
+      for (const auto &child : children(pat)) {
+        args.push_back(synthesize(child, substitutions, places));
+      }
 
       auto node = std::visit( overloaded {
-        [&] (const Constant &con) -> Id { return _graph->make_leaf( std::to_string(con.ref()) ); },
-        [&] (const Place &plc)    -> Id { return subs.id(plc.ref()); },
-        [&] (const Op &op)        -> Id { return _graph->make_node(op.ref(), args); },
+        [&] (const constant &con) -> Id { return _graph->make_leaf( std::to_string(con.ref()) ); },
+        [&] (const place &plc)    -> Id { return substitutions.id(places.at(plc)); },
+        [&] (const operation &op) -> Id { return _graph->make_node(op.ref(), args); },
         [&] (const auto&)         -> Id { LOG(FATAL) << "unsupported node"; },
-      }, ast->value);
+      }, root(pat));
 
       return node;
-    }
-
-    template< typename Pattern, typename Substitution >
-    Id synthesize(const Pattern &pattern, const Substitution &sub) const
-    {
-      CHECK(sub.size() == pattern.places.size());
-      return synthesize(pattern.ast, sub);
     }
 
     TestGraph *_graph;
