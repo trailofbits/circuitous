@@ -15,81 +15,48 @@
 
 namespace circ::eqsat {
 
-  using Parser = PatternParser;
-  using Constant = ASTNode::Constant;
-  using Place    = ASTNode::Place;
-  using Op       = ASTNode::Op;
+  TEST_CASE("Expr Parser") {
+    auto parser = expr_parser::parser();
+    CHECK(parser("(op_add ?x ?y)"));
+    CHECK(parser("(op_add ?x (op_mul 2 ?y))"));
 
-  template< typename T, typename Parsed  >
-  T get(const Parsed &node)
-  {
-    return std::get<T>(node->value);
-  }
+    {
+      auto expr = result(parser("(op_add ?x (op_mul 2 ?y))"));
+      CHECK(root(expr) == atom(operation("add")));
+    }
 
-  template< typename T, typename Parsed, unsigned I, unsigned ...Is >
-  T get(const Parsed &val)
-  {
-    return get< T, Parsed, Is... >(val->children[I]);
-  }
+    {
+      auto expr = result(parser("(op_add (op_mul 1 ?x) 3)"));
+      CHECK(root(expr) == atom(operation("add")));
+      auto ch = children(expr);
+      CHECK(std::get<atom>(ch[1]) == atom(constant(3)));
 
-  template< typename T, unsigned ...Indices >
-  T parse(Parser &p, std::string_view str)
-  {
-    auto val = p.parse(str);
-    return get< T, decltype(val), Indices... >(val);
-  }
+      auto subexpr = ch[0];
+      CHECK(root(subexpr) == atom(operation("mul")));
+      auto subch = children(subexpr);
+      CHECK(std::get<atom>(subch[1]) == atom(place("x")));
 
-  bool fails(Parser &parser, std::string_view str)
-  {
-    return parser.parse(str) == nullptr;
-  }
+      CHECK(places(expr).size() == 1);
+    }
 
-  TEST_CASE("Pattern Simple Parse") {
-    Parser parser;
-
-    CHECK(parse< Constant >(parser, "5") == 5);
-    CHECK(parse< Constant >(parser, "-15") == -15);
-
-    CHECK(parse< Op >(parser, "(op_add 1 2)") == "add");
-    auto a = parse< Constant, 0 >(parser, "(op_add 1 2)");
-    CHECK(a == 1);
-    auto b = parse< Constant, 1 >(parser, "(op_add 1 2)");
-    CHECK(b == 2);
-
-    CHECK(parse< Place >(parser, "?x") == 0);
-
-    CHECK(parse< Op >(parser, "(op_add (op_mul 1 ?x) 3)") == "add" );
-
-    auto c = parse< Op, 0 >(parser, "(op_add (op_mul 1 ?x) 3)");
-    CHECK(c == "mul");
-
-    auto d = parse< Constant, 0, 0 >(parser, "(op_add (op_mul 1 ?x) 3)");
-    CHECK(d == 1);
-
-    auto e = parse< Place, 0, 1 >(parser, "(op_add (op_mul 1 ?x) 3)");
-    CHECK(e == 0);
-
-    auto f = parse< Constant, 1 >(parser, "(op_add (op_mul 1 ?x) 3)");
-    CHECK(f == 3);
-
-    CHECK(fails(parser, "?-7"));
-    CHECK(fails(parser, "?7"));
-
-    CHECK(fails(parser, "("));
-    CHECK(fails(parser, ")"));
-    CHECK(fails(parser, "())"));
-
-    CHECK(fails(parser, "5val"));
+    // missing closing parenthesis
+    CHECK(!parser("(op_add ?x (op_mul 2 ?y)"));
   }
 
   TEST_CASE("Pattern Places") {
-    using Places = Pattern::Places;
-    CHECK(Pattern("?x").places.size() == 1);
-    CHECK(Pattern("(op_mul ?x ?y)").places.size() == 2);
-    CHECK(Pattern("(op_mul ?x ?x)").places.size() == 1);
-    CHECK(Pattern("(?x ?y ?z)").places.size() == 3);
-    CHECK(Pattern("(op_add (op_mul 1 ?x) ?y)").places.size() == 2);
-    CHECK(Pattern("(op_add (op_mul 1 ?x) ?x)").places.size() == 1);
+    auto parser = expr_parser::parser();
+
+    auto count_places = [&parser] (std::string_view in) {
+      auto res = parser(in);
+      return places(result(res)).size();
+    };
+
+    CHECK(count_places("(?x)") == 1);
+    CHECK(count_places("(op_mul ?x ?y)") == 2);
+    CHECK(count_places("(op_mul ?x ?x)") == 1);
+    CHECK(count_places("(?x ?y ?z)") == 3);
+    CHECK(count_places("(op_add (op_mul 1 ?x) ?y)") == 2);
+    CHECK(count_places("(op_add (op_mul 1 ?x) ?x)") == 1);
   }
 
 } // namespace circ::eqsat

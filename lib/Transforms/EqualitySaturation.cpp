@@ -50,13 +50,7 @@ namespace eqsat {
   template< typename Graph >
   struct PatternCircuitBuilder
   {
-    using Constant = ASTNode::Constant;
-    using Place    = ASTNode::Place;
-    using Op       = ASTNode::Op;
-
     using Id       = typename Graph::Id;
-
-    using PatternNode = ASTNodePtr;
 
     PatternCircuitBuilder(Circuit *circuit_) : circuit(circuit_) {}
 
@@ -65,7 +59,7 @@ namespace eqsat {
       return nullptr;
     }
 
-    Operation* operation(const Op &op, std::span< Operation * > args) const
+    Operation* operation(const eqsat::operation &op, std::span< Operation * > args) const
     {
       auto res = [&] () -> Operation* {
         LOG(FATAL) << "unsupported operation";
@@ -77,28 +71,22 @@ namespace eqsat {
       return res;
     }
 
-    template< typename Substitutions >
-    Operation *synthesize(const PatternNode &ast, const Substitutions &subs) const
+    Id synthesize(const pattern &pat, const auto &subs, const auto &places) const
     {
+      CHECK(subs.size() == places.size());
+
       // TODO(Heno): addnodes to egraph
-      std::vector< Operation* > args;
-      for (const auto &child : ast->children)
-        args.push_back(synthesize(child, subs));
+      // std::vector< Operation* > args;
+      // for (const auto &child : eqsat::children(pat))
+      //   args.push_back(synthesize(child, subs));
 
-      auto node = std::visit( overloaded {
-        [&] (const Constant &con) -> Operation* { return constant(con); },
-        [&] (const Place &plc)    -> Operation* { return nullptr; /* TODO(Heno) */ },
-        [&] (const Op &op)        -> Operation* { return operation(op, args); },
-        [&] (const auto&)         -> Operation* { return nullptr; },
-      }, ast->value);
+      // auto node = std::visit( overloaded {
+      //   [&] (const eqsat::constant &con) -> Operation* { return nullptr; /* TODO(Heno) */ },
+      //   [&] (const eqsat::place &plc)    -> Operation* { return nullptr; /* TODO(Heno) */ },
+      //   [&] (const eqsat::operation &op) -> Operation* { return operation(op, args); },
+      //   [&] (const auto&)                -> Operation* { return nullptr; },
+      // }, eqsat::root(pat));
 
-      return node;
-    }
-
-    template< typename Pattern, typename Substitutions >
-    Id synthesize(const Pattern &pattern, const Substitutions &subs) const
-    {
-      CHECK(subs.size() == pattern.places.size());
       return 0;
     }
 

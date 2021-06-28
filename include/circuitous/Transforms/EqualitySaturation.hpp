@@ -25,16 +25,11 @@
 
 namespace circ::eqsat {
 
-  // helper for pattern visitor
-  template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
-  template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
-
   // substitution mapping from places (variables) to equality classes
   template< typename Graph >
   struct Substitution
   {
     using Id = typename Graph::Id;
-    using Place = ASTNode::Place;
 
     using value_type = std::pair< Id, bool >;
 
@@ -51,9 +46,9 @@ namespace circ::eqsat {
       _mapping[idx] = id;
     }
 
-    bool try_set(Place place, Id id)
+    bool try_set(eqsat::place plc, Id id)
     {
-      auto idx = place.ref();
+      auto idx = plc.ref();
       if (!test(idx))
         return false;
       set(idx, id);
@@ -101,20 +96,15 @@ namespace circ::eqsat {
   template< typename Graph >
   struct EGraphMatcher
   {
-    using PatternNode = ASTNodePtr;
     using ENode = typename Graph::ENode;
     using EClass = typename Graph::EClass;
     using Id = typename Graph::Id;
 
-    using Constant = ASTNode::Constant;
-    using Place    = ASTNode::Place;
-    using Op       = ASTNode::Op;
-
     using Substitution = Substitution< Graph >;
     using Substitutions = Substitutions< Graph >;
 
-    EGraphMatcher(const Graph &egraph, const Pattern &pattern)
-      : _egraph(egraph), _pattern(pattern)
+    EGraphMatcher(const Graph &egraph, const pattern_with_places &pat)
+      : _egraph(egraph), _pattern(pat)
     {}
 
     using MatchResult = std::optional< Substitutions >;
@@ -122,7 +112,7 @@ namespace circ::eqsat {
     MatchResult empty_match(bool is_matched)
     {
       if (is_matched)
-        return Substitutions{Substitution(_pattern.places.size())};
+        return Substitutions{Substitution( _pattern.places.size() )};
       return std::nullopt;
     }
 
@@ -130,7 +120,7 @@ namespace circ::eqsat {
 
     MatchResult match(const EClass &eclass)
     {
-      if (auto result = match(eclass, _pattern.ast)) {
+      if (auto result = match(eclass, _pattern.expr)) {
         // filter out non-fully matched substitutions
         std::erase_if(result.value(), [](const auto &sub) {
           return !sub.fully_matched();
@@ -141,12 +131,12 @@ namespace circ::eqsat {
       return std::nullopt;
     }
 
-    MatchResult match(const EClass &eclass, const PatternNode &pattern)
+    MatchResult match(const EClass &eclass, const pattern &pat)
     {
       // performs union of all matches on the root nodes in the given eclass
       MatchResult result = unmatched();
       for (const auto *node : eclass.nodes) {
-        if (auto subs = match(node, pattern)) {
+        if (auto subs = match(node, pat)) {
           if (!result)
             result = std::move(subs);
           else
@@ -156,39 +146,40 @@ namespace circ::eqsat {
       return result;
     }
 
-    MatchResult match_one(const ENode *root, const PatternNode &pattern)
+    MatchResult match_one(const ENode *root, const pattern &pat)
     {
       return std::visit( overloaded {
-        [&] (const Constant &con) -> MatchResult {
+        [&] (const eqsat::constant &con) -> MatchResult {
           if (auto node_con = root->constant())
-            return empty_match(node_con == con);
+            return empty_match(node_con == con.ref());
           return unmatched();
         },
-        [&] (const Place &plc) -> MatchResult {
+        [&] (const eqsat::place &plc) -> MatchResult {
           auto id = _egraph.find(root);
           Substitution sub( _pattern.places.size() );
-          sub.set(plc.ref(), id);
+          sub.set( _pattern.places.at(plc), id);
           return Substitutions{sub};
         },
-        [&] (const Op &op) -> MatchResult {
+        [&] (const eqsat::operation &op) -> MatchResult {
           return empty_match(root->name() == op);
         },
         [&] (const auto&) -> MatchResult { return unmatched(); /* unsupported kind */ },
-      }, pattern->value );
+      }, eqsat::root(pat) );
     }
 
-    MatchResult match(const ENode *root, const PatternNode &pattern)
+    MatchResult match(const ENode *root, const pattern &pat)
     {
-      auto head = match_one(root, pattern);
+      auto head = match_one(root, pat);
       if (!head)
         return unmatched();
-      if (pattern->children.empty())
+
+      if (children(pat).empty())
         return head;
 
       std::vector< Substitutions > children;
       {
         auto child = root->children.begin();
-        for (const auto &node : pattern->children) {
+        for (const auto &node : eqsat::children(pat)) {
           auto child_class = _egraph.eclass(*child);
           if (auto sub = match(child_class, node)) {
             children.push_back(std::move(sub.value()));
@@ -255,7 +246,7 @@ namespace circ::eqsat {
 
   private:
     const Graph &_egraph;
-    const Pattern &_pattern;
+    const pattern_with_places &_pattern;
   };
 
   template< typename Graph >
@@ -263,12 +254,11 @@ namespace circ::eqsat {
   {
     using Matches = Matches< Graph >;
 
-    Matcher(const Pattern &pattern) : _pattern(pattern) {}
+    Matcher(const pattern_with_places &pat) : _pattern(pat) {}
 
     Matches match(const Graph &egraph) const
     {
       // TODO(Heno): add operation caching to egraph
-
       Matches matches;
       for (const auto &[id, eclass] : egraph.classes()) {
         EGraphMatcher matcher(egraph, _pattern);
@@ -282,7 +272,7 @@ namespace circ::eqsat {
     }
 
   private:
-    const Pattern &_pattern;
+    const pattern_with_places &_pattern;
   };
 
   template< typename Graph, typename Builder >
@@ -291,8 +281,8 @@ namespace circ::eqsat {
     using Matches = Matches< Graph >;
     using EClassMatch = EClassMatch< Graph >;
 
-    Applier(const Pattern &pattern, Builder builder)
-      : _pattern(pattern), _builder(builder)
+    Applier(const pattern_with_places &pat, Builder builder)
+      : _pattern(pat), _builder(builder)
     {}
 
     void apply_on_matches(Graph &egraph, const Matches &matches) const
@@ -307,13 +297,13 @@ namespace circ::eqsat {
       const auto &[id, substitutions] = match;
       // TODO(Heno): perform once for all substitutions
       for (const auto &sub : substitutions) {
-        auto patch = _builder.synthesize(_pattern, sub);
+        auto patch = _builder.synthesize(_pattern.expr, sub, _pattern.places);
         egraph.merge(id, patch);
       }
     }
 
   private:
-    const Pattern &_pattern;
+    const pattern_with_places &_pattern;
     Builder _builder;
   };
 
@@ -321,7 +311,7 @@ namespace circ::eqsat {
   struct Rule
   {
     Rule(std::string_view name, std::string_view lhs_, std::string_view rhs_)
-      : name(name), lhs(lhs_), rhs(rhs_, lhs.places)
+      : name(name), lhs(make_pattern(lhs_)), rhs(make_pattern(rhs_))
     {}
 
     using Matches = Matches< Graph >;
@@ -338,7 +328,8 @@ namespace circ::eqsat {
     {
       using Applier = Applier< Graph, Builder >;
 
-      Applier(rhs, builder).apply_on_matches(egraph, matches);
+      Applier(pattern_with_places(rhs, lhs.places), builder)
+        .apply_on_matches(egraph, matches);
     }
 
     template< typename Builder >
@@ -351,8 +342,8 @@ namespace circ::eqsat {
     const std::string name;
     // Rewrite rule 'lhs -> rhs' that allows to match
     // left-hand-side and replace it with right-hand-side
-    Pattern lhs;
-    Pattern rhs;
+    pattern_with_places lhs;
+    pattern rhs;
   };
 
 
