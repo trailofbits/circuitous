@@ -199,4 +199,12 @@ namespace circ
 		return result;
 	}
 
-} // namespace circuitous
+	namespace {
+		constexpr void tests()
+		{
+			static_assert( constexpr_vector({1, 2, 3}).size() == 3 );
+			static_assert( constexpr_vector({1, 2, 3})[2] == 3 );
+		}
+	}
+
+} // namespace circ
