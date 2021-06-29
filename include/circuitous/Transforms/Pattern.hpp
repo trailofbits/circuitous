@@ -60,6 +60,11 @@ namespace circ::eqsat {
   struct expr : std::variant< atom, std::vector< expr > >
   {
     using variant::variant;
+
+    // TODO(Heno): remove when compiler supports P2162R2:
+    // std::visit for classes derived from std::variant
+    constexpr const variant &get() const { return *this; }
+    constexpr variant &get() { return *this; }
   };
 
   using expr_list = std::vector< expr >;
@@ -174,7 +179,7 @@ namespace circ::eqsat {
     return std::visit( overloaded {
       [] (const atom &a) -> atom { return a; },
       [] (const expr_list &vec) -> atom { return std::get<atom>(vec.front()); }
-    }, e);
+    }, e.get());
   }
 
   expr_list children(const auto& e)
@@ -184,7 +189,7 @@ namespace circ::eqsat {
       [] (const expr_list &vec) -> expr_list {
         return { std::next(vec.begin()), vec.end() };
       }
-    }, e);
+    }, e.get());
   }
 
   using pattern = expr;
@@ -214,10 +219,10 @@ namespace circ::eqsat {
           return {*p};
         return {};
       },
-      [] (const expr_list &vec) {
+      [] (const std::vector< expr > &vec) -> std::unordered_set<place> {
         return places(vec);
       }
-    }, e);
+    }, e.get());
   }
 
   struct pattern_with_places
