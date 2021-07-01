@@ -14,12 +14,12 @@ namespace circ
   template< typename T >
   struct constexpr_vector
   {
-    using value_type 		  = T;
-    using reference 		  = value_type&;
+    using value_type      = T;
+    using reference       = value_type&;
     using const_reference = const value_type&;
-    using pointer 				= value_type*;
-    using const_pointer 	= const value_type*;
-    using iterator 			  = pointer;
+    using pointer         = value_type*;
+    using const_pointer   = const value_type*;
+    using iterator        = pointer;
     using const_iterator  = const_pointer;
 
     constexpr constexpr_vector() = default;
