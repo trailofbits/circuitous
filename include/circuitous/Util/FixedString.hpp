@@ -19,12 +19,12 @@ namespace circ::meta
     using value_type  = char;
     using container_t = std::array< value_type, N >;
 
-    using reference  			 = value_type&;
-    using const_reference  = const value_type&;
-    using pointer    			 = value_type*;
-    using const_pointer    = const value_type*;
-    using iterator	 			 = typename container_t::iterator;
-    using const_iterator	 = typename container_t::const_iterator;
+    using reference       = value_type&;
+    using const_reference = const value_type&;
+    using pointer         = value_type*;
+    using const_pointer   = const value_type*;
+    using iterator        = typename container_t::iterator;
+    using const_iterator  = typename container_t::const_iterator;
 
     constexpr fixed_string() = default;
 
