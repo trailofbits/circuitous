@@ -13,6 +13,10 @@
 #include <circuitous/Util/FixedString.hpp>
 #include <circuitous/Util/ConstExprVector.hpp>
 
+// This file implements parsec-like parser utilities for constexpr context.
+// Its main building blocks are parser combinators that are high-order functions
+// that combine smaller combinators (parsers) to build more complex ones.
+
 namespace circ::parser
 {
   template< typename T >
@@ -24,6 +28,9 @@ namespace circ::parser
   };
 
   using parse_input_t = std::string_view;
+
+  // A parser is callable that takes string and return
+  // optional result and remaining (unparsed) string.
 
   template< typename P >
   concept Parser = invocable<P, parse_input_t >;
@@ -52,6 +59,9 @@ namespace circ::parser
 
   constexpr parse_input_t rest(const auto &p) { return p->second; }
 
+  // --- monad parser functions ---
+
+  // fmap applies function 'f' to parser result
   template< typename F, typename P, typename T = std::invoke_result_t< F, parse_type<P> > >
   constexpr parser<T> auto fmap(F &&f, P &&p)
   {
@@ -79,6 +89,7 @@ namespace circ::parser
     };
   }
 
+  // lifts a value into parser
   template< typename T >
   constexpr parser<T> auto lift(T &&t)
   {
@@ -87,6 +98,7 @@ namespace circ::parser
     };
   }
 
+  // always failing parser
   template< typename T >
   constexpr parser<T> auto fail(T)
   {
@@ -104,6 +116,10 @@ namespace circ::parser
     };
   }
 
+  // --- parser combinators ---
+
+  // alternation: frirst try P1, and if it fails, try P2.
+  // Both parsers have to return the same type.
   template< typename P1, typename P2,
             typename T = std::enable_if_t< std::is_same_v< parse_type<P1>, parse_type<P2> > > >
   constexpr parser<T> auto operator|(P1&& p1, P2&& p2)
@@ -115,6 +131,7 @@ namespace circ::parser
     };
   }
 
+  // accumulation: combine results of sequential application of both parsers
   template< typename P1, typename P2, typename F,
             typename T = std::invoke_result_t< F, parse_type<P1>, parse_type<P2> > >
   constexpr parser<T> auto combine(P1 &&p1, P2 &&p2, F&& f)
@@ -127,6 +144,7 @@ namespace circ::parser
     };
   }
 
+  // combine two parsers and return the result of the second one
   template< typename P1, typename P2,
             typename L = parse_type<P1>, typename R = parse_type<P2> >
   constexpr parser<R> auto operator<(P1 &&p1, P2 &&p2)
@@ -136,6 +154,7 @@ namespace circ::parser
                    [] (auto, const auto& r) { return r; });
   }
 
+  // combine two parsers and return the result of the first one
   template< typename P1, typename P2,
             typename L = parse_type<P1>, typename R = parse_type<P2> >
   constexpr parser<L> auto operator>(P1 &&p1, P2 &&p2)
@@ -145,6 +164,7 @@ namespace circ::parser
                    [] (const auto& l, auto) { return l; });
   }
 
+  // try to apply a parser, and if it fails, return a default value
   template< typename P, typename T = parse_type<P> >
   constexpr parser<T> auto option(T &&def, P &&p)
   {
@@ -173,6 +193,8 @@ namespace circ::parser
     return {init, in};
   }
 
+  // apply parser 'p' zero or more times, accumulating the results according to a
+  // function 'f' with initial accumulator value 'init'
   template <typename P, typename T, typename F>
   constexpr parser<T> auto many(P &&p, T &&init, F &&f)
   {
@@ -184,6 +206,7 @@ namespace circ::parser
     };
   }
 
+  // apply parser 'p' at least once
   template <typename P, typename T, typename F>
   constexpr parser<T> auto many1(P &&p, T &&init, F &&f)
   {
@@ -199,6 +222,7 @@ namespace circ::parser
     };
   }
 
+  // parse character 'c'
   constexpr parser<char> auto char_parser(char c)
   {
     return [=] (parse_input_t in) -> parse_result_t<char> {
@@ -208,6 +232,7 @@ namespace circ::parser
     };
   }
 
+  // parse string 'pattern'
   constexpr parser<std::string_view> auto string_parser(std::string_view pattern)
   {
     return [=] (parse_input_t in) -> parse_result_t<std::string_view> {
@@ -217,6 +242,7 @@ namespace circ::parser
     };
   }
 
+  // parse character ∈ chars
   constexpr parser<char> auto one_of(std::string_view chars)
   {
     return [=] (parse_input_t in) -> parse_result_t<char> {
@@ -228,6 +254,7 @@ namespace circ::parser
     };
   }
 
+  // parse character ∉ chars
   constexpr parser<char> auto none_of(std::string_view chars)
   {
     return [=] (parse_input_t in) -> parse_result_t<char> {
@@ -239,6 +266,8 @@ namespace circ::parser
     };
   }
 
+  // accumulate parsed values by parser p1, that are separated by
+  // strings parseble by p2
   template< typename P1, typename P2, typename T, typename F >
   constexpr parser<T> auto separated(P1 &&p1, P2 &&p2, T &&init, F &&f)
   {
