@@ -77,73 +77,45 @@ namespace circ
 
     constexpr reference at(const std::size_t pos)
     {
-      if (pos >= _size) {
-        throw std::range_error("access out of bounds");
-      } else {
-        return _data[pos];
-      }
+      if (pos >= _size) throw std::range_error("access out of bounds");
+      else return _data[pos];
     }
 
     constexpr const_reference at(const std::size_t pos) const
     {
-      if (pos >= _size) {
-        throw std::range_error("access out of bounds");
-      } else {
-        return _data[pos];
-      }
+      if (pos >= _size) throw std::range_error("access out of bounds");
+      else return _data[pos];
     }
 
     constexpr reference front()
     {
-      if (empty()) {
-        throw std::range_error("accessing empty vector");
-      } else {
-        return _data[0];
-      }
+      if (empty()) throw std::range_error("accessing empty vector");
+      else return _data[0];
     }
 
     constexpr const_reference front() const
     {
-      if (empty()) {
-        throw std::range_error("accessing empty vector");
-      } else {
-        return _data[0];
-      }
+      if (empty()) throw std::range_error("accessing empty vector");
+      else return _data[0];
     }
 
     constexpr reference back()
     {
-      if (empty()) {
-        throw std::range_error("accessing empty vector");
-      } else {
-        return _data[_size - 1];
-      }
+      if (empty()) throw std::range_error("accessing empty vector");
+      else return _data[_size - 1];
     }
 
     constexpr const_reference back() const
     {
-      if (empty()) {
-        throw std::range_error("accessing empty vector");
-      } else {
-        return _data[_size - 1];
-      }
+      if (empty()) throw std::range_error("accessing empty vector");
+      else return _data[_size - 1];
     }
 
-    constexpr reference push_back(const T &value)
+    constexpr reference push_back(T value)
     {
-      if (_size >= _capacity) {
-        throw std::range_error("overfill of constexpr vector");
-      } else {
-        _data[_size++] = value;
-        return back();
-      }
-    }
-
-    constexpr reference push_back(T &&value)
-    {
-      if (_size >= _capacity) {
-        throw std::range_error("overfill of constexpr vector");
-      } else {
+      // TODO(Heno): possibility to resize
+      if (_size >= _capacity) throw std::range_error("overfill of constexpr vector");
+      else {
         _data[_size++] = std::move(value);
         return back();
       }
@@ -152,9 +124,9 @@ namespace circ
     template< typename ...Args >
     constexpr reference emplace_back( Args&& ... args )
     {
-      if (_size >= _capacity) {
-        throw std::range_error("overfill of constexpr vector");
-      } else {
+      // TODO(Heno): possibility to resize
+      if (_size >= _capacity) throw std::range_error("overfill of constexpr vector");
+      else {
         _data[_size++] = T( std::forward<Args>(args)... );
         return back();
       }
@@ -202,8 +174,8 @@ namespace circ
   namespace {
     constexpr void tests()
     {
-      static_assert( constexpr_vector({1, 2, 3}).size() == 3 );
-      static_assert( constexpr_vector({1, 2, 3})[2] == 3 );
+      static_assert(constexpr_vector({1, 2, 3}).size() == 3);
+      static_assert(constexpr_vector({1, 2, 3})[2] == 3);
     }
   }
 
