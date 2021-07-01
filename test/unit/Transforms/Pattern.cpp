@@ -16,7 +16,7 @@
 namespace circ::eqsat {
 
   TEST_CASE("Expr Parser") {
-    auto parser = expr_parser::parser();
+    auto parser = pattern_parser();
     CHECK(parser("(op_add ?x ?y)"));
     CHECK(parser("(op_add ?x (op_mul 2 ?y))"));
 
@@ -44,7 +44,7 @@ namespace circ::eqsat {
   }
 
   TEST_CASE("Pattern Places") {
-    auto parser = expr_parser::parser();
+    auto parser = pattern_parser();
 
     auto count_places = [&parser] (std::string_view in) {
       auto res = parser(in);
@@ -57,6 +57,38 @@ namespace circ::eqsat {
     CHECK(count_places("(?x ?y ?z)") == 3);
     CHECK(count_places("(op_add (op_mul 1 ?x) ?y)") == 2);
     CHECK(count_places("(op_add (op_mul 1 ?x) ?x)") == 1);
+  }
+
+  TEST_CASE("Named Expr") {
+    auto parser = named_expr_parser();
+
+    {
+      auto p = parser("(let place (?x))");
+      CHECK(p && result(p).name == "place" && root(result(p)) == atom(place("x")));
+    }
+  }
+
+  TEST_CASE("Pattern With Named Subexpressions") {
+    auto parser = pattern_parser();
+
+    // only a named subexpression is not a pattern
+    CHECK(!parser("((let place (?x)))"));
+
+    {
+      auto p = parser("((let place (?x)) ($place))");
+      CHECK(p && result(p).subexprs.size() == 1 && root(result(p)) == atom(label("place")));
+    }
+
+    {
+      auto p = parser("((let X (?x)) (let Y (?y)) (op_add $X $Y))");
+      CHECK(p && result(p).subexprs.size() == 2);
+      auto res = result(p);
+      CHECK(root(res) == atom(operation("add")));
+
+      auto ch = children(res);
+      CHECK(std::get<atom>(ch[0]) == atom(label("X")));
+      CHECK(std::get<atom>(ch[1]) == atom(label("Y")));
+    }
   }
 
 } // namespace circ::eqsat

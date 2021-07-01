@@ -56,6 +56,12 @@ namespace circ::eqsat {
         auto rule = TestRule("id", "(?x)", "(?x)");
         CHECK(count_matches(rule.match(egraph)) == 3);
       }
+
+      SUBCASE("named commutativity") {
+        auto rule = TestRule("commutativity", "((let X (?x)) (let Y (?y)) (op_mul $X $Y))", "(op_mul ?y ?x)");
+        auto m = rule.match(egraph);
+        CHECK(count_matches(m) == 1);
+      }
     }
 
     TEST_CASE("Addition")
@@ -218,6 +224,54 @@ namespace circ::eqsat {
       CHECK(ops.nodes[1]->term == "mul");
       CHECK(ops.nodes[1]->children[0] == x);
       CHECK(ops.nodes[1]->children[1] != x);
+    }
+
+    TEST_CASE("Named Subexpressions")
+    {
+      TestGraph egraph;
+      TestGraphBuilder builder(&egraph);
+
+      auto x = egraph.make_leaf("x");
+      auto y = egraph.make_leaf("y");
+      auto a = egraph.make_node("add", {x, y});
+
+      auto rule = TestRule("commutativity", "((let X (?x)) (let Y (?y)) (op_add $X $Y))", "(op_add ?y ?x)");
+
+      rule.apply(egraph, builder);
+      egraph.rebuild();
+
+      auto additions = egraph.eclass(a);
+      CHECK(additions.size() == 2);
+
+      CHECK(additions.nodes[0]->children[0] == x);
+      CHECK(additions.nodes[0]->children[1] == y);
+
+      CHECK(additions.nodes[1]->children[0] == y);
+      CHECK(additions.nodes[1]->children[1] == x);
+    }
+
+    TEST_CASE("Named Subexpressions in Rewrite")
+    {
+      TestGraph egraph;
+      TestGraphBuilder builder(&egraph);
+
+      auto x = egraph.make_leaf("x");
+      auto y = egraph.make_leaf("y");
+      auto a = egraph.make_node("add", {x, y});
+
+      auto rule = TestRule("commutativity", "(op_add ?x ?y)", "((let X (?x)) (op_add ?y $X))");
+
+      rule.apply(egraph, builder);
+      egraph.rebuild();
+
+      auto additions = egraph.eclass(a);
+      CHECK(additions.size() == 2);
+
+      CHECK(additions.nodes[0]->children[0] == x);
+      CHECK(additions.nodes[0]->children[1] == y);
+
+      CHECK(additions.nodes[1]->children[0] == y);
+      CHECK(additions.nodes[1]->children[1] == x);
     }
   }
 

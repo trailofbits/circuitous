@@ -56,6 +56,7 @@ namespace circ::parser
 
   constexpr const auto& result(const auto &p) { return p->first; }
   constexpr auto& result(auto &p) { return p->first; }
+  constexpr auto result(auto &&p) { return std::move(p->first); }
 
   constexpr parse_input_t rest(const auto &p) { return p->second; }
 
@@ -142,6 +143,35 @@ namespace circ::parser
           return {{f(result(r1), result(r2)), rest(r2)}};
       return std::nullopt;
     };
+  }
+
+  // accumulate: parser results to tuple
+  template< typename P, typename T = std::tuple< parse_type<P> > >
+  constexpr parser<T> auto combine(P &&p)
+  {
+    return [=] (parse_input_t in) -> parse_result_t< T > {
+      if (auto r = p(in))
+        return {{std::make_tuple(result(r)), rest(r)}};
+      return std::nullopt;
+    };
+  }
+
+  template< typename P, typename ...Ps
+          , typename T = std::tuple< parse_type<P>, parse_type<Ps>... > >
+  constexpr parser<T> auto combine(P &&p, Ps&&... ps)
+  {
+    return [=] (parse_input_t in) -> parse_result_t< T > {
+      if (auto r1 = combine(p)(in))
+        if (auto r2 = combine(ps...)(rest(r1)))
+          return {{std::tuple_cat(result(r1), result(r2)), rest(r2)}};
+      return std::nullopt;
+    };
+  }
+
+  template< typename P1, typename P2, typename T = std::tuple< parse_type<P1>, parse_type<P2> > >
+  constexpr parser<T> auto operator&(P1 &&p1, P2 &&p2)
+  {
+    return combine(std::forward<P1>(p1), std::forward<P2>(p2));
   }
 
   // combine two parsers and return the result of the second one
@@ -282,6 +312,22 @@ namespace circ::parser
       }
       return {{init, s}};
     };
+  }
+
+  // --- parser constructor helpers ---
+
+  template< typename T, typename P >
+  constexpr parser<T> auto from_tuple(P &&p)
+  {
+    return fmap([] (auto &&t) {
+      return std::make_from_tuple< T >(std::forward<decltype(t)>(t));
+    }, std::forward<P>(p));
+  }
+
+  template< typename T, typename P >
+  constexpr parser<T> auto construct(P &&p)
+  {
+    return fmap( [] (auto &&arg) { return T(std::forward<decltype(arg)>(arg)); }, std::forward<P>(p) );
   }
 
   namespace detail
