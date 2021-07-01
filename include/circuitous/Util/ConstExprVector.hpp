@@ -1,4 +1,4 @@
- // Copyright 2020, Trail of Bits. All rights reserved.
+ // Copyright 2021, Trail of Bits. All rights reserved.
 
 #pragma once
 
@@ -6,6 +6,11 @@
 
 namespace circ
 {
+  // Implements temporary std::vector for constexpr context.
+  // When the standard library gains support of the constexpr vector,
+  // this class will become obsolete and should be replaced by std::vector.
+  // The only addition to std is concatenation operator+.
+
   template< typename T >
   struct constexpr_vector
   {

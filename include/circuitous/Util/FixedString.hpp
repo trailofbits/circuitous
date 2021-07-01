@@ -10,6 +10,9 @@
 
 namespace circ::meta
 {
+  // Class 'fixed_string' implements a static string that can
+  // be passed as a non type template parameter.
+
   template< std::size_t N >
   struct fixed_string
   {
