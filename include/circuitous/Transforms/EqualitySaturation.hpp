@@ -131,12 +131,12 @@ namespace circ::eqsat {
       return std::nullopt;
     }
 
-    MatchResult match(const EClass &eclass, const pattern &pat)
+    MatchResult match(const EClass &eclass, const expr &e)
     {
       // performs union of all matches on the root nodes in the given eclass
       MatchResult result = unmatched();
       for (const auto *node : eclass.nodes) {
-        if (auto subs = match(node, pat)) {
+        if (auto subs = match(node, e)) {
           if (!result)
             result = std::move(subs);
           else
@@ -146,7 +146,7 @@ namespace circ::eqsat {
       return result;
     }
 
-    MatchResult match_one(const ENode *root, const pattern &pat)
+    MatchResult match_one(const ENode *root, const expr &e)
     {
       return std::visit( overloaded {
         [&] (const eqsat::constant &con) -> MatchResult {
@@ -163,23 +163,28 @@ namespace circ::eqsat {
         [&] (const eqsat::operation &op) -> MatchResult {
           return empty_match(root->name() == op);
         },
-        [&] (const auto&) -> MatchResult { return unmatched(); /* unsupported kind */ },
-      }, eqsat::root(pat) );
+        [&] (const eqsat::label &lab) -> MatchResult {
+          return match(root, _pattern.subexpr(lab.ref()));
+        },
+        [&] (const auto&) -> MatchResult {
+          return unmatched(); /* unsupported kind */
+        },
+      }, eqsat::root(e));
     }
 
-    MatchResult match(const ENode *root, const pattern &pat)
+    MatchResult match(const ENode *root, const expr &e)
     {
-      auto head = match_one(root, pat);
+      auto head = match_one(root, e);
       if (!head)
         return unmatched();
 
-      if (children(pat).empty())
+      if (children(e).empty())
         return head;
 
       std::vector< Substitutions > children;
       {
         auto child = root->children.begin();
-        for (const auto &node : eqsat::children(pat)) {
+        for (const auto &node : eqsat::children(e)) {
           auto child_class = _egraph.eclass(*child);
           if (auto sub = match(child_class, node)) {
             children.push_back(std::move(sub.value()));
@@ -297,7 +302,7 @@ namespace circ::eqsat {
       const auto &[id, substitutions] = match;
       // TODO(Heno): perform once for all substitutions
       for (const auto &sub : substitutions) {
-        auto patch = _builder.synthesize(_pattern.expr, sub, _pattern.places);
+        auto patch = _builder.synthesize(_pattern, sub);
         egraph.merge(id, patch);
       }
     }
@@ -319,7 +324,6 @@ namespace circ::eqsat {
     Matches match(const Graph &egraph) const
     {
       using Matcher = Matcher< Graph >;
-
       return Matcher(lhs).match(egraph);
     }
 
