@@ -71,22 +71,11 @@ namespace eqsat {
       return res;
     }
 
-    Id synthesize(const pattern &pat, const auto &subs, const auto &places) const
+    Id synthesize(const pattern_with_places &pat, const auto &subs) const
     {
-      CHECK(subs.size() == places.size());
+      CHECK(subs.size() == pat.places.size());
 
       // TODO(Heno): addnodes to egraph
-      // std::vector< Operation* > args;
-      // for (const auto &child : eqsat::children(pat))
-      //   args.push_back(synthesize(child, subs));
-
-      // auto node = std::visit( overloaded {
-      //   [&] (const eqsat::constant &con) -> Operation* { return nullptr; /* TODO(Heno) */ },
-      //   [&] (const eqsat::place &plc)    -> Operation* { return nullptr; /* TODO(Heno) */ },
-      //   [&] (const eqsat::operation &op) -> Operation* { return operation(op, args); },
-      //   [&] (const auto&)                -> Operation* { return nullptr; },
-      // }, eqsat::root(pat));
-
       return 0;
     }
 

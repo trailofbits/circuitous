@@ -15,6 +15,7 @@
 #include <cctype>
 #include <cstring>
 #include <memory>
+#include <stdexcept>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -43,12 +44,18 @@ namespace circ::eqsat {
   using constant = strong_type< std::int64_t, constant_tag >;
 
   struct op_tag;
+  // operation has to be named with prefix 'op_'
   using operation = strong_type< std::string_view, op_tag >;
 
   struct placeholder_tag;
+  // place has to be named with prefix '?'
   using place = strong_type< std::string_view, placeholder_tag >;
 
-  using atom = std::variant< constant, operation, place >;
+  struct label_tag;
+  // subexpression label has to be named with prefix '$'
+  using label = strong_type< std::string_view, label_tag >;
+
+  using atom = std::variant< constant, operation, place, label >;
 
   template< typename stream >
   stream& operator<<(stream& os, const atom& a)
@@ -65,6 +72,27 @@ namespace circ::eqsat {
     // std::visit for classes derived from std::variant
     constexpr const variant &get() const { return *this; }
     constexpr variant &get() { return *this; }
+  };
+
+  struct named_expr : expr
+  {
+    named_expr(std::string_view n, const expr &e) : expr(e), name(n) {}
+    named_expr(std::string_view n, expr &&e) : expr(std::move(e)), name(n) {}
+
+    std::string_view name;
+  };
+
+  struct pattern : expr
+  {
+    using named_exprs = std::unordered_map< std::string_view, expr >;
+
+    explicit pattern(const expr &e) : expr(e) {}
+    explicit pattern(expr &&e) : expr(std::move(e)) {}
+
+    pattern(const named_exprs &subs, const expr &e) : expr(e), subexprs(subs) {}
+    pattern(named_exprs &&subs, expr &&e) : expr(std::move(e)), subexprs(std::move(subs)) {}
+
+    named_exprs subexprs;
   };
 
   using expr_list = std::vector< expr >;
@@ -110,28 +138,27 @@ namespace circ::eqsat {
 
   constexpr parser<operation> auto operation_parser()
   {
-    auto name = [] (std::string_view name) { return operation(name); };
-    return fmap( name, (string_parser("op_") < word_parser()) );
+    return construct< operation >(string_parser("op_") < word_parser());
   }
 
   constexpr parser<place> auto place_parser()
   {
-    auto name = [] (std::string_view name) { return place(name); };
-    return fmap( name, (char_parser('?') < word_parser()) );
+    return construct< place >(char_parser('?') < word_parser());
+  }
+
+  constexpr parser<label> auto label_parser()
+  {
+    return construct< label >(char_parser('$') < word_parser());
   }
 
   constexpr parser<atom> auto atom_parser()
   {
-    auto to_atom_parser = [] (auto &&parser) {
-      auto to_atom = [] (auto &&v) { return atom(v); };
-      return fmap( to_atom, std::move(parser) );
-    };
+    auto con = construct< atom >(constant_parser());
+    auto op  = construct< atom >(operation_parser());
+    auto plc = construct< atom >(place_parser());
+    auto lab = construct< atom >(label_parser());
 
-    auto con = to_atom_parser(constant_parser());
-    auto op  = to_atom_parser(operation_parser());
-    auto plc = to_atom_parser(place_parser());
-
-    return con | op | plc;
+    return con | op | plc | lab;
   }
 
   template< typename P, typename T = parse_type<P> >
@@ -141,38 +168,53 @@ namespace circ::eqsat {
   }
 
   // TODO(Heno): make constexpr
-  struct expr_parser
+  namespace detail
   {
-    using parser_result = parse_result_t< expr >;
-    using parser_t = auto (*)(parse_input_t) -> parser_result;
-
-    static auto atom()
+    struct expr_parser
     {
-      return fmap([] (auto a) { return expr(a); }, atom_parser() );
-    }
+      using parser_result = parse_result_t< expr >;
+      using parser_t = auto (*)(parse_input_t) -> parser_result;
 
-    static inline auto push = [] (expr a, expr b) -> expr {
-      auto vec = std::get<expr_list>(wrap(a));
-      vec.push_back(b);
-      return vec;
-    };
+      static auto atom() { return construct< expr >(atom_parser()); }
 
-    static auto list()
-    {
-      return parenthesized(
-        separated(element_parser(), skip(isspace), expr(std::vector<expr>{}), push)
-      );
-    }
-
-    static auto element_parser() -> parser_t
-    {
-      return [] (parse_input_t in) -> parser_result {
-        return (atom() | list())(in);
+      static inline auto push = [] (expr a, expr b) -> expr {
+        auto vec = std::get<expr_list>(wrap(a));
+        vec.push_back(b);
+        return vec;
       };
-    }
 
-    static auto parser() { return list(); }
-  };
+      static auto list()
+      {
+        return parenthesized(
+          separated(element_parser(), skip(isspace), expr(std::vector<expr>{}), push)
+        );
+      }
+
+      static auto element_parser() -> parser_t
+      {
+        return [] (parse_input_t in) -> parser_result {
+          return (atom() | list())(in);
+        };
+      }
+
+      static auto parser() { return list(); }
+    };
+  } // namespace detail
+
+  static inline parser<expr> auto expr_parser()
+  {
+    return detail::expr_parser::parser();
+  }
+
+  // TODO(Heno): constexpr
+  // named expression has form: (let <name> <expr>)
+  static inline parser<named_expr> auto named_expr_parser()
+  {
+    auto name_p = (string_parser("let") & skip(isspace)) < word_parser();
+    auto expr_p = (skip(isspace) < expr_parser());
+
+    return from_tuple< named_expr >( parenthesized( name_p & expr_p ) );
+  }
 
   atom root(const auto& e)
   {
@@ -192,37 +234,59 @@ namespace circ::eqsat {
     }, e.get());
   }
 
-  using pattern = expr;
-
   // TODO(Heno): constexpr
-  static inline parser<pattern> auto pattern_parser() { return expr_parser::parser(); }
+  static inline parser<pattern> auto pattern_parser()
+  {
+    using named_exprs = pattern::named_exprs;
+
+    // TODO(Heno): do not copy exprs
+    auto insert_named_expr = [] (auto &&exprs, auto &&e) {
+      exprs[e.name] = e;
+      return exprs;
+    };
+
+    auto subexpr_parser = many((named_expr_parser() > skip(isspace)), named_exprs{}, insert_named_expr);
+
+    return
+      // pattern is either expression
+      construct< pattern >( expr_parser() ) |
+      // or list of named expressions and final anonymous expression that we are matching against
+      from_tuple< pattern >( parenthesized(subexpr_parser & expr_parser()) );
+  }
 
   // TODO(Heno): constexpr
   static inline pattern make_pattern(std::string_view pat)
   {
-    return result(pattern_parser()(pat));
+    auto parser = pattern_parser();
+    if (auto p = parser(pat))
+      return result(std::move(p));
+    throw std::runtime_error("syntax error in pattern");
   }
 
-  std::unordered_set<place> places(const auto &vec)
-  {
-    std::unordered_set<place> res;
-    for (const auto &v : vec)
-      res.merge(places(v));
-    return res;
-  }
 
-  static inline std::unordered_set<place> places(const expr &e)
+  using places_t = std::unordered_set<place>;
+  inline places_t places(const expr &e, const auto &subexprs)
   {
     return std::visit( overloaded {
-      [] (const atom &a) -> std::unordered_set<place> {
-        if (auto p = std::get_if<place>(&a))
-          return {*p};
-        return {};
+      [&] (const atom &a) -> places_t {
+        return std::visit( overloaded {
+          [&] (const label &lab) -> places_t { return places(subexprs.at(lab.ref()), subexprs); },
+          [&] (const place &val) -> places_t { return {val}; },
+          [&] (const auto &)     -> places_t { return {}; }
+        }, a);
       },
-      [] (const std::vector< expr > &vec) -> std::unordered_set<place> {
-        return places(vec);
+      [&] (const std::vector< expr > &vec) -> places_t {
+        places_t res;
+        for (const auto &v : vec)
+          res.merge(places(v, subexprs));
+        return res;
       }
-    }, e.get());
+    }, e);
+  }
+
+  inline places_t places(const pattern &pat)
+  {
+    return places(static_cast<expr>(pat), pat.subexprs);
   }
 
   struct pattern_with_places
@@ -240,9 +304,27 @@ namespace circ::eqsat {
       : expr(pat), places(map)
     {}
 
+    const auto &subexpr(const auto &label) const { return expr.subexprs.at(label); }
+    const auto &subexprs() const { return expr.subexprs; }
+
     pattern expr;
     places_map places;
   };
+
+  template< typename stream >
+  auto operator<<(stream &os, const pattern_with_places&pat) -> decltype(os << "")
+  {
+    return os << pat.expr;
+  }
+
+  template< typename stream >
+  auto operator<<(stream &os, const pattern&pat) -> decltype(os << "")
+  {
+    os << '(' << root(pat);
+    for (const auto &ch : children(pat))
+      os << ' ' << ch;
+    return os << ')';
+  }
 
   namespace {
     static inline void tests()

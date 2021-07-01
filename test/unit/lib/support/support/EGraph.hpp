@@ -67,23 +67,36 @@ namespace circ {
   {
     using constant  = eqsat::constant;
     using place     = eqsat::place;
+    using label     = eqsat::label;
     using operation = eqsat::operation;
 
     TestGraphBuilder(TestGraph *graph) : _graph(graph) {}
 
-    Id synthesize(const eqsat::pattern &pat, const auto &substitutions, const auto &places) const
+    Id synthesize(const eqsat::pattern_with_places &pat, const auto &substitutions) const
     {
+      CHECK(substitutions.size() == pat.places.size());
+      return synthesize(pat.expr, substitutions, pat.places, pat.subexprs());
+    }
+
+    Id synthesize(const eqsat::expr &e, const auto &substitutions,
+                  const auto &places, const auto &subexprs) const
+    {
+      auto synth = [&] (const auto &sub) {
+        return synthesize(sub, substitutions, places, subexprs);
+      };
+
       std::vector< Id > args;
-      for (const auto &child : children(pat)) {
-        args.push_back(synthesize(child, substitutions, places));
+      for (const auto &child : children(e)) {
+        args.push_back(synth(child));
       }
 
       auto node = std::visit( overloaded {
         [&] (const constant &con) -> Id { return _graph->make_leaf( std::to_string(con.ref()) ); },
         [&] (const place &plc)    -> Id { return substitutions.id(places.at(plc)); },
         [&] (const operation &op) -> Id { return _graph->make_node(op.ref(), args); },
+        [&] (const label &lab)    -> Id { return synth(subexprs.at(lab.ref())); },
         [&] (const auto&)         -> Id { LOG(FATAL) << "unsupported node"; },
-      }, root(pat));
+      }, root(e));
 
       return node;
     }
