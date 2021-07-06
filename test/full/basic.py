@@ -261,7 +261,7 @@ test_ip = {
 }
 
 test_all = {
-        ModelTest("adc, add, sub, sbb, shl, shr, xor, or, and, div, idiv").tags({"min", "big"})
+  ModelTest("adc, add, sub, sbb, shl, shr, xor, or, and, div, idiv").tags({"min", "big"})
   .bytes(intel(["adc rax, 0x12", "add rcx, rax", "add rax, 0x45",
                 "sub rcx, 0x15", "sub rax, rcx", "sbb rax, 0x12",
                 "shr rax, 0x2", "shr rcx, 0x2", "shl rax, 0x2", "shl rcx, 0x2",
