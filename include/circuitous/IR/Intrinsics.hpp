@@ -739,12 +739,12 @@ static inline auto make_breakpoint(llvm::IRBuilder<> &ir) {
 }
 
 template<typename ...Args>
-auto make_hint(llvm::IRBuilder<> &ir, Args &&...args) {
+auto make_advice(llvm::IRBuilder<> &ir, Args &&...args) {
   return impl::implement_call<Advice>(ir, {}, std::forward<Args>(args)...);
 }
 
 template<typename C = std::vector<llvm::Value *>>
-auto make_hintcheck(llvm::IRBuilder<> &ir, const C &c_args) {
+auto make_advice_constraint(llvm::IRBuilder<> &ir, const C &c_args) {
   CHECK_EQ(c_args.size(), 2) << "make_hintcheck expects 2 call args.";
   CHECK(c_args[0]->getType() == c_args[1]->getType());
   return impl::implement_call<AdviceConstraint>(ir, c_args, c_args[0]->getType());
@@ -755,7 +755,7 @@ auto make_advice_constraint(llvm::IRBuilder<> &ir, llvm::Value *advice, I val) {
   auto ty = llvm::dyn_cast< llvm::IntegerType >(advice->getType());
   CHECK(ty);
   auto ci = ir.getIntN(ty->getIntegerBitWidth(), val);
-  return make_hintcheck(ir, {ci, advice});
+  return make_advice_constraint(ir, {ci, advice});
 }
 
 template<typename C = std::vector<llvm::Value *>, typename ...Args>
