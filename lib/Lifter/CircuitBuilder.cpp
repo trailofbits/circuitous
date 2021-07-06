@@ -198,8 +198,9 @@ auto CircuitBuilder::BuildCircuit0(std::vector<InstructionSelection> isels) -> C
   auto circuit0 = Circuit0(ctx);
   auto circuit0_func = circuit0.Create();
   circuit0.InjectISELs(std::move(isels));
-
   ctx.clean_module({circuit0_func});
+
+  circuit0.constraint_unused();
 
   intrinsics::disable_opts<intrinsics::VerifyInst, intrinsics::Select>(ctx.module());
 
@@ -464,6 +465,80 @@ llvm::Function *Circuit0::Create() {
       << "Couldn't find program counter register "
       << ctx.arch()->ProgramCounterRegisterName();
   return circuit_fn;
+}
+
+void Circuit0::constraint_unused_advices(verif_diff_t &out) {
+
+  std::unordered_set< llvm::Value * > all_advices;
+  auto gather = [&](auto x) { all_advices.insert(x); };
+  intrinsics::Advice::ForAllIn(circuit_fn, gather);
+
+  auto handle_ctx = [](auto ctx_i, auto advices) {
+    auto ctx = llvm::dyn_cast<llvm::CallInst>(ctx_i);
+    CHECK(ctx);
+    for (uint32_t i = 0; i < ctx->getNumArgOperands(); ++i) {
+      auto intrinsic_call = llvm::dyn_cast< llvm::CallInst >(ctx->getArgOperand(i));
+      if (!intrinsic_call ||
+          !intrinsics::AdviceConstraint::IsIntrinsic(intrinsic_call->getCalledFunction()))
+      {
+        continue;
+      }
+
+      auto advice = intrinsic_call->getArgOperand(1u);
+      advices.erase(advice);
+    }
+    return advices;
+  };
+
+
+  for (auto verif : verified_insts) {
+    llvm::IRBuilder<> ir(llvm::dyn_cast<llvm::Instruction>(verif));
+    for (auto unconstrained : handle_ctx(verif, all_advices)) {
+      out[verif].push_back(intrinsics::make_advice_constraint(ir, unconstrained, 0ull));
+    }
+  }
+}
+
+void Circuit0::constraint_unused_hints(verif_diff_t &out) {
+  auto all_mem = mem::get_all(ctx.module());
+
+  for (std::size_t i = 0; i < verified_insts.size(); ++i) {
+    auto ctx = llvm::dyn_cast< llvm::CallInst >(verified_insts[i]);
+    CHECK(ctx) << remill::LLVMThingToString(verified_insts[i]);
+
+    auto constrained = mem::constrained_by(ctx);
+
+    llvm::IRBuilder<> ir(ctx);
+    for (auto [idx, fn] : all_mem) {
+      // Already constrained by this context, no need to do more
+      if (constrained.count(idx)) {
+        continue;
+      }
+
+      auto mem_hint = intrinsics::make_memory(ir, intrinsics::Memory::id(fn));
+      out[verified_insts[i]].push_back(intrinsics::make_unused_constraint(ir, {mem_hint}));
+    }
+  }
+}
+
+void Circuit0::constraint_unused() {
+  verif_diff_t diff;
+  constraint_unused_hints(diff);
+  constraint_unused_advices(diff);
+
+  for (std::size_t i = 0; i < verified_insts.size(); ++i) {
+    if (!diff.count(verified_insts[i])) {
+      continue;
+    }
+    auto additional_args = diff[verified_insts[i]];
+
+    auto selects = used_selects[verified_insts[i]];
+    used_selects.erase(verified_insts[i]);
+
+    auto ctx = llvm::dyn_cast< llvm::CallInst >(verified_insts[i]);
+    verified_insts[i] = extend(ctx, std::move(additional_args));
+    used_selects[verified_insts[i]] = std::move(selects);
+  }
 }
 
 void Circuit0::InjectISELs(std::vector<InstructionSelection> isels) {
