@@ -750,6 +750,14 @@ auto make_hintcheck(llvm::IRBuilder<> &ir, const C &c_args) {
   return impl::implement_call<AdviceConstraint>(ir, c_args, c_args[0]->getType());
 }
 
+template< typename I > requires std::is_integral_v< I >
+auto make_advice_constraint(llvm::IRBuilder<> &ir, llvm::Value *advice, I val) {
+  auto ty = llvm::dyn_cast< llvm::IntegerType >(advice->getType());
+  CHECK(ty);
+  auto ci = ir.getIntN(ty->getIntegerBitWidth(), val);
+  return make_hintcheck(ir, {ci, advice});
+}
+
 template<typename C = std::vector<llvm::Value *>, typename ...Args>
 auto make_read_constraint(llvm::IRBuilder<> &ir, const C &c_args, Args &&... args) {
   return impl::implement_call<ReadConstraint>(ir, c_args, std::forward<Args>(args)...);
