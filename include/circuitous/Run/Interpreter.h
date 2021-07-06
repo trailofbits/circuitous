@@ -58,6 +58,7 @@ namespace circ::run {
   template<typename Spawn>
   struct QueueInterpreter {
     using value_type = typename Spawn::value_type;
+    using spawn_t = Spawn;
 
     Circuit *circuit;
 
@@ -75,30 +76,29 @@ namespace circ::run {
       }
     }
 
-    void set_input_state(const trace::Entry &in) {
+    template<typename F>
+    void runners_do(F &&f) {
       for (auto &[_, runner] : runners) {
-        runner.set_input_state(in);
+        f(runner);
       }
+    }
+
+    void set_input_state(const trace::Entry &in) {
+      return runners_do([ & ]( auto &runner ){ runner.set_input_state(in); } );
     }
 
     void set_output_state(const trace::Entry &out) {
-      for (auto &[_, runner] : runners) {
-        runner.set_output_state(out);
-      }
+      return runners_do([ & ]( auto &runner ){ runner.set_output_state(out); } );
     }
 
     void set_memory(uint64_t addr, const std::string &val) {
-      for (auto &[_, runner] : runners) {
-        runner.set_memory(addr, val);
-      }
+      return runners_do([ & ]( auto &runner ){ runner.set_memory(addr, val); } );
     }
 
     template<typename T, typename ...Ts>
     void init() {
       for (auto c : circuit->Attr<T>()) {
-        for (auto &[_, runner] : runners) {
-          runner.Visit(c);
-        }
+        runners_do([ & ]( auto &runner ){ runner.Visit(c); } );
       }
 
       if constexpr (sizeof...(Ts) != 0) {
@@ -107,11 +107,18 @@ namespace circ::run {
     }
 
     auto values() const {
+      // TODO(lukas): This is dubious once we consider verify mode
       CHECK(acceptor);
       return acceptor->values();
     }
 
     void init() { init<Undefined, Constant>(); }
+
+    bool result() {
+      uint32_t acceptors = 0;
+      runners_do([ & ](auto &runner ){ if ( *runner.result ) ++acceptors; });
+      return acceptors == 1;
+    }
 
     bool Run() {
       init();
