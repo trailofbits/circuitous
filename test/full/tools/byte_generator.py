@@ -111,6 +111,9 @@ def intel(instructions):
 def att(instructions):
   return LazyBytes(instructions, _att_cache)
 
+def raw(instructions):
+  return instructions
+
 # What happens here:
 # * Create tmp dir
 # * Move there
