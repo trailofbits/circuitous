@@ -129,6 +129,8 @@ using Constraint = type_fragment< 0x6 >;
 using Uncat = type_fragment< 0x7 >;
 using BoolOp = type_fragment< 0x9 >;
 
+/* Leaves */
+
 template< template< typename > class T >
 struct Input : T< meta_fragment< 0 > > {
   using parent_t = T< meta_fragment< 0 > >;
@@ -256,6 +258,102 @@ using leaf_values_ts = tl::make_list<
     InputRegister, OutputRegister, Memory
 >;
 
+/* Constaints */
+
+struct EnforceCtx : Operation {
+  using Operation::Operation;
+  enum : uint8_t { kDynamic = 0u, kFixed = 1u };
+
+  Operation *dynamic() { return operands[kDynamic]; }
+  Operation *fixed() { return operands[kFixed]; }
+
+  const Operation *dynamic() const { return operands[kDynamic]; }
+  const Operation *fixed() const { return operands[kFixed]; }
+
+  std::string suffix_() const {
+    if (operands.size() != 2) {
+      return "invalid.0";
+    }
+    return fixed()->Name() + "." + std::to_string(fixed()->size);
+  }
+};
+
+struct MemoryConstraint : Operation {
+  using Operation::Operation;
+
+  enum : uint8_t { kFixed = 0u, kSize = 1u, kAddr = 2u, kTS = 3u, kValue = 4u };
+
+  auto hint_arg() const  { return operands[kFixed]; }
+  auto size_arg() const { return operands[kSize]; }
+  auto addr_arg() const { return operands[kAddr]; }
+  auto ts_arg() const { return operands[kTS]; }
+  auto val_arg() const { return operands[kValue]; }
+  auto mem_idx() const {
+    return dynamic_cast< Memory * >( hint_arg() )->mem_idx;
+  }
+};
+
+// A comparison between the proposed output value of a register, and the
+// output register itself.
+struct RegConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 0 > > {
+  static constexpr uint32_t kind = apply(Operation::kind);
+  RegConstraint() : EnforceCtx(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "register_constraint"; }
+  std::string Name() const override { return "register_constraint." + EnforceCtx::suffix_(); }
+};
+
+// A comparison between the proposed output value of a register, and the
+// output register itself.
+struct AdviceConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 1 > > {
+  static constexpr uint32_t kind = apply(Operation::kind);
+  AdviceConstraint() : EnforceCtx(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "advice_constraint"; }
+  std::string Name() const override { return "advice_constraint." + EnforceCtx::suffix_(); }
+};
+
+// Says that we are preserving the value of a register.
+struct PreservedConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 2 > > {
+  static constexpr uint32_t kind = apply(Operation::kind);
+  PreservedConstraint() : EnforceCtx(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "preserved_constraint"; }
+  std::string Name() const override { return "preserved_constraint." + EnforceCtx::suffix_(); }
+};
+
+// Says that we are moving one register to a different register.
+struct CopyConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 3 > > {
+  static constexpr uint32_t kind = apply(Operation::kind);
+  CopyConstraint() : EnforceCtx(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "copy_constraint"; }
+  std::string Name() const override { return "copy_constraint." + EnforceCtx::suffix_(); }
+};
+
+struct WriteConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 4 > > {
+  static constexpr uint32_t kind = apply(Operation::kind);
+  WriteConstraint() : MemoryConstraint(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "write_constraint"; }
+  std::string Name() const override { return "write_constraint"; }
+};
+
+struct ReadConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 5 > > {
+  static constexpr uint32_t kind = apply(Operation::kind);
+  ReadConstraint() : MemoryConstraint(this->bool_size, kind) {}
+  std::string op_code_str() const override { return "read_constraint"; }
+  std::string Name() const override { return "read_constraint"; }
+};
+
+
+// TODO(lukas): It would be nice to move these to struct defs
+static inline bool constrained_by(Operation *v, Operation *c) {
+  switch (v->op_code) {
+    case OutputErrorFlag::kind:
+    case OutputTimestamp::kind:
+    case OutputRegister::kind :
+        return is_one_of<RegConstraint, PreservedConstraint, CopyConstraint>(c);
+    case Advice::kind : return is_one_of<AdviceConstraint>(c);
+    case Memory::kind : return is_one_of<ReadConstraint, WriteConstraint>(c);
+    default: return true;
+  }
+}
 
 /* LLVMOP */
 
@@ -408,89 +506,6 @@ struct Select : Operation, make_kind< Uncat, tag_fragment< 0 > > {
   // Return one of the `2 ^ bits` values. It is also expected that this node
   // has `2 ^ bits + 1` operands.
   uint32_t bits = 0;
-};
-
-/* Constaints */
-
-struct EnforceCtx : Operation {
-  using Operation::Operation;
-  enum : uint8_t { kDynamic = 0u, kFixed = 1u };
-
-  Operation *dynamic() { return operands[kDynamic]; }
-  Operation *fixed() { return operands[kFixed]; }
-
-  const Operation *dynamic() const { return operands[kDynamic]; }
-  const Operation *fixed() const { return operands[kFixed]; }
-
-  std::string suffix_() const {
-    if (operands.size() != 2) {
-      return "invalid.0";
-    }
-    return fixed()->Name() + "." + std::to_string(fixed()->size);
-  }
-};
-
-struct MemoryConstraint : Operation {
-  using Operation::Operation;
-
-  enum : uint8_t { kFixed = 0u, kSize = 1u, kAddr = 2u, kTS = 3u, kValue = 4u };
-
-  auto hint_arg() const  { return operands[kFixed]; }
-  auto size_arg() const { return operands[kSize]; }
-  auto addr_arg() const { return operands[kAddr]; }
-  auto ts_arg() const { return operands[kTS]; }
-  auto val_arg() const { return operands[kValue]; }
-  auto mem_idx() const {
-    return dynamic_cast< Memory * >( hint_arg() )->mem_idx;
-  }
-};
-
-// A comparison between the proposed output value of a register, and the
-// output register itself.
-struct RegConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 0 > > {
-  static constexpr uint32_t kind = apply(Operation::kind);
-  RegConstraint() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "register_constraint"; }
-  std::string Name() const override { return "register_constraint." + EnforceCtx::suffix_(); }
-};
-
-// A comparison between the proposed output value of a register, and the
-// output register itself.
-struct AdviceConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 1 > > {
-  static constexpr uint32_t kind = apply(Operation::kind);
-  AdviceConstraint() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "advice_constraint"; }
-  std::string Name() const override { return "advice_constraint." + EnforceCtx::suffix_(); }
-};
-
-// Says that we are preserving the value of a register.
-struct PreservedConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 2 > > {
-  static constexpr uint32_t kind = apply(Operation::kind);
-  PreservedConstraint() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "preserved_constraint"; }
-  std::string Name() const override { return "preserved_constraint." + EnforceCtx::suffix_(); }
-};
-
-// Says that we are moving one register to a different register.
-struct CopyConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 3 > > {
-  static constexpr uint32_t kind = apply(Operation::kind);
-  CopyConstraint() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "copy_constraint"; }
-  std::string Name() const override { return "copy_constraint." + EnforceCtx::suffix_(); }
-};
-
-struct WriteConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 4 > > {
-  static constexpr uint32_t kind = apply(Operation::kind);
-  WriteConstraint() : MemoryConstraint(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "write_constraint"; }
-  std::string Name() const override { return "write_constraint"; }
-};
-
-struct ReadConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 5 > > {
-  static constexpr uint32_t kind = apply(Operation::kind);
-  ReadConstraint() : MemoryConstraint(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "read_constraint"; }
-  std::string Name() const override { return "read_constraint"; }
 };
 
 #define make_bool_op(cls, idx) \
