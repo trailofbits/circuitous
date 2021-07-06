@@ -218,6 +218,11 @@ struct Circuit0 {
         ISEL_view isel,
         State &state);
 
+    using verif_diff_t = std::unordered_map< llvm::Value *, std::vector< llvm::Value * > >;
+    void constraint_unused();
+    void constraint_unused_advices(verif_diff_t &out);
+    void constraint_unused_hints(verif_diff_t &out);
+
     // Vector of return values, one for each result of doing a
     // `__circuitous_verify_decode`.
     std::vector<llvm::Value *> verified_insts;
