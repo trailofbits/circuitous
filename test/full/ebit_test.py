@@ -1,9 +1,9 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 
-from tools.byte_generator import intel
-from tools.model_test import ModelTest
+from tools.byte_generator import intel, raw
+from tools.model_test import ModelTest, Test
 from tools.verify_test import VerifyTest
-from tools.tc import State, S, MS, MIG
+from tools.tc import State, S, MS, MIG, MemHint
 
 _verify_test = {
   VerifyTest("selftest").tags({"selftest"})
@@ -48,7 +48,64 @@ pop = {
   .case(run_bytes = intel(["pop rbx"]), R = True)
   .case(run_bytes = intel(["pop rdx"]), R = True)
   .case(run_bytes = intel(["pop rbp"]), R = True)
-  .case(run_bytes = intel(["pop r9"]), R = False)
+  .case(run_bytes = intel(["pop r9"]), R = False),
+
+  ModelTest("pop [rsp]").tags({"pop", "min", "mem"})
+  .bytes(intel(["pop QWORD PTR [rsp]"]))
+  .DI(S(0x20000).RSP(0x3000).RIP(0x1000).RAX(0x5000)
+                 .rwmem(0x3000, "0040" + 6 * "00")
+                 .rwmem(0x4000, "0030" + 6 * "00")
+                 .rwmem(0x5000, "00f0" + 6 * "00"))
+  .case(run_bytes = 0, R = True)
+  # `pop [rsp]` uses different semantic function than other `pop [gpr]``
+  .case(run_bytes = intel(["pop QWORD PTR [rax]"]), R=False),
+
+  ModelTest("pop [rax]").tags({"pop", "min", "mem"})
+  .bytes(intel(["pop QWORD PTR [rsp]"]))
+  .DI(S(0x20000).RSP(0x3000).RIP(0x1000).RAX(0x5000).RBX(0x6211)
+                 .rwmem(0x3000, "0040" + 6 * "00")
+                 .rwmem(0x4000, "0030" + 6 * "00")
+                 .rwmem(0x5000, "00f0" + 6 * "00")
+                 .rwmem(0x6210, "00" * 16))
+  .case(run_bytes = 0, R = True)
+  # `pop [rsp]` uses different semantic function than other `pop [gpr]``
+  .case(run_bytes = intel(["pop QWORD PTR [rbx]"]), R=False),
+
+  ModelTest("pop [rsp - 0x20]").tags({"pop", "min", "mem"})
+  .bytes(intel(["pop QWORD PTR [rsp - 0x20]"]))
+  .DI(S(0x20000).RSP(0x3000).RIP(0x1000)
+                 .rwmem(0x2ff8, "00" * 8)
+                 .rwmem(0x3000, "0040" + 30 * "00")
+                 .rwmem(0x4000, "0030" + 6 * "00"))
+  .case(run_bytes = 0, R = True)
+}
+
+
+pop_corners = {
+  Test("pop rsp").tags({"min", "pop", "mem"})
+  .bytes(intel(["pop rsp"]))
+  .DI(S(0x23000).RSP(0x3000).RIP(0x1000)
+                .rwmem(0x3000, "0040" + 6 * "00")
+                .rwmem(0x4000, "0030" + 6 * "00"))
+  .case(run_bytes = 0,
+        DE = MS().RSP(0x4008).RIP(0x1001).ts(1).mem_hint(MemHint.read(0x3000, 0x4000, 8)),
+        R=True),
+
+  ModelTest("pop rsp microx").tags({"min", "pop", "mem"})
+  .bytes(intel(["pop rsp"]))
+  .DI(S(0x23000).RSP(0x3000).RIP(0x1000)
+                .rwmem(0x3000, "0040" + 6 * "00")
+                .rwmem(0x4000, "0030" + 6 * "00"))
+  .case(run_bytes = 0, R=True)
+}
+
+push_corners = {
+  ModelTest("push rsp").tags({"min", "push", "mem"})
+  .bytes(intel(["push rsp"]))
+  .DI(S(0x23000).RSP(0x3008).RIP(0x1000)
+                .rwmem(0x3000, "0040" + 6 * "00")
+                .rwmem(0x4000, "0030" + 6 * "00"))
+  .case(run_bytes = 0, R = True)
 }
 
 push = {
@@ -125,7 +182,43 @@ mov_mem = {
   .case(run_bytes = 0, R=True)
   .case(run_bytes = 0, R=True)
   .scases(intel, ["mov rax, [r9 + 2*rsi -0x5]", "mov r10, [rsi + 2 * r10 + 0x5]"], R=True)
-  .scases(intel, ["mov [r9 + 2*rsi -0x5], rcx", "mov [rsi + 2 * r10 + 0x5], r8"], R=True)
+  .scases(intel, ["mov [r9 + 2*rsi -0x5], rcx", "mov [rsi + 2 * r10 + 0x5], r8"], R=True),
+
+  ModelTest("mov mem imm").tags({"mov", "mem", "min"})
+  .bytes(intel(["mov QWORD PTR [0x6531], 0x412"]))
+  .DI(S(0x32100).mig(MIG().rw(0x6000, 0x1000).rw(0x10000, 0x1000).rw(0x20000, 0x1000)))
+  .case(run_bytes = 0, R = True)
+  .scases(intel, ["mov QWORD PTR [0x6531], 0x412a12", "mov QWORD PTR [0x101ab], 0x4ffbe",
+                  "mov QWORD PTR [0x20aaa], 0x0"], R=True),
+
+  ModelTest("mov mem reg").tags({"mov", "mem", "min"})
+  .bytes(intel(["mov QWORD PTR [0x6531], r9"]))
+  .DI(S(0x32100).mig(MIG().rw(0x6000, 0x1000).rw(0x10000, 0x1000).rw(0x20000, 0x1000))
+      .RAX(0xffaa).R10(0x431).RCX(0xbeac4))
+  .case(run_bytes = 0, R = True)
+  .scases(intel, ["mov QWORD PTR [0x6531], r10",
+                  "mov QWORD PTR [0x101ab], rcx",
+                  "mov QWORD PTR [0x20aaa], rax"], R=True)
+  .case(run_bytes = intel(["mov QWORD PTR [0x101ab], 0x0"]), R=False),
+
+  ModelTest("mov mem reg32").tags({"mov", "mem", "32b"})
+  .bytes(intel(["mov [0x6531], r9d"]))
+  .DI(S(0x32100).mig(MIG().rw(0x6000, 0x1000).rw(0x10000, 0x1000).rw(0x20000, 0x1000))
+      .RAX(0xaebbefc4ffaa).R10(0x44444ffbbcc31).RCX(0xb55ffcb1eac4).R12(0x432))
+  .case(run_bytes = 0, R = True)
+  .scases(intel, ["mov [0x6531], r10d",
+                  "mov [0x101ab], r11d",
+                  "mov [0x20aaa], r12d"], R=True)
+  .case(run_bytes = intel(["mov QWORD PTR [0x101ab], 0x0"]), R=False)
+  # This will fail because of prefixes
+  .case(run_bytes = intel(["mov DWORD PTR [0x101ab], ecx"]), R=False)
+  .case(run_bytes = intel(["mov QWORD PTR [0x101ab], rax"]), R=False),
+
+
+  ModelTest("mov rip, imm").tags({"mov", "mem"})
+  .bytes(intel(["mov [rip + 0x1400], rax"]))
+  .DI(S(0x3400).RIP(0x7000).mig(MIG().rw(0x8000, 0x1000)))
+  .case(run_bytes = 0, R = True)
 }
 
 xor_mem = {
@@ -138,7 +231,94 @@ xor_mem = {
   .case(run_bytes = intel(["xor [r8], rax"]), R=True)
 }
 
+cfg = {
+  ModelTest("jmp reg").tags({"jmp", "cfg", "min"})
+  .bytes(intel(["jmp rax"]))
+  .DI(S(0x4212).RBX(0x123).RCX(0x4212))
+  .scases(intel, ["jmp rax", "jmp rbx", "jmp rcx", "jmp rsp"], R=True)
+  .scases(intel, ["jmp r8"], R=False),
+
+  ModelTest("jmp rxreg").tags({"jmp", "cfg"})
+  .bytes(intel(["jmp r10"]))
+  .DI(S(0x4212).RBX(0x123).RCX(0x4212).R8(0xff4312).R10(0xfff421))
+  # All below should in reality fail, since they will be generated as shorter forms
+  .scases(intel, ["jmp rax", "jmp rbx", "jmp rcx", "jmp rsp"], R=False)
+  .scases(intel, ["jmp r8", "jmp r12"], R=True),
+
+  ModelTest("jmp [rip + imm8]").tags({"jmp", "cfg", "min"})
+  .bytes(intel(["jmp [rip + 0x43]"]))
+  .DI(S(0x41212).RAX(0x2000).mig(MIG().rw(0x6000, 0x1000)))
+  .scases(raw, ["ff2500500000"], R=True)
+  .scases(intel, ["jmp rax"], R=False),
+
+  #ModelTest("jz").tags({"jz", "cfg", "min", "cwip4", "mem"})
+  #.bytes(intel(["jz [rip + 0x5]"]))
+  #.DI(S(0x40231).rwmem(0x40231, "fb1a321ac4ffffff4332"))
+  #.case(run_bytes = 0, DI=MS().aflags(0), R = True)
+  #.case(run_bytes = 0, DI=MS().aflags(1), R = True)
+
+  ModelTest("call 0xff4410").tags({"call", "cfg", "min"})
+  .bytes("e800400000")
+  .DI(S(0x4121).RSP(0x8116).mig(MIG().rw(0x8000, 0x1000)))
+  .case(run_bytes = 0, R=True),
+
+  ModelTest("call rax").tags({"call", "cfg", "min"})
+  .bytes(intel(["call rax"]))
+  .DI(S(0x4121)
+      .RSP(0x8116).R8(0x0).R10(0x3411e).R15(0xfff12)
+      .RAX(0xfff77).RBP(0x4121a)
+      .mig(MIG().rw(0x8000, 0x1000)))
+  .scases(intel, ["call r8", "call r10", "call r15"], R=False)
+  .scases(intel, ["call rax", "call rbp"], R=True)
+  .case(run_bytes = intel(["call rsp"]), R=True),
+
+  ModelTest("call r10").tags({"call", "cfg", "min"})
+  .bytes(intel(["call r10"]))
+  .DI(S(0x4121)
+      .RSP(0x8116).R8(0x0).R10(0x3411e).R15(0xfff12)
+      .RAX(0xfff77).RBP(0x4121a)
+      .mig(MIG().rw(0x8000, 0x1000)))
+  .scases(intel, ["call r8", "call r10", "call r15"], R=True)
+  .scases(intel, ["call rax", "call rsp"], R=False),
+
+  ModelTest("call dreg").tags({"call", "cfg", "min"})
+  .bytes(intel(["call [rsp + 8]"]))
+  .DI(S(0x4121)
+      .RSP(0x8116).R8(0x0).R10(0x3411e).R15(0xfff12)
+      .RAX(0xfff77).RBP(0x4121a)
+      .rwmem(0x8108, "00405060ffae43112012405055657a98aefc31321291a3fcfecf718a981721"))
+  .case(run_bytes = 0, R = True)
+}
+
+evil = {
+  ModelTest("call dreg").tags({"call", "cfg", "min"})
+  .bytes(intel(["call [rsp + 8]"]))
+  .DI(S(0x4121)
+      .RSP(0x8116).R8(0x0).R10(0x3411e).R15(0xfff12)
+      .RAX(0xfff77).RBP(0x4121a)
+      .rwmem(0x8108, "00405060ffae43112012405055657a98aefc31321291a3fcfecf718a981721"))
+  .case(run_bytes = 0, R = True)
+}
+
+big_mix = {
+  ModelTest("adc, add, sub, sbb, shl, shr, xor, or, and, div, idiv").tags({"min", "big"})
+  .bytes(intel(["adc rax, 0x12", "add rcx, rax", "add rax, 0x45",
+                "sub rcx, 0x15", "sub rax, rcx", "sbb rax, 0x12",
+                "shr rax, 0x2", "shr rcx, 0x2", "shl rax, 0x2", "shl rcx, 0x2",
+                "xor rax, rax", "xor rax, rcx",
+                "or rax, rax","or rax, rcx",
+                "and rax, 0xfffff", "and rax, rcx",
+                "div rax", "idiv rcx", "idiv rax"]))
+  .DI(S(0x1).RAX(0x12).RCX(0x45).aflags(0))
+  .case(run_bytes = 0, R=True)
+  .case(run_bytes = 1, R=True)
+  .case(run_bytes = 2, R=True)
+  .case(run_bytes = 3, R=True)
+  .case(run_bytes = 4, R=True)
+  .case(run_bytes = 5, R=True)
+}
 
 
 circuitous_tests = [ saturation_property, _verify_test, timestamp_inc,
-  push, pop, push_cx, push_deref, mov_mem, xor_mem ]
+  push, pop, push_cx, push_deref, mov_mem, xor_mem, pop_corners, push_corners,
+  big_mix, cfg, evil ]
