@@ -87,15 +87,15 @@ namespace circ::ifuzz::permutate {
       };
     }
 
-    static auto identity_reg() {
-      return [](auto &self, auto &flipped) {
+    auto identity_reg() {
+      return [&](auto &self, auto &flipped) {
         return flipped.type == OpType::kTypeRegister &&
                self.reg.size == flipped.reg.size;
       };
     }
 
-    static auto identity_addr() {
-      return [](auto &self_, auto& flipped_) {
+    auto identity_addr() {
+      return [&](auto &self_, auto& flipped_) {
         if (flipped_.type != OpType::kTypeAddress) {
           return false;
         }
@@ -188,7 +188,7 @@ namespace circ::ifuzz::permutate {
     using cri = const remill::Instruction &;
 
     template<typename Fn>
-    static std::tuple<bool, bool> CheckStructure(
+    std::tuple<bool, bool> CheckStructure(
       cri original, cri permutation, const Item_t &items, Fn &&on_self)
     {
       if (original.bytes.size() != permutation.bytes.size()) {
@@ -255,9 +255,9 @@ namespace circ::ifuzz::permutate {
     using OpType = typename Next::OpType;
     using Item_t = typename Next::Item_t;
 
-    static bool Compare(const remill::Instruction &original,
-                        const remill::Instruction &permutation,
-                        const Item_t &items)
+    bool Compare(const remill::Instruction &original,
+                 const remill::Instruction &permutation,
+                 const Item_t &items)
     {
       CHECK(items.size() >= 1) << "Cannot compare " << items.size() << " items.";
       OpType type = items.begin()->second->type;
@@ -276,7 +276,7 @@ namespace circ::ifuzz::permutate {
     using citem_ref = const Item_t &;
 
     template<typename Fn>
-    static bool Check(cri original, cri permutation, citem_ref op, Fn &&on_self) {
+    bool Check(cri original, cri permutation, citem_ref op, Fn &&on_self) {
       auto [structural, exact] = Next::CheckStructure(original, permutation, op, on_self);
       return structural && (exact_mod || !exact);
     }
