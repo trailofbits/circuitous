@@ -98,6 +98,43 @@ namespace circ {
       return out;
     }
 
+    auto inst_distance(llvm::Instruction *a, llvm::Instruction *b) {
+      CHECK(a->getParent() == b->getParent());
+      using bb_it = llvm::BasicBlock::iterator;
+      return std::distance(bb_it(a), bb_it(b));
+    }
+
+    // Sometimes we need to move the select call further into the function
+    // because domination issues - i.e. we try to emit it right after last
+    // of its operands is defined.
+    template<typename C, typename ...Ts>
+    auto make_blueprint(C &args, Ts &&... ts) {
+      auto fst = &*fn->begin()->begin();
+
+      auto get_ip = [&]() {
+        llvm::Instruction *out = fst;
+        for (auto i = 1u; i < args.size(); ++i) {
+          if (auto inst = llvm::dyn_cast<llvm::Instruction>(args[i])) {
+            if (inst_distance(fst, out) < inst_distance(fst, inst)) {
+              out = inst;
+            }
+          }
+        }
+        return out;
+      };
+
+      auto get_ir = [&](auto ip_) {
+        if (!ip_) {
+          return llvm::IRBuilder<>(&*fn->begin()->begin());
+        }
+        return llvm::IRBuilder<>(ip_->getNextNonDebugInstruction());
+      };
+
+      auto ir = get_ir(get_ip());
+      args[0] = intrinsics::make_hint(ir, args[0]->getType());
+      return intrinsics::make_select(ir, args, std::forward<Ts>(ts)...);
+    }
+
     void generate_blueprints(std::unordered_map<blueprint_t, uint64_t> stats) {
       auto generate = [&](auto blueprint, auto count) {
         llvm::IRBuilder<> ir(&*fn->begin()->begin());
@@ -106,8 +143,7 @@ namespace circ {
         auto [bitsize, type] = intrinsics::Select::ParseArgs(blueprint->getCalledFunction());
         for (std::size_t i = 0; i < count; ++i) {
           // Replace the selector with hint
-          args[0] = intrinsics::make_hint(ir, args[0]->getType());
-          auto select = intrinsics::make_select(ir, args, bitsize, type);
+          auto select = make_blueprint(args, bitsize, type);
           generated[blueprint].emplace_back(llvm::dyn_cast<llvm::CallInst>(args[0]), select);
         }
       };
