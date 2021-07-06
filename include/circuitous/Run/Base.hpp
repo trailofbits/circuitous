@@ -302,7 +302,10 @@ namespace circ::run {
       std::vector<HasMemory::Parsed> out;
       for (auto op : this->circuit->template Attr<Memory>()) {
         // TODO(lukas): Check if memory was derived or supplied
-        out.push_back(this->deconstruct(*this->get(op)));
+        // TODO(lukas): This should never happen once we enforce zeroed unused hints
+        if (this->has_value(op)) {
+          out.push_back(this->deconstruct(*this->get(op)));
+        }
       }
       return out;
     }
