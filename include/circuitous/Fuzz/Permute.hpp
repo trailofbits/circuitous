@@ -255,9 +255,13 @@ namespace circ::ifuzz::permutate {
     using OpType = typename Next::OpType;
     using Item_t = typename Next::Item_t;
 
-    bool Compare(const remill::Instruction &original,
-                 const remill::Instruction &permutation,
-                 const Item_t &items)
+    using cri = const remill::Instruction;
+
+    bool compare(cri &original, cri &permuation, std::size_t idx) {
+      return compare(original, permuation, {{ idx, &original.operands[idx] }});
+    }
+
+    bool compare(cri &original, cri &permutation, const Item_t &items)
     {
       CHECK(items.size() >= 1) << "Cannot compare " << items.size() << " items.";
       OpType type = items.begin()->second->type;
@@ -272,11 +276,10 @@ namespace circ::ifuzz::permutate {
       }
     }
 
-    using cri = const remill::Instruction &;
-    using citem_ref = const Item_t &;
+    using citem = const Item_t;
 
     template<typename Fn>
-    bool Check(cri original, cri permutation, citem_ref op, Fn &&on_self) {
+    bool Check(cri &original, cri &permutation, citem &op, Fn &&on_self) {
       auto [structural, exact] = Next::CheckStructure(original, permutation, op, on_self);
       return structural && (exact_mod || !exact);
     }
