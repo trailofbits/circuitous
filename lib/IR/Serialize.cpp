@@ -379,6 +379,7 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
   DECODE_CONDITION(CopyConstraint)
   DECODE_CONDITION(ReadConstraint)
   DECODE_CONDITION(WriteConstraint)
+  DECODE_CONDITION(UnusedConstraint)
 
   DECODE_GENERIC(InputInstructionBits)
   DECODE_CONDITION(DecodeCondition)
