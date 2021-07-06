@@ -192,6 +192,19 @@ void CSem<S>::Visit(WriteConstraint *op_) {
 }
 
 template<typename S>
+void CSem<S>::Visit(UnusedConstraint *op) {
+  llvm::APInt unused { intrinsics::Memory::allocated_size, 0, false };
+  if (this->supplied.count(op->operands[0])) {
+    self().SetNodeVal(op, this->BoolVal(this->get(op, 0) == llvm::APInt(unused)));
+    return;
+  }
+
+  self().SetNodeVal(op, this->TrueVal());
+  self().SetNodeVal(op->operands[0], unused);
+}
+
+
+template<typename S>
 void CSem<S>::Visit(RegConstraint *op) { return this-> handle_cond(op); }
 
 template<typename S>
