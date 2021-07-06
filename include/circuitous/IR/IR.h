@@ -538,6 +538,27 @@ tl::TL<
 
 using node_list_t = tl::merge< generic_list_t, llvm_ops_t, leaf_values_ts >;
 
+  // TODO(lukas): Generalise comparator and move to `tl::`.
+  template< typename F, typename H, typename ... Tail >
+  auto runtime_find_(uint32_t id, F &&f) {
+    if (H::kind == id) {
+      return f(static_cast<H *>(nullptr));
+    }
+    if constexpr (sizeof...(Tail) != 0) {
+      return runtime_find_< F, Tail ... >(id, f);
+    } else {
+      LOG(FATAL) << "runtime find on: " << id << " failed";
+    }
+  }
+
+  // These may be quite expensive to re-compute, if they are called
+  // often, consider refactor or at least caching.
+  template< typename F, typename ... Ts >
+  auto runtime_find( tl::TL< Ts ... >, uint32_t idx, F &&f) {
+    return runtime_find_< F, Ts... >(idx, std::forward< F >(f));
+  }
+
+
 // TODO(lukas): This is just a hotfix, ideally we want the type list
 //              will all the nodes to carry names.
 static inline std::string fragment_as_str(uint32_t kind) {
