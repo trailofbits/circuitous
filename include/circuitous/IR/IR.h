@@ -342,6 +342,12 @@ struct ReadConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 5
   std::string Name() const override { return "read_constraint"; }
 };
 
+struct UnusedConstraint : Operation, make_kind< Constraint, tag_fragment< 6 > > {
+  static constexpr uint32_t kind = apply(Operation::kind);
+  UnusedConstraint() : Operation(this->bool_size, kind) {}
+  static std::string op_code_str() { return "unused_constraint"; }
+  std::string Name() const override { return "unused_constraint"; }
+};
 
 // TODO(lukas): It would be nice to move these to struct defs
 static inline bool constrained_by(Operation *v, Operation *c) {
@@ -351,7 +357,8 @@ static inline bool constrained_by(Operation *v, Operation *c) {
     case OutputRegister::kind :
         return is_one_of<RegConstraint, PreservedConstraint, CopyConstraint>(c);
     case Advice::kind : return is_one_of<AdviceConstraint>(c);
-    case Memory::kind : return is_one_of<ReadConstraint, WriteConstraint>(c);
+    case Memory::kind :
+        return is_one_of<ReadConstraint, WriteConstraint, UnusedConstraint>(c);
     default: return true;
   }
 }
@@ -531,7 +538,7 @@ tl::TL<
   CountLeadingZeroes, CountTrailingZeroes, Extract, PopulationCount,
   Parity, InputImmediate,
   RegConstraint, PreservedConstraint, CopyConstraint, DecodeCondition,
-  ReadConstraint, WriteConstraint,
+  ReadConstraint, WriteConstraint, UnusedConstraint,
   VerifyInstruction, OnlyOneCondition,
   AdviceConstraint, Select, And,
   Or

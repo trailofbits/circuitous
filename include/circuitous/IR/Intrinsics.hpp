@@ -431,6 +431,7 @@ namespace data {
 
   struct ReadConstraint : dot_seperator { sccc_prefix("__circuitous.memread"); };
   struct WriteConstraint : dot_seperator { sccc_prefix("__circuitous.memwrite"); };
+  struct UnusedConstraint : dot_seperator { sccc_prefix("__circuitous.unusued"); };
 
 } //namespace data
 
@@ -541,6 +542,7 @@ struct Transport : impl::Identity<data::Transport> {};
 // hint, size, addr, ts, value
 struct ReadConstraint : impl::Predicate<data::ReadConstraint> {};
 struct WriteConstraint : impl::Predicate<data::WriteConstraint> {};
+struct UnusedConstraint : impl::Predicate<data::UnusedConstraint> {};
 
 struct Error : impl::Identity<data::Error> {};
 
@@ -767,6 +769,11 @@ auto make_outcheck(llvm::IRBuilder<> &ir, const C &c_args) {
 template<typename ...Args>
 auto make_memory(llvm::IRBuilder<> &ir, Args &&...args) {
   return impl::implement_call<Memory>(ir, {}, std::forward<Args>(args)...);
+}
+
+template<typename C = std::vector< llvm::Value * > >
+auto make_unused_constraint(llvm::IRBuilder<> &ir, const C &c_args) {
+  return impl::implement_call<UnusedConstraint>(ir, c_args);
 }
 
 template<typename T, typename ... Ts>
