@@ -400,6 +400,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     if (intrinsics::WriteConstraint::IsIntrinsic(fn)) {
       return VisitGenericIntrinsic<WriteConstraint>(call, fn);
     }
+    if (intrinsics::UnusedConstraint::IsIntrinsic(fn)) {
+      return VisitGenericIntrinsic<UnusedConstraint>(call, fn);
+    }
     LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(call);
   }
 
