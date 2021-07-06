@@ -47,6 +47,33 @@ namespace circ::mem {
     return collect({as_it(from), as_it(to)});
   }
 
+  static inline auto constrained_by(llvm::CallInst *ctx) {
+    std::unordered_set<uint64_t> constrained;
+    for (auto i = 0u; i < ctx->getNumArgOperands(); ++i) {
+      auto call = llvm::dyn_cast<llvm::CallInst>(ctx->getArgOperand(i));
+
+      if (!call ||
+          !intrinsics::one_of<intrinsics::ReadConstraint,
+                              intrinsics::WriteConstraint>(call->getCalledFunction()))
+      {
+        continue;
+      }
+
+      auto mem_hint = llvm::dyn_cast< llvm::CallInst >(call->getArgOperand(0u));
+      CHECK(mem_hint && intrinsics::Memory::IsIntrinsic(mem_hint->getCalledFunction()));
+      constrained.insert(intrinsics::Memory::id(mem_hint->getCalledFunction()));
+    }
+    return constrained;
+  }
+
+  static inline auto get_all(llvm::Module *m) {
+    std::unordered_map<uint64_t, llvm::Function *> out;
+    for (auto fn : intrinsics::Memory::All(m)) {
+      out[intrinsics::Memory::id(fn)] = fn;
+    }
+    return out;
+  }
+
   struct Synthetizer {
     using mem_t = intrinsics::Memory;
 
