@@ -106,14 +106,8 @@ namespace circ::run {
       return true;
     }
 
-    std::unordered_map<Operation *, llvm::APInt> values() const {
-      std::unordered_map<Operation *, llvm::APInt> out;
-      for (auto &[op, val] : node_values) {
-        if (val) {
-          out[op] = *val;
-        }
-      }
-      return out;
+    std::unordered_map<Operation *, value_type> values() const {
+      return node_values;
     }
 
     auto &self() { return static_cast<Self &>(*this); }
