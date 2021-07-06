@@ -512,6 +512,7 @@ std::vector<llvm::Instruction *> Circuit0::LowerDstRegs(std::vector<llvm::Value 
     llvm::IRBuilder<> ir(llvm::cast<llvm::Instruction>(dst));
     out.push_back(ir.CreateAlloca(p_type->getPointerElementType(), nullptr, "DSTA_"));
     dst->replaceAllUsesWith(out.back());
+    llvm::dyn_cast<llvm::Instruction>(dst)->eraseFromParent();
   }
   return out;
 }
