@@ -548,6 +548,12 @@ struct Error : impl::Identity<data::Error> {};
 
 struct Memory : impl::BucketAllocator<data::Memory, 16 + 64 + 64 + 64> {
 
+  static uint32_t id(llvm::Function *fn) {
+    CHECK(IsIntrinsic(fn))
+        << ((fn->hasName()) ? fn->getName().str() : std::string("no name"));
+    return std::get<0>(ParseArgs<uint32_t>(fn));
+  }
+
   template<typename V>
   struct Parsed {
     // 1 bit
