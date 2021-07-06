@@ -15,17 +15,15 @@ namespace circ::ifuzz {
 
   using reg_navigation_t = std::tuple< uint32_t, uint32_t, uint32_t >;
 
-  static auto fetch_reg(remill::Instruction &inst, reg_navigation_t idxs)
+  static inline auto fetch_reg(remill::Operand &r_op, std::tuple<uint32_t, uint32_t> idxs)
   -> std::optional<remill::Operand::Register *>
   {
-    auto [inst_idx, op_idx, snd] = idxs;
-
-    auto &op = inst.operands[inst_idx];
+    auto [op_idx, snd] = idxs;
     if (op_idx == 0) {
-      return std::make_optional(&op.reg);
+      return std::make_optional(&r_op.reg);
     }
     if (op_idx == 1) {
-      return std::make_optional( (snd == 0) ? &op.addr.base_reg : &op.addr.index_reg );
+      return std::make_optional( (snd == 0) ? &r_op.addr.base_reg : &r_op.addr.index_reg );
     }
     if (op_idx == 0xff) {
       return std::nullopt;
@@ -33,18 +31,16 @@ namespace circ::ifuzz {
     LOG(FATAL) << "Unknown fetch config";
   }
 
-  static auto fetch_reg(shadowinst::Instruction &s_inst, reg_navigation_t idxs)
+  static inline auto fetch_reg(shadowinst::Operand &s_op, std::tuple<uint32_t, uint32_t> idxs)
   -> std::optional<shadowinst::Reg *>
   {
-    auto [inst_idx, op_idx, snd] = idxs;
-
-    auto &op = s_inst.operands[inst_idx];
+    auto [op_idx, snd] = idxs;
     if (op_idx == 0) {
-      return std::make_optional(&*op.reg);
+      return std::make_optional(&*s_op.reg);
     }
     if (op_idx == 1) {
-      return std::make_optional( (snd == 0) ? &*op.address->base_reg
-                                            : &*op.address->index_reg );
+      return std::make_optional( (snd == 0) ? &*s_op.address->base_reg
+                                            : &*s_op.address->index_reg );
     }
     if (op_idx == 0xff) {
       return std::nullopt;
@@ -52,7 +48,16 @@ namespace circ::ifuzz {
     LOG(FATAL) << "Unknown fetch config";
   }
 
-  static auto fetch_reg(s_reg_vessel &vessel, reg_navigation_t idxs)
+  template<typename I>
+  static auto fetch_reg(I &inst, reg_navigation_t idxs)
+  {
+    auto inst_idx = std::get<0>(idxs);
+
+    auto &op = inst.operands[inst_idx];
+    return fetch_reg(op, {std::get<1>(idxs), std::get<2>(idxs)});
+  }
+
+  static inline auto fetch_reg(s_reg_vessel &vessel, reg_navigation_t idxs)
   -> std::optional<shadowinst::Reg *>
   {
     auto [inst_idx, _, _2] = idxs;
@@ -63,6 +68,10 @@ namespace circ::ifuzz {
     }
     return std::nullopt;
   }
+
+  static inline auto reg_reg() { return std::make_tuple(0u, 0u); }
+  static inline auto addr_base_reg() { return std::make_tuple(1u, 0u); }
+  static inline auto addr_index_reg() { return std::make_tuple(1u, 1u); }
 
   template<typename S>
   void assign_reg(S &vessel, reg_navigation_t navigation, shadowinst::Reg s_reg) {
