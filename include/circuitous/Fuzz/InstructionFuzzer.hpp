@@ -131,9 +131,7 @@ namespace circ {
             continue;
           }
           using C = ifuzz::permutate::Comparator;
-          op_bits[op_i][i] = C::Compare(rinst,
-                                        *permutations[i],
-                                        { { op_i, &rinst.operands[op_i] } });
+          op_bits[op_i][i] = C().compare(rinst, *permutations[i], op_i);
         }
       }
       return op_bits;
@@ -305,7 +303,8 @@ namespace circ {
           if (!permutations[i]) {
             continue;
           }
-          husk_bits[i] = ifuzz::permutate::HuskComparator::Compare(rinst, *permutations[i], group);
+          using CMP = ifuzz::permutate::HuskComparator;
+          husk_bits[i] = CMP().compare(rinst, *permutations[i], group);
         }
 
         s_inst.deps.push_back({});
@@ -398,7 +397,7 @@ namespace circ {
           items.emplace(idx, &inst.operands[idx]);
         }
 
-        return ifuzz::permutate::HuskEnlargerComparator::Compare(rinst, inst, items);
+        return ifuzz::permutate::HuskEnlargerComparator().compare(rinst, inst, items);
       };
 
       auto for_valid = [](auto fn, auto &group) {
