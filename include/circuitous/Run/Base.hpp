@@ -370,6 +370,7 @@ namespace circ::run {
 
     void Visit(ReadConstraint *op);
     void Visit(WriteConstraint *op);
+    void Visit(UnusedConstraint *op);
   };
 
   #include <circuitous/Run/Derive.tpp>
