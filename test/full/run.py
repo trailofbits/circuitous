@@ -116,8 +116,14 @@ class Lifter(SimulateCWDMixin):
         log_info("\tSkipped")
       tc.metafiles[case.name + ".circuit"] = circuit
 
+  def shorten_name(self, bytes):
+    if len(bytes) < 32:
+      return str(bytes)
+    return str(hash(str(bytes)))
+
+
   def circuit_name(self, bytes):
-    return bytes + ".circuit.ir"
+    return self.shorten_name(bytes) + ".circuit.ir"
 
   def lift(self, bytes, extra_args):
     args = [self.binary,
