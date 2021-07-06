@@ -6,6 +6,8 @@
 
 #include <circuitous/Util/LLVMUtil.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
+
+#include <circuitous/Fuzz/InstNavigation.hpp>
 #include <circuitous/Lifter/Shadows.hpp>
 #include <circuitous/Lifter/ShadowMat.hpp>
 
@@ -211,11 +213,18 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
   // Some registers may require additional shifts
   auto ShiftCoerceInfo(const shadowinst::Reg &s_reg) {
     std::map<uint64_t, std::vector<std::string>> out;
-    for (auto &[reg, bits] : s_reg.translation_map) {
-      auto orig = arch->RegisterByName(reg);
-      auto big = orig->EnclosingRegister();
 
-      auto key = orig->offset - big->offset;
+    auto fetch_offset = [&](auto reg) -> uint64_t {
+      if (auto orig = arch->RegisterByName(reg)) {
+        auto big = orig->EnclosingRegister();
+        return orig->offset - big->offset;
+      }
+      return 0ul;
+    };
+
+    for (auto &[reg, bits] : s_reg.translation_map) {
+      auto key = fetch_offset(reg);
+
       for (auto &bstr : bits) {
         out[key].push_back(s_reg.make_bitstring(bstr));
       }
@@ -227,17 +236,46 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
   // of its widest version - e.g. edi needs mask to be extracted from rdi)
   auto MaskCoerceInfo(const shadowinst::Reg &s_reg) {
     std::map<std::tuple<uint64_t, uint64_t>, std::vector<std::string>> out;
-    for (auto &[reg, bits] : s_reg.translation_map) {
-      auto orig = arch->RegisterByName(reg);
-      auto big = orig->EnclosingRegister();
 
-      auto key = std::make_tuple(orig->size, big->size);
+    auto fetch_info = [&](auto reg) -> std::tuple< uint32_t, uint32_t > {
+      if (auto orig = arch->RegisterByName(reg)) {
+        auto big = orig->EnclosingRegister();
+        return std::make_tuple(orig->size, big->size);
+      }
+      // TODO(lukas): Pass in a default? There is no way to get original
+      //              size from things like `NEXT_PC`.
+      return std::make_tuple(8ull, 8ull);
+    };
+
+    for (auto &[reg, bits] : s_reg.translation_map) {
+      auto key = fetch_info(reg);
       for (auto &bstr : bits) {
         out[key].push_back(s_reg.make_bitstring(bstr));
       }
     }
-    CHECK_EQ(out.size(), 1);
+
+    CHECK(!out.empty());
+    // Check with extra dbg message
+    if (out.size() != 1) {
+      // Build dbg message
+      std::stringstream ss;
+      for (auto &[key, _] : out) {
+        auto [x, y] = key;
+        ss << "[ " << std::to_string(x) << " , " << std::to_string(y) << " ]";
+      }
+      LOG(FATAL) << "out.size() != 1\n" << ss.str();
+    }
     return out.begin()->first;
+  }
+
+  std::string input_name(std::string_view name) {
+    if (auto base = arch->RegisterByName(name)) {
+      return base->EnclosingRegister()->name;
+    }
+    if (name == "NEXT_PC") {
+      return std::string(name);
+    }
+    LOG(FATAL) << "Cannot locate input " << name;
   }
 
   // If register does not have a shadow we can procees the same way default lifter
@@ -267,17 +305,15 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     llvm::IRBuilder<> ir(bb);
 
     auto locate_reg = [&](auto &name) {
-      auto base = arch->RegisterByName(name);
-      CHECK(base) << "locate_reg failed for " << name;
-      auto enclosed = base->EnclosingRegister()->name;
-      return this->parent::LoadRegValue(bb, state_ptr, enclosed);
+      return this->parent::LoadRegValue(bb, state_ptr, input_name(name));
     };
 
     auto selected = LiftSReg(bb, ir, s_reg, locate_reg);
 
     auto dst = [&](auto what) -> llvm::Value * {
       if (llvm::isa<llvm::PointerType>(concrete->getType())) {
-        auto dst = intrinsics::make_alloca(ir, llvm::PointerType::getUnqual(what->getType()));
+        auto dst = intrinsics::make_alloca(
+            ir, { state_ptr }, llvm::PointerType::getUnqual(what->getType()));
         dst->setName("DST_" + std::to_string(current_op));
 
         // Add metadata so someone down the line can identify the alloca (and its
@@ -348,10 +384,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     auto zero = llvm::ConstantInt::get(word_type, 0, false);
 
     auto locate_reg = [&](auto &name) {
-      auto base = arch->RegisterByName(name);
-      CHECK(base) << "locate_reg failed for " << name;
-      auto enclosed = base->EnclosingRegister()->name;
-      return this->parent::LoadWordRegValOrZero(block, state_ptr, enclosed, zero);
+      return this->parent::LoadWordRegValOrZero(block, state_ptr, input_name(name), zero);
     };
 
     return LiftSReg(block, ir, s_reg, locate_reg);
@@ -390,14 +423,29 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
 
   llvm::Value *LiftSReg(
       llvm::BasicBlock *block, llvm::Value *state_ptr,
-      const std::optional<shadowinst::Reg> &maybe_s_reg,
-      const remill::Operand &r_op)
+      remill::Operand &r_op,
+      std::tuple<uint32_t, uint32_t> idxs)
   {
     llvm::Value *zero = HideValue(llvm::ConstantInt::get(word_type, 0, false), block, word_size);
-    if (!maybe_s_reg || maybe_s_reg->empty()) {
-      return LoadWordRegValOrZero_(block, state_ptr, r_op.reg.name, zero);
+
+    auto maybe_s_reg = ifuzz::fetch_reg(CurrentShade(), idxs);
+    auto r_reg = ifuzz::fetch_reg(r_op, idxs);
+    CHECK(r_reg);
+
+    if (!maybe_s_reg) {
+      return LoadWordRegValOrZero_(block, state_ptr, (*r_reg)->name, zero);
     }
-    return LiftSReg(block, state_ptr, *maybe_s_reg);
+    if ((*maybe_s_reg)->empty()) {
+      if ((*maybe_s_reg)->translation_map.size() == 0) {
+        return LoadWordRegValOrZero_(block, state_ptr, (*r_reg)->name, zero);
+      }
+      CHECK((*maybe_s_reg)->translation_map.size() == 1);
+      auto &entry = *(*maybe_s_reg)->translation_map.begin();
+      CHECK_EQ(entry.second.size(), 1);
+      CHECK(entry.second.begin()->empty());
+      return LoadWordRegValOrZero_(block, state_ptr, entry.first, zero);
+    }
+    return LiftSReg(block, state_ptr, **maybe_s_reg);
   }
 
   template<typename I>
@@ -443,10 +491,8 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     if (!CurrentShade().address) {
       return concrete;
     }
-    auto &s_base_reg = CurrentShade().address->base_reg;
-    auto base_reg = LiftSReg(block, state_ptr, s_base_reg, r_op);
-    auto index_reg = LiftSReg(block, state_ptr, CurrentShade().address->index_reg, r_op);
-    CHECK(index_reg);
+    auto base_reg = LiftSReg(block, state_ptr, r_op, ifuzz::addr_base_reg());
+    auto index_reg = LiftSReg(block, state_ptr, r_op, ifuzz::addr_index_reg());
 
     auto scale = LiftSImmediate(
         block,
