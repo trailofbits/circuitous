@@ -131,7 +131,7 @@ namespace circ {
       };
 
       auto ir = get_ir(get_ip());
-      args[0] = intrinsics::make_hint(ir, args[0]->getType());
+      args[0] = intrinsics::make_advice(ir, args[0]->getType());
       return intrinsics::make_select(ir, args, std::forward<Ts>(ts)...);
     }
 
@@ -170,7 +170,7 @@ namespace circ {
 
       for (auto &[ctx_, selects] : ctx_to_selects) {
         auto ctx = llvm::dyn_cast<llvm::CallInst>(ctx_);
-        CHECK(ctx);
+        CHECK(ctx) << remill::LLVMThingToString(ctx_);
 
         std::vector<llvm::Value *> ctx_args{ctx->arg_begin(), ctx->arg_end()};
         std::unordered_map<blueprint_t, std::size_t> idxs;
@@ -190,7 +190,7 @@ namespace circ {
           // where N > M)
           auto selector = coerce_selector(ir, selects[i], node);
           selects[i]->replaceAllUsesWith(node);
-          ctx_args.push_back(intrinsics::make_hintcheck(ir, {selector, hint}));
+          ctx_args.push_back(intrinsics::make_advice_constraint(ir, {selector, hint}));
           selects[i]->eraseFromParent();
         }
 
