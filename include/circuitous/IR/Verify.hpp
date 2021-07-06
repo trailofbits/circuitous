@@ -71,6 +71,7 @@ struct Verifier {
       case CountLeadingZeroes::kind:
       case CountTrailingZeroes::kind:
       case Extract::kind:
+      case UnusedConstraint::kind:
         return Exactly(1, op);
       case RegConstraint::kind:
       case PreservedConstraint::kind:
@@ -108,7 +109,7 @@ struct Verifier {
           return Exactly(2, op);
       }
     }
-    LOG(FATAL) << "Cannot verify kind: " << op->op_code;
+    LOG(FATAL) << "Cannot verify kind: " << to_string(op->op_code);
   }
 
   bool Verify(Operation *op) {
