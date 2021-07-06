@@ -161,6 +161,7 @@ namespace circ::run {
     VerifyInstruction *current;
     CtxCollector *collector;
     State state;
+    std::optional<bool> result;
 
     Spawn(Circuit *circuit_, VerifyInstruction *current_,
           CtxCollector *collector_)
@@ -209,95 +210,32 @@ namespace circ::run {
       }
     }
 
+    template<typename T>
+    void init_notify_() {
+      for (auto node : circuit->template Attr<T>()) {
+        if (this->node_values.count(node)) {
+          continue;
+        }
+
+        if (!collector->op_to_ctxs[node].count(current)) {
+          continue;
+        }
+        for (auto user : node->users) {
+          if (constrained_by(node, user)) {
+            state.Notify(user);
+          }
+        }
+      }
+    }
+
+    template<typename ...Ts>
+    void init_notify() {
+      return (init_notify_<Ts>(), ...);
+    }
+
     void init() {
       parent_t::init();
-
-      for (auto hint : circuit->template Attr<Advice>()) {
-        if (this->node_values.count(hint)) {
-          continue;
-        }
-        if (collector->op_to_ctxs[hint].count(current)) {
-          for (auto user : hint->users) {
-            if (user->op_code == AdviceConstraint::kind) {
-              state.Notify(user);
-            }
-          }
-        }
-      }
-
-      for (auto oreg : circuit->template Attr<OutputRegister>()) {
-        if (this->node_values.count(oreg)) {
-          continue;
-        }
-        if (collector->op_to_ctxs[oreg].count(current)) {
-          for (auto user : oreg->users) {
-            state.Notify(user);
-          }
-        }
-      }
-      for (auto oreg : circuit->template Attr<OutputErrorFlag>()) {
-        if (this->node_values.count(oreg)) {
-          continue;
-        }
-        if (collector->op_to_ctxs[oreg].count(current)) {
-          for (auto user : oreg->users) {
-            if (user->op_code == RegConstraint::kind) {
-              state.Notify(user);
-            }
-          }
-        }
-      }
-      for (auto oreg : circuit->template Attr<OutputTimestamp>()) {
-        if (this->node_values.count(oreg)) {
-          continue;
-        }
-        if (collector->op_to_ctxs[oreg].count(current)) {
-          for (auto user : oreg->users) {
-            state.Notify(user);
-          }
-        }
-      }
-      for (auto oreg : circuit->template Attr<Memory>()) {
-        if (this->node_values.count(oreg)) {
-          continue;
-        }
-        if (collector->op_to_ctxs[oreg].count(current)) {
-          for (auto user : oreg->users) {
-            if (is_one_of<ReadConstraint, WriteConstraint>(user)) {
-              state.Notify(user);
-            }
-          }
-        }
-      }
-    }
-
-    std::string op_name(Operation *op) {
-      std::stringstream ss;
-      ss << op->op_code_str() << " " << op->id();
-      return ss.str();
-    }
-
-    std::string ctx_stats() {
-      std::stringstream ss;
-      ss << "Undef:" << std::endl;
-
-      for (auto op : current->operands) {
-        if (!this->has_value(op)) {
-          ss << "\t" << op_name(op);
-        }
-      }
-
-      ss << "Details:" << std::endl;
-      for (auto op : current->operands) {
-        ss << "\t" << op_name(op) << " ";
-        if (!this->has_value(op)) {
-          ss << "{} " << state.blocked[op];
-        } else {
-          ss << this->GetNodeVal(op)->toString(10, false);
-        }
-        ss << std::endl;
-      }
-      return ss.str();
+      init_notify<Advice, OutputRegister, OutputErrorFlag, OutputTimestamp, Memory>();
     }
 
     bool Run() {
@@ -306,11 +244,13 @@ namespace circ::run {
         auto x = state.Pop();
         Dispatch(x);
       }
-      LOG(INFO) << ctx_stats();
-      if (auto res = this->GetNodeVal(current)) {
-        return *res == this->TrueVal();
-      }
-      return false;
+      result = [&](){
+        if (auto res = this->GetNodeVal(current)) {
+          return *res == this->TrueVal();
+        }
+        return false;
+      }();
+      return *result;
     }
   };
 
