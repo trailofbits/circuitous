@@ -13,6 +13,7 @@
 #include <llvm/Support/MemoryBuffer.h>
 #pragma clang diagnostic pop
 
+#include <circuitous/Run/Inspect.hpp>
 #include <circuitous/Run/Interpreter.h>
 #include <circuitous/Run/Trace.hpp>
 
@@ -40,6 +41,8 @@ DEFINE_string(memory, "", "addr,hex_val");
 
 DEFINE_bool(derive, false, "Derive mode");
 DEFINE_bool(verify, false, "Verify mode");
+DEFINE_bool(interactive, false, "Interactive mode");
+DEFINE_string(inspect, "", "Inspect failing test case");
 
 DEFINE_bool(sim, false, "Interactive");
 
@@ -73,6 +76,64 @@ auto load_singular(const std::string &path) -> std::optional<circ::run::trace::E
   return std::make_optional(get_entry(0ul, load_json(path)));
 }
 
+template<typename I>
+void export_derived(I inspect) {
+  // Open output file
+  std::error_code ec;
+  llvm::raw_fd_ostream output(FLAGS_export_derived, ec, llvm::sys::fs::F_Text);
+  CHECK(!ec) << "Error while opening output state JSON file: " << ec.message();
+
+  // Dump output register values to JSON
+  llvm::json::Object output_obj;
+  llvm::json::Object output_regs_obj;
+  llvm::json::Object output_mem_hints;
+
+  auto as_str = [](const auto &what) -> std::string {
+    return std::to_string(what->getLimitedValue());
+  };
+
+  if (inspect.focus()) {
+    for (auto [reg, val] : inspect->template get_derived<circ::OutputRegister>()) {
+      CHECK(val);
+      output_regs_obj[reg->reg_name] = std::to_string(val->getLimitedValue());
+    }
+    for (auto [_, val] : inspect->template get_derived<circ::OutputErrorFlag>()) {
+      output_obj["ebit"] = (val == llvm::APInt(1, 1));
+    }
+    output_obj["timestamp"] = as_str(inspect->get(inspect.circuit->output_timestamp()));
+
+    auto str = [](auto val) {
+      return val.toString(10, false);
+    };
+
+    for (const auto &val : inspect->get_derived_mem()) {
+      llvm::json::Object mem_hint;
+      mem_hint["used"]  = str(val.used);
+      mem_hint["mode"]  = str(val.mode);
+      mem_hint["id"]    = str(val.id);
+      mem_hint["size"]  = str(val.size);
+      mem_hint["addr"]  = str(val.addr);
+      mem_hint["value"] = str(val.value);
+      mem_hint["ts"]    = str(val.timestamp);
+      output_mem_hints[str(val.id)] = std::move(mem_hint);
+    }
+  }
+
+  // Serialize
+  output_obj["regs"] = std::move(output_regs_obj);
+  output_obj["result"] = inspect.g_result();
+  output_obj["mem_hints"] = std::move(output_mem_hints);
+  output << llvm::json::Value(std::move(output_obj));
+
+  if (!inspect.lenses) {
+    inspect.focus(0u);
+  }
+}
+
+void print_dot() {
+
+}
+
 template<typename Runner>
 void run() {
 
@@ -95,62 +156,16 @@ void run() {
     run.set_memory(std::strtoull(addr.data(), nullptr, 16), val.str());
   }
 
-  auto result = run.Run();
+  run.Run();
 
   if (!FLAGS_export_derived.empty()) {
-        // Open output file
-    std::error_code ec;
-    llvm::raw_fd_ostream output(FLAGS_export_derived, ec, llvm::sys::fs::F_Text);
-    CHECK(!ec) << "Error while opening output state JSON file: " << ec.message();
-    // Dump output register values to JSON
-
-    llvm::json::Object output_obj;
-    llvm::json::Object output_regs_obj;
-    llvm::json::Object output_mem_hints;
-
-    auto as_str = [](const auto &what) -> std::string {
-      return std::to_string(what->getLimitedValue());
-    };
-
-    if (run.acceptor) {
-      for (auto [reg, val] : run.acceptor->template get_derived<circ::OutputRegister>()) {
-        CHECK(val);
-        output_regs_obj[reg->reg_name] = std::to_string(val->getLimitedValue());
-      }
-      for (auto [_, val] : run.acceptor->template get_derived<circ::OutputErrorFlag>()) {
-        output_obj["ebit"] = (val == llvm::APInt(1, 1));
-      }
-      output_obj["timestamp"] = as_str(run.acceptor->get(circuit->output_timestamp()));
-
-      auto str = [](auto val) {
-        return val.toString(10, false);
-      };
-
-      for (const auto &val : run.acceptor->get_derived_mem()) {
-        llvm::json::Object mem_hint;
-        mem_hint["used"]  = str(val.used);
-        mem_hint["mode"]  = str(val.mode);
-        mem_hint["id"]    = str(val.id);
-        mem_hint["size"]  = str(val.size);
-        mem_hint["addr"]  = str(val.addr);
-        mem_hint["value"] = str(val.value);
-        mem_hint["ts"]    = str(val.timestamp);
-        output_mem_hints[str(val.id)] = std::move(mem_hint);
-      }
-    }
-
-    // Serialize
-    output_obj["regs"] = std::move(output_regs_obj);
-    output_obj["result"] = result;
-    output_obj["mem_hints"] = std::move(output_mem_hints);
-    output << llvm::json::Value(std::move(output_obj));
+    export_derived(circ::run::Inspector<Runner>(&run));
   }
 
-  //store_old_trace(FLAGS_json_out, run.get_output_state(), result);
   if (!FLAGS_dot_out.empty() && run.acceptor) {
     std::unordered_map<circ::Operation *, std::string> values;
     for (auto &[op, val] : run.values()) {
-      values[op] = val.toString(16, false);
+      values[op] = (val) ? val->toString(16, false) : std::string("{ undef }");
     }
     std::ofstream os(FLAGS_dot_out);
     circ::PrintDOT(os, circuit.get(), values);
