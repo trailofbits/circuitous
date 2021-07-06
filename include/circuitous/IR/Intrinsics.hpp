@@ -294,7 +294,7 @@ namespace impl {
 
     static llvm::Function *CreateFn(llvm::Module *module, llvm::Type *type) {
       llvm::IRBuilder<> ir(module->getContext());
-      auto fn_t = llvm::FunctionType::get(type, {}, false);
+      auto fn_t = llvm::FunctionType::get(type, {}, true);
       auto callee = module->getOrInsertFunction(Name(type), fn_t);
       return Parent::freeze(llvm::cast<llvm::Function>(callee.getCallee()));
     }
@@ -710,9 +710,9 @@ auto make_raw_ib_extract(llvm::IRBuilder<> &ir, Args &&...args) {
   return impl::implement_call<ExtractRaw>(ir, {}, std::forward<Args>(args)...);
 }
 
-template<typename ...Args>
-auto make_alloca(llvm::IRBuilder<> &ir, Args &&...args) {
-  return impl::implement_call<AllocateDst>(ir, {}, std::forward<Args>(args)...);
+template<typename C = std::vector<llvm::Value *>, typename ...Args>
+auto make_alloca(llvm::IRBuilder<> &ir, const C &c_args, Args &&...args) {
+  return impl::implement_call<AllocateDst>(ir, c_args, std::forward<Args>(args)...);
 }
 
 template<typename C = std::vector<llvm::Value *>, typename ...Args>
