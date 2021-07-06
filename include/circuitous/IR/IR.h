@@ -35,7 +35,7 @@ struct Operation : public Node<Operation> {
   virtual ~Operation() = default;
 
   virtual std::string Name() const;
-  virtual std::string op_code_str() const { LOG(FATAL) << "Not implemented"; }
+  static std::string op_code_str() { LOG(FATAL) << "Not implemented"; }
   virtual bool Equals(const Operation *that) const;
 
   auto &operator[](std::size_t idx) { return operands[idx]; }
@@ -135,7 +135,7 @@ template< template< typename > class T >
 struct Input : T< meta_fragment< 0 > > {
   using parent_t = T< meta_fragment< 0 > >;
   using parent_t::parent_t;
-  std::string op_code_str() const override { return "in." + parent_t::op_code_str(); }
+  static std::string op_code_str() { return "in." + parent_t::op_code_str(); }
   std::string Name() const override { return "In." + parent_t::Name(); }
 };
 
@@ -143,7 +143,7 @@ template< template< typename > class T >
 struct Output : T< meta_fragment< 1 > > {
   using parent_t = T< meta_fragment< 1 > >;
   using parent_t::parent_t;
-  std::string op_code_str() const override { return "out." + parent_t::op_code_str(); }
+  static std::string op_code_str() { return "out." + parent_t::op_code_str(); }
   std::string Name() const override { return "Out." + parent_t::Name(); }
 };
 
@@ -158,7 +158,7 @@ struct Register : Operation, make_kind< LeafValue, tag_fragment< 3 >, meta_fragm
       : Operation(size_, kind), reg_name(rn_)
   {}
 
-  std::string op_code_str() const override { return "register"; }
+  static std::string op_code_str() { return "register"; }
   std::string Name() const override { return "register." + reg_name; }
   bool Equals(const Operation *other) const override { LOG(FATAL) << "TODO"; }
 
@@ -175,7 +175,7 @@ struct ErrorFlag : Operation, make_kind< LeafValue, tag_fragment< 4 >, meta_frag
 
   ErrorFlag(uint32_t size_ = 1u) : Operation(size_, kind) {}
 
-  std::string op_code_str() const override { return "error_flag"; }
+  static std::string op_code_str() { return "error_flag"; }
   std::string Name() const override { return "error_flag"; }
 };
 
@@ -189,7 +189,7 @@ struct Timestamp : Operation, make_kind< LeafValue, tag_fragment< 7 >, meta_frag
 
   Timestamp(uint32_t size_ = 64u) : Operation(size_, kind) {}
 
-  std::string op_code_str() const override { return "timestamp"; }
+  static std::string op_code_str() { return "timestamp"; }
   std::string Name() const override { return "timestamp"; }
 };
 
@@ -201,7 +201,7 @@ struct Undefined final : Operation, make_kind< LeafValue, tag_fragment< 2 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
 
   explicit Undefined(unsigned size_) : Operation(size_, kind) {}
-  std::string op_code_str() const override { return "undefined"; }
+  static std::string op_code_str() { return "undefined"; }
   std::string Name() const override { return "undefined"; }
 };
 
@@ -210,7 +210,7 @@ struct Memory : Operation, make_kind< LeafValue, tag_fragment< 8 > > {
   static constexpr uint32_t default_size = 208;
 
   explicit Memory(uint32_t mem_idx_) : Operation(default_size, kind), mem_idx(mem_idx_) {}
-  std::string op_code_str() const override { return "memory"; }
+  static std::string op_code_str() { return "memory"; }
   std::string Name() const override { return "memory"; }
 
   uint32_t mem_idx = 0;
@@ -225,7 +225,7 @@ struct Constant final : Operation, make_kind< LeafValue, tag_fragment< 1 > > {
   {}
 
   bool Equals(const Operation *that) const override;
-  std::string op_code_str() const override { return "constant"; }
+  static std::string op_code_str() { return "constant"; }
   std::string Name() const override;
 
   // Value of this constant. The least significant bit is stored in `bits[0]`,
@@ -238,7 +238,7 @@ struct Advice final : Operation, make_kind< LeafValue, tag_fragment< 5 > > {
 
   inline explicit Advice(unsigned size_) : Operation(size_, kind) {}
 
-  std::string op_code_str() const override { return "hint"; }
+  static std::string op_code_str() { return "hint"; }
   std::string Name() const override { return "hint"; }
 };
 
@@ -247,7 +247,7 @@ struct InputInstructionBits : Operation, make_kind< LeafValue, tag_fragment< 6 >
   static constexpr uint32_t kind = apply(Operation::kind);
   explicit InputInstructionBits(unsigned size_) : Operation(size_, kind) {}
 
-  std::string op_code_str() const override { return "instruction_bits"; }
+  static std::string op_code_str() { return "instruction_bits"; }
   std::string Name() const override { return "instruction_bits"; }
 };
 
@@ -298,7 +298,7 @@ struct MemoryConstraint : Operation {
 struct RegConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 0 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   RegConstraint() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "register_constraint"; }
+  static std::string op_code_str() { return "register_constraint"; }
   std::string Name() const override { return "register_constraint." + EnforceCtx::suffix_(); }
 };
 
@@ -307,7 +307,7 @@ struct RegConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 0 
 struct AdviceConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 1 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   AdviceConstraint() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "advice_constraint"; }
+  static std::string op_code_str() { return "advice_constraint"; }
   std::string Name() const override { return "advice_constraint." + EnforceCtx::suffix_(); }
 };
 
@@ -315,7 +315,7 @@ struct AdviceConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment<
 struct PreservedConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 2 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   PreservedConstraint() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "preserved_constraint"; }
+  static std::string op_code_str() { return "preserved_constraint"; }
   std::string Name() const override { return "preserved_constraint." + EnforceCtx::suffix_(); }
 };
 
@@ -323,21 +323,21 @@ struct PreservedConstraint final : EnforceCtx, make_kind< Constraint, tag_fragme
 struct CopyConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 3 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   CopyConstraint() : EnforceCtx(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "copy_constraint"; }
+  static std::string op_code_str() { return "copy_constraint"; }
   std::string Name() const override { return "copy_constraint." + EnforceCtx::suffix_(); }
 };
 
 struct WriteConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 4 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   WriteConstraint() : MemoryConstraint(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "write_constraint"; }
+  static std::string op_code_str() { return "write_constraint"; }
   std::string Name() const override { return "write_constraint"; }
 };
 
 struct ReadConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 5 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   ReadConstraint() : MemoryConstraint(this->bool_size, kind) {}
-  std::string op_code_str() const override { return "read_constraint"; }
+  static std::string op_code_str() { return "read_constraint"; }
   std::string Name() const override { return "read_constraint"; }
 };
 
@@ -361,7 +361,7 @@ static inline bool constrained_by(Operation *v, Operation *c) {
 struct cls final : Operation, make_kind< Computational, tag_fragment< idx > > { \
   static constexpr uint32_t kind = apply(Operation::kind); \
   cls(unsigned size_) : Operation(size_, kind) {} \
-  std::string op_code_str() const override { return #cls; } \
+  static std::string op_code_str() { return #cls; } \
   std::string Name() const override { return #cls; } \
 };
 
@@ -412,7 +412,7 @@ using llvm_ops_t = tl::TL<
 struct InputImmediate : Operation, make_kind< HiddenValue, tag_fragment< 0 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
 
-  std::string op_code_str() const override { return "input_immediate"; }
+  static std::string op_code_str() { return "input_immediate"; }
   std::string Name() const override { return "input_immediate"; }
   bool Equals(const Operation *that) const override;
 
@@ -424,7 +424,7 @@ struct InputImmediate : Operation, make_kind< HiddenValue, tag_fragment< 0 > > {
 struct Extract final : Operation, make_kind< BitManip, tag_fragment< 0 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
 
-  std::string op_code_str() const override { return "extract"; }
+  static std::string op_code_str() { return "extract"; }
   std::string Name() const override {
     std::stringstream ss;
     ss << "extract." << high_bit_exc << "." << low_bit_inc;
@@ -446,7 +446,7 @@ struct Extract final : Operation, make_kind< BitManip, tag_fragment< 0 > > {
 struct Concat final : Operation, make_kind< BitManip, tag_fragment< 1 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   Concat(uint32_t size_) : Operation(size_, kind) {}
-  std::string op_code_str() const override { return "concat"; }
+  static std::string op_code_str() { return "concat"; }
   std::string Name() const override { return "concat"; }
 };
 
@@ -455,28 +455,28 @@ struct Concat final : Operation, make_kind< BitManip, tag_fragment< 1 > > {
 struct PopulationCount final : Operation, make_kind< BitOp, tag_fragment< 0 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   explicit PopulationCount(unsigned size_) : Operation(size_, kind) {}
-  std::string op_code_str() const override { return "pop_count"; }
+  static std::string op_code_str() { return "pop_count"; }
   std::string Name() const override { return "pop_count"; }
 };
 
 struct CountLeadingZeroes final : Operation, make_kind< BitOp, tag_fragment< 1 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   explicit CountLeadingZeroes(unsigned size_) : Operation(size_, kind) {}
-  std::string op_code_str() const override { return "count_lead_zeroes"; }
+  static std::string op_code_str() { return "count_lead_zeroes"; }
   std::string Name() const override { return "count_lead_zeroes"; }
 };
 
 struct CountTrailingZeroes final : Operation, make_kind< BitOp, tag_fragment< 2 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   explicit CountTrailingZeroes(unsigned size_) : Operation(size_, kind) {}
-  std::string op_code_str() const override { return "count_trailing_zeroes"; }
+  static std::string op_code_str() { return "count_trailing_zeroes"; }
   std::string Name() const override { return "count_trailing_zeroes"; }
 };
 
 struct Not final : Operation, make_kind< BitOp, tag_fragment< 3 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   explicit Not(unsigned size_) : Operation(size_, kind) {}
-  std::string op_code_str() const override { return "not"; }
+  static std::string op_code_str() { return "not"; }
   std::string Name() const override { return "not"; }
 };
 
@@ -484,7 +484,7 @@ struct Parity final : Operation, make_kind< BitOp, tag_fragment< 4 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
   explicit Parity() : Operation(1, kind) {}
 
-  std::string op_code_str() const override { return "parity"; }
+  static std::string op_code_str() { return "parity"; }
   std::string Name() const override { return "parity"; }
 };
 
@@ -496,7 +496,7 @@ struct Select : Operation, make_kind< Uncat, tag_fragment< 0 > > {
   explicit Select(uint32_t bits_, uint32_t size_)
       : Operation(size_, kind), bits(bits_)
   {}
-  std::string op_code_str() const override { return "select"; }
+  static std::string op_code_str() { return "select"; }
   std::string Name() const override {
     std::stringstream ss;
     ss << "select." << bits;
@@ -512,7 +512,7 @@ struct Select : Operation, make_kind< Uncat, tag_fragment< 0 > > {
 struct cls final : Operation, make_kind< BoolOp, tag_fragment< idx > > { \
   static constexpr uint32_t kind = apply(Operation::kind); \
   cls() : Operation(this->bool_size, kind) {} \
-  std::string op_code_str() const override { return #cls; } \
+  static std::string op_code_str() { return #cls; } \
   std::string Name() const override { return #cls; } \
 };
 
