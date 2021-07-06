@@ -97,4 +97,15 @@ namespace circ {
     return llvm::UndefValue::get(val->getType()) == val;
   }
 
+  static inline auto extend(llvm::CallInst *call, std::vector<llvm::Value *> args) {
+    llvm::IRBuilder<> ir(call);
+    args.insert(args.begin(), call->data_operands_begin(), call->data_operands_end());
+    auto callee = call->getCalledFunction();
+
+    auto new_call = ir.CreateCall(callee, args);
+    call->replaceAllUsesWith(new_call);
+    call->eraseFromParent();
+    return new_call;
+  }
+
 } // namespace circ
