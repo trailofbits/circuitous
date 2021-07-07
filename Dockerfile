@@ -50,12 +50,18 @@ ARG ARCH
 ARG LLVM_VERSION
 ARG LIBRARIES
 
-RUN apt-get update && \
-    apt-get install -qqy xz-utils python3.8-venv make rpm && \
-    rm -rf /var/lib/apt/lists/*
-
 # Build dependencies
 WORKDIR /dependencies
+
+RUN apt-get update && \
+    apt-get install -y software-properties-common
+RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
+RUN add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-12 main"
+
+RUN apt-get update && \
+    apt-get install -y clang-12 libstdc++-10-dev && \
+    apt-get install -qqy xz-utils python3.8-venv make rpm && \
+    rm -rf /var/lib/apt/lists/*
 
 # cxx-common
 ADD https://github.com/trailofbits/cxx-common/releases/latest/download/vcpkg_ubuntu-${UBUNTU_VERSION}_llvm-${LLVM_VERSION}_${ARCH}.tar.xz vcpkg_ubuntu-${UBUNTU_VERSION}_llvm-${LLVM_VERSION}_${ARCH}.tar.xz
@@ -88,6 +94,8 @@ COPY . ./
 # Source venv, build circuitous, Install binaries & system packages
 RUN source ${VIRTUAL_ENV}/bin/activate && \
     cmake -G Ninja -B build -S . \
+        -DCMAKE_C_COMPILER=clang-12 \
+        -DCMAKE_CXX_COMPILER=clang++-12 \
         -Dremill_DIR:PATH=/usr/local/lib/cmake/remill \
         -DCMAKE_INSTALL_PREFIX:PATH="${LIBRARIES}" \
         -DCMAKE_VERBOSE_MAKEFILE=True \
