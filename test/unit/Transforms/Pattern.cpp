@@ -105,4 +105,11 @@ namespace circ::eqsat {
     }
   }
 
+  TEST_CASE("Union") {
+    auto parser = pattern_parser();
+    CHECK(parser("(union $A)"));
+    CHECK(parser("(union $A $B)"));
+    CHECK(parser("(union $A $B $C $D)"));
+  }
+
 } // namespace circ::eqsat
