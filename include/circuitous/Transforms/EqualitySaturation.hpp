@@ -90,8 +90,15 @@ namespace circ::eqsat {
   template< typename Graph >
   using EClassMatch = std::pair< typename Graph::Id, Substitutions< Graph > >;
 
+  using MatchLabel = std::variant< std::monostate, std::string_view >;
+
+  static inline constexpr MatchLabel anonymous_label = std::monostate{};
+
   template< typename Graph >
-  using Matches = std::vector< EClassMatch< Graph > >;
+  using MatchedClasses = std::vector< EClassMatch< Graph > >;
+
+  template< typename Graph >
+  using Matches = std::unordered_map< MatchLabel, MatchedClasses< Graph > >;
 
   template< typename Graph >
   struct EGraphMatcher
@@ -258,19 +265,43 @@ namespace circ::eqsat {
   struct Matcher
   {
     using Matches = Matches< Graph >;
+    using MatchedClasses = MatchedClasses< Graph >;
 
     Matcher(const pattern_with_places &pat) : _pattern(pat) {}
 
     Matches match(const Graph &egraph) const
     {
+      const auto &e = _pattern.expr.get();
+      if (auto m = std::get_if<match_expr>(&e)) {
+        return multimatch(egraph, *m);
+      }
+
+      return {{anonymous_label, match(egraph, _pattern)}};
+    }
+
+    MatchedClasses match(const Graph &egraph, const pattern_with_places &pat) const
+    {
+      MatchedClasses matches;
       // TODO(Heno): add operation caching to egraph
-      Matches matches;
       for (const auto &[id, eclass] : egraph.classes()) {
-        EGraphMatcher matcher(egraph, _pattern);
+        EGraphMatcher matcher(egraph, pat);
 
         // pattern matches with a root in the eclass
         if (auto substitutions = matcher.match(eclass))
           matches.emplace_back( id, std::move(substitutions.value()) );
+      }
+      return matches;
+    }
+
+    Matches multimatch(const Graph &egraph, const match_expr &e) const
+    {
+      const auto &subexprs = _pattern.subexprs();
+
+      Matches matches;
+      for (const auto &label : e.labels)
+      {
+        auto subpattern = pattern_with_places(subexprs.at(label.ref()), subexprs);
+        matches[label.ref()] = match(egraph, subpattern);
       }
 
       return matches;
@@ -284,16 +315,27 @@ namespace circ::eqsat {
   struct Applier
   {
     using Matches = Matches< Graph >;
+    using MatchedClasses = MatchedClasses< Graph >;
     using EClassMatch = EClassMatch< Graph >;
 
     Applier(const pattern_with_places &pat, Builder builder)
       : _pattern(pat), _builder(builder)
     {}
 
+    void apply_single_pattern(Graph &egraph, const MatchedClasses &classes) const
+    {
+      for (const auto &match : classes) {
+        apply_on(egraph, match);
+      }
+    }
+
     void apply_on_matches(Graph &egraph, const Matches &matches) const
     {
-      for (const auto &match : matches) {
-        apply_on(egraph, match);
+      if (matches.count(anonymous_label)) {
+        CHECK(matches.size() == 1);
+        apply_single_pattern(egraph, matches.at(anonymous_label));
+      } else {
+        // TODO(Heno): combine matches
       }
     }
 
