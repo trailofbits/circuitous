@@ -275,13 +275,14 @@ namespace circ::eqsat {
           [&] (const auto &)     -> places_t { return {}; }
         }, a);
       },
-      [&] (const std::vector< expr > &vec) -> places_t {
+      [&] (const expr_list &vec) -> places_t {
         places_t res;
         for (const auto &v : vec)
           res.merge(places(v, subexprs));
         return res;
-      }
-    }, e);
+      },
+      [] (const auto&) -> places_t { throw "unsupported expression type"; }
+    }, e.get());
   }
 
   inline places_t places(const pattern &pat)
