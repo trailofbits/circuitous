@@ -50,7 +50,7 @@ pop = {
   .case(run_bytes = intel(["pop rbp"]), R = True)
   .case(run_bytes = intel(["pop r9"]), R = False),
 
-  ModelTest("pop [rsp]").tags({"pop", "min", "mem"})
+  ModelTest("pop [rsp]").tags({"pop", "min", "mem", "todo"})
   .bytes(intel(["pop QWORD PTR [rsp]"]))
   .DI(S(0x20000).RSP(0x3000).RIP(0x1000).RAX(0x5000)
                  .rwmem(0x3000, "0040" + 6 * "00")
@@ -71,7 +71,7 @@ pop = {
   # `pop [rsp]` uses different semantic function than other `pop [gpr]``
   .case(run_bytes = intel(["pop QWORD PTR [rbx]"]), R=False),
 
-  ModelTest("pop [rsp - 0x20]").tags({"pop", "min", "mem"})
+  ModelTest("pop [rsp - 0x20]").tags({"pop", "min", "mem", "todo"})
   .bytes(intel(["pop QWORD PTR [rsp - 0x20]"]))
   .DI(S(0x20000).RSP(0x3000).RIP(0x1000)
                  .rwmem(0x2ff8, "00" * 8)
@@ -82,7 +82,7 @@ pop = {
 
 
 pop_corners = {
-  Test("pop rsp").tags({"min", "pop", "mem"})
+  Test("pop rsp").tags({"min", "pop", "mem", "todo"})
   .bytes(intel(["pop rsp"]))
   .DI(S(0x23000).RSP(0x3000).RIP(0x1000)
                 .rwmem(0x3000, "0040" + 6 * "00")
@@ -91,7 +91,7 @@ pop_corners = {
         DE = MS().RSP(0x4008).RIP(0x1001).ts(1).mem_hint(MemHint.read(0x3000, 0x4000, 8)),
         R=True),
 
-  ModelTest("pop rsp microx").tags({"min", "pop", "mem"})
+  ModelTest("pop rsp microx").tags({"min", "pop", "mem", "todo"})
   .bytes(intel(["pop rsp"]))
   .DI(S(0x23000).RSP(0x3000).RIP(0x1000)
                 .rwmem(0x3000, "0040" + 6 * "00")
