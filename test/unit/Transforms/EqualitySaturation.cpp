@@ -17,12 +17,19 @@
 
 namespace circ::eqsat {
 
-  unsigned count_matches(auto matches) {
+  unsigned count_matches(const MatchedClasses< TestGraph > &matches) {
     auto eclass_match_count = [] (unsigned sum, auto &eclass_match) {
       const auto &[id, matches] = eclass_match;
       return sum + matches.size();
     };
     return std::accumulate(matches.begin(), matches.end(), unsigned(0), eclass_match_count);
+  }
+
+  unsigned count_matches(const Matches< TestGraph > &matches) {
+    if (matches.count(anonymous_label)) {
+      return count_matches(matches.at(anonymous_label));
+    }
+    return 0;
   }
 
   using TestRule = Rule< TestGraph >;
@@ -82,7 +89,9 @@ namespace circ::eqsat {
       egraph.merge(a1, a2);
       egraph.rebuild();
 
-      CHECK(count_matches(rule.match(egraph)) == 2);
+      auto matches = rule.match(egraph);
+      auto c = count_matches(matches);
+      CHECK(c == 2);
     }
 
     TEST_CASE("Multilayer")
@@ -250,6 +259,27 @@ namespace circ::eqsat {
       CHECK(additions.nodes[1]->children[1] == x);
     }
 
+    TEST_CASE("Multi-match Rewrite")
+    {
+      TestGraph egraph;
+      TestGraphBuilder builder(&egraph);
+
+      auto x = egraph.make_leaf("x");
+      egraph.make_node("add", {x, x});
+
+      auto con = egraph.make_leaf("2");
+      egraph.make_node("mul", {x, con});
+
+      //egraph.make_node("xor", {mul, add});
+
+      auto rule = TestRule("mul-add-equality", "((let A (op_add ?x ?x)) (let B (op_mul ?x 2)) (match $A $B))", "(union $A $B)");
+      auto matches = rule.match(egraph);
+
+      CHECK(matches.size() == 2);
+      CHECK(count_matches(matches["A"])== 1);
+      CHECK(count_matches(matches["B"])== 1);
+    }
+
     TEST_CASE("Named Subexpressions in Rewrite")
     {
       TestGraph egraph;
@@ -273,6 +303,7 @@ namespace circ::eqsat {
       CHECK(additions.nodes[1]->children[0] == y);
       CHECK(additions.nodes[1]->children[1] == x);
     }
+
   }
 
 } // namespace circ::eqsat
