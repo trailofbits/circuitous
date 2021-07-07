@@ -64,7 +64,15 @@ namespace circ::eqsat {
     return os;
   }
 
-  struct expr : std::variant< atom, std::vector< expr > >
+  // expression of form: (match [labels])
+  // serves to match multiple labeled expressions
+  struct match_expr { std::vector<label> labels; };
+
+  // expression of form: (union [labels])
+  // serves to unify matched labels on the right hand side of the rule
+  struct union_expr { std::vector<label> labels; };
+
+  struct expr : std::variant< atom, std::vector< expr >, match_expr, union_expr >
   {
     using variant::variant;
 
@@ -216,11 +224,41 @@ namespace circ::eqsat {
     return from_tuple< named_expr >( parenthesized( name_p & expr_p ) );
   }
 
+  static inline parser<std::vector<label>> auto labels_parser()
+  {
+    // TODO(Heno): get rid of copy
+    auto push = [] (std::vector<label> labels, label l) {
+      labels.push_back(l);
+      return labels;
+    };
+
+    return separated(label_parser(), skip(isspace), std::vector<label>(), push);
+  }
+
+  // TODO(Heno): constexpr
+  // match expression has form: (match [labels])
+  static inline parser<match_expr> auto match_expr_parser()
+  {
+    auto prefix = (string_parser("match") & skip(isspace));
+    return construct< match_expr >(parenthesized(prefix < labels_parser()));
+  }
+
+  // TODO(Heno): constexpr
+  // match expression has form: (union [labels])
+  static inline parser<union_expr> auto union_expr_parser()
+  {
+    auto prefix = (string_parser("union") & skip(isspace));
+    return construct< union_expr >(parenthesized(prefix < labels_parser()));
+  }
+
   atom root(const auto& e)
   {
     return std::visit( overloaded {
       [] (const atom &a) -> atom { return a; },
-      [] (const expr_list &vec) -> atom { return std::get<atom>(vec.front()); }
+      [] (const expr_list &vec) -> atom { return std::get<atom>(vec.front()); },
+      [] (const auto&) -> atom {
+        throw "unsupported expression type";
+      }
     }, e.get());
   }
 
@@ -230,6 +268,9 @@ namespace circ::eqsat {
       [] (const atom &a) -> expr_list { return {}; },
       [] (const expr_list &vec) -> expr_list {
         return { std::next(vec.begin()), vec.end() };
+      },
+      [] (const auto&) -> expr_list {
+        throw "unsupported expression type";
       }
     }, e.get());
   }
@@ -250,8 +291,14 @@ namespace circ::eqsat {
     return
       // pattern is either expression
       construct< pattern >( expr_parser() ) |
-      // or list of named expressions and final anonymous expression that we are matching against
-      from_tuple< pattern >( parenthesized(subexpr_parser & expr_parser()) );
+      // or list of named expressions and final anonymous expression
+      // that we are matching against
+      from_tuple< pattern >( parenthesized(subexpr_parser & expr_parser()) ) |
+      // or list of named expressions and final match expression
+      // that allows to specify multi-pattern rules
+      from_tuple< pattern >( parenthesized(subexpr_parser & match_expr_parser()) ) |
+      // or union expression that allows to specify unification of matched rules
+      construct< pattern >( union_expr_parser() );
   }
 
   // TODO(Heno): constexpr
@@ -267,6 +314,13 @@ namespace circ::eqsat {
   using places_t = std::unordered_set<place>;
   inline places_t places(const expr &e, const auto &subexprs)
   {
+    auto foreach_places = [&] (const auto &vec) {
+        places_t res;
+        for (const auto &v : vec)
+          res.merge(places(v, subexprs));
+        return res;
+    };
+
     return std::visit( overloaded {
       [&] (const atom &a) -> places_t {
         return std::visit( overloaded {
@@ -275,12 +329,9 @@ namespace circ::eqsat {
           [&] (const auto &)     -> places_t { return {}; }
         }, a);
       },
-      [&] (const expr_list &vec) -> places_t {
-        places_t res;
-        for (const auto &v : vec)
-          res.merge(places(v, subexprs));
-        return res;
-      },
+      [&] (const expr_list &list) -> places_t { return foreach_places(list); },
+      [&] (const match_expr &e)   -> places_t { return foreach_places(e.labels); },
+      [&] (const union_expr &e)   -> places_t { return foreach_places(e.labels); },
       [] (const auto&) -> places_t { throw "unsupported expression type"; }
     }, e.get());
   }
@@ -295,13 +346,13 @@ namespace circ::eqsat {
     using places_map = std::unordered_map< eqsat::place, unsigned >;
     explicit pattern_with_places(const pattern &pat)
       : expr(pat)
-    {
-      unsigned id = 0;
-      for (const auto &plc : eqsat::places(pat))
-        places[plc] = id++;
-    }
+    { setup_places(); }
 
-    explicit pattern_with_places(const pattern &pat, const places_map &map)
+    pattern_with_places(const expr &e, const auto &subexprs)
+      : expr(subexprs, e)
+    { setup_places(); }
+
+    pattern_with_places(const pattern &pat, const places_map &map)
       : expr(pat), places(map)
     {}
 
@@ -310,16 +361,25 @@ namespace circ::eqsat {
 
     pattern expr;
     places_map places;
+
+    private:
+
+      void setup_places()
+      {
+        unsigned id = 0;
+        for (const auto &plc : eqsat::places(expr))
+          places[plc] = id++;
+      }
   };
 
   template< typename stream >
-  auto operator<<(stream &os, const pattern_with_places&pat) -> decltype(os << "")
+  auto operator<<(stream &os, const pattern_with_places &pat) -> decltype(os << "")
   {
     return os << pat.expr;
   }
 
   template< typename stream >
-  auto operator<<(stream &os, const pattern&pat) -> decltype(os << "")
+  auto operator<<(stream &os, const pattern &pat) -> decltype(os << "")
   {
     os << '(' << root(pat);
     for (const auto &ch : children(pat))
