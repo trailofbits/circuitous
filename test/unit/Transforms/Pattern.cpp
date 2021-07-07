@@ -91,4 +91,18 @@ namespace circ::eqsat {
     }
   }
 
+  TEST_CASE("Multi-match") {
+
+    CHECK(match_expr_parser()("(match $A)"));
+    CHECK(match_expr_parser()("(match $A $B)"));
+    CHECK(match_expr_parser()("(match $A $B $C $D)"));
+
+    auto parser = pattern_parser();
+
+    {
+      auto p = parser("((let A (op_add ?x ?y)) (let B (op_add ?x ?y)) (match $A $B))");
+      CHECK(p);
+    }
+  }
+
 } // namespace circ::eqsat
