@@ -327,7 +327,7 @@ namespace circ::parser
   template< typename T, typename P >
   constexpr parser<T> auto construct(P &&p)
   {
-    return fmap( [] (auto &&arg) { return T(std::forward<decltype(arg)>(arg)); }, std::forward<P>(p) );
+    return fmap([] (auto &&arg) { return T{std::forward<decltype(arg)>(arg)}; }, std::forward<P>(p) );
   }
 
   namespace detail
