@@ -7,10 +7,15 @@
 #include <cstdint>
 #include <vector>
 
+#include <circuitous/Util/StrongType.hpp>
+
 namespace circ {
 
   struct UnionFind {
-    using Id = std::uint64_t;
+
+    struct id_tag;
+    using Id = strong_type< std::size_t, id_tag >;
+
 
     inline Id make_set() noexcept
     {
@@ -20,14 +25,14 @@ namespace circ {
 
     [[nodiscard]] inline Id& parent(Id id) noexcept
     {
-      CHECK( _parents.size() > id );
-      return _parents[id];
+      CHECK( _parents.size() > id.ref() );
+      return _parents[id.ref()];
     }
 
     [[nodiscard]] inline Id parent(Id id) const noexcept
     {
-      CHECK( _parents.size() > id );
-      return _parents[id];
+      CHECK( _parents.size() > id.ref() );
+      return _parents[id.ref()];
     }
 
     // Obtains a root 'id' for given node, but does not
