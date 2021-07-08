@@ -343,40 +343,6 @@ namespace circ::eqsat {
 
   struct pattern_with_places
   {
-    using places_map = std::unordered_map< eqsat::place, unsigned >;
-    explicit pattern_with_places(const pattern &pat)
-      : expr(pat)
-    { setup_places(); }
-
-    pattern_with_places(const expr &e, const auto &subexprs)
-      : expr(subexprs, e)
-    { setup_places(); }
-
-    pattern_with_places(const pattern &pat, const places_map &map)
-      : expr(pat), places(map)
-    {}
-
-    const auto &subexpr(const auto &label) const { return expr.subexprs.at(label); }
-    const auto &subexprs() const { return expr.subexprs; }
-
-    pattern expr;
-    places_map places;
-
-    private:
-
-      void setup_places()
-      {
-        unsigned id = 0;
-        for (const auto &plc : eqsat::places(expr))
-          places[plc] = id++;
-      }
-  };
-
-  template< typename stream >
-  auto operator<<(stream &os, const pattern_with_places &pat) -> decltype(os << "")
-  {
-    return os << pat.expr;
-  }
 
   template< typename stream >
   auto operator<<(stream &os, const pattern &pat) -> decltype(os << "")

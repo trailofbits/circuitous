@@ -72,10 +72,10 @@ namespace circ {
 
     TestGraphBuilder(TestGraph *graph) : _graph(graph) {}
 
-    Id synthesize(const eqsat::pattern_with_places &pat, const auto &substitutions) const
+    Id synthesize(const eqsat::pattern &pat, const auto &places, const auto &substitutions) const
     {
-      CHECK(substitutions.size() == pat.places.size());
-      return synthesize(pat.expr, substitutions, pat.places, pat.subexprs());
+      CHECK(substitutions.size() == places.size());
+      return synthesize(pat, substitutions, places, pat.subexprs);
     }
 
     Id synthesize(const eqsat::expr &e, const auto &substitutions,
