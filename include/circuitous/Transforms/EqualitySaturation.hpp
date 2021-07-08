@@ -21,41 +21,34 @@
 #include <string_view>
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/ADT/UnionFind.hpp>
 #include <circuitous/Transforms/Pattern.hpp>
 
 namespace circ::eqsat {
 
+  using Id = UnionFind::Id;
   // substitution mapping from places (variables) to equality classes
-  template< typename Graph >
   struct Substitution
   {
-    using Id = typename Graph::Id;
-
     using value_type = std::pair< Id, bool >;
+    using index = std::size_t;
 
-    Substitution(size_t size) : _mapping(size, 0) , _matched(size, false) {}
-
-    bool test(size_t idx) const
+    Substitution(std::size_t size) : _mapping(size, Id(0)) , _matched(size, false) {}
+    Substitution(std::size_t size, index idx, Id id)
+      : Substitution(size)
     {
-      return _matched[idx];
+      set(idx, id);
     }
 
-    void set(size_t idx, Id id)
+    bool test(index idx) const { return _matched[idx]; }
+
+    void set(index idx, Id id)
     {
       _matched[idx] = true;
       _mapping[idx] = id;
     }
 
-    bool try_set(eqsat::place plc, Id id)
-    {
-      auto idx = plc.ref();
-      if (!test(idx))
-        return false;
-      set(idx, id);
-      return true;
-    }
-
-    Id id(size_t idx) const
+    Id id(index idx) const
     {
       CHECK(test(idx));
       return _mapping[idx];
@@ -63,10 +56,7 @@ namespace circ::eqsat {
 
     size_t size() const { return _mapping.size(); }
 
-    value_type get(size_t idx) const
-    {
-      return { _mapping[idx], _matched[idx] };
-    }
+    value_type get(index idx) const { return { _mapping[idx], _matched[idx] }; }
 
     bool fully_matched() const
     {
@@ -83,275 +73,292 @@ namespace circ::eqsat {
     std::vector< bool > _matched;
   };
 
-  template< typename Graph >
-  using Substitutions = std::set< Substitution< Graph > >;
+  using Substitutions = std::set< Substitution >;
 
-  // Result of matched nodes rooting in the given equality class
-  template< typename Graph >
-  using EClassMatch = std::pair< typename Graph::Id, Substitutions< Graph > >;
-
-  using MatchLabel = std::variant< std::monostate, std::string_view >;
+  using MatchLabel = std::variant< std::monostate, label >;
 
   static inline constexpr MatchLabel anonymous_label = std::monostate{};
 
-  template< typename Graph >
-  using MatchedClasses = std::vector< EClassMatch< Graph > >;
-
-  template< typename Graph >
-  using Matches = std::unordered_map< MatchLabel, MatchedClasses< Graph > >;
-
-  template< typename Graph >
-  struct EGraphMatcher
+  // Single match of labeled expressions, maps to each matching label
+  // a single equality class.
+  // Maintains possible substitutions of pattern plces for current match.
+  // A special case is anonymous match for unlabeled pattern.
+  struct LabeledMatch
   {
-    using ENode = typename Graph::ENode;
-    using EClass = typename Graph::EClass;
-    using Id = typename Graph::Id;
+    // matching of labels to equality nodes
+    std::unordered_map< MatchLabel, Id > labels;
+    // corresponding substitutions for the matching
+    Substitutions substitutions;
 
-    using Substitution = Substitution< Graph >;
-    using Substitutions = Substitutions< Graph >;
+    bool is_anonymous() const { return labels.count(anonymous_label); }
+  };
 
-    EGraphMatcher(const Graph &egraph, const pattern_with_places &pat)
-      : _egraph(egraph), _pattern(pat)
+  // All possible matches for a given pattern
+  using Matches = std::vector< LabeledMatch >;
+
+  template< typename Graph, typename Pattern, typename Places >
+  struct Match
+  {
+    Match(const Graph &graph, const Pattern &pat, const Places &places)
+      : egraph(graph), pattern(pat), places(places)
     {}
 
-    using MatchResult = std::optional< Substitutions >;
+    Matches result() const { return match(egraph); }
 
-    MatchResult empty_match(bool is_matched)
+  private:
+
+    const Graph &egraph;
+    const Pattern &pattern;
+    const Places &places;
+
+    Matches match(const auto &egraph) const
     {
-      if (is_matched)
-        return Substitutions{Substitution( _pattern.places.size() )};
-      return std::nullopt;
+      // TODO(Heno): relink labels
+      return std::visit( overloaded {
+        [&] (const match_expr &e) -> Matches { return match(egraph, e); },
+        [&] (const expr_list  &e) -> Matches { return match(egraph, e); },
+        [&] (const atom &a)       -> Matches { return match(egraph, a); },
+        [&] (const union_expr & ) -> Matches {
+          throw "union clause is forbidden in the matching pattern";
+        }
+      /* TODO(Heno): pick a root clause */
+      }, pattern.get());
     }
 
-    static MatchResult unmatched() { return std::nullopt; }
-
-    MatchResult match(const EClass &eclass)
+    static inline std::optional< LabeledMatch > merge(const LabeledMatch &lhs, const LabeledMatch &rhs)
     {
-      if (auto result = match(eclass, _pattern.expr)) {
-        // filter out non-fully matched substitutions
-        std::erase_if(result.value(), [](const auto &sub) {
-          return !sub.fully_matched();
-        });
-        return result;
+      auto product = product_of_substitutions(lhs.substitutions, rhs.substitutions);
+      if (product.empty())
+        return std::nullopt;
+
+      LabeledMatch match;
+      match.substitutions = std::move(product);
+      match.labels = lhs.labels;
+
+      for (const auto &[label, id] : rhs.labels) {
+        CHECK(!match.labels.count(label));
+        match.labels[label] = id;
       }
 
-      return std::nullopt;
+      return match;
     }
 
-    MatchResult match(const EClass &eclass, const expr &e)
+    // TOD(Heno): optimize copies of vectors and maps
+    static inline Matches product_of_matches(const auto &matches)
     {
-      // performs union of all matches on the root nodes in the given eclass
-      MatchResult result = unmatched();
-      for (const auto *node : eclass.nodes) {
-        if (auto subs = match(node, e)) {
-          if (!result)
-            result = std::move(subs);
-          else
-            result->merge(std::move(subs.value()));
+      CHECK(matches.size() > 0);
+      if (matches.size() == 1)
+        return matches.front();
+
+      Matches result;
+      auto partial = product_of_matches(tail(matches));
+      for (const auto &lhs : matches.front()) {
+        for (const auto &rhs : partial) {
+          if (auto merged = merge(lhs, rhs)) {
+            result.push_back(std::move(*merged));
+          }
         }
       }
+
       return result;
     }
 
-    MatchResult match_one(const ENode *root, const expr &e)
+    // combine single label matches into multilable matches
+    Matches combine_matches(const std::vector< Matches > &matches) const
     {
-      return std::visit( overloaded {
-        [&] (const eqsat::constant &con) -> MatchResult {
-          if (auto node_con = root->constant())
-            return empty_match(node_con == con.ref());
-          return unmatched();
-        },
-        [&] (const eqsat::place &plc) -> MatchResult {
-          auto id = _egraph.find(root);
-          Substitution sub( _pattern.places.size() );
-          sub.set( _pattern.places.at(plc), id);
-          return Substitutions{sub};
-        },
-        [&] (const eqsat::operation &op) -> MatchResult {
-          return empty_match(root->name() == op);
-        },
-        [&] (const eqsat::label &lab) -> MatchResult {
-          return match(root, _pattern.subexpr(lab.ref()));
-        },
-        [&] (const auto&) -> MatchResult {
-          return unmatched(); /* unsupported kind */
-        },
-      }, eqsat::root(e));
+      return product_of_matches(std::span(matches));
     }
 
-    MatchResult match(const ENode *root, const expr &e)
+    // match multiple labeled expressions and unify the result
+    Matches match(const auto &egraph, const match_expr &e) const
     {
-      auto head = match_one(root, e);
-      if (!head)
-        return unmatched();
-
-      if (children(e).empty())
-        return head;
-
-      std::vector< Substitutions > children;
-      {
-        auto child = root->children.begin();
-        for (const auto &node : eqsat::children(e)) {
-          auto child_class = _egraph.eclass(*child);
-          if (auto sub = match(child_class, node)) {
-            children.push_back(std::move(sub.value()));
-          } else {
-            return unmatched();
-          }
-          ++child;
-        }
+      // MatchedClasses matched;
+      std::vector< Matches > matches;
+      for (const auto &label : e.labels) {
+        matches.push_back(match(egraph, pattern.subexprs.at(label), label));
       }
 
-      auto merge = [] (auto lhs, const auto &rhs) -> std::optional< Substitution > {
-        for (size_t idx = 0; idx < rhs.size(); ++idx) {
-          if (auto [id, set] = rhs.get(idx); set) {
-            if (!lhs.test(idx)) {
-              lhs.set(idx, id);
-            } else {
-              if (lhs.id(idx) != id)
-                return std::nullopt;
-            }
+      return combine_matches(matches);
+    }
+
+    // match single unlabled expression
+    Matches match(const auto &egraph, const auto &e, MatchLabel lab = anonymous_label) const
+    {
+      Matches matched;
+      // TODO(Heno): add operation caching to egraph
+      for (const auto &[id, eclass] : egraph.classes())
+        // pattern matches with a root in the eclass
+        if (auto subs = match_eclass(eclass, e); !subs.empty()) {
+          LabeledMatch match;
+          match.labels[lab] = id;
+          match.substitutions = std::move(subs);
+          matched.push_back(std::move(match));
+        }
+      return matched;
+    }
+
+    // match pattern with some of the eclass nodes (produces all possible matches)
+    Substitutions match_eclass(const auto &eclass, const auto &e) const
+    {
+      Substitutions res;
+      for (const auto &node : eclass.nodes)
+        if (auto subs = match_enode(node, e); !subs.empty())
+          res.merge(std::move(subs));
+      return res;
+    }
+
+    // match pattern with root in the enode
+    Substitutions match_enode(const auto &enode, const expr &e) const
+    {
+      return std::visit( overloaded {
+        [&] (const atom &a)      -> Substitutions { return match_enode(enode, a); },
+        [&] (const expr_list &l) -> Substitutions { return match_enode(enode, l); },
+        [&] (const match_expr &) -> Substitutions { throw "match clause is forbidden in the nested expression"; },
+        [&] (const union_expr &) -> Substitutions { throw "union clause is forbidden in the nested expression"; }
+      }, e.get());
+    }
+
+    Substitutions match_enode(const auto &enode, const atom &a) const
+    {
+      return std::visit([&] (const auto &v) -> Substitutions { return match_atom(enode, v); }, a);
+    }
+
+    Substitutions match_enode(const auto &enode, const expr_list &e) const
+    {
+      if (auto head = match_enode(enode, e.front()); !head.empty()) {
+        if (tail(e).empty())
+          return head;
+
+        // gather substitutions for all children
+        std::vector< Substitutions > subs;
+        auto child = enode->children.begin();
+        for (const auto &node : tail(e)) {
+          auto child_class = egraph.eclass(*child);
+          auto sub = match_eclass(child_class, node);
+          if (sub.empty())
+            return {}; // unmatched child
+          subs.push_back(std::move(sub));
+          ++child;
+        }
+
+        return product_of_substitutions(head, subs);
+      }
+
+      return {};
+    }
+
+    static inline auto tail(const auto &vec)
+    {
+      auto tail = std::next(vec.begin());
+      return std::span( &(*tail), vec.size() - 1);
+    }
+
+    static inline std::optional< Substitution > merge_subsitutions(auto lhs, const auto &rhs)
+    {
+      for (size_t idx = 0; idx < rhs.size(); ++idx) {
+        if (auto [id, set] = rhs.get(idx); set) {
+          if (!lhs.test(idx)) {
+            lhs.set(idx, id);
+          } else {
+            if (lhs.id(idx) != id)
+              return std::nullopt;
           }
         }
-        return lhs;
-      };
+      }
+      return lhs;
+    }
 
-      Substitutions product = head.value();
-      // make product of all matches from all children
-      for (auto child : children) {
-        if (child.empty())
-          continue;
+    static inline Substitutions product_of_substitutions(const Substitutions &lhs, const Substitutions &rhs)
+    {
+      Substitutions product;
+      for (const auto &lsub : lhs)
+        for (const auto &rsub : rhs)
+          if (auto merged = merge_subsitutions(lsub, rsub))
+            product.insert(std::move(*merged));
+      return product;
+    }
 
-        if (product.empty()) {
-          product = std::move(child);
-          continue;
-        }
+    static inline Substitutions product_of_substitutions(const Substitutions &head, const std::vector< Substitutions > &tail)
+    {
+      Substitutions product = head;
 
-        Substitutions next;
-        // make product of all alternatives with all already processed children
-        for (const auto &substitution : child) {
-          for (const auto &matched : product) {
-            if (auto prod = merge(matched, substitution))
-              next.insert(std::move(prod.value()));
-          }
-        }
+      for (const auto &rhs : tail) {
+        Substitutions next = product_of_substitutions(product, rhs);
         std::swap(product, next);
       }
 
       return product;
     }
 
-    template< typename stream >
-    static void print_substitutions(const Substitutions &substitutions, stream &out)
+    // creates trivial substitution (with no fixed place) if matched
+    static inline Substitutions trivial(bool matched, std::size_t size)
     {
-      int i = 0;
-      if (substitutions.empty())
-        out << "empty substitutions\n";
-      for (const auto &sub : substitutions) {
-        out << "alternative " << i++ << '\n';
-        for (size_t i = 0; i < sub.size(); ++i) {
-          if (sub.test(i))
-            out << i << " -> " << sub.id(i) << '\n';
-        }
-      }
+      if (matched)
+        return {Substitution(size)};
+      return {};
     }
 
-  private:
-    const Graph &_egraph;
-    const pattern_with_places &_pattern;
-  };
+    // match constant node
+    Substitutions match_atom(const auto &enode, const constant &c) const
+    {
+      if (auto nconst = enode->constant())
+        return trivial(nconst == c.ref(), places.size());
+      return {};
+    }
 
-  template< typename Graph >
-  struct Matcher
+    // match operation node
+    Substitutions match_atom(const auto &enode, const operation &o) const
+    {
+      return trivial(enode->name() == o, places.size());
+    }
+
+    // match place (variable) node
+    Substitutions match_atom(const auto &enode, const place &p) const
+    {
+      auto id = egraph.find(enode);
+      return {Substitution{places.size(), places.at(p), id}};
+    }
+
+    // match labeled subexpression
+    Substitutions match_atom(const auto &enode, const label &lab) const
+    {
+      return match_enode(enode, pattern.subexprs.at(lab));
+    }
+
+  }; // Matcher
+
+  template< typename Graph, typename Builder, typename Pattern, typename Places >
+  struct Apply
   {
-    using Matches = Matches< Graph >;
-    using MatchedClasses = MatchedClasses< Graph >;
-
-    Matcher(const pattern_with_places &pat) : _pattern(pat) {}
-
-    Matches match(const Graph &egraph) const
-    {
-      const auto &e = _pattern.expr.get();
-      if (auto m = std::get_if<match_expr>(&e)) {
-        return multimatch(egraph, *m);
-      }
-
-      return {{anonymous_label, match(egraph, _pattern)}};
-    }
-
-    MatchedClasses match(const Graph &egraph, const pattern_with_places &pat) const
-    {
-      MatchedClasses matches;
-      // TODO(Heno): add operation caching to egraph
-      for (const auto &[id, eclass] : egraph.classes()) {
-        EGraphMatcher matcher(egraph, pat);
-
-        // pattern matches with a root in the eclass
-        if (auto substitutions = matcher.match(eclass))
-          matches.emplace_back( id, std::move(substitutions.value()) );
-      }
-      return matches;
-    }
-
-    Matches multimatch(const Graph &egraph, const match_expr &e) const
-    {
-      const auto &subexprs = _pattern.subexprs();
-
-      Matches matches;
-      for (const auto &label : e.labels)
-      {
-        auto subpattern = pattern_with_places(subexprs.at(label.ref()), subexprs);
-        matches[label.ref()] = match(egraph, subpattern);
-      }
-
-      return matches;
-    }
-
-  private:
-    const pattern_with_places &_pattern;
-  };
-
-  template< typename Graph, typename Builder >
-  struct Applier
-  {
-    using Matches = Matches< Graph >;
-    using MatchedClasses = MatchedClasses< Graph >;
-    using EClassMatch = EClassMatch< Graph >;
-
-    Applier(const pattern_with_places &pat, Builder builder)
-      : _pattern(pat), _builder(builder)
+    Apply(Graph &graph, const Builder &builder, const Pattern &pattern, const Places &places)
+      : egraph(graph), builder(builder), pattern(pattern), places(places)
     {}
 
-    void apply_single_pattern(Graph &egraph, const MatchedClasses &classes) const
+    Graph &egraph;
+    const Builder &builder;
+    const Pattern &pattern;
+    const Places  &places;
+
+    void apply(const Matches &matches)
     {
-      for (const auto &match : classes) {
-        apply_on(egraph, match);
-      }
+      for (const auto &match : matches) {
+        if (match.is_anonymous()) {
+          auto id = match.labels.at(anonymous_label);
+          apply_anonymous(id, match.substitutions);
+        } else {
+          throw "unsupported apply";
+        }
+      };
     }
 
-    void apply_on_matches(Graph &egraph, const Matches &matches) const
+    void apply_anonymous(Id id, const Substitutions &subs)
     {
-      if (matches.count(anonymous_label)) {
-        CHECK(matches.size() == 1);
-        apply_single_pattern(egraph, matches.at(anonymous_label));
-      } else {
-        // TODO(Heno): combine matches
-      }
-    }
-
-    void apply_on(Graph &egraph, const EClassMatch &match) const
-    {
-      const auto &[id, substitutions] = match;
       // TODO(Heno): perform once for all substitutions
-      for (const auto &sub : substitutions) {
-        auto patch = _builder.synthesize(_pattern, sub);
+      for (const auto &sub : subs) {
+        auto patch = builder.synthesize(pattern, places, sub);
         egraph.merge(id, patch);
       }
     }
-
-  private:
-    const pattern_with_places &_pattern;
-    Builder _builder;
   };
 
   template< typename Graph >
@@ -359,37 +366,36 @@ namespace circ::eqsat {
   {
     Rule(std::string_view name, std::string_view lhs_, std::string_view rhs_)
       : name(name), lhs(make_pattern(lhs_)), rhs(make_pattern(rhs_))
+      , places(get_indexed_places(lhs))
     {}
 
-    using Matches = Matches< Graph >;
-
-    Matches match(const Graph &egraph) const
+    auto match(const Graph &egraph) const
     {
-      using Matcher = Matcher< Graph >;
-      return Matcher(lhs).match(egraph);
+      Match m(egraph, lhs, places);
+      return m.result();
     }
 
-    template< typename Builder >
-    void apply(Graph &egraph, Builder builder, const Matches &matches) const
+    void apply(Graph &egraph, const auto &builder, const auto &matches) const
     {
-      using Applier = Applier< Graph, Builder >;
-
-      Applier(pattern_with_places(rhs, lhs.places), builder)
-        .apply_on_matches(egraph, matches);
+      Apply a(egraph, builder, rhs, places);
+      a.apply(matches);
     }
 
-    template< typename Builder >
-    void apply(Graph &egraph, Builder builder) const
+    void apply(Graph &egraph, const auto &builder) const
     {
-      auto matches = match(egraph);
-      apply(egraph, builder, matches);
+      apply(egraph, builder, match(egraph));
     }
 
     const std::string name;
     // Rewrite rule 'lhs -> rhs' that allows to match
     // left-hand-side and replace it with right-hand-side
-    pattern_with_places lhs;
+    pattern lhs;
     pattern rhs;
+
+    // Places that occur in the rewrite pattern
+    // Note: it is required that place occurs on the left hand side
+    // of the rule when it occurs on the right hand side
+    indexed_places places;
   };
 
 
@@ -400,7 +406,6 @@ namespace circ::eqsat {
   struct BasicRulesScheduler
   {
     using Rule = Rule< Graph >;
-    using Matches = Matches< Graph >;
 
     BasicRulesScheduler(Builder &builder) : _builder(builder) {}
 
