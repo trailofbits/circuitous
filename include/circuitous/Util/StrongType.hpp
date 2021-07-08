@@ -5,6 +5,7 @@
 #pragma once
 
 #include <compare>
+#include <string>
 
 namespace circ {
 
@@ -42,10 +43,14 @@ namespace circ {
     friend bool operator==(const underlying_t &a, const strong_type &b) { return a == b._value; }
     friend bool operator!=(const underlying_t &a, const strong_type &b) { return !(a == b); }
 
+    friend bool operator<(const strong_type &a, const strong_type &b)  { return a._value < b._value; }
+    friend bool operator<(const strong_type &a, const underlying_t &b) { return a._value < b; }
+    friend bool operator<(const underlying_t &a, const strong_type &b) { return a < b._value; }
+
     template< typename stream >
     friend stream& operator<<(stream &out, const strong_type &a) noexcept
     {
-      return out << a._value;
+      return out << std::to_string(a._value);
     }
 
   private:
