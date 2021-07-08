@@ -71,12 +71,12 @@ namespace eqsat {
       return res;
     }
 
-    Id synthesize(const pattern_with_places &pat, const auto &subs) const
+    Id synthesize(const pattern &pat, const auto &places, const auto &subs) const
     {
-      CHECK(subs.size() == pat.places.size());
+      CHECK(subs.size() == places.size());
 
       // TODO(Heno): addnodes to egraph
-      return 0;
+      return Id(0);
     }
 
     Circuit *circuit;
@@ -90,7 +90,6 @@ namespace eqsat {
     using Rule = Rule< Graph >;
     using Rules = Rules< Graph >;
     using RulesScheduler = Scheduler< Graph >;
-    using Matches = typename Rule::Matches;
     using PatternCircuitBuilder = PatternCircuitBuilder< Graph >;
 
     EqSatRunner(Circuit *circuit)
