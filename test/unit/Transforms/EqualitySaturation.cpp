@@ -7,6 +7,7 @@
  */
 
 #include <doctest/doctest.h>
+#include <cstddef>
 #include <numeric>
 #include <support/EGraph.hpp>
 #include <circuitous/Transforms/Pattern.hpp>
@@ -17,19 +18,10 @@
 
 namespace circ::eqsat {
 
-  unsigned count_matches(const MatchedClasses< TestGraph > &matches) {
-    auto eclass_match_count = [] (unsigned sum, auto &eclass_match) {
-      const auto &[id, matches] = eclass_match;
-      return sum + matches.size();
-    };
-    return std::accumulate(matches.begin(), matches.end(), unsigned(0), eclass_match_count);
-  }
-
-  unsigned count_matches(const Matches< TestGraph > &matches) {
-    if (matches.count(anonymous_label)) {
-      return count_matches(matches.at(anonymous_label));
-    }
-    return 0;
+  auto count_matches(const Matches &matches)
+  {
+    auto count = [] (auto res, const auto &match) { return res + match.substitutions.size(); };
+    return std::accumulate(matches.begin(), matches.end(), std::size_t(0), count);
   }
 
   using TestRule = Rule< TestGraph >;
@@ -270,14 +262,13 @@ namespace circ::eqsat {
       auto con = egraph.make_leaf("2");
       egraph.make_node("mul", {x, con});
 
-      //egraph.make_node("xor", {mul, add});
+      auto y = egraph.make_leaf("x");
+      egraph.make_node("mul", {y, con});
 
       auto rule = TestRule("mul-add-equality", "((let A (op_add ?x ?x)) (let B (op_mul ?x 2)) (match $A $B))", "(union $A $B)");
       auto matches = rule.match(egraph);
 
-      CHECK(matches.size() == 2);
-      CHECK(count_matches(matches["A"])== 1);
-      CHECK(count_matches(matches["B"])== 1);
+      CHECK(matches.size() == 1);
     }
 
     TEST_CASE("Named Subexpressions in Rewrite")
