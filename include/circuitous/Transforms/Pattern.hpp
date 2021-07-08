@@ -87,12 +87,12 @@ namespace circ::eqsat {
     named_expr(std::string_view n, const expr &e) : expr(e), name(n) {}
     named_expr(std::string_view n, expr &&e) : expr(std::move(e)), name(n) {}
 
-    std::string_view name;
+    label name;
   };
 
   struct pattern : expr
   {
-    using named_exprs = std::unordered_map< std::string_view, expr >;
+    using named_exprs = std::unordered_map< label, expr >;
 
     explicit pattern(const expr &e) : expr(e) {}
     explicit pattern(expr &&e) : expr(std::move(e)) {}
@@ -310,7 +310,6 @@ namespace circ::eqsat {
     throw std::runtime_error("syntax error in pattern");
   }
 
-
   using places_t = std::unordered_set<place>;
   inline places_t places(const expr &e, const auto &subexprs)
   {
@@ -324,7 +323,7 @@ namespace circ::eqsat {
     return std::visit( overloaded {
       [&] (const atom &a) -> places_t {
         return std::visit( overloaded {
-          [&] (const label &lab) -> places_t { return places(subexprs.at(lab.ref()), subexprs); },
+          [&] (const label &lab) -> places_t { return places(subexprs.at(lab), subexprs); },
           [&] (const place &val) -> places_t { return {val}; },
           [&] (const auto &)     -> places_t { return {}; }
         }, a);
@@ -338,11 +337,18 @@ namespace circ::eqsat {
 
   inline places_t places(const pattern &pat)
   {
-    return places(static_cast<expr>(pat), pat.subexprs);
+    return places(pat, pat.subexprs);
   }
 
-  struct pattern_with_places
+  using indexed_places = std::unordered_map< eqsat::place, unsigned >;
+  inline indexed_places get_indexed_places(const pattern &pat)
   {
+    indexed_places places;
+    unsigned id = 0;
+    for (const auto &plc : eqsat::places(pat))
+      places[plc] = id++;
+    return places;
+  }
 
   template< typename stream >
   auto operator<<(stream &os, const pattern &pat) -> decltype(os << "")
