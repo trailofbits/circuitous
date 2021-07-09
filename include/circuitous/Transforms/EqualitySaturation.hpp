@@ -96,6 +96,12 @@ namespace circ::eqsat {
   // All possible matches for a given pattern
   using Matches = std::vector< LabeledMatch >;
 
+  static inline auto tail(const auto &vec)
+  {
+    auto tail = std::next(vec.begin());
+    return std::span( &(*tail), vec.size() - 1);
+  }
+
   template< typename Graph, typename Pattern, typename Places >
   struct Match
   {
@@ -103,27 +109,23 @@ namespace circ::eqsat {
       : egraph(graph), pattern(pat), places(places)
     {}
 
-    Matches result() const { return match(egraph); }
+    Matches result() const
+    {
+      return std::visit( overloaded {
+        [&] (const match_expr &e) -> Matches { return match(e); },
+        [&] (const expr_list  &e) -> Matches { return match(e); },
+        [&] (const atom &a)       -> Matches { return match(a); },
+        [&] (const union_expr & ) -> Matches {
+          throw std::runtime_error("union clause is forbidden in the matching pattern");
+        }
+      }, pattern.get());
+    }
 
   private:
 
     const Graph &egraph;
     const Pattern &pattern;
     const Places &places;
-
-    Matches match(const auto &egraph) const
-    {
-      // TODO(Heno): relink labels
-      return std::visit( overloaded {
-        [&] (const match_expr &e) -> Matches { return match(egraph, e); },
-        [&] (const expr_list  &e) -> Matches { return match(egraph, e); },
-        [&] (const atom &a)       -> Matches { return match(egraph, a); },
-        [&] (const union_expr & ) -> Matches {
-          throw "union clause is forbidden in the matching pattern";
-        }
-      /* TODO(Heno): pick a root clause */
-      }, pattern.get());
-    }
 
     static inline std::optional< LabeledMatch > merge(const LabeledMatch &lhs, const LabeledMatch &rhs)
     {
@@ -143,7 +145,7 @@ namespace circ::eqsat {
       return match;
     }
 
-    // TOD(Heno): optimize copies of vectors and maps
+    // TODO(Heno): optimize copies of vectors and maps
     static inline Matches product_of_matches(const auto &matches)
     {
       CHECK(matches.size() > 0);
@@ -170,19 +172,19 @@ namespace circ::eqsat {
     }
 
     // match multiple labeled expressions and unify the result
-    Matches match(const auto &egraph, const match_expr &e) const
+    Matches match(const match_expr &e) const
     {
       // MatchedClasses matched;
       std::vector< Matches > matches;
       for (const auto &label : e.labels) {
-        matches.push_back(match(egraph, pattern.subexprs.at(label), label));
+        matches.push_back(match(pattern.subexprs.at(label), label));
       }
 
       return combine_matches(matches);
     }
 
     // match single unlabled expression
-    Matches match(const auto &egraph, const auto &e, MatchLabel lab = anonymous_label) const
+    Matches match(const auto &e, MatchLabel lab = anonymous_label) const
     {
       Matches matched;
       // TODO(Heno): add operation caching to egraph
@@ -213,8 +215,12 @@ namespace circ::eqsat {
       return std::visit( overloaded {
         [&] (const atom &a)      -> Substitutions { return match_enode(enode, a); },
         [&] (const expr_list &l) -> Substitutions { return match_enode(enode, l); },
-        [&] (const match_expr &) -> Substitutions { throw "match clause is forbidden in the nested expression"; },
-        [&] (const union_expr &) -> Substitutions { throw "union clause is forbidden in the nested expression"; }
+        [&] (const match_expr &) -> Substitutions {
+          throw std::runtime_error("match clause is forbidden in the nested expression");
+        },
+        [&] (const union_expr &) -> Substitutions {
+          throw std::runtime_error("union clause is forbidden in the nested expression");
+        }
       }, e.get());
     }
 
@@ -245,12 +251,6 @@ namespace circ::eqsat {
       }
 
       return {};
-    }
-
-    static inline auto tail(const auto &vec)
-    {
-      auto tail = std::next(vec.begin());
-      return std::span( &(*tail), vec.size() - 1);
     }
 
     static inline std::optional< Substitution > merge_subsitutions(auto lhs, const auto &rhs)
@@ -312,7 +312,8 @@ namespace circ::eqsat {
       return trivial(enode->name() == o, places.size());
     }
 
-    // match place (variable) node
+    // match place (variable) node, returns single substitution with
+    // a matched place to the enode
     Substitutions match_atom(const auto &enode, const place &p) const
     {
       auto id = egraph.find(enode);
@@ -339,25 +340,62 @@ namespace circ::eqsat {
     const Pattern &pattern;
     const Places  &places;
 
-    void apply(const Matches &matches)
+    void apply(const Matches &matches) const { apply(pattern, matches); }
+
+    void apply(const expr &e, const Matches &matches) const
     {
-      for (const auto &match : matches) {
-        if (match.is_anonymous()) {
-          auto id = match.labels.at(anonymous_label);
-          apply_anonymous(id, match.substitutions);
-        } else {
-          throw "unsupported apply";
+      return std::visit( overloaded {
+        [&] (const atom &a)       { return apply(a, matches); },
+        [&] (const expr_list  &e) { return apply(e, matches); },
+        [&] (const union_expr &e) { return apply(e, matches); },
+        [&] (const match_expr & ) {
+          throw std::runtime_error("match clause is forbidden in the rewrite pattern");
         }
-      };
+      }, e.get());
     }
 
-    void apply_anonymous(Id id, const Substitutions &subs)
+    void apply(const atom &e, const Matches &matches) const
     {
-      // TODO(Heno): perform once for all substitutions
-      for (const auto &sub : subs) {
-        auto patch = builder.synthesize(pattern, places, sub);
-        egraph.merge(id, patch);
+      throw std::runtime_error("Rewrite rule is applied on the level of expression lists");
+    }
+
+    void apply(const union_expr &e, const Matches &matches) const
+    {
+      for (const auto &match : matches) {
+        auto head = match.labels.at(e.labels.front());
+        for (const auto &next : tail(e.labels)) {
+          egraph.merge(head, match.labels.at(next));
+        }
       }
+    }
+
+    void apply(const expr_list &list, const Matches &matches) const
+    {
+      if (!is_nested(list))
+        return apply_patch(list, matches);
+
+      for (const auto &e :list)
+        apply(e, matches);
+    }
+
+    void apply_patch(const expr &e, const Matches &matches) const
+    {
+      for (const auto &match : matches) {
+        auto id = match.labels.at(anonymous_label);
+        // TODO(Heno): perform once for all substitutions
+        for (const auto &sub : match.substitutions) {
+          auto patch = builder.synthesize(e, sub, places, pattern.subexprs);
+          egraph.merge(id, patch);
+        }
+      }
+    }
+
+    bool is_nested(const expr_list &list) const
+    {
+      for (const auto &e : list)
+        if (!std::holds_alternative<expr_list>(e))
+          return false;
+      return true;
     }
   };
 

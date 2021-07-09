@@ -71,7 +71,7 @@ namespace eqsat {
       return res;
     }
 
-    Id synthesize(const pattern &pat, const auto &places, const auto &subs) const
+    Id synthesize(const expr &e, const auto &subs, const auto &places, const auto &subexprs) const
     {
       CHECK(subs.size() == places.size());
 
