@@ -251,24 +251,33 @@ namespace circ::eqsat {
       CHECK(additions.nodes[1]->children[1] == x);
     }
 
-    TEST_CASE("Multi-match Rewrite")
+    TEST_CASE("Multi-match Union")
     {
       TestGraph egraph;
       TestGraphBuilder builder(&egraph);
 
       auto x = egraph.make_leaf("x");
-      egraph.make_node("add", {x, x});
+      auto add = egraph.make_node("add", {x, x});
 
       auto con = egraph.make_leaf("2");
-      egraph.make_node("mul", {x, con});
+      auto mul = egraph.make_node("mul", {x, con});
 
       auto y = egraph.make_leaf("x");
       egraph.make_node("mul", {y, con});
 
-      auto rule = TestRule("mul-add-equality", "((let A (op_add ?x ?x)) (let B (op_mul ?x 2)) (match $A $B))", "(union $A $B)");
-      auto matches = rule.match(egraph);
+      auto rule = TestRule( "mul-add-equality"
+                , "((let A (op_add ?x ?x)) (let B (op_mul ?x 2)) (match $A $B))"
+                , "(union $A $B)"
+      );
 
+      auto matches = rule.match(egraph);
       CHECK(matches.size() == 1);
+
+      rule.apply(egraph, builder);
+      egraph.rebuild();
+
+      CHECK(egraph.eclass(add).size() == 2);
+      CHECK(egraph.eclass(add) == egraph.eclass(mul));
     }
 
     TEST_CASE("Named Subexpressions in Rewrite")

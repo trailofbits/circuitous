@@ -72,17 +72,12 @@ namespace circ {
 
     TestGraphBuilder(TestGraph *graph) : _graph(graph) {}
 
-    Id synthesize(const eqsat::pattern &pat, const auto &places, const auto &substitutions) const
-    {
-      CHECK(substitutions.size() == places.size());
-      return synthesize(pat, substitutions, places, pat.subexprs);
-    }
-
-    Id synthesize(const eqsat::expr &e, const auto &substitutions,
+    Id synthesize(const eqsat::expr &e, const auto &subs,
                   const auto &places, const auto &subexprs) const
     {
+      CHECK(subs.size() == places.size());
       auto synth = [&] (const auto &sub) {
-        return synthesize(sub, substitutions, places, subexprs);
+        return synthesize(sub, subs, places, subexprs);
       };
 
       std::vector< Id > args;
@@ -92,7 +87,7 @@ namespace circ {
 
       auto node = std::visit( overloaded {
         [&] (const constant &con) -> Id { return _graph->make_leaf( std::to_string(con.ref()) ); },
-        [&] (const place &plc)    -> Id { return substitutions.id(places.at(plc)); },
+        [&] (const place &plc)    -> Id { return subs.id(places.at(plc)); },
         [&] (const operation &op) -> Id { return _graph->make_node(op.ref(), args); },
         [&] (const label &lab)    -> Id { return synth(subexprs.at(lab)); },
         [&] (const auto&)         -> Id { LOG(FATAL) << "unsupported node"; },
@@ -104,4 +99,4 @@ namespace circ {
     TestGraph *_graph;
   };
 
-} // namesapce circuitous
+} // namespace circ
