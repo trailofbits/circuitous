@@ -13,11 +13,7 @@ class ModelTest(Test):
   def case(self, name_=None, **kwargs):
     assert 'E' not in kwargs
     super().case(name_, **kwargs)
-    self.e_mutators.append(kwargs.get('DE', MS()))
     return self
-
-  def _expected_state(self, **kwargs):
-    return State()
 
   def generate(self, **kwargs):
     super().generate(**kwargs)

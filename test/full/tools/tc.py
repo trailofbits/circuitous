@@ -429,9 +429,12 @@ class Test:
       return estate
 
     # We know it is present due to lead assert
-    distate = kwargs.get('DE', None)
-    if distate is not None:
-      return self.default_istate.mutate(distate)
+    destate = kwargs.get('DE', None)
+    if destate is not None:
+      self.e_mutators.append(destate)
+      return self.default_istate.mutate(destate)
+    else:
+      self.e_mutators.append(MS())
     return State()
 
   # Options -- [] denotes optional, <> denotes that it is inherited if not specified:
