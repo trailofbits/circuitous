@@ -44,10 +44,24 @@ namespace circ::err {
   }
 
 
+  llvm::Value *handle_div(llvm::BinaryOperator *div) {
+    auto divisor = div->getOperand(1u);
+    llvm::IRBuilder<> ir(div);
+    auto zero = llvm::ConstantInt::get(divisor->getType(), 0u);
+    auto is_zero = ir.CreateICmpEQ(zero, divisor);
+    return ir.CreateSelect(is_zero, ir.getTrue(), ir.getFalse());
+  }
+
   static inline auto handle_implicit(
       llvm::IRBuilder<> &ir, const std::vector<llvm::Value *> &implicit_errs)
   {
     std::vector<llvm::Value *> out;
+    for (auto err_i : implicit_errs) {
+      auto bin_op = llvm::dyn_cast< llvm::BinaryOperator >(err_i);
+      if (bin_op && is_div(bin_op)) {
+        out.push_back(handle_div(bin_op));
+      }
+    }
     return out;
   }
 
