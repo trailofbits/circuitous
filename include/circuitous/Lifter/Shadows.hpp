@@ -197,6 +197,7 @@ namespace circ::shadowinst {
 
     // NOTE(lukas): We want them ordererd.
     std::map<reg_t, materializations_t> translation_map;
+    std::unordered_set< reg_t > dirty;
 
     std::string to_string(uint8_t indent=0) const {
       std::stringstream ss;
@@ -205,7 +206,8 @@ namespace circ::shadowinst {
       ss << this->has_regions::to_string(indent + 1);
       ss << _indent << "Translation map:" << std::endl;
       for (auto &[reg, all_mats] : translation_map) {
-        ss << std::string((indent + 1) * 2, ' ' ) << reg << std::endl;
+        ss << std::string((indent + 1) * 2, ' ' ) << reg
+           << (is_dirty(reg) ? " (dirty)" : "") << std::endl;
         for (auto &mat : all_mats) {
           ss << std::string((indent + 2) * 2, ' ');
           if (mat.empty()) {
@@ -219,6 +221,15 @@ namespace circ::shadowinst {
         }
       }
       return ss.str();
+    }
+
+    bool is_dirty(const reg_t &reg) const {
+      return dirty.count(reg);
+    }
+
+    void mark_dirty(const reg_t &reg) {
+      CHECK(translation_map.count(reg));
+      dirty.insert(reg);
     }
 
     uint64_t translation_entries_count() const {
