@@ -555,8 +555,8 @@ struct Identity : impl::Identity<data::Identity> {};
 struct Transport : impl::Identity<data::Transport> {};
 
 // hint, size, addr, ts, value
-struct ReadConstraint : impl::Predicate<data::ReadConstraint> {};
-struct WriteConstraint : impl::Predicate<data::WriteConstraint> {};
+struct ReadConstraint : impl::Frozen<impl::Predicate<data::ReadConstraint>> {};
+struct WriteConstraint : impl::Frozen<impl::Predicate<data::WriteConstraint>> {};
 struct UnusedConstraint : impl::Predicate<data::UnusedConstraint> {};
 
 struct Error : impl::Identity<data::Error> {};
