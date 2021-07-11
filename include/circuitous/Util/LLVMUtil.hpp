@@ -9,6 +9,10 @@
 #include <optional>
 #include <string>
 
+#include <remill/BC/Version.h>
+#include <remill/BC/Util.h>
+#include <remill/Arch/Arch.h>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
@@ -18,6 +22,7 @@
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
 #include <llvm/Support/raw_os_ostream.h>
+#include <llvm/Transforms/Utils/Cloning.h>
 #pragma clang diagnostic pop
 
 namespace circ {
@@ -106,6 +111,53 @@ namespace circ {
     call->replaceAllUsesWith(new_call);
     call->eraseFromParent();
     return new_call;
+  }
+
+  static inline auto reg_from_gep(llvm::GetElementPtrInst *gep, const auto &arch)
+  -> const remill::Register *
+  {
+    auto dl = llvm::DataLayout(gep->getModule());
+    auto [_, off] = remill::StripAndAccumulateConstantOffsets(dl, gep);
+    return arch->RegisterAtStateOffset(static_cast<uint64_t>(off));
+  }
+
+  static inline auto coerce_reg(llvm::LoadInst *load, const remill::Register *reg)
+  -> const remill::Register *
+  {
+    if (!reg) {
+      return nullptr;
+    }
+    auto dl = llvm::DataLayout(load->getModule());
+    auto size = dl.getTypeSizeInBits (load->getType());
+    return reg->EnclosingRegisterOfSize(size / 8);
+  }
+
+  static inline auto make_range(llvm::Instruction *from, llvm::Instruction *to) {
+    using bb_t = llvm::BasicBlock::iterator;
+    return llvm::iterator_range< bb_t >(bb_t{from}, bb_t{to});
+  }
+
+  template<typename F>
+  static inline auto inline_flattened(llvm::CallInst *call, F &&f) {
+    auto begin = f(llvm::IRBuilder<>(call));
+    using bb_it = llvm::BasicBlock::iterator;
+    auto end = f(llvm::IRBuilder<>(call->getParent(), std::next(bb_it{call})));
+
+    auto block = call->getParent();
+    if (std::prev(block->end())->isTerminator()) {
+      LOG(WARNING) << "Going to inline ill formed block (terminator missing).";
+    }
+    CHECK(call->getCalledFunction()->size() == 1);
+
+    llvm::InlineFunctionInfo info;
+  #if LLVM_VERSION_NUMBER < LLVM_VERSION(11, 0)
+    llvm::InlineFunction(call, info);
+  #else
+    llvm::InlineFunction(*call, info);
+  #endif
+
+    CHECK(begin->getParent() == end->getParent());
+    return std::make_tuple(begin, end);
   }
 
 } // namespace circ
