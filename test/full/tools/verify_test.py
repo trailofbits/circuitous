@@ -9,14 +9,9 @@ class VerifyTest(Test):
 
   def case(self, name=None, **kwargs):
     super().case(name, **kwargs)
-    self.e_mutators.append(kwargs.get('DE', MS()))
 
     self.manual_gen = kwargs.get('M', None) is not None
-
     return self
-
-  def _expected_state(self, **kwargs):
-    return State()
 
   def generate(self, **kwargs):
     super().generate(**kwargs)
