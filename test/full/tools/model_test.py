@@ -104,6 +104,7 @@ class MicroxGen:
     except FloatingPointError as e:
       out = copy.deepcopy(input)
       out.ebit(True)
+      out.timestamp += 1
       return out
     out.timestamp = input.timestamp + 1
 
