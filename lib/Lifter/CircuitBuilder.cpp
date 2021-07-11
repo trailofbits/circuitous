@@ -626,10 +626,16 @@ std::vector<llvm::Value *> Circuit0::HandleDstRegs(
 
       ++proccessed;
       auto &table = s_op.reg->translation_map;
+
+      if (s_op.reg->is_dirty(reg->name)) {
+        continue;
+      }
+
       for (auto reg_part : EnclosedClosure(reg)) {
         if (!table.count(reg_part->name)) {
           continue;
         }
+
         // The basic idea here (we need to handle partial registers)
         // is that we first "refresh" the top-level with originally loaded value.
         // That is needed because in previous iteration something else may have been
@@ -681,17 +687,15 @@ void Circuit0::InjectSemantic(
     state.store(ir, reg, arg);
   }
 
-  auto begin = intrinsics::make_breakpoint(ir);
   auto sem_call = CallSemantic(
     ir, isel.lifted, state_ptr, surface.pc, llvm::UndefValue::get(ctx.memory_ptr_type()));
-  auto end = intrinsics::make_breakpoint(ir);
 
-  llvm::InlineFunctionInfo info;
-#if LLVM_VERSION_NUMBER < LLVM_VERSION(11, 0)
-  llvm::InlineFunction(sem_call, info);
-#else
-  llvm::InlineFunction(*sem_call, info);
-#endif
+  auto make_breakpoint = [](auto ir) {
+    return intrinsics::make_breakpoint(ir);
+  };
+  auto [begin, end] = inline_flattened(sem_call, make_breakpoint);
+  ir.SetInsertPoint(inst_block);
+
 
   // Create encoding comparisons
   auto params = ByteFragments(ir, isel);
@@ -730,7 +734,6 @@ void Circuit0::InjectSemantic(
     extra_params[i] = intrinsics::Transport::unwrap(extra_params[i]);
   }
   params.insert(params.end(), extra_params.begin(), extra_params.end());
-
 
   begin->eraseFromParent();
   end->eraseFromParent();
