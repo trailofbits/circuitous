@@ -318,7 +318,8 @@ namespace impl {
 
     static std::string Name(uint32_t id) {
       std::stringstream ss;
-      ss << Self_t::fn_prefix << Self_t::separator << id << Self_t::separator << allocated_size;
+      ss << Self_t::fn_prefix << Self_t::separator << id
+                              << Self_t::separator << allocated_size;
       return ss.str();
     }
 
@@ -442,6 +443,8 @@ namespace data {
   struct WriteConstraint : dot_seperator { sccc_prefix("__circuitous.memwrite"); };
   struct UnusedConstraint : dot_seperator { sccc_prefix("__circuitous.unusued"); };
 
+  struct MemBarrier : dot_seperator { sccc_prefix("__circuitous.mem_barrier"); };
+  struct ISELBarrier : dot_seperator { sccc_prefix("__circuitous.isel_barrier"); };
 } //namespace data
 
 // Intrinsic declaration. Overall, they all try to provide the following unified API
@@ -500,6 +503,9 @@ struct Concat : impl::VarArg<data::Concat> {};
 //              by the caller and it is undefined what happens
 //              if optimizer is called (may merge multiple instances).
 struct BreakPoint : impl::Predicate<data::BreakPoint> {};
+
+struct MemBarrier : impl::Predicate<data::MemBarrier> {};
+struct ISELBarrier : impl::Frozen<impl::Predicate<data::ISELBarrier>> {};
 
 struct Advice : impl::Allocator<data::Advice> {};
 struct AdviceConstraint : impl::BinaryPredicate<data::AdviceConstraint> {};
@@ -673,10 +679,22 @@ struct Memory : impl::BucketAllocator<data::Memory, 16 + 64 + 64 + 64> {
   }
 };
 
+#define define_helper(name, class) \
+template< typename C = std::vector< llvm::Value * >, typename ...Args > \
+auto make_##name(llvm::IRBuilder<> &ir, const C &c_args, Args && ... args) { \
+  return impl::implement_call<class>(ir, c_args, std::forward< Args >(args)...); \
+}
+
 /* Helper functions to make creation of intrinsic calls easier for the user
  * C - container holding arguments
  * Args... - arguments to be forwarded to appropriate `CreateFn`.
  */
+
+define_helper(mem_barrier, MemBarrier)
+define_helper(isel_barrier, ISELBarrier)
+
+#undef define_helper
+
 template<typename C>
 auto make_transport(llvm::IRBuilder<> &ir, const C &args) {
   return impl::implement_call<Transport>(ir, {args}, args->getType());
