@@ -13,6 +13,7 @@
 
 #include <remill/Arch/Arch.h>
 #include <remill/Arch/Instruction.h>
+#include <remill/BC/Annotate.h>
 #include <remill/BC/IntrinsicTable.h>
 #include <remill/BC/Lifter.h>
 #include <remill/BC/Util.h>
@@ -77,6 +78,8 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
   llvm::IntegerType *word_type;
   uint64_t word_size = 0;
 
+  std::unordered_map< uint64_t, llvm::Value * > reg_op_dsts;
+
   InstructionLifter(arch_ptr_t arch_, llvm::Module *module_)
       : parent(arch_, remill::IntrinsicTable(module_)),
         arch(arch_),
@@ -91,6 +94,119 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     shadow = shadow_;
   }
 
+  bool possible_isel(llvm::CallInst *c) {
+    auto callee = c->getCalledFunction();
+    if (!callee || !callee->hasName()) {
+      return false;
+    }
+    auto name = callee->getName();
+    return !name.startswith("__remill") && !name.startswith("__circuitous");
+  }
+
+  llvm::CallInst *fetch_sem_call(llvm::BasicBlock *block) {
+    llvm::CallInst *out = nullptr;
+    for (auto &inst : *block) {
+      if (auto call = llvm::dyn_cast<llvm::CallInst>(&inst); call && possible_isel(call)) {
+        CHECK(!out);
+        out = call;
+      }
+    }
+    return out;
+  }
+
+
+  using maybe_gep_t = std::optional< llvm::GetElementPtrInst * >;
+  maybe_gep_t loads_from_state(llvm::LoadInst *load) {
+    auto block = load->getParent();
+    // NOTE(lukas): Since there is `PC` argument missing, we cannot use
+    //              usual remill enum.
+    auto state_ptr = remill::NthArgument(block->getParent(), 1);
+
+    auto gep = llvm::dyn_cast<llvm::GetElementPtrInst>(load->getPointerOperand());
+    if (!gep) {
+      return {};
+    }
+
+    return (gep->getPointerOperand() == state_ptr) ? std::make_optional(gep) : nullptr;
+  }
+
+  struct cisel : remill::Semantics {
+    using P = remill::Semantics;
+    inline static const std::string metadata_value = P::metadata_value + ".cisel";
+  };
+
+  void consolidate_isel(llvm::Function *isel) {
+    if (reg_op_dsts.empty()) {
+      return;
+    }
+
+    // TODO(lukas): Will require some more complicated iteration down the line
+    if (isel->size() != 1) {
+      return;
+    }
+
+    // Is this one already transformed?
+    if (remill::HasOriginType<cisel>(isel)) {
+      return;
+    }
+
+    remill::Annotate<cisel>(isel);
+
+    for (auto [idx, _] : reg_op_dsts) {
+      consolidate_isel_(isel, idx);
+    }
+  }
+
+  void consolidate_isel_(llvm::Function *isel, auto idx) {
+    std::vector<llvm::StoreInst *> writes;
+    auto val = remill::NthArgument(isel, 2 + idx);
+    auto &s_reg = shadow->operands[idx].reg;
+
+    // Get all stores that are storing into the destination operand
+    for (auto &bb : *isel) {
+      for (auto &inst : bb) {
+        if (auto store = llvm::dyn_cast< llvm::StoreInst >(&inst)) {
+          if (store->getPointerOperand() == val) {
+            writes.push_back(store);
+          }
+        }
+      }
+    }
+
+    CHECK(writes.size() == 1);
+
+    // Continuing from the write into dst, collect all loads from the `State`
+    // TODO(lukas): What about loads?
+    using entry_t = std::tuple< llvm::LoadInst *, llvm::GetElementPtrInst * >;
+    std::vector< entry_t > loads;
+    for (auto &inst : make_range(writes.front(), isel->begin()->getTerminator())) {
+      if (auto load = llvm::dyn_cast< llvm::LoadInst >(&inst)) {
+        if (auto gep = loads_from_state(load)) {
+          CHECK(*gep != nullptr);
+          loads.emplace_back(load, *gep);
+        }
+      }
+    }
+
+    for (auto [load, gep] : loads) {
+      auto enclosed = coerce_reg(load, reg_from_gep(gep, arch));
+      CHECK(enclosed);
+
+      auto name = enclosed->name;
+      if (!s_reg->translation_map.count(name)) {
+        continue;
+      }
+
+      s_reg->mark_dirty(name);
+
+      llvm::IRBuilder<> ir(load);
+      auto cond = shadowinst::make_explicit_decode(ir, *s_reg, name);
+      auto select = intrinsics::make_select(
+          ir, {cond, ir.CreateLoad(gep), ir.CreateLoad(val)}, 1ul, load->getType());
+      load->replaceAllUsesWith(select);
+    }
+  }
+
   auto LiftIntoBlock(remill::Instruction &inst, llvm::BasicBlock *block,
                      bool is_delayed) {
       auto lift_status = this->parent::LiftIntoBlock(inst, block, is_delayed);
@@ -100,13 +216,18 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
       if (lift_status != remill::kLiftedInstruction) {
         return lift_status;
       }
+      auto state_ptr = remill::NthArgument(block->getParent(), remill::kStatePointerArgNum);
+
+      auto call = fetch_sem_call(block);
+      CHECK(call);
+      consolidate_isel(call->getCalledFunction());
+
 
       // We need to actually store the new value of instruction pointer
       // into the corresponding register.
       // NOTE(lukas): This should technically be responsiblity of remill::InstructionLifter
       //              but it is not happening for some reason.
       llvm::IRBuilder ir(block);
-      auto state_ptr = remill::NthArgument(block->getParent(), remill::kStatePointerArgNum);
       auto pc_ref = LoadRegAddress(block, state_ptr, remill::kPCVariableName);
       auto next_pc_ref = LoadRegAddress(block, state_ptr, remill::kNextPCVariableName);
       ir.CreateStore(ir.CreateLoad(next_pc_ref), pc_ref);
@@ -278,6 +399,19 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     LOG(FATAL) << "Cannot locate input " << name;
   }
 
+  llvm::Value *LiftRegisterOperand(remill::Instruction &inst,
+                                   llvm::BasicBlock *bb,
+                                   llvm::Value *state_ptr,
+                                   llvm::Argument *arg,
+                                   remill::Operand &op) override
+  {
+    auto lifted = LiftRegisterOperand_impl(inst, bb, state_ptr, arg, op);
+    if (inst.operands[current_op].action == remill::Operand::kActionWrite) {
+      reg_op_dsts[current_op] = lifted;
+    }
+    return lifted;
+  }
+
   // If register does not have a shadow we can procees the same way default lifter
   // does. However, if a shadow is present we need to do more complex decision
   // mostly in form of `selectN` with possible `undef` that represents that a register
@@ -286,11 +420,10 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
   // where the register "lives". Note that this is not the pointer into `State`,
   // but it is initialized appropriately (e.g. if we write into `RAX` then load
   // from this pointer will yield value of `RAX`).
-  llvm::Value *LiftRegisterOperand(remill::Instruction &inst,
-                                   llvm::BasicBlock *bb,
-                                   llvm::Value *state_ptr,
-                                   llvm::Argument *arg,
-                                   remill::Operand &op) override {
+  llvm::Value *LiftRegisterOperand_impl(
+      remill::Instruction &inst, llvm::BasicBlock *bb,
+      llvm::Value *state_ptr, llvm::Argument *arg, remill::Operand &op)
+  {
     if (!CurrentShade().reg) {
       return this->parent::LiftRegisterOperand(inst, bb, state_ptr, arg, op);
     }
