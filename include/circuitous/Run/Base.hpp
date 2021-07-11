@@ -215,13 +215,13 @@ namespace circ::run {
 
     void Visit(UDiv *op) {
       auto div = [&](auto o) {
-        return (is_zero(rhs(o))) ? this->Undef() : std::make_optional( lhs(o).udiv(rhs(o)) );
+        return (is_zero(rhs(o))) ? rhs(o) : std::make_optional( lhs(o).udiv(rhs(o)) );
       };
       safe(op, div);
     }
     void Visit(SDiv *op) {
       auto div = [&](auto o) {
-        return (is_zero(rhs(o))) ? this->Undef() : std::make_optional( lhs(o).sdiv(rhs(o)) );
+        return (is_zero(rhs(o))) ? rhs(o) : std::make_optional( lhs(o).sdiv(rhs(o)) );
       };
       safe(op, div);
     }
