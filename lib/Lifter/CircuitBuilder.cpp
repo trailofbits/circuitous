@@ -722,7 +722,7 @@ void Circuit0::InjectSemantic(
     // Error bit is saturated, so we need to `or` input and current.
     current_err = ir.CreateOr(ebit_in, current_err);
   }
-  params.push_back(intrinsics::make_outcheck(ir, {ebit_in, ebit_out}));
+  params.push_back(intrinsics::make_outcheck(ir, {current_err, ebit_out}));
 
   // Collect annotated instructions - this is the way separate components
   // of the lfiting pipleline communicate
