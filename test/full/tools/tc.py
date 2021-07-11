@@ -37,6 +37,11 @@ class MemHint:
 
     self.size = size_
 
+  def read(addr_, val_, size_):
+    return MemHint(addr_, val_, MemHint.READ, size_)
+  def write(addr_, val_, size_):
+    return MemHint(addr_, val_, MemHint.WRITE, size_)
+
   def zero_hint():
     x = MemHint(None, None, MemHint.READ, None)
     x.used = False
@@ -211,8 +216,13 @@ class StateBase:
     return self
 
   def mem_hint(self, val):
-    self.mem_hints.append(val)
+    if isinstance(val, list):
+      for x in val:
+        self.mem_hint(x)
+    else:
+      self.mem_hints.append(val)
     return self
+
 
   def mig(self, gen):
     if self.memory is None:
@@ -275,6 +285,9 @@ class State(StateBase):
 
     if other.memory is not None:
       mutated.memory = other.memory
+
+    if other.mem_hints is not None:
+      mutated.mem_hint(other.mem_hints)
     return mutated
 
   def set_bytes(self, bytes_):
@@ -335,6 +348,15 @@ for reg in _regs + _aflags:
   setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))
   setattr(Mutator, reg, lambda s,v,r=reg : s.set_reg(r, v))
   setattr(Mutator, "u" + reg, lambda s,r=reg : s.unset_reg(r))
+
+def random_state(seed):
+  random.seed(seed)
+  out = S(0x1031)
+  for reg in _regs:
+    getattr(out, reg)(random.randint(0, (1 << 64) - 1))
+  for reg in _aflags:
+    getattr(out, reg)(random.randint(0, 1))
+  return out
 
 
 class TestCase:
@@ -482,6 +504,11 @@ class Test:
     verdict = kwargs = kwargs.get('RG', None)
     case._result_generator = verdict
     self.cases.append(case)
+    return self
+
+  def all_defined(self):
+    for idx, bytes in enumerate(self._inst_arr):
+      self.case(run_bytes = idx, R = True)
     return self
 
   def scases(self, compiler, insts, **kwargs):
