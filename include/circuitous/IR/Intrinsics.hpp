@@ -180,6 +180,15 @@ namespace impl {
     }
   };
 
+  template<typename T>
+  struct Frozen : T {
+    template< typename ...Args >
+    static llvm::Function *CreateFn(Args &&...args) {
+      auto fn = T::CreateFn(std::forward< Args >(args)...);
+      return T::freeze(fn);
+    }
+  };
+
   // On contrast with `Predicate` it expects 2 runtime arguments of the same
   // types and returns bool. Size of arguments is encoded in the name.
   template<typename Self_t>
