@@ -155,28 +155,6 @@ namespace circ::shadowinst {
   }
 
   template<typename Getter>
-  auto make_decoder_selects(const Reg &s_reg, llvm::IRBuilder<> &ir, Getter &&get_reg) {
-    auto merge_conditions = [&](auto &all) -> llvm::Value * {
-      if (all.size() == 1) {
-        return all[0];
-      }
-      return intrinsics::make_xor(ir, all);
-    };
-
-    SelectMaker selects{ir};
-    for (auto &[reg, all_mats] : s_reg.translation_map) {
-      auto conditions = decoder_conditions(s_reg, reg, ir);
-
-      // We do not need to emit `xor` if there there would
-      // be only one argument to it.
-      auto condition = merge_conditions(conditions);
-      selects.chain(condition, get_reg(reg, ir));
-    }
-    auto xor_all = merge_conditions(selects.conditions);
-    return std::make_tuple(xor_all, selects.get());
-  }
-
-  template<typename Getter>
   auto make_intrinsics_decoder(const Reg &s_reg, llvm::IRBuilder<> &ir, Getter &get_reg) {
     auto entries = s_reg.translation_entries_count();
     auto bits = s_reg.region_bitsize();
@@ -222,6 +200,24 @@ namespace circ::shadowinst {
     CHECK(select_args.size() > 1);
     auto select = intrinsics::make_select(ir, select_args, bits, select_args[1]->getType());
     return std::make_tuple(cond, select);
+  }
+
+  // Return `i1` that is set to true if `s_reg` was decoded to `reg`.
+  static inline auto make_explicit_decode(
+      llvm::IRBuilder<> &ir, const Reg &s_reg, const std::string &reg)
+  {
+    LOG(INFO) << reg;
+    auto selector = region_selector(ir, s_reg);
+
+    auto it = s_reg.translation_map.find(reg);
+    CHECK(it != s_reg.translation_map.end());
+
+    llvm::Value *acc = ir.getFalse();
+    for (auto &mat : it->second) {
+      auto as_constant = ir.getInt(make_APInt(mat, 0, mat.size()));
+      acc = ir.CreateOr(ir.CreateICmpEQ(selector, as_constant), acc);
+    }
+    return acc;
   }
 
 } // namespace circ::shadowinst
