@@ -30,12 +30,12 @@ saturation_property = {
   .case(run_bytes = 0, R = True)
   .case(run_bytes = 0, DI = MS().ebit(True), R = False),
 
-  VerifyTest("idiv by 0").tags({"idiv", "ebit", "todo"})
+  VerifyTest("idiv by 0").tags({"idiv", "ebit"})
   .bytes(intel(["idiv rdi"])).DI(S(0x350).RDI(0x0))
   .case(run_bytes = 0, R = True)
-  .case(run_bytes = 0, DI = MS().ebit(False), R = False),
+  .case(run_bytes = 0, DE = MS().ebit(False), R = False),
 
-  VerifyTest("Preserve on error idiv").tags({"idiv", "ebit", "todo"})
+  VerifyTest("Preserve on error idiv").tags({"idiv", "ebit"})
   .bytes(intel(["idiv rdi"])).DI(S(0x300).RDI(0x0).ebit(True))
   .case(run_bytes = 0, R = True)
   .case(run_bytes = 0, DI = MS().RDI(0x3), DE = MS().RAX(0x100), R = False),
@@ -251,11 +251,6 @@ cfg = {
   .scases(raw, ["ff2500500000"], R=True)
   .scases(intel, ["jmp rax"], R=False),
 
-  #ModelTest("jz").tags({"jz", "cfg", "min", "cwip4", "mem"})
-  #.bytes(intel(["jz [rip + 0x5]"]))
-  #.DI(S(0x40231).rwmem(0x40231, "fb1a321ac4ffffff4332"))
-  #.case(run_bytes = 0, DI=MS().aflags(0), R = True)
-  #.case(run_bytes = 0, DI=MS().aflags(1), R = True)
 
   ModelTest("call 0xff4410").tags({"call", "cfg", "min"})
   .bytes("e800400000")
