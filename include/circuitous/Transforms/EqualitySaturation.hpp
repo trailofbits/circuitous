@@ -85,8 +85,10 @@ namespace circ::eqsat {
   // A special case is anonymous match for unlabeled pattern.
   struct LabeledMatch
   {
+    using labels_map = std::unordered_map< MatchLabel, Id >;
+
     // matching of labels to equality nodes
-    std::unordered_map< MatchLabel, Id > labels;
+    labels_map labels;
     // corresponding substitutions for the matching
     Substitutions substitutions;
 
@@ -99,7 +101,7 @@ namespace circ::eqsat {
   static inline auto tail(const auto &vec)
   {
     auto tail = std::next(vec.begin());
-    return std::span( &(*tail), vec.size() - 1);
+    return std::span( &(*tail), vec.size() - 1 );
   }
 
   template< typename Graph, typename Pattern, typename Places >
@@ -133,9 +135,7 @@ namespace circ::eqsat {
       if (product.empty())
         return std::nullopt;
 
-      LabeledMatch match;
-      match.substitutions = std::move(product);
-      match.labels = lhs.labels;
+      LabeledMatch match{lhs.labels, std::move(product)};
 
       for (const auto &[label, id] : rhs.labels) {
         CHECK(!match.labels.count(label));
@@ -190,12 +190,8 @@ namespace circ::eqsat {
       // TODO(Heno): add operation caching to egraph
       for (const auto &[id, eclass] : egraph.classes())
         // pattern matches with a root in the eclass
-        if (auto subs = match_eclass(eclass, e); !subs.empty()) {
-          LabeledMatch match;
-          match.labels[lab] = id;
-          match.substitutions = std::move(subs);
-          matched.push_back(std::move(match));
-        }
+        if (auto subs = match_eclass(eclass, e); !subs.empty())
+          matched.push_back( LabeledMatch{{{lab, id}}, std::move(subs)} );
       return matched;
     }
 
@@ -204,8 +200,7 @@ namespace circ::eqsat {
     {
       Substitutions res;
       for (const auto &node : eclass.nodes)
-        if (auto subs = match_enode(node, e); !subs.empty())
-          res.merge(std::move(subs));
+        res.merge(match_enode(node, e));
       return res;
     }
 
@@ -392,10 +387,9 @@ namespace circ::eqsat {
 
     bool is_nested(const expr_list &list) const
     {
-      for (const auto &e : list)
-        if (!std::holds_alternative<expr_list>(e))
-          return false;
-      return true;
+      return std::all_of(list.begin(), list.end(), [] (const auto &e) {
+        return std::holds_alternative<expr_list>(e);
+      });
     }
   };
 
