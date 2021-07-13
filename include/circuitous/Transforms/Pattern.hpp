@@ -81,20 +81,33 @@ namespace circ::eqsat {
 
   using contexts_constraints = disjoint_expr;
 
+  using context_name = std::string_view;
+
   struct expr : std::variant< atom, std::vector< expr >, match_expr, union_expr >
   {
     using variant::variant;
 
-    // TODO(Heno): remove when compiler supports P2162R2:
-    // std::visit for classes derived from std::variant
+    expr(const expr &e) = default;
+    expr(expr &&e) = default;
+
+    expr(const variant &e, context_name c) : variant(e), context(c) {}
+    expr(variant &&e, context_name c) : variant(std::move(e)), context(c) {}
+
+    expr& operator=(const expr &) = default;
+    expr& operator=(expr &&) = default;
+
     constexpr const variant &get() const { return *this; }
     constexpr variant &get() { return *this; }
+
+    std::optional<context_name> context = std::nullopt;
   };
 
   struct named_expr : expr
   {
-    named_expr(std::string_view n, const expr &e) : expr(e), name(n) {}
-    named_expr(std::string_view n, expr &&e) : expr(std::move(e)), name(n) {}
+    using name_type = std::string_view;
+
+    named_expr(name_type n, const expr &e) : expr(e), name(n) {}
+    named_expr(name_type n, expr &&e) : expr(std::move(e)), name(n) {}
 
     label name;
   };
@@ -249,12 +262,20 @@ namespace circ::eqsat {
     return detail::expr_parser::parser();
   }
 
+  // expression can be suffixed with context name as: <expr>:context
+  static inline parser<expr> auto expr_with_context_parser()
+  {
+    auto context_suffix = char_parser(':') < name_parser();
+    auto expression = detail::expr_parser::parser();
+    return from_tuple< expr >(expression & context_suffix) | expression;
+  }
+
   // TODO(Heno): constexpr
   // named expression has form: (let <name> <expr>)
   static inline parser<named_expr> auto named_expr_parser()
   {
     auto name_p = (string_parser("let") & skip(isspace)) < name_parser();
-    auto expr_p = (skip(isspace) < expr_parser());
+    auto expr_p = (skip(isspace) < expr_with_context_parser());
 
     return from_tuple< named_expr >( parenthesized( name_p & expr_p ) );
   }
