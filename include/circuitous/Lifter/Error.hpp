@@ -18,6 +18,15 @@ namespace circ::err {
     return op_code == BO::SDiv || op_code == BO::UDiv;
   }
 
+  static inline bool is_ctlz(llvm::Value *inst) {
+    auto call = llvm::dyn_cast< llvm::CallInst >(inst);
+    if (!call)
+      return false;
+
+    auto callee = call->getCalledFunction();
+    return callee && callee->getIntrinsicID() == llvm::Intrinsic::ctlz;
+  }
+
   // Returns `[explicit_errors, implicit_erros]`
   template<typename R = llvm::iterator_range<llvm::BasicBlock::iterator>>
   static inline auto collect(R range)
@@ -43,6 +52,22 @@ namespace circ::err {
     return collect({as_it(from), as_it(to)});
   }
 
+  llvm::Value *handle_ctlz(llvm::Value *inst) {
+    auto call = llvm::dyn_cast< llvm::CallInst >(inst);
+    CHECK(call);
+
+    // Constant flag that specifies if zero is undef
+    auto flag = call->getArgOperand(1u);
+
+    llvm::IRBuilder<> ir(call);
+    if (flag == ir.getFalse()) {
+      return nullptr;
+    }
+
+    CHECK(flag == ir.getTrue());
+    auto zero = llvm::ConstantInt::get(call->getArgOperand(0u)->getType(), 0u);
+    return ir.CreateICmpEQ(call->getArgOperand(0u), zero);
+  }
 
   llvm::Value *handle_div(llvm::BinaryOperator *div) {
     auto divisor = div->getOperand(1u);
@@ -60,6 +85,11 @@ namespace circ::err {
       auto bin_op = llvm::dyn_cast< llvm::BinaryOperator >(err_i);
       if (bin_op && is_div(bin_op)) {
         out.push_back(handle_div(bin_op));
+      }
+      if (is_ctlz(err_i)) {
+        if (auto err = handle_ctlz(err_i)) {
+          out.push_back(err);
+        }
       }
     }
     return out;
