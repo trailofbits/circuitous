@@ -112,6 +112,13 @@ namespace circ::run {
 
     auto &self() { return static_cast<Self &>(*this); }
 
+    void SetNodeVal(Operation *op, const value_type &val);
+
+    template< typename I > requires std::is_integral_v< I >
+    auto SetNodeVal(Operation *op, I &&i) {
+      return self().SetNodeVal(op, llvm::APInt(op->size, i, false));
+    }
+
     template<typename Op, typename F>
     auto safe(Op *op, F &&f) {
       if (!ValidChildren(op)) {
@@ -119,8 +126,6 @@ namespace circ::run {
       }
       self().SetNodeVal(op, f(op));
     }
-
-    void SetNodeVal(Operation *op, const value_type &val);
 
     value_type GetNodeVal(Operation *op) const ;
     value_type get(Operation *op) const  {
@@ -194,6 +199,12 @@ namespace circ::run {
     void Visit(Select *op);
     void Visit(Parity *op);
     void Visit(PopulationCount *op);
+    void Visit(CountLeadingZeroes *op) {
+      safe(op, [&](auto o){ return self().get(o, 0)->countLeadingZeros(); } );
+    }
+    void Visit(CountTrailingZeroes *op) {
+      safe(op, [&](auto o){ return self().get(o, 0)->countTrailingZeros(); } );
+    }
     void Visit(Or *op);
     void Visit(And *op);
 
