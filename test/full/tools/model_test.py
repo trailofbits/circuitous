@@ -3,7 +3,7 @@
 import copy
 import math
 
-from tools.tc import State, Test, _regs, _aflags, MS, MemHint
+from tools.tc import State, Test, _regs, _aflags, MS, MemHint, MemInput, MIG
 
 import microx
 from microx_core import Executor
@@ -27,6 +27,37 @@ class ModelTest(Test):
         raise e
       case.expected.result = result
     return self
+
+def mem_input_to_map(region, o, m):
+  addr, bytes, (r, w, e) = region
+  assert len(bytes) <= 0x1000
+  aligned_addr = (addr >> 12) << 12
+  amm = microx.ArrayMemoryMap(o, aligned_addr, aligned_addr + 0x1000,
+                              can_read=r, can_write=w, can_execute=e)
+  m.add_map(amm)
+  amm.store_bytes(aligned_addr, bytes)
+
+class PermissiveMemory(microx.Memory):
+
+  def __init__(self, ops, address_size, seed_, page_shift=12):
+    super().__init__(ops, address_size, page_shift)
+    self._memory_maps = {}
+    self.seed = seed_
+    self.additional_inputs = MIG(self.seed)
+
+  def generate_values(self, addr, count=0x1000):
+    self.mem_input.mem_(addr, count, r=True, w=True, e=True)
+
+  def _find_map(self, byte_addr):
+    offset = (byte_addr & self._address_mask) >> self._page_shift
+    if offset not in self._memory_maps:
+      aligned_addr = (byte_addr >> 12) << 12
+      # Generate values for this unalocated memory
+      self.additional_inputs.mem_(aligned_addr, 0x1000, r=True, w=True, e=True)
+      # Store generated values as microx memory
+      mem_input_to_map(self.additional_inputs.generated.entries[-1], self._ops, self)
+
+    return self._memory_maps[offset]
 
 
 # Watch out, exceptions works funky
@@ -53,6 +84,7 @@ class Process_(microx.Process):
 
     return super(Process_, self).read_memory(addr, num_bytes, hint)
 
+
 class MicroxGen:
   def __init__(self):
     pass
@@ -65,10 +97,12 @@ class MicroxGen:
     rsp = input.registers.get("RSP")
 
     o = microx.Operations()
-    m = microx.Memory(o, 64)
+    m = PermissiveMemory(o, 64, 42)
 
     size = 0x1000
-    code = microx.ArrayMemoryMap(o, rip, rip + size, can_write=True, can_execute=True)
+    aligned_addr = (rip >> 12) << 12
+    code = microx.ArrayMemoryMap(o, aligned_addr, aligned_addr + size,
+                                 can_read=True, can_write=True, can_execute=True)
     m.add_map(code)
 
     #TODO(lukas): Stack & other memory
@@ -81,8 +115,6 @@ class MicroxGen:
                                     can_read=r, can_write=w, can_execute=e)
         m.add_map(amm)
         amm.store_bytes(addr, bytes)
-
-    MS()
 
     bytes = []
     for i in range(0, len(input.bytes), 2):
@@ -114,4 +146,5 @@ class MicroxGen:
     for reg in _regs + _aflags:
       out.set_reg(reg, t.read_register(reg, t.REG_HINT_NONE))
     out.ebit(False)
+    input.mig(m.additional_inputs)
     return out
