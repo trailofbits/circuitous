@@ -105,6 +105,24 @@ namespace circ::eqsat {
     }
   }
 
+  TEST_CASE("Context Declaration") {
+
+    CHECK(disjoint_expr_parser()("(disjoint C1 C2)"));
+    CHECK(disjoint_expr_parser()("(disjoint CA CB CD)"));
+
+    auto parser = pattern_parser();
+
+    {
+      auto p = parser("((let X (?x)) (let Y (?y)) (disjoint C1 C2) (match $X $Y))");
+      CHECK(p);
+    }
+
+    {
+      auto p = parser("((let X (?x)) (let Y (?y)) (disjoint C1 C2) (op_add $X $Y))");
+      CHECK(p);
+    }
+  }
+
   TEST_CASE("Union") {
     auto parser = pattern_parser();
     CHECK(parser("(union $A)"));
