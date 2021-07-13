@@ -20,8 +20,6 @@
 namespace circ {
 namespace eqsat {
 
-  using CircuitEGraph = EGraph< ENode< Operation* > >;
-
   struct EGraphBuilder : public Visitor< EGraphBuilder >
   {
     using ENode = CircuitEGraph::ENode;

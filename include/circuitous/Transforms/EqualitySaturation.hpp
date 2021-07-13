@@ -26,6 +26,24 @@
 
 namespace circ::eqsat {
 
+  using CircuitENode = ENode< Operation* >;
+  using CircuitEGraph = EGraph< CircuitENode >;
+
+  static inline std::string name(const CircuitENode *node)
+  {
+    throw std::runtime_error("not implemented");
+  }
+
+  static inline bool is_context_node(const CircuitENode *node)
+  {
+    throw std::runtime_error("not implemented");
+  }
+
+  static inline std::optional<std::int64_t> extract_constant(const CircuitENode *node)
+  {
+    throw std::runtime_error("not implemented");
+  }
+
   using Id = UnionFind::Id;
   // substitution mapping from places (variables) to equality classes
   struct Substitution
@@ -296,7 +314,7 @@ namespace circ::eqsat {
     // match constant node
     Substitutions match_atom(const auto &enode, const constant &c) const
     {
-      if (auto nconst = enode->constant())
+      if (auto nconst = extract_constant(enode))
         return trivial(nconst == c.ref(), places.size());
       return {};
     }
@@ -304,7 +322,7 @@ namespace circ::eqsat {
     // match operation node
     Substitutions match_atom(const auto &enode, const operation &o) const
     {
-      return trivial(enode->name() == o, places.size());
+      return trivial(name(enode) == o, places.size());
     }
 
     // match place (variable) node, returns single substitution with
@@ -340,18 +358,15 @@ namespace circ::eqsat {
     void apply(const expr &e, const Matches &matches) const
     {
       return std::visit( overloaded {
-        [&] (const atom &a)       { return apply(a, matches); },
+        [&] (const atom &a)       {
+          throw std::runtime_error("rewrite rule is applied on the level of expression lists");
+        },
         [&] (const expr_list  &e) { return apply(e, matches); },
         [&] (const union_expr &e) { return apply(e, matches); },
         [&] (const match_expr & ) {
           throw std::runtime_error("match clause is forbidden in the rewrite pattern");
         }
       }, e.get());
-    }
-
-    void apply(const atom &e, const Matches &matches) const
-    {
-      throw std::runtime_error("Rewrite rule is applied on the level of expression lists");
     }
 
     void apply(const union_expr &e, const Matches &matches) const
