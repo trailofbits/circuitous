@@ -40,32 +40,6 @@ namespace circ {
     }
     friend bool operator<(const ENode &a, const ENode &b) { return a.term < b.term; }
 
-    std::string name() const
-    {
-      if constexpr (std::is_same_v< Term, std::string >)
-        return term;
-      else
-        return term->Name();
-    }
-
-    std::optional< std::int64_t > constant() const
-    {
-      auto is_number = [] (const std::string &s) {
-        auto isdigit = [](auto c) { return std::isdigit(c); };
-        return !s.empty() && std::all_of(s.begin(), s.end(), isdigit);
-      };
-
-      if constexpr (std::is_same_v< Term, std::string >) {
-        if (is_number(term)) {
-          return std::stoll(term);
-        }
-      }
-
-      // TODO(Heno): Parse constant from circ
-
-      return std::nullopt;
-    }
-
     Term term;
     Children children;
   };

@@ -22,24 +22,45 @@ namespace circ {
   template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
   using StringNode = ENode< std::string >;
+
+  static inline bool is_context_node(const StringNode *node)
+  {
+    return std::string_view(node->term).starts_with("CTX");
+  }
+
+  static inline std::string name(const StringNode *node)
+  {
+    return node->term;
+  }
+
+  static inline std::optional<std::int64_t> extract_constant(const StringNode *node)
+  {
+    auto is_number = [] (std::string_view s) {
+      auto isdigit = [](auto c) { return std::isdigit(c); };
+      return !s.empty() && std::all_of(s.begin(), s.end(), isdigit);
+    };
+
+    if (is_number(node->term))
+      return std::stoll(node->term);
+
+    return std::nullopt;
+  }
+
   struct TestGraph : EGraph< StringNode >
   {
     auto make_leaf(std::string_view atom)
     {
       auto candidate = ENode(std::string(atom));
-      auto constant = candidate.constant();
+      auto con = extract_constant(&candidate);
 
-      if (constant) {
-        if (auto it = constants.find(constant.value()); it != constants.end()) {
+      if (con)
+        if (auto it = constants.find(*con); it != constants.end())
           return find(it->second);
-        }
-      }
 
       auto [id, node] = add(std::move(candidate));
 
-      if (constant) {
-        constants.emplace(constant.value(), node);
-      }
+      if (con)
+        constants.emplace(*con, node);
 
       return id;
     }
