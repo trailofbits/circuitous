@@ -55,6 +55,9 @@ namespace circ::eqsat {
   // subexpression label has to be named with prefix '$'
   using label = strong_type< std::string_view, label_tag >;
 
+  struct context_tag;
+  using context = strong_type< std::string_view, context_tag >;
+
   using atom = std::variant< constant, operation, place, label >;
 
   template< typename stream >
@@ -71,6 +74,12 @@ namespace circ::eqsat {
   // expression of form: (union [labels])
   // serves to unify matched labels on the right hand side of the rule
   struct union_expr { std::vector<label> labels; };
+
+  // expression of form: (disjoint [context])
+  // serves to specify disjoint contexts
+  struct disjoint_expr { std::vector<context> contexts; };
+
+  using contexts_constraints = disjoint_expr;
 
   struct expr : std::variant< atom, std::vector< expr >, match_expr, union_expr >
   {
@@ -97,9 +106,15 @@ namespace circ::eqsat {
     explicit pattern(const expr &e) : expr(e) {}
     explicit pattern(expr &&e) : expr(std::move(e)) {}
 
-    pattern(const named_exprs &subs, const expr &e) : expr(e), subexprs(subs) {}
-    pattern(named_exprs &&subs, expr &&e) : expr(std::move(e)), subexprs(std::move(subs)) {}
+    pattern(const named_exprs &subs, const contexts_constraints &c, const expr &e)
+      : expr(e), constraints(c), subexprs(subs)
+    {}
 
+    pattern(named_exprs &&subs, contexts_constraints &&c, expr &&e)
+      : expr(std::move(e)), constraints(std::move(c)), subexprs(std::move(subs))
+    {}
+
+    contexts_constraints constraints;
     named_exprs subexprs;
   };
 
@@ -144,19 +159,39 @@ namespace circ::eqsat {
     return fmap( value, number_parser<value_t>() );
   }
 
+  constexpr parser<std::string_view> auto name_parser()
+  {
+    return [] (parse_input_t in) -> parse_result_t<std::string_view> {
+      if (auto prefix = length_parser(isalpha)(in); prefix && result(prefix) > 0) {
+        if (auto suffix = length_parser(isdigit)(rest(prefix))) {
+          auto length = result(prefix) + result(suffix);
+          return {{in.substr(0, length), in.substr(length)}};
+        }
+      }
+
+      return std::nullopt;
+    };
+  }
+
+
   constexpr parser<operation> auto operation_parser()
   {
-    return construct< operation >(string_parser("op_") < word_parser());
+    return construct< operation >(string_parser("op_") < name_parser());
   }
 
   constexpr parser<place> auto place_parser()
   {
-    return construct< place >(char_parser('?') < word_parser());
+    return construct< place >(char_parser('?') < name_parser());
   }
 
   constexpr parser<label> auto label_parser()
   {
-    return construct< label >(char_parser('$') < word_parser());
+    return construct< label >(char_parser('$') < name_parser());
+  }
+
+  constexpr parser<context> auto context_parser()
+  {
+    return construct< context >(name_parser());
   }
 
   constexpr parser<atom> auto atom_parser()
@@ -218,37 +253,62 @@ namespace circ::eqsat {
   // named expression has form: (let <name> <expr>)
   static inline parser<named_expr> auto named_expr_parser()
   {
-    auto name_p = (string_parser("let") & skip(isspace)) < word_parser();
+    auto name_p = (string_parser("let") & skip(isspace)) < name_parser();
     auto expr_p = (skip(isspace) < expr_parser());
 
     return from_tuple< named_expr >( parenthesized( name_p & expr_p ) );
   }
 
-  static inline parser<std::vector<label>> auto labels_parser()
+  template< typename P >
+  static inline parser< std::vector<parse_type<P>> > auto to_vector_parser(P &&p)
   {
+    using parsed_type = parse_type<P>;
     // TODO(Heno): get rid of copy
-    auto push = [] (std::vector<label> labels, label l) {
-      labels.push_back(l);
-      return labels;
+    auto push = [] (std::vector<parsed_type> vec, parsed_type v) {
+      vec.push_back(v);
+      return vec;
     };
 
-    return separated(label_parser(), skip(isspace), std::vector<label>(), push);
+    return separated(std::forward<P>(p), skip(isspace), std::vector<parsed_type>(), push);
+  }
+
+  static inline parser<std::vector<label>> auto labels_parser()
+  {
+    return to_vector_parser(label_parser());
+  }
+
+  template< typename Expr >
+  static inline parser<Expr> auto match_label_list(std::string_view prefix)
+  {
+    auto match_prefix = (string_parser(prefix) & skip(isspace));
+    return construct< Expr >(parenthesized(match_prefix < labels_parser()));
   }
 
   // TODO(Heno): constexpr
   // match expression has form: (match [labels])
   static inline parser<match_expr> auto match_expr_parser()
   {
-    auto prefix = (string_parser("match") & skip(isspace));
-    return construct< match_expr >(parenthesized(prefix < labels_parser()));
+    return match_label_list<match_expr>("match");
   }
 
   // TODO(Heno): constexpr
   // match expression has form: (union [labels])
   static inline parser<union_expr> auto union_expr_parser()
   {
-    auto prefix = (string_parser("union") & skip(isspace));
-    return construct< union_expr >(parenthesized(prefix < labels_parser()));
+    return match_label_list<union_expr>("union");
+  }
+
+  static inline parser<std::vector<context>> auto contexts_parser()
+  {
+    return to_vector_parser(context_parser());
+  }
+
+  // TODO(Heno): constexpr
+  // match expression has form: (disjoint [labels])
+  static inline parser<disjoint_expr> auto disjoint_expr_parser()
+  {
+    auto match_prefix = (string_parser("disjoint") & skip(isspace));
+    return construct< disjoint_expr >(parenthesized(match_prefix < contexts_parser()));
   }
 
   atom root(const auto& e)
@@ -286,17 +346,21 @@ namespace circ::eqsat {
       return exprs;
     };
 
-    auto subexpr_parser = many((named_expr_parser() > skip(isspace)), named_exprs{}, insert_named_expr);
+    auto subexpr_parser = many(
+      (named_expr_parser() > skip(isspace)), named_exprs{}, insert_named_expr
+    );
+
+    auto constraints = option(contexts_constraints{}, (disjoint_expr_parser() > skip(isspace)));
 
     return
       // pattern is either expression
       construct< pattern >( expr_parser() ) |
       // or list of named expressions and final anonymous expression
       // that we are matching against
-      from_tuple< pattern >( parenthesized(subexpr_parser & expr_parser()) ) |
+      from_tuple< pattern >( parenthesized( combine(subexpr_parser, constraints, expr_parser()) ) ) |
       // or list of named expressions and final match expression
       // that allows to specify multi-pattern rules
-      from_tuple< pattern >( parenthesized(subexpr_parser & match_expr_parser()) ) |
+      from_tuple< pattern >( parenthesized( combine(subexpr_parser, constraints, match_expr_parser()) ) ) |
       // or union expression that allows to specify unification of matched rules
       construct< pattern >( union_expr_parser() );
   }
