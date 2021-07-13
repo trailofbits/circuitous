@@ -121,6 +121,11 @@ namespace circ::eqsat {
       auto p = parser("((let X (?x)) (let Y (?y)) (disjoint C1 C2) (op_add $X $Y))");
       CHECK(p);
     }
+
+    {
+      auto p = parser("((let X (?x):C1) (let Y (?y):C2) (disjoint C1 C2) (match $X $Y))");
+      CHECK(p);
+    }
   }
 
   TEST_CASE("Union") {
