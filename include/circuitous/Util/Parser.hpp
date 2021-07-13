@@ -397,6 +397,8 @@ namespace circ::parser
   constexpr bool islower(char c) noexcept { return 'a' <= c && c <= 'z'; }
   constexpr bool isupper(char c) noexcept { return 'A' <= c && c <= 'Z'; }
   constexpr bool isalpha(char c) noexcept { return islower(c) || isupper(c); }
+  constexpr bool isdigit(char c) noexcept { return '0' <= c && c <= '9'; }
+  constexpr bool isalphanum(char c) noexcept { return isalpha(c) || isdigit(c); }
 
   template< typename Pred >
   constexpr parser<char> auto char_parser(Pred &&predicate)
@@ -425,18 +427,23 @@ namespace circ::parser
     return many(parser, std::monostate{}, [] (auto m, auto) { return m; });
   }
 
-  constexpr parser<std::size_t> auto word_length_parser()
+  template< typename Pred >
+  constexpr parser<std::size_t> auto length_parser(Pred &&pred)
   {
     auto accum = [](std::size_t res, auto) -> std::size_t { return ++res; };
-    return many(letter_parser(), std::size_t(0), accum);
+    return many(char_parser(std::forward<Pred>(pred)), std::size_t(0), accum);
   }
 
-  constexpr parser<parse_input_t> auto word_parser()
+  template< typename Pred >
+  constexpr parser<std::string_view> auto word_parser(Pred &&pred)
   {
-    return [] (parse_input_t in) -> parse_result_t<parse_input_t> {
-      if (auto l = word_length_parser()(in)) {
+    return [pred = std::forward<Pred>(pred)] (parse_input_t in)
+      -> parse_result_t<std::string_view>
+    {
+      if (auto l = length_parser(pred)(in)) {
         auto length = result(l);
-        return {{in.substr(0, length), in.substr(length)}};
+        if (length > 0)
+          return {{in.substr(0, length), in.substr(length)}};
       }
 
       return std::nullopt;
@@ -484,12 +491,12 @@ namespace circ::parser
       }
 
       {
-        constexpr auto p = word_length_parser()("test abc"sv);
+        constexpr auto p = length_parser(isalpha)("test abc"sv);
         static_assert( p && result(p) == 4 );
       }
 
       {
-        constexpr auto p = word_parser()("word abc"sv);
+        constexpr auto p = word_parser(isalpha)("word abc"sv);
         static_assert( p && result(p) == "word"sv );
       }
 
