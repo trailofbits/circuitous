@@ -179,7 +179,7 @@ class MemInput:
 
 class StateBase:
   __slots__ = ('registers', '_ebit', 'timestamp', 'undefined', 'mem_hints',
-               'memory')
+               'memory', '_seed')
 
   def __init__(self):
     self.registers = {}
@@ -189,6 +189,7 @@ class StateBase:
     self.mem_hints = []
 
     self.memory = None
+    self._seed = 42
 
   def set_reg(self, reg, val):
     self.registers[reg] = val
@@ -361,7 +362,7 @@ def random_state(seed):
 
 class TestCase:
   __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated', '_result_generator',
-               'run_mode')
+               'run_mode', 'seed')
 
   def __init__(self, name_=None, bytes_=None, input_=None, expected_=None):
     self.name = name_
@@ -371,6 +372,7 @@ class TestCase:
     self.simulated = State()
     self._result_generator = None
     self.run_mode = '--derive'
+    self.seed = 42
 
 # Base class to define tests with -- unfortunately it already does a lot of custom options
 # feel free to come with better decomposition
