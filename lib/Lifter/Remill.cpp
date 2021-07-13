@@ -315,6 +315,10 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     return VisitGenericIntrinsic<Concat>(call, fn, size);
   }
 
+  auto value_size(llvm::Value *val) {
+    return static_cast<uint32_t>(dl.getTypeSizeInBits(val->getType()));
+  }
+
   template<typename T>
   Operation *LowerLLVMIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
     auto res_size = static_cast<uint32_t>(dl.getTypeSizeInBits(call->getType()));
@@ -328,10 +332,22 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     return VisitGenericIntrinsic<T>(call, fn, res_size);
   }
 
+  Operation *call_arg(llvm::CallInst *call, uint32_t idx) {
+    auto op = call->getArgOperand(idx);
+    if (!val_to_op.count(op))
+      Visit(call->getParent()->getParent(), op);
+    return val_to_op[op];
+  }
+
+
   Operation *VisitLLVMIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
     switch (fn->getIntrinsicID()) {
       case llvm::Intrinsic::ctpop : return LowerLLVMIntrinsic<PopulationCount>(call, fn);
-      case llvm::Intrinsic::ctlz  : return LowerLLVMIntrinsic<CountLeadingZeroes>(call, fn);
+      case llvm::Intrinsic::ctlz  : {
+        auto out = impl->Create<CountLeadingZeroes>(value_size(call));
+        out->AddUse(call_arg(call, 0u));
+        return out;
+      }
       case llvm::Intrinsic::cttz  : return LowerLLVMIntrinsic<CountTrailingZeroes>(call, fn);
       default:
         LOG(FATAL) << "Unsupported intrinsic call: "
