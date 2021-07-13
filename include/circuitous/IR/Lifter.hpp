@@ -358,23 +358,32 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
   auto MaskCoerceInfo(const shadowinst::Reg &s_reg) {
     std::map<std::tuple<uint64_t, uint64_t>, std::vector<std::string>> out;
 
+    std::vector<std::string> defaulted;
+    auto defaults = [&](auto reg) -> bool {
+      return !arch->RegisterByName(reg);
+    };
+
     auto fetch_info = [&](auto reg) -> std::tuple< uint32_t, uint32_t > {
       if (auto orig = arch->RegisterByName(reg)) {
         auto big = orig->EnclosingRegister();
         return std::make_tuple(orig->size, big->size);
       }
-      // TODO(lukas): Pass in a default? There is no way to get original
-      //              size from things like `NEXT_PC`.
-      return std::make_tuple(8ull, 8ull);
+      LOG(FATAL) << "Cannot fetch info for reg that is not in arch.";
     };
 
     for (auto &[reg, bits] : s_reg.translation_map) {
+      if (defaults(reg)) {
+        defaulted.push_back(reg);
+        continue;
+      }
+
       auto key = fetch_info(reg);
       for (auto &bstr : bits) {
         out[key].push_back(s_reg.make_bitstring(bstr));
       }
     }
 
+    CHECK(defaulted.size() <= 1);
     CHECK(!out.empty());
     // Check with extra dbg message
     if (out.size() != 1) {
@@ -384,8 +393,16 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
         auto [x, y] = key;
         ss << "[ " << std::to_string(x) << " , " << std::to_string(y) << " ]";
       }
-      LOG(FATAL) << "out.size() != 1\n" << ss.str();
+      LOG(FATAL) << "out.size() != 1\n" << ss.str() << " in:\n" << s_reg.to_string();
     }
+
+    auto &[key, _] = *(out.begin());
+    for (auto reg : defaulted) {
+      for (auto &bstr : s_reg.translation_map.find(reg)->second) {
+        out[key].push_back(s_reg.make_bitstring(bstr));
+      }
+    }
+
     return out.begin()->first;
   }
 
