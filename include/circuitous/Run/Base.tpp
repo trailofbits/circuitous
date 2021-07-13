@@ -98,7 +98,7 @@ void OpSem<S>::Visit(Select *op) {
   }
   auto selector = self().get( ( *op )[ 0 ] );
   auto chosen = self().get( ( *op )[ selector->getLimitedValue() + 1 ] );
-  return self().SetNodeVal(op, *chosen);
+  return self().SetNodeVal(op, chosen);
 }
 
 template<typename S>

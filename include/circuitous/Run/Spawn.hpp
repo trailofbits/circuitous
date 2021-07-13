@@ -175,6 +175,8 @@ namespace circ::run {
 
     Spawn &operator=(Spawn) = delete;
 
+    using Base::SetNodeVal;
+
     void SetNodeVal(Operation *op, const value_type &val) {
       if (node_values.count(op)) {
         CHECK(node_values[op] == val)
