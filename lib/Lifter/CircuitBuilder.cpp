@@ -188,7 +188,46 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
   MuteStateEscape(*ctx.module(), "__remill_error");
   MuteStateEscape(*ctx.module(), "__remill_missing_block");
 
-  return BuildCircuit1(BuildCircuit0(std::move(isels)));
+  // After optimizations some context may be merged, but llvm opt will not remove them
+  // from the top-level xor function.
+  auto crop_return = [](auto fn) {
+    std::vector< llvm::Instruction * > rets;
+    for (auto &bb : *fn)
+      for (auto &inst : bb)
+        if (auto ret = llvm::dyn_cast< llvm::ReturnInst >(&inst))
+          rets.push_back(ret);
+
+    // There should always be one return
+    CHECK(rets.size() == 1);
+    auto returned = rets[0]->getOperand(0u);
+
+    auto call = llvm::dyn_cast< llvm::CallInst >(returned);
+    CHECK(returned && intrinsics::Xor::IsIntrinsic(call->getCalledFunction()));
+
+    // Eliminate all duplicates
+    std::unordered_set<llvm::Value *> verifies;
+    // Skip all other operands
+    std::vector<llvm::Value *> others;
+    for (uint32_t i = 0; i < call->getNumArgOperands(); ++i) {
+      if (auto verif = llvm::dyn_cast< llvm::CallInst >(call->getArgOperand(i))) {
+        if (intrinsics::VerifyInst::IsIntrinsic(verif->getCalledFunction())) {
+          verifies.insert(verif);
+          continue;
+        }
+      }
+      others.push_back(call->getArgOperand(i));
+    }
+
+    llvm::IRBuilder<> ir(call);
+    others.insert(others.end(), verifies.begin(), verifies.end());
+
+    auto xor_ = intrinsics::make_xor(ir, others);
+    call->replaceAllUsesWith(xor_);
+    call->eraseFromParent();
+    return fn;
+  };
+
+  return crop_return(BuildCircuit1(BuildCircuit0(std::move(isels))));
 }
 
 // Build the first level circuit. We will analyze this function later to
