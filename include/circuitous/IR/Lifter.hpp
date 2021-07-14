@@ -585,17 +585,18 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     if (!maybe_s_reg) {
       return LoadWordRegValOrZero_(block, state_ptr, (*r_reg)->name, zero);
     }
-    if ((*maybe_s_reg)->empty()) {
-      if ((*maybe_s_reg)->translation_map.size() == 0) {
+    auto &s_reg = *maybe_s_reg;
+    if (s_reg->empty()) {
+      if (s_reg->translation_map.size() == 0) {
         return LoadWordRegValOrZero_(block, state_ptr, (*r_reg)->name, zero);
       }
-      CHECK((*maybe_s_reg)->translation_map.size() == 1);
-      auto &entry = *(*maybe_s_reg)->translation_map.begin();
+      CHECK(s_reg->translation_map.size() == 1);
+      auto &entry = *s_reg->translation_map.begin();
       CHECK_EQ(entry.second.size(), 1);
       CHECK(entry.second.begin()->empty());
       return LoadWordRegValOrZero_(block, state_ptr, entry.first, zero);
     }
-    return LiftSReg(block, state_ptr, **maybe_s_reg);
+    return LiftSReg(block, state_ptr, *s_reg);
   }
 
   template<typename I>
