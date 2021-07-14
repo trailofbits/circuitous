@@ -150,20 +150,6 @@ namespace circ {
     EClass& eclass(Id id) { return _classes[ _unions.find(id) ]; }
     const EClass& eclass(Id id) const { return _classes.at( _unions.find(id) ); }
 
-    std::unordered_set<ENode*> contexts(Id id)
-    {
-      std::unordered_set<ENode*> res;
-      for (auto p : eclass(id).parents) {
-        if (is_context_node(p)) {
-          res.insert(p);
-        } else {
-          res.merge(contexts(find(p)));
-        }
-      }
-      return res;
-    }
-
-
     // Restores the egraph invariants, i.e, congruence equality and enode uniqueness
     void rebuild()
     {
