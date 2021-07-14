@@ -284,10 +284,9 @@ namespace circ::eqsat {
   static inline parser< std::vector<parse_type<P>> > auto to_vector_parser(P &&p)
   {
     using parsed_type = parse_type<P>;
-    // TODO(Heno): get rid of copy
     auto push = [] (std::vector<parsed_type> vec, parsed_type v) {
-      vec.push_back(v);
-      return vec;
+      vec.push_back(std::move(v));
+      return std::move(vec);
     };
 
     return separated(std::forward<P>(p), skip(isspace), std::vector<parsed_type>(), push);
