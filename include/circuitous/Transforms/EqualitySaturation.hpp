@@ -26,6 +26,8 @@
 
 namespace circ::eqsat {
 
+  using Id = UnionFind::Id;
+
   using CircuitENode = ENode< Operation* >;
   using CircuitEGraph = EGraph< CircuitENode >;
 
@@ -44,7 +46,20 @@ namespace circ::eqsat {
     throw std::runtime_error("not implemented");
   }
 
-  using Id = UnionFind::Id;
+  template< typename Graph, typename ENode = typename Graph::ENode >
+  static inline std::unordered_set< ENode* > contexts(const Graph &egraph, Id id)
+  {
+    std::unordered_set< ENode* > res;
+    for (auto p : egraph.eclass(id).parents) {
+      if (is_context_node(p)) {
+        res.insert(p);
+      } else {
+        res.merge(contexts(egraph, egraph.find(p)));
+      }
+    }
+    return res;
+  }
+
   // substitution mapping from places (variables) to equality classes
   struct Substitution
   {
@@ -131,7 +146,7 @@ namespace circ::eqsat {
 
     Matches result() const
     {
-      return std::visit( overloaded {
+      auto matches = std::visit( overloaded {
         [&] (const match_expr &e) -> Matches { return match(e); },
         [&] (const expr_list  &e) -> Matches { return match(e); },
         [&] (const atom &a)       -> Matches { return match(a); },
@@ -139,6 +154,8 @@ namespace circ::eqsat {
           throw std::runtime_error("union clause is forbidden in the matching pattern");
         }
       }, pattern.get());
+
+      return filter_constrained(std::move(matches));
     }
 
   private:
@@ -146,6 +163,51 @@ namespace circ::eqsat {
     const Graph &egraph;
     const Pattern &pattern;
     const Places &places;
+
+    Matches filter_constrained(Matches &&matches) const
+    {
+      if (pattern.constraints.contexts.size() < 2)
+        return std::move(matches);
+
+      matches.erase(
+        std::remove_if(matches.begin(), matches.end(), [&](const auto &match) {
+          return constrained(match);
+        }),
+        matches.end()
+      );
+
+      return std::move(matches);
+    }
+
+    using context_node = typename Graph::ENode*;
+    using context_t = std::unordered_set< context_node >;
+    using named_contexts = std::unordered_map<context_name, context_t>;
+
+    named_contexts get_named_contexts(const auto &labels) const
+    {
+      named_contexts res;
+      for (const auto &[lab, id] : labels) {
+        if (std::holds_alternative<label>(lab))
+          if (auto sub = pattern.subexprs.at(std::get<label>(lab)); sub.context)
+            res[*sub.context] = contexts(egraph, id);
+      }
+      return res;
+    }
+
+    bool constrained(const LabeledMatch &match) const
+    {
+      auto named = get_named_contexts(match.labels);
+
+      std::unordered_map< context_node, int > counts;
+      for (const auto &name : pattern.constraints.contexts)
+        for (const auto &node : named.at(name.ref()))
+          counts[node]++;
+
+      return std::any_of(counts.begin(), counts.end(), [] (const auto &elem) {
+        const auto &[_, count] = elem;
+        return count > 1;
+      });
+    }
 
     static inline std::optional< LabeledMatch > merge(const LabeledMatch &lhs, const LabeledMatch &rhs)
     {
