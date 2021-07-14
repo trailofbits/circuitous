@@ -304,6 +304,62 @@ namespace circ::eqsat {
       CHECK(additions.nodes[1]->children[1] == x);
     }
 
+    TEST_CASE("Constrained Contexts Rewrite")
+    {
+      TestGraph egraph;
+      TestGraphBuilder builder(&egraph);
+
+      auto x = egraph.make_leaf("x");
+      auto add = egraph.make_node("add", {x, x});
+
+      auto con = egraph.make_leaf("2");
+      auto mul1 = egraph.make_node("mul", {x, con});
+      auto mul2 = egraph.make_node("mul", {x, con});
+
+      egraph.make_node("CTX1", {add, mul1});
+      egraph.make_node("CTX2", {mul2});
+
+      auto addctx = contexts(egraph, add);
+
+      auto any_of = [] (const auto &contexts, std::string_view target) {
+        return std::any_of(contexts.begin(), contexts.end(), [&] (const auto &ctx) {
+          return name(ctx) == target;
+        });
+      };
+
+      CHECK(addctx.size() == 1);
+      CHECK(any_of(addctx, "CTX1"));
+
+      auto conctx = contexts(egraph, con);
+      CHECK(conctx.size() == 2);
+      CHECK(any_of(conctx, "CTX1"));
+      CHECK(any_of(conctx, "CTX2"));
+
+      auto xctx = contexts(egraph, x);
+      CHECK(xctx.size() == 2);
+      CHECK(any_of(xctx, "CTX1"));
+      CHECK(any_of(xctx, "CTX2"));
+
+      CHECK(contexts(egraph, add) == contexts(egraph, mul1));
+
+      auto rule = TestRule(
+        "mul-add-equality",
+        "((let A (op_add ?x ?x):C1) (let B (op_mul ?x 2):C2) (disjoint C1 C2) (match $A $B))",
+        "(union $A $B)"
+      );
+
+      auto matches = rule.match(egraph);
+      CHECK(matches.size() == 1);
+
+      rule.apply(egraph, builder);
+      egraph.rebuild();
+
+      egraph.dump("egraph.dot");
+
+
+      CHECK(egraph.eclass(add).size() == 2);
+      CHECK(egraph.eclass(add) == egraph.eclass(mul2));
+    }
   }
 
 } // namespace circ::eqsat
