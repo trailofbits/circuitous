@@ -33,7 +33,7 @@ jobs:
 
     runs-on: ubuntu-20.04
 
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     container:
       image: docker.pkg.github.com/lifting-bits/cxx-common/vcpkg-builder-${{ matrix.image.name }}:${{ matrix.image.tag }}
