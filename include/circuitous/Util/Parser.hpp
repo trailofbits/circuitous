@@ -308,7 +308,7 @@ namespace circ::parser
     {
       if (auto r = p1(s)) {
         auto p = p2 < p1;
-        return {accumulate(rest(r), p, f(init, result(r)), f)};
+        return {accumulate(rest(r), p, f(std::move(init), std::move(result(r))), f)};
       }
       return {{init, s}};
     };
