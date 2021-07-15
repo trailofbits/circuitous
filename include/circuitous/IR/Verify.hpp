@@ -86,7 +86,7 @@ struct Verifier {
       case Select::kind:
         return Exactly((1 << op->operands[0]->size) + 1, op);
       case Concat::kind:
-        return MoreThan(2, op);
+        return MoreThan(1, op);
       case VerifyInstruction::kind:
       case OnlyOneCondition::kind:
       case Circuit::kind:
