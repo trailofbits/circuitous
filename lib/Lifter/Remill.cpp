@@ -69,72 +69,67 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
                                          llvm::Value *val) {
   auto self = static_cast<T *>(this);
 
-  //const auto val = use.get();
-
   // Bottom out at an argument; it should be an input register.
-  if (auto arg_val = llvm::dyn_cast<llvm::Argument>(val); arg_val) {
-    self->VisitArgument(context, arg_val);
+  if (auto arg_val = llvm::dyn_cast<llvm::Argument>(val)) {
+    return self->VisitArgument(context, arg_val);
+  }
 
   // Instruction; follow the dependency chain.
-  } else if (auto inst_val = llvm::dyn_cast<llvm::Instruction>(val); inst_val) {
-    if (auto call_val = llvm::dyn_cast<llvm::CallInst>(inst_val); call_val) {
+  if (auto inst_val = llvm::dyn_cast<llvm::Instruction>(val)) {
+    if (auto call_val = llvm::dyn_cast<llvm::CallInst>(inst_val)) {
       for (auto &op_use : call_val->arg_operands()) {
         self->Visit(context, op_use);
       }
 
-      self->VisitFunctionCall(context, call_val);
+      return self->VisitFunctionCall(context, call_val);
 
-    } else {
-      for (auto &op_use : inst_val->operands()) {
-        self->Visit(context, op_use);
-      }
-
-      if (llvm::isa<llvm::BinaryOperator>(inst_val) ||
-          llvm::isa<llvm::CmpInst>(inst_val)) {
-        self->VisitBinaryOperator(context, inst_val);
-
-      } else if (llvm::isa<llvm::UnaryInstruction>(inst_val)) {
-        self->VisitUnaryOperator(context, inst_val);
-
-      } else if (llvm::isa<llvm::SelectInst>(inst_val)) {
-        self->VisitSelect(context, inst_val);
-
-      } else if (auto freeze = llvm::dyn_cast<llvm::FreezeInst>(inst_val)) {
-        self->VisitFreeze(context, freeze);
-      } else {
-        LOG(FATAL) << "Unexpected value during visit: "
-                   << remill::LLVMThingToString(inst_val);
-      }
+    }
+    for (auto &op_use : inst_val->operands()) {
+      self->Visit(context, op_use);
     }
 
-  // Bottom out at a constant, ignore for now.
-  } else if (auto const_val = llvm::dyn_cast<llvm::Constant>(val); const_val) {
-    if (auto undef = llvm::dyn_cast<llvm::UndefValue>(const_val); undef) {
-      self->VisitUndefined(context, undef);
+    if (llvm::isa<llvm::BinaryOperator>(inst_val) ||
+        llvm::isa<llvm::CmpInst>(inst_val)) {
+      return self->VisitBinaryOperator(context, inst_val);
+    }
 
-    } else if (auto ce = llvm::dyn_cast<llvm::ConstantExpr>(const_val); ce) {
+    if (llvm::isa<llvm::UnaryInstruction>(inst_val)) {
+      return self->VisitUnaryOperator(context, inst_val);
+    }
+    if (llvm::isa<llvm::SelectInst>(inst_val)) {
+      return self->VisitSelect(context, inst_val);
+    }
+    if (auto freeze = llvm::dyn_cast<llvm::FreezeInst>(inst_val)) {
+      return self->VisitFreeze(context, freeze);
+    }
+    LOG(FATAL) << "Unexpected value during visit: " << remill::LLVMThingToString(inst_val);
+  }
+
+  // Bottom out at a constant, ignore for now.
+  if (auto const_val = llvm::dyn_cast<llvm::Constant>(val)) {
+    if (auto undef = llvm::dyn_cast<llvm::UndefValue>(const_val)) {
+      return self->VisitUndefined(context, undef);
+    }
+    if (auto ce = llvm::dyn_cast<llvm::ConstantExpr>(const_val)) {
       auto ce_inst = ce->getAsInstruction();
       auto &entry_block = context->getEntryBlock();
       ce_inst->insertBefore(&*entry_block.getFirstInsertionPt());
       ce->replaceAllUsesWith(ce_inst);
       CHECK_EQ(val, ce_inst);
-      self->Visit(context, val);  // Revisit.
-
-    } else if (auto ci = llvm::dyn_cast<llvm::ConstantInt>(val); ci) {
-      self->VisitConstantInt(context, ci);
-
-    } else if (auto cf = llvm::dyn_cast<llvm::ConstantFP>(val); cf) {
-      self->VisitConstantFP(context, cf);
-
-    } else {
-      LOG(FATAL)
-          << "Unexpected constant encountered during dependency visitor: "
-          << remill::LLVMThingToString(val);
+      return self->Visit(context, val);  // Revisit.
     }
-  } else {
-    LOG(FATAL) << "Unexpected value encountered during dependency visitor: "
-               << remill::LLVMThingToString(val);
+    if (auto ci = llvm::dyn_cast<llvm::ConstantInt>(val)) {
+      return self->VisitConstantInt(context, ci);
+    }
+    if (auto cf = llvm::dyn_cast<llvm::ConstantFP>(val)) {
+      return self->VisitConstantFP(context, cf);
+    }
+    LOG(FATAL)
+        << "Unexpected constant encountered during dependency visitor: "
+        << remill::LLVMThingToString(val);
   }
+  LOG(FATAL) << "Unexpected value encountered during dependency visitor: "
+             << remill::LLVMThingToString(val);
 }
 
 class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
@@ -157,35 +152,25 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   }
 
   static unsigned SizeFromSuffix(llvm::StringRef name) {
-    if (name.endswith("_8")) {
-      return 8u;
-    } else if (name.endswith("_16")) {
-      return 16u;
-    } else if (name.endswith("_32")) {
-      return 32u;
-    } else if (name.endswith("_64")) {
-      return 64u;
-    } else if (name.endswith("_f32")) {
-      return 32u;
-    } else if (name.endswith("_f64")) {
-      return 64u;
-    } else if (name.endswith("_f80")) {
-      return 80u;
-    } else if (name.endswith("_f128")) {
-      return 128u;
-    } else {
-      LOG(FATAL) << "Unsupported memory read intrinsic: " << name.str();
-      return 0u;
-    }
+    if (name.endswith("_8"))    return 8u;
+    if (name.endswith("_16"))   return 16u;
+    if (name.endswith("_32"))   return 32u;
+    if (name.endswith("_64"))   return 64u;
+    if (name.endswith("_f32"))  return 32u;
+    if (name.endswith("_f64"))  return 64u;
+    if (name.endswith("_f80"))  return 80u;
+    if (name.endswith("_f128")) return 128u;
+
+    LOG(FATAL) << "Unsupported memory read intrinsic: " << name.str();
   }
 
-  Operation *VisitExtractIntrinsic(llvm::Function *fn) {
+  Operation *VisitExtractIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
     // TODO(lukas): Refactor into separate method and check in a better way
     //              that includes `_avx` variants.
     auto triple = llvm::Triple(fn->getParent()->getTargetTriple());
     CHECK(remill::GetArchName(triple) == remill::kArchAMD64);
 
-    const auto &[from, size] = intrinsics::Extract::ParseArgs(fn);
+    auto [from, size] = intrinsics::Extract::ParseArgs< uint32_t >(fn);
 
     CHECK(impl->Attr<InputInstructionBits>().Size() == 1);
     const auto &inst_bytes = *impl->Attr<InputInstructionBits>().begin();
@@ -208,10 +193,11 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
         from = y;
       }
     };
-    partials =  generate_fragments(static_cast<uint32_t>(from),
-                                   static_cast<uint32_t>(from + size));
+    partials = generate_fragments(from ,from + size);
 
     if (partials.size() == 1) {
+      // `Emplace` was not called, therefore manual assignement is needed.
+      val_to_op[call] = partials.front();
       return partials.front();
     }
 
@@ -220,16 +206,11 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     // ba 12 00 00 00 - mov 12, %rdx
     // If we do extract(32, 0) we end up with `12000000` as number, but we would
     // expect `00000012` therefore we must reorder them and then concat.
-    auto full = impl->Create<Concat>(static_cast<unsigned>(size));
+    auto full = Emplace< Concat >(call, size);
     for (auto x : partials) {
       full->AddUse(x);
     }
     return full;
-  }
-
-  Operation *VisitInputImmediate(llvm::CallInst *call, llvm::Function *fn) {
-    auto [size] = intrinsics::InputImmediate::ParseArgs<uint32_t>(fn);
-    return VisitGenericIntrinsic<InputImmediate>(call, fn, size);
   }
 
   Operation *VisitExtractRawIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
@@ -239,17 +220,14 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     CHECK(remill::GetArchName(triple) == remill::kArchAMD64);
 
     CHECK(impl->Attr<InputInstructionBits>().Size() == 1);
-    const auto &inst_bytes = *impl->Attr<InputInstructionBits>().begin();
+    const auto &inst_bytes = impl->input_inst_bits();
 
-    const auto &[from, size] = intrinsics::ExtractRaw::ParseArgs(fn);
-    auto op = impl->Create<Extract>(
-        static_cast<unsigned>(from),
-        static_cast<unsigned>(from + size));
+    auto [from, size] = intrinsics::ExtractRaw::ParseArgs< uint32_t >(fn);
+    auto op = Emplace< Extract >(call, from, from + size);
 
     auto args = CallArgs(call);
     if (!args.empty()) {
-      Visit(call->getParent()->getParent(), args[0]);
-      op->AddUse(val_to_op[args[0]]);
+      op->AddUse(Fetch(call->getParent()->getParent(), args[0]));
     } else {
       op->AddUse(inst_bytes);
     }
@@ -257,98 +235,34 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   }
 
   template<typename O, typename ... Args>
-  Operation *VisitGenericIntrinsic(
-      llvm::CallInst *call, llvm::Function *fn, Args &&... args) {
-    auto out = impl->Create<O>(std::forward<Args>(args)...);
+  Operation *VisitGenericIntrinsic(llvm::CallInst *call, llvm::Function *fn, Args &&... args) {
+    auto out = Emplace< O >(call, std::forward<Args>(args)...);
     for (auto arg : CallArgs(call)) {
-      if (!val_to_op.count(arg)) {
-        Visit(call->getParent()->getParent(), arg);
-      }
-      auto op = val_to_op[arg];
-      out->AddUse(op);
+      out->AddUse(Fetch(call->getParent()->getParent(), arg));
     }
     return out;
-  }
-
-  Operation *VisitOutputCheckIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
-    return VisitGenericIntrinsic<RegConstraint>(call, fn);
-  }
-
-  Operation *VisitXor(llvm::CallInst *call, llvm::Function *fn) {
-    return VisitGenericIntrinsic<OnlyOneCondition>(call, fn);
-  }
-
-  Operation *VisitBitCompare(llvm::CallInst *call, llvm::Function *fn) {
-    return VisitGenericIntrinsic<DecodeCondition>(call, fn);
-  }
-
-  Operation *VisitVerifyInst(llvm::CallInst *call, llvm::Function *fn) {
-    return VisitGenericIntrinsic<VerifyInstruction>(call, fn);
-  }
-
-  Operation *VisitAdviceConstraintIntrinsics(llvm::CallInst *call, llvm::Function *fn) {
-    return VisitGenericIntrinsic<AdviceConstraint>(call, fn);
-  }
-
-  Operation *VisitAdviceIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
-    auto [size] = intrinsics::Advice::ParseArgs<uint32_t>(fn);
-    return VisitGenericIntrinsic<Advice>(call, fn, size);
-  }
-
-  Operation *VisitSelectIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
-    auto [bits, size] = intrinsics::Select::ParseArgs<uint32_t>(fn);
-    return VisitGenericIntrinsic<Select>(call, fn, bits, size);
-  }
-
-  Operation *VisitOrIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
-    return VisitGenericIntrinsic<Or>(call, fn);
-  }
-
-  Operation *VisitConcat(llvm::CallInst *call, llvm::Function *fn) {
-    auto args = CallArgs(call);
-    if (args.size() == 1) {
-      Visit(call->getParent()->getParent(), args[0]);
-      return val_to_op[args[0]];
-    }
-
-    auto [size] = intrinsics::Concat::ParseArgs<uint32_t>(fn);
-    return VisitGenericIntrinsic<Concat>(call, fn, size);
   }
 
   auto value_size(llvm::Value *val) {
     return static_cast<uint32_t>(dl.getTypeSizeInBits(val->getType()));
   }
 
-  template<typename T>
-  Operation *LowerLLVMIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
-    auto res_size = static_cast<uint32_t>(dl.getTypeSizeInBits(call->getType()));
-    auto arg_0 = call->getArgOperand(0u);
-    if (!val_to_op.count(arg_0)) {
-      Visit(call->getParent()->getParent(), arg_0);
-    }
-    if (val_to_op[arg_0]->op_code == Undefined::kind) {
-      return impl->Create<Undefined>(res_size);
-    }
-    return VisitGenericIntrinsic<T>(call, fn, res_size);
-  }
-
   Operation *call_arg(llvm::CallInst *call, uint32_t idx) {
     auto op = call->getArgOperand(idx);
-    if (!val_to_op.count(op))
-      Visit(call->getParent()->getParent(), op);
-    return val_to_op[op];
+    return Fetch(call->getParent()->getParent(), op);
   }
-
 
   Operation *VisitLLVMIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
     switch (fn->getIntrinsicID()) {
-      case llvm::Intrinsic::ctpop : return LowerLLVMIntrinsic<PopulationCount>(call, fn);
+      case llvm::Intrinsic::ctpop :
+        return VisitGenericIntrinsic< PopulationCount >(call, fn, value_size(call));
       case llvm::Intrinsic::ctlz  : {
-        auto out = impl->Create<CountLeadingZeroes>(value_size(call));
+        auto out = Emplace< CountLeadingZeroes >(call, value_size(call));
         out->AddUse(call_arg(call, 0u));
         return out;
       }
-      case llvm::Intrinsic::cttz  : return LowerLLVMIntrinsic<CountTrailingZeroes>(call, fn);
+      case llvm::Intrinsic::cttz  :
+        return VisitGenericIntrinsic< CountTrailingZeroes >(call, fn, value_size(call));
       default:
         LOG(FATAL) << "Unsupported intrinsic call: "
                    << remill::LLVMThingToString(call);
@@ -361,128 +275,135 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     if (name.startswith("__remill_read_memory_")) {
       LOG(FATAL) << "__remill_read_memory_* should not be present!";
     }
-    if (name.startswith("__remill_undefined_")) {
-      return impl->Create<Undefined>(SizeFromSuffix(name));
-    }
     if (name.startswith("__remill_write_memory_")) {
       LOG(FATAL) << "__remill_write_memory_* should not be present!";
     }
+
+    if (name.startswith("__remill_undefined_")) {
+      return Emplace< Undefined >(call, SizeFromSuffix(name));
+    }
     if (intrinsics::Extract::IsIntrinsic(fn)) {
-      return VisitExtractIntrinsic(fn);
+      return VisitExtractIntrinsic(call, fn);
     }
     if (intrinsics::ExtractRaw::IsIntrinsic(fn)) {
       return VisitExtractRawIntrinsic(call, fn);
     }
     if (intrinsics::InputImmediate::IsIntrinsic(fn)) {
-      return VisitInputImmediate(call, fn);
+      auto [size] = intrinsics::InputImmediate::ParseArgs<uint32_t>(fn);
+      return VisitGenericIntrinsic< InputImmediate >(call, fn, size);
     }
     if (intrinsics::Xor::IsIntrinsic(fn)) {
-      return VisitXor(call, fn);
+      return VisitGenericIntrinsic< OnlyOneCondition >(call, fn);
     }
     if (intrinsics::Concat::IsIntrinsic(fn)) {
-      return VisitConcat(call, fn);
+      auto [size] = intrinsics::Concat::ParseArgs< uint32_t >(fn);
+      return VisitGenericIntrinsic< Concat >(call, fn, size);
     }
     if (intrinsics::Select::IsIntrinsic(fn)) {
-      return VisitSelectIntrinsic(call, fn);
+      auto [bits, size] = intrinsics::Select::ParseArgs< uint32_t >(fn);
+      return VisitGenericIntrinsic< Select >(call, fn, bits, size);
     }
     if (intrinsics::OutputCheck::IsIntrinsic(fn)) {
-      return VisitOutputCheckIntrinsic(call, fn);
+      return VisitGenericIntrinsic< RegConstraint >(call, fn);
     }
     if (intrinsics::BitCompare::IsIntrinsic(fn)) {
-      return VisitBitCompare(call, fn);
+      return VisitGenericIntrinsic< DecodeCondition >(call, fn);
     }
     if (intrinsics::VerifyInst::IsIntrinsic(fn)) {
-      return VisitVerifyInst(call, fn);
+      return VisitGenericIntrinsic< VerifyInstruction >(call, fn);
     }
     if (intrinsics::Advice::IsIntrinsic(fn)) {
-      return VisitAdviceIntrinsic(call, fn);
+      auto [size] = intrinsics::Advice::ParseArgs< uint32_t >(fn);
+      return VisitGenericIntrinsic< Advice >(call, fn, size);
     }
     if (intrinsics::AdviceConstraint::IsIntrinsic(fn)) {
-      return VisitAdviceConstraintIntrinsics(call, fn);
+      return VisitGenericIntrinsic< AdviceConstraint >(call, fn);
     }
     if (intrinsics::Or::IsIntrinsic(fn)) {
-      return VisitOrIntrinsic(call, fn);
+      return VisitGenericIntrinsic< Or >(call, fn);
     }
     if (intrinsics::Memory::IsIntrinsic(fn)) {
       auto [id, _] = intrinsics::Memory::ParseArgs< uint32_t >(fn);
       return VisitGenericIntrinsic< Memory >(call, fn, id);
     }
     if (intrinsics::And::IsIntrinsic(fn)) {
-      return VisitGenericIntrinsic<And>(call, fn);
+      return VisitGenericIntrinsic< And >(call, fn);
     }
     if (intrinsics::ReadConstraint::IsIntrinsic(fn)) {
-      return VisitGenericIntrinsic<ReadConstraint>(call, fn);
+      return VisitGenericIntrinsic< ReadConstraint >(call, fn);
     }
     if (intrinsics::WriteConstraint::IsIntrinsic(fn)) {
-      return VisitGenericIntrinsic<WriteConstraint>(call, fn);
+      return VisitGenericIntrinsic< WriteConstraint >(call, fn);
     }
     if (intrinsics::UnusedConstraint::IsIntrinsic(fn)) {
-      return VisitGenericIntrinsic<UnusedConstraint>(call, fn);
+      return VisitGenericIntrinsic< UnusedConstraint >(call, fn);
     }
     LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(call);
   }
 
+  // This function is responsible for binding some node to `val` inside `val_to_op`.
   void VisitFunctionCall(llvm::Function *, llvm::CallInst *val) {
     if (val_to_op.count(val)) {
       return;
     }
-    const auto func = val->getCalledFunction();
+
+    auto func = val->getCalledFunction();
     LOG_IF(FATAL, !func) << "Cannot find called function used in call: "
                          << remill::LLVMThingToString(val);
 
+    Operation *op = nullptr;
     if (func->getIntrinsicID() != llvm::Intrinsic::not_intrinsic) {
-      val_to_op[val] = VisitLLVMIntrinsic(val, func);
+      op = VisitLLVMIntrinsic(val, func);
     } else {
-      val_to_op[val] = VisitIntrinsic(val, func);
+      op = VisitIntrinsic(val, func);
     }
+    CHECK(op && val_to_op[val] == op);
   }
 
 
   Operation *HandleLLVMOP(llvm::Instruction *inst) {
-    auto module = inst->getParent()->getParent()->getParent();
-    const auto &dl = module->getDataLayout();
-    auto size = static_cast<uint32_t>(dl.getTypeSizeInBits(inst->getType()));
+    auto size = value_size(inst);
 
-    auto handle_predicate = [&](llvm::Instruction *inst_) -> Operation *{
+    auto handle_predicate = [&](llvm::Instruction *inst_) -> Operation * {
       auto cmp = llvm::dyn_cast< llvm::CmpInst >( inst_ );
       CHECK(cmp);
 
       switch (cmp->getPredicate()) {
-        case llvm::CmpInst::ICMP_EQ:  return impl->Create<Icmp_eq>(size);
-        case llvm::CmpInst::ICMP_NE:  return impl->Create<Icmp_ne>(size);
-        case llvm::CmpInst::ICMP_ULT: return impl->Create<Icmp_ult>(size);
-        case llvm::CmpInst::ICMP_SLT: return impl->Create<Icmp_slt>(size);
-        case llvm::CmpInst::ICMP_UGT: return impl->Create<Icmp_ugt>(size);
-        case llvm::CmpInst::ICMP_UGE:  return impl->Create<Icmp_uge>(size);
-        case llvm::CmpInst::ICMP_ULE:  return impl->Create<Icmp_ule>(size);
-        case llvm::CmpInst::ICMP_SGT:  return impl->Create<Icmp_sgt>(size);
-        case llvm::CmpInst::ICMP_SGE:  return impl->Create<Icmp_sge>(size);
-        case llvm::CmpInst::ICMP_SLE:  return impl->Create<Icmp_sle>(size);
+        case llvm::CmpInst::ICMP_EQ:  return Emplace<Icmp_eq>(inst, size);
+        case llvm::CmpInst::ICMP_NE:  return Emplace<Icmp_ne>(inst, size);
+        case llvm::CmpInst::ICMP_ULT: return Emplace<Icmp_ult>(inst, size);
+        case llvm::CmpInst::ICMP_SLT: return Emplace<Icmp_slt>(inst, size);
+        case llvm::CmpInst::ICMP_UGT: return Emplace<Icmp_ugt>(inst, size);
+        case llvm::CmpInst::ICMP_UGE:  return Emplace<Icmp_uge>(inst, size);
+        case llvm::CmpInst::ICMP_ULE:  return Emplace<Icmp_ule>(inst, size);
+        case llvm::CmpInst::ICMP_SGT:  return Emplace<Icmp_sgt>(inst, size);
+        case llvm::CmpInst::ICMP_SGE:  return Emplace<Icmp_sge>(inst, size);
+        case llvm::CmpInst::ICMP_SLE:  return Emplace<Icmp_sle>(inst, size);
         default: LOG(FATAL) << "Cannot lower llvm predicate " << cmp->getPredicate();
       }
     };
 
     auto op_code = inst->getOpcode();
     switch (op_code) {
-      case llvm::Instruction::OtherOps::Select: return impl->Create<BSelect>(size);
-      case llvm::BinaryOperator::Add: return impl->Create<Add>(size);
-      case llvm::BinaryOperator::Sub: return impl->Create<Sub>(size);
-      case llvm::BinaryOperator::Mul: return impl->Create<Mul>(size);
+      case llvm::Instruction::OtherOps::Select: return Emplace<BSelect>(inst, size);
+      case llvm::BinaryOperator::Add: return Emplace<Add>(inst, size);
+      case llvm::BinaryOperator::Sub: return Emplace<Sub>(inst, size);
+      case llvm::BinaryOperator::Mul: return Emplace<Mul>(inst, size);
 
-      case llvm::BinaryOperator::UDiv: return impl->Create<UDiv>(size);
-      case llvm::BinaryOperator::SDiv: return impl->Create<SDiv>(size);
+      case llvm::BinaryOperator::UDiv: return Emplace<UDiv>(inst, size);
+      case llvm::BinaryOperator::SDiv: return Emplace<SDiv>(inst, size);
 
-      case llvm::BinaryOperator::And: return impl->Create<CAnd>(size);
-      case llvm::BinaryOperator::Or: return impl->Create<COr>(size);
-      case llvm::BinaryOperator::Xor: return impl->Create<CXor>(size);
+      case llvm::BinaryOperator::And: return Emplace<CAnd>(inst, size);
+      case llvm::BinaryOperator::Or: return Emplace<COr>(inst, size);
+      case llvm::BinaryOperator::Xor: return Emplace<CXor>(inst, size);
 
-      case llvm::BinaryOperator::Shl: return impl->Create<Shl>(size);
-      case llvm::BinaryOperator::LShr: return impl->Create<LShr>(size);
-      case llvm::BinaryOperator::AShr: return impl->Create<AShr>(size);
+      case llvm::BinaryOperator::Shl: return Emplace<Shl>(inst, size);
+      case llvm::BinaryOperator::LShr: return Emplace<LShr>(inst, size);
+      case llvm::BinaryOperator::AShr: return Emplace<AShr>(inst, size);
 
-      case llvm::BinaryOperator::Trunc: LOG(INFO) << size; return impl->Create<Trunc>(size);
-      case llvm::BinaryOperator::ZExt: return impl->Create<ZExt>(size);
-      case llvm::BinaryOperator::SExt: return impl->Create<SExt>(size);
+      case llvm::BinaryOperator::Trunc: LOG(INFO) << size; return Emplace<Trunc>(inst, size);
+      case llvm::BinaryOperator::ZExt: return Emplace<ZExt>(inst, size);
+      case llvm::BinaryOperator::SExt: return Emplace<SExt>(inst, size);
       case llvm::BinaryOperator::ICmp: return handle_predicate(inst);
 
       default :
@@ -492,119 +413,67 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   }
 
   void VisitSelect(llvm::Function *func, llvm::Instruction *val) {
-    auto &op = val_to_op[val];
-    if (op) {
+    if (val_to_op.count(val)) {
       return;
     }
 
-    const auto sel = llvm::dyn_cast<llvm::SelectInst>(val);
-    const auto cond_val = sel->getCondition();
-    const auto true_val = sel->getTrueValue();
-    const auto false_val = sel->getFalseValue();
+    auto sel = llvm::dyn_cast<llvm::SelectInst>(val);
+    if (Fetch(func, sel->getCondition())->op_code == Undefined::kind) {
+      Emplace< Undefined >(sel, value_size(sel));
+      return;
+    }
 
-    auto cond_op = val_to_op[cond_val];
-    CHECK_NOTNULL(cond_op);
+    auto true_val = Fetch(func, sel->getTrueValue());
+    auto false_val = Fetch(func, sel->getFalseValue());
 
-    const auto num_bits =
-        static_cast<unsigned>(dl.getTypeSizeInBits(val->getType()));
+    CHECK(true_val->op_code != Undefined::kind || false_val->op_code != Undefined::kind);
 
-    // The condition is undefined, that means we aren't selecting either value,
-    // unfortunately :-(
-    if (cond_op->op_code == Undefined::kind) {
-      op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
+    auto define = [&](auto what) -> Operation * {
+      if (what->op_code != Undefined::kind)
+        return what;
 
-    // Condition is defined.
-    } else {
-      auto true_op = val_to_op[true_val];
-      auto false_op = val_to_op[false_val];
-      CHECK_NOTNULL(true_val);
-      CHECK_NOTNULL(false_op);
-      CHECK_EQ(num_bits, true_op->size);
-      CHECK_EQ(num_bits, false_op->size);
+      auto op = impl->Create< Not >(value_size(val));
+      op->AddUse((what == true_val) ? false_val : true_val);
+      return op;
+    };
 
-      // Both selected values are undefined, thus the result is undefined.
-      if (true_op->op_code == Undefined::kind &&
-          false_op->op_code == Undefined::kind) {
-        op = true_op;
-        return;
-      }
-
-      op = HandleLLVMOP(val);
-      op->AddUse(cond_op);
-
-      // True side is undefined; convert it into a defined value that is not
-      // the same as the False side.
-      if (true_op->op_code == Undefined::kind) {
-        auto not_false_op = impl->Create<Not>(num_bits);
-        not_false_op->AddUse(false_op);
-
-        op->AddUse(not_false_op);
-        op->AddUse(false_op);
-
-      // False side is undefined; convert it into a defined value that is not
-      // the same as the True side.
-      } else if (false_op->op_code == Undefined::kind) {
-        auto not_true_op = impl->Create<Not>(num_bits);
-        not_true_op->AddUse(true_op);
-
-        op->AddUse(true_op);
-        op->AddUse(not_true_op);
-
-      // Neither is undefined, yay!
-      } else {
-        op->AddUse(true_op);
-        op->AddUse(false_op);
-      }
+    auto op = HandleLLVMOP(val);
+    for (const auto &op_ : val->operand_values()) {
+      op->AddUse(define(Fetch(func, op_)));
     }
   }
 
-  void VisitBinaryOperator(llvm::Function *func,
-                           llvm::Instruction *val) {
-    auto &op = val_to_op[val];
-    if (op) {
+  bool has_undefined_ops(llvm::Function *func, llvm::Instruction *inst) {
+    for (const auto &op : inst->operand_values()) {
+      if (Fetch(func, op)->op_code == Undefined::kind) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void VisitLLVMOperator(llvm::Function *func, llvm::Instruction *val) {
+    if (val_to_op.count(val)) {
       return;
     }
 
-    const auto lhs_val = val->getOperand(0u);
-    const auto rhs_val = val->getOperand(1u);
-    Visit(func, lhs_val);
-    Visit(func, rhs_val);
-    auto lhs_op = val_to_op[lhs_val];
-    auto rhs_op = val_to_op[rhs_val];
-    CHECK_NOTNULL(lhs_op);
-    CHECK_NOTNULL(rhs_op);
+    if (has_undefined_ops(func, val)) {
+      Emplace< Undefined >(val, value_size(val));
+      return;
+    }
 
-    // Fold undefined values.
-    if (lhs_op->op_code == Undefined::kind ||
-        rhs_op->op_code == Undefined::kind) {
-      const auto num_bits = dl.getTypeSizeInBits(val->getType());
-      op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
-
-    } else {
-      op = HandleLLVMOP(val);
-      op->AddUse(lhs_op);
-      op->AddUse(rhs_op);
+    auto op = HandleLLVMOP(val);
+    for (const auto &op_ : val->operand_values()) {
+      op->AddUse(Fetch(func, op_));
     }
   }
 
-  void VisitUnaryOperator(llvm::Function *func,
-                          llvm::Instruction *val) {
-    auto &op = val_to_op[val];
-    if (op) {
-      return;
-    }
+  void VisitBinaryOperator(llvm::Function *func, llvm::Instruction *val) {
+    VisitLLVMOperator(func, val);
+  }
 
-    const auto op_val = val->getOperand(0u);
-    auto op0 = val_to_op[op_val];
-    CHECK_NOTNULL(op0);
-
-    if (op0->op_code == Undefined::kind) {
-      const auto num_bits = dl.getTypeSizeInBits(val->getType());
-      op = impl->Create<Undefined>(static_cast<unsigned>(num_bits));
-    } else {
-      op = HandleLLVMOP(val);
-      op->AddUse(op0);
-    }
+  void VisitUnaryOperator(llvm::Function *func, llvm::Instruction *val) {
+   VisitLLVMOperator(func, val);
   }
 
   void VisitAPInt(llvm::Constant *val, llvm::APInt ap_val) {
@@ -612,7 +481,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       return;
     }
 
-    const auto num_bits = dl.getTypeSizeInBits(val->getType());
+    auto num_bits = value_size(val);
     llvm::SmallString<128> bits;
 
     bits.reserve(num_bits);
@@ -638,13 +507,10 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
 
     auto num_bits = static_cast<uint32_t>(dl.getTypeSizeInBits(val->getType()));
-    Emplace<Undefined>(val, num_bits);
+    Emplace< Undefined >(val, num_bits);
   }
 
-  void VisitConstantInt(llvm::Function *, llvm::ConstantInt *val) {
-    VisitAPInt(val, val->getValue());
-  }
-
+  void VisitConstantInt(llvm::Function *, llvm::ConstantInt *val) { VisitAPInt(val, val->getValue()); }
   void VisitConstantFP(llvm::Function *, llvm::ConstantFP *val) {
     VisitAPInt(val, val->getValueAPF().bitcastToAPInt());
   }
@@ -659,6 +525,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   template<typename T, typename ...Args>
   Operation* Emplace(llvm::Value *key, Args &&... args) {
     auto [it, _] = val_to_op.emplace(key, impl->Create<T>(std::forward<Args>(args)...));
+    populate_meta(key, it->second);
     return it->second;
   }
 
