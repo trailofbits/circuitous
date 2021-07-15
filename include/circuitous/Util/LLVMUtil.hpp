@@ -53,8 +53,17 @@ namespace circ {
     CHECK(!inst->getMetadata(kind));
     auto &ctx = inst->getContext();
     llvm::IRBuilder<> ir(ctx);
+
+    auto format = [](const auto &val_) {
+      if constexpr (std::is_integral_v< T >) {
+        return std::to_string(val_);
+      } else {
+        return val_;
+      }
+    };
+
     auto node = llvm::MDNode::get(
-      ctx, {llvm::MDString::get(ctx, std::to_string(value))});
+      ctx, {llvm::MDString::get(ctx, format(value))});
     inst->setMetadata(kind, node);
   }
 
@@ -108,6 +117,7 @@ namespace circ {
     auto callee = call->getCalledFunction();
 
     auto new_call = ir.CreateCall(callee, args);
+    new_call->copyMetadata(*call);
     call->replaceAllUsesWith(new_call);
     call->eraseFromParent();
     return new_call;
