@@ -195,10 +195,7 @@ namespace circ {
         }
 
         // Now we need to update the verify_inst itself, as there are new hint checks
-        llvm::IRBuilder<> ir(ctx);
-        auto n_ctx = intrinsics::make_verify(ir, ctx_args);
-        ctx->replaceAllUsesWith(n_ctx);
-        ctx->eraseFromParent();
+        extend(ctx, ctx_args);
       }
     }
 
