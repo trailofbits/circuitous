@@ -26,6 +26,7 @@ struct FileConfig {
   enum class Selector : uint8_t {
     Operation = 0x0,
     Invalid = 0x1,
+    Metadatum = 0x2,
     Reference = 0xff
   };
 
@@ -35,7 +36,8 @@ struct FileConfig {
   std::string to_string(const Selector &sel) {
     switch(sel) {
       case Selector::Operation : return "Operation";
-      case Selector::Invalid : return "Invalid";
+      case Selector::Invalid   : return "Invalid";
+      case Selector::Metadatum : return "Metadatum";
       case Selector::Reference : return "Reference";
     }
   }
@@ -114,6 +116,15 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
   template<typename ...Args>
   void write(Args &&... args) {
     (Write(std::forward<Args>(args)), ...);
+  }
+
+  void write_metadata(Operation *op) {
+    for (auto &[key, val] : op->meta) {
+      Write(Selector::Metadatum);
+      Write(op->id());
+      Write(key);
+      Write(val);
+    }
   }
 
   void Visit(InputRegister *op) { write(op->reg_name, op->size); }
@@ -259,6 +270,12 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
       }
       return op_it->second;
     }
+    if (sel == Selector::Metadatum) {
+      auto [id, key, val] = read< raw_id_t, std::string, std::string >();
+      CHECK(id_to_op.count(id));
+      id_to_op[id]->set_meta(std::move(key), std::move(val));
+      return nullptr;
+    }
     LOG(FATAL) << "Unexpected tag for an operation reference: " << this->to_string(sel);
   }
 
@@ -403,6 +420,12 @@ void Circuit::Serialize(std::ostream &os) {
       vis.Write(op);
     }
   }
+
+  auto write_metadata = [&](auto op) {
+    vis.write_metadata(op);
+  };
+  ForEachOperation(write_metadata);
+
   os.flush();
 }
 
@@ -439,10 +462,7 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   is.unsetf(std::ios::skipws);
 
   while (is.good() && !is.eof() && EOF != is.peek()) {
-    auto op = vis.Read();
-    if (!op) {
-      break;
-    }
+    std::ignore = vis.Read();
   }
   is.flags(old_flags);
 
