@@ -6,6 +6,7 @@
 
 #include <circuitous/Util/UseDef.h>
 #include <circuitous/Util/TypeList.hpp>
+#include <circuitous/IR/Metadata.hpp>
 
 #include <bitset>
 #include <iosfwd>
@@ -28,7 +29,7 @@ class StringRef;
 namespace circ {
 
 // A general instruction.
-struct Operation : public Node<Operation> {
+struct Operation : public Node<Operation>, HasStringMeta {
  public:
   static constexpr uint32_t kind = 0;
   static constexpr uint32_t bool_size = 1u;
@@ -595,6 +596,13 @@ static inline std::string fragment_as_str(uint32_t kind) {
 template<typename Kind>
 static inline std::string to_string(Kind kind) {
   return fragment_as_str(kind);
+}
+
+static inline std::string pretty_print(Operation *op) {
+  std::stringstream ss;
+  ss << op->id() << ": " << to_string(op->op_code) << std::endl;
+  ss << op->dump_meta();
+  return ss.str();
 }
 
 }  // namespace circ
