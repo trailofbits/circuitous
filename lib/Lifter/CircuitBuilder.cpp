@@ -487,6 +487,7 @@ llvm::Function *CircuitBuilder::BuildCircuit1(Circuit0 circuit0) {
   });
 
   for (auto [old_call, new_call] : to_replace) {
+    new_call->copyMetadata(*old_call);
     old_call->replaceAllUsesWith(new_call);
     old_call->eraseFromParent();
   }
@@ -790,6 +791,14 @@ void Circuit0::InjectSemantic(
   // (register comparisons) are true.
   ir.SetInsertPoint(exit_block);
   auto call = intrinsics::make_verify(ir, params);
+
+  std::stringstream ss;
+  for (auto byte : isel.instruction.bytes) {
+    ss << " " << std::setw(2) << std::setfill('0') << std::hex
+       << static_cast<unsigned>(static_cast<uint8_t>(byte));
+  }
+  annotate_llvm(call, circir_llvm_meta::lifted_bytes, ss.str());
+
   AddMetadata(call, CircuitBuilder::bytes_fragments_count_kind, fragments_size);
   verified_insts.push_back(call);
   used_selects.emplace(call, std::move(selects));
