@@ -113,6 +113,12 @@ namespace circ::ifuzz::permutate {
           return false;
         }
 
+        // RSP in base reg requires some bits set elsewhere.
+        if ((self.base_reg.name != flipped.base_reg.name) &&
+            (flipped.base_reg.name == "NEXT_PC")) {
+          return false;
+        }
+
         // Base
         if (self.base_reg.size != flipped.base_reg.size ||
            (self.base_reg.name != flipped.base_reg.name)) {
