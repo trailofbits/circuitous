@@ -67,8 +67,8 @@ namespace circ {
     }
 
     template<typename ...Args>
-    void Dispatch(Operation *op, Args &&...args) {
-      this->Visit_<Ops...>(op, std::forward<Args>(args)...);
+    auto Dispatch(Operation *op, Args &&...args) {
+      return this->Visit_<Ops...>(op, std::forward<Args>(args)...);
     }
   };
 
