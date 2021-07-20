@@ -1,6 +1,12 @@
 /*
  * Copyright (c) 2021 Trail of Bits, Inc.
  */
+
+#include <memory>
+#include <fstream>
+#include <iostream>
+#include <sstream>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wconversion"
 #include <glog/logging.h>
@@ -8,12 +14,20 @@
 #include <z3++.h>
 #pragma clang diagnostic pop
 
+#include <circuitous/IR/IR.h>
+#include <circuitous/IR/Storage.hpp>
 #include <circuitous/IR/Circuit.hpp>
 
 namespace circ
 {
-  struct IRToSMTVisitor : public Visitor<IRToSMTVisitor>
+
+  template< typename Derived >
+  struct BaseSMTVisitor : Visitor< Derived >
   {
+    using Base = Visitor< Derived >;
+    using Base::Dispatch;
+    using Base::Visit;
+
     z3::context ctx;
 
     z3::expr to_bv(z3::expr expr)
@@ -21,7 +35,7 @@ namespace circ
       return z3::ite(expr, ctx.bv_val(1, 1), ctx.bv_val(0, 1));
     }
 
-    z3::expr uninterpreted(Operation *op, z3::sort result_sort)
+    z3::expr uninterpreted(Operation *op, const std::string &name, z3::sort result_sort)
     {
       z3::expr_vector args(ctx);
       z3::sort_vector args_sorts(ctx);
@@ -30,18 +44,23 @@ namespace circ
         args_sorts.push_back(args.back().get_sort());
       }
 
-      auto decl = z3::function(op->Name().c_str(), args_sorts, result_sort);
+      auto decl = z3::function(name.c_str(), args_sorts, result_sort);
       return decl(args);
     }
 
-    z3::expr uninterpreted(Operation *op)
+    z3::expr uninterpreted(Operation *op, const std::string &name)
     {
-      return uninterpreted(op, ctx.bv_sort(op->size));
+      return uninterpreted(op, name, ctx.bv_sort(op->size));
+    }
+
+    z3::expr constant(Operation *op, const std::string &name)
+    {
+      return ctx.bv_const(name.c_str(), op->size);
     }
 
     z3::expr constant(Operation *op)
     {
-      return ctx.bv_const(op->Name().c_str(), op->size);
+      return constant(op, op->Name());
     }
 
     z3::expr lhs(Operation *op) { return Dispatch(op->operands[0]); };
@@ -51,18 +70,59 @@ namespace circ
     {
       LOG(FATAL) << "Unhandled operation: " << op->Name();
     }
+  };
 
-    z3::expr Visit(InputInstructionBits *op) { return constant(op); }
+  template< typename Derived >
+  struct IRToSMTConstantsVisitor : BaseSMTVisitor< Derived >
+  {
+    using Base = BaseSMTVisitor< Derived >;
+    using Base::Dispatch;
+    using Base::Visit;
+    using Base::constant;
+    using Base::ctx;
+
+    z3::expr Visit(InputInstructionBits *op) { return constant(op, "InputBits"); }
     z3::expr Visit(InputRegister *op) { return constant(op); }
     z3::expr Visit(OutputRegister *op) { return constant(op); }
 
     z3::expr Visit(Advice *op)
     {
-      auto name = "advice." + std::to_string(reinterpret_cast<uint64_t>(op));
+      auto name = "Advice." + std::to_string(reinterpret_cast<uint64_t>(op));
       return ctx.bv_const(name.c_str(), op->size);
     }
 
+    z3::expr Visit(PopulationCount *op)     { return constant(op, "Population"); }
+    z3::expr Visit(CountLeadingZeroes *op)  { return constant(op, "LeadingZeros"); }
+    z3::expr Visit(CountTrailingZeroes *op) { return constant(op, "TrailingZeros"); }
+
+    z3::expr Visit(InputTimestamp *op)  { return constant(op); }
+    z3::expr Visit(OutputTimestamp *op) { return constant(op); }
+    z3::expr Visit(InputErrorFlag *op)  { return constant(op); }
+    z3::expr Visit(OutputErrorFlag *op) { return constant(op); }
+
     z3::expr Visit(Undefined *op) { return constant(op); }
+
+    z3::expr Visit(Constant *op)
+    {
+      auto bits = std::make_unique<bool[]>(op->size);
+
+      std::size_t idx = 0;
+      for (auto bit : op->bits)
+        bits[idx++] = bit != '0';
+
+      return ctx.bv_val(op->size, bits.get());
+    }
+  };
+
+  template< typename Derived >
+  struct IRToSMTOpsVisitor : IRToSMTConstantsVisitor< Derived >
+  {
+    using Base = IRToSMTConstantsVisitor< Derived >;
+    using Base::Dispatch;
+    using Base::Visit;
+    using Base::to_bv;
+    using Base::lhs;
+    using Base::rhs;
 
     z3::expr Visit(Add *op) { return lhs(op) + rhs(op); }
     z3::expr Visit(Sub *op) { return lhs(op) - rhs(op); }
@@ -103,7 +163,15 @@ namespace circ
     z3::expr Visit(Icmp_sgt *op) { return to_bv(lhs(op) > rhs(op)); }
     z3::expr Visit(Icmp_sge *op) { return to_bv(lhs(op) >= rhs(op)); }
     z3::expr Visit(Icmp_sle *op) { return to_bv(z3::sle(lhs(op), rhs(op))); }
-    z3::expr Visit(Not *op) { return uninterpreted(op); }
+  };
+
+  struct IRToSMTVisitor : IRToSMTOpsVisitor<IRToSMTVisitor>
+  {
+    using Base = IRToSMTOpsVisitor<IRToSMTVisitor>;
+    using Base::Dispatch;
+    using Base::Visit;
+
+    z3::expr Visit(Not *op) { return uninterpreted(op, "not"); }
 
     z3::expr Visit(Extract *op)
     {
@@ -113,41 +181,22 @@ namespace circ
       return val.extract(hi, lo);
     }
 
-    z3::expr Visit(Concat *op) { return uninterpreted(op); }
-    z3::expr Visit(Select *op) { return uninterpreted(op); }
-    z3::expr Visit(Parity *op) { return uninterpreted(op); }
+    z3::expr Visit(Concat *op) { return uninterpreted(op, "Concat"); }
+    z3::expr Visit(Select *op) { return uninterpreted(op, "Select"); }
+    z3::expr Visit(Parity *op) { return uninterpreted(op, "Parity"); }
 
-    z3::expr Visit(PopulationCount *op)     { return constant(op); }
-    z3::expr Visit(CountLeadingZeroes *op)  { return constant(op); }
-    z3::expr Visit(CountTrailingZeroes *op) { return constant(op); }
-
-    z3::expr Visit(RegConstraint *op)       { return uninterpreted(op); }
-    z3::expr Visit(PreservedConstraint *op) { return uninterpreted(op); }
-    z3::expr Visit(CopyConstraint *op)      { return uninterpreted(op); }
-    z3::expr Visit(OnlyOneCondition *op)    { return uninterpreted(op); }
-    z3::expr Visit(DecodeCondition *op)     { return uninterpreted(op); }
-    z3::expr Visit(AdviceConstraint *op)    { return uninterpreted(op); }
-    z3::expr Visit(VerifyInstruction *op)   { return uninterpreted(op); }
-
-    z3::expr Visit(Constant *op)
-    {
-      auto bits = std::make_unique<bool[]>(op->size);
-
-      std::size_t idx = 0;
-      for (auto bit : op->bits)
-        bits[idx++] = bit != '0';
-
-      return ctx.bv_val(op->size, bits.get());
-    }
-
-    z3::expr Visit(InputTimestamp *op)  { return constant(op); }
-    z3::expr Visit(OutputTimestamp *op) { return constant(op); }
-    z3::expr Visit(InputErrorFlag *op)  { return constant(op); }
-    z3::expr Visit(OutputErrorFlag *op) { return constant(op); }
+    z3::expr Visit(RegConstraint *op)       { return uninterpreted(op, "RegisterConstraint"); }
+    z3::expr Visit(PreservedConstraint *op) { return uninterpreted(op, "PreservedConstraint"); }
+    z3::expr Visit(CopyConstraint *op)      { return uninterpreted(op, "CopyConstraint"); }
+    z3::expr Visit(AdviceConstraint *op)    { return uninterpreted(op, "AdviceConstraint"); }
+    z3::expr Visit(OnlyOneCondition *op)    { return uninterpreted(op, "OnlyOne"); }
+    z3::expr Visit(DecodeCondition *op)     { return uninterpreted(op, "Decode"); }
+    z3::expr Visit(VerifyInstruction *op)   { return uninterpreted(op, "Verify"); }
 
     z3::expr Visit(Circuit *op)
     {
-      return uninterpreted(op, ctx.bool_sort());
+      return uninterpreted(op, "Circuit", ctx.bool_sort());
     }
   };
-}
+
+} // namespace circ
