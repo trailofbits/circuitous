@@ -261,8 +261,11 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
         out->AddUse(call_arg(call, 0u));
         return out;
       }
-      case llvm::Intrinsic::cttz  :
-        return VisitGenericIntrinsic< CountTrailingZeroes >(call, fn, value_size(call));
+      case llvm::Intrinsic::cttz  : {
+        auto out = Emplace< CountTrailingZeroes >(call, value_size(call));
+        out->AddUse(call_arg(call, 0u));
+        return out;
+      }
       default:
         LOG(FATAL) << "Unsupported intrinsic call: "
                    << remill::LLVMThingToString(call);
