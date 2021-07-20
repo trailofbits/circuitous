@@ -598,10 +598,13 @@ static inline std::string to_string(Kind kind) {
   return fragment_as_str(kind);
 }
 
+template< bool with_meta = true >
 static inline std::string pretty_print(Operation *op) {
   std::stringstream ss;
-  ss << op->id() << ": " << to_string(op->op_code) << std::endl;
-  ss << op->dump_meta();
+  ss << op->id() << ": " << to_string(op->op_code);
+  if constexpr (with_meta) {
+    ss << std::endl << op->dump_meta();
+  }
   return ss.str();
 }
 
