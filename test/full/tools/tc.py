@@ -248,8 +248,13 @@ class State(StateBase):
 
   def __init__(self, default_val = None, default_rip = 0x1000):
     super().__init__()
-    for x in _regs + _aflags:
+    for x in _regs:
       self.set_reg(x, default_val)
+    for x in _aflags:
+      if default_val is not None:
+        self.set_reg(x, default_val % 2)
+      else:
+        self.set_reg(x, default_val)
     self.set_reg("RIP", default_rip)
     self.ebit(False)
     self.ts(0)
@@ -359,6 +364,14 @@ def random_state(seed):
     getattr(out, reg)(random.randint(0, 1))
   return out
 
+def populate_state(gen):
+  out = S(0x1031)
+  for reg in _regs:
+    getattr(out, reg)(gen(0, (1 << 25) - 1))
+  for reg in _aflags:
+    getattr(out, reg)(gen(0, 1))
+  return out
+
 
 class TestCase:
   __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated', '_result_generator',
@@ -381,7 +394,7 @@ class TestCase:
 class Test:
   __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
                '_tags', '_names', '_lift_opts', '_inst_arr',
-               'default_istate', 'e_mutators', '_mode')
+               'default_istate', 'e_mutators', '_mode', 'rand_gen')
 
   def __init__(self, name_=""):
     # TODO(lukas): Split this into
@@ -408,6 +421,7 @@ class Test:
     self._inst_arr = []
 
     self._mode = None
+    self.rand_gen = None
 
   def mode(self, what) :
     self._mode = what
@@ -508,9 +522,27 @@ class Test:
     self.cases.append(case)
     return self
 
-  def all_defined(self):
+  def all_defined(self, **kwargs):
     for idx, bytes in enumerate(self._inst_arr):
-      self.case(run_bytes = idx, R = True)
+      if kwargs.get('random', False):
+        self.case(run_bytes = idx, I =populate_state(self.get_val_gen()) ,R = True, **kwargs)
+      else:
+        self.case(run_bytes = idx, R = True, **kwargs)
+    return self
+
+  def seed(self, x):
+    assert self.rand_gen is None
+    self.rand_gen = random.Random(x)
+    return self
+
+  def get_val_gen(self):
+    def val_gen(a, b):
+      return self.rand_gen.randint(a, b)
+    return val_gen
+
+  def random(self, number, **kwargs):
+    for _ in range(number):
+      self.case(I = populate_state(self.get_val_gen()), **kwargs)
     return self
 
   def scases(self, compiler, insts, **kwargs):
