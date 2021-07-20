@@ -4,6 +4,7 @@
 
 #include <circuitous/IR/IR.h>
 #include <circuitous/IR/Verify.hpp>
+#include <circuitous/IR/SMT.hpp>
 #include <circuitous/Printers.h>
 #include <circuitous/Transforms.h>
 #include <circuitous/IR/Cost.hpp>
@@ -26,7 +27,7 @@ DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "TODO(luaks): Needs update");
-DEFINE_string(smt_out, "", "TODO(lukas): Needs updte");
+DEFINE_string(smt_out, "", "Path to the output smt2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
 DEFINE_string(optimizations, "",
               "TODO(lukas): Not supported atm");
@@ -262,7 +263,7 @@ int main(int argc, char *argv[]) {
     }
     LOG(INFO) << "Printing smt";
     std::ofstream os(FLAGS_smt_out);
-    circ::PrintSMT(os, circuit.get(), false);
+    circ::PrintSMT(os, circuit.get());
     LOG(INFO) << "Done.";
   }
 
