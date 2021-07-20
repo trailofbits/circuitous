@@ -14,7 +14,7 @@ _regs = [ "RIP", "RSP", "RBP",
 _e_regs = ["EAX, EBX", "ECX", "EDX"]
 _b_regs = ["AX", "BX", "CX", "DX"]
 _a_regs = ["AL", "AH"]
-_aflags = ["AF", "CF", "OF", "ZF", "PF", "SF"]
+_aflags = ["AF", "CF", "OF", "ZF", "PF", "SF", "DF"]
 _all_regs = _regs + _aflags + _e_regs + _b_regs + _a_regs
 
 class MemHint:
