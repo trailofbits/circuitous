@@ -116,6 +116,8 @@ class Lifter(SimulateCWDMixin):
       bytes = case.bytes
       circuit = self.locate(self.circuit_name(bytes))
       log_info("Lifting: " + '.' * 16 + " " + tc.name + " -> " + case.name)
+      if dbg_verbose:
+        log_info(case.bytes)
       if not circuit in tc.metafiles:
         tc.metafiles[circuit] = self.lift(case.bytes, tc._lift_opts + extra_args)
       else:
