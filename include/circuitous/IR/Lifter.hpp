@@ -324,9 +324,10 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
                 << remill::LLVMThingToString(hidden_imm->getType())
                 << " to type "
                 << remill::LLVMThingToString(constant_imm->getType());
-      // NOTE(lukas): SExt used as it should be generally safer (we want to preserve)
-      //              the sign bit.
-      hidden_imm = ir.CreateSExtOrTrunc(hidden_imm, constant_imm->getType());
+      if (arch_op.imm.is_signed)
+        hidden_imm = ir.CreateSExtOrTrunc(hidden_imm, constant_imm->getType());
+      else
+        hidden_imm = ir.CreateZExtOrTrunc(hidden_imm, constant_imm->getType());
     }
     return HideValue(hidden_imm, bb, size);
   }
