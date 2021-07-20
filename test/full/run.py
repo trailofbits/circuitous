@@ -76,6 +76,11 @@ def strip(what):
       out.append(x[1:])
   return out
 
+def maybe_hex(what):
+  if what is None:
+    return str(what)
+  return hex(what)
+
 
 class PipelineFail(Exception):
   def __init__(self, component, out="", err="", cause=None):
@@ -266,7 +271,7 @@ class Comparator(SimulateCWDMixin):
       if e_val != int(val):
         accept = False
         message += "Register " + reg + " (expected != actual): " + \
-                   hex(e_val) + " != " + hex(val) + "\n"
+                   maybe_hex(e_val) + " != " + maybe_hex(val) + "\n"
 
     if after.timestamp != expected.timestamp:
       accept = False
