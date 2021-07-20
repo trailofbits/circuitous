@@ -2,9 +2,11 @@
  * Copyright (c) 2021 Trail of Bits, Inc.
  */
 
+#include <functional>
 #include <memory>
 #include <fstream>
 #include <iostream>
+#include <numeric>
 #include <sstream>
 
 #pragma clang diagnostic push
@@ -163,6 +165,14 @@ namespace circ
     z3::expr Visit(Icmp_sgt *op) { return to_bv(lhs(op) > rhs(op)); }
     z3::expr Visit(Icmp_sge *op) { return to_bv(lhs(op) >= rhs(op)); }
     z3::expr Visit(Icmp_sle *op) { return to_bv(z3::sle(lhs(op), rhs(op))); }
+
+    z3::expr Visit(Extract *op)
+    {
+      auto val = Dispatch(op->operands[0]);
+      auto hi = op->high_bit_exc - 1;
+      auto lo = op->low_bit_inc;
+      return val.extract(hi, lo);
+    }
   };
 
   struct IRToSMTVisitor : IRToSMTOpsVisitor<IRToSMTVisitor>
@@ -172,14 +182,6 @@ namespace circ
     using Base::Visit;
 
     z3::expr Visit(Not *op) { return uninterpreted(op, "not"); }
-
-    z3::expr Visit(Extract *op)
-    {
-      auto val = Dispatch(op->operands[0]);
-      auto hi = op->high_bit_exc - 1;
-      auto lo = op->low_bit_inc;
-      return val.extract(hi, lo);
-    }
 
     z3::expr Visit(Concat *op) { return uninterpreted(op, "Concat"); }
     z3::expr Visit(Select *op) { return uninterpreted(op, "Select"); }
@@ -196,6 +198,58 @@ namespace circ
     z3::expr Visit(Circuit *op)
     {
       return uninterpreted(op, "Circuit", ctx.bool_sort());
+    }
+  };
+
+  struct IRToBitBlastableSMTVisitor : IRToSMTOpsVisitor< IRToBitBlastableSMTVisitor >
+  {
+    using Base = IRToSMTOpsVisitor<  IRToBitBlastableSMTVisitor >;
+    using Base::Dispatch;
+    using Base::Visit;
+
+    z3::expr accumulate(const auto &operands, const auto &fn)
+    {
+      auto dispatched = [&, fn] (const auto &lhs, auto rhs) { return fn(lhs, Dispatch(rhs)); };
+      auto init = Dispatch(operands[0]);
+      return std::accumulate(std::next(operands.begin()), operands.end(), init, dispatched);
+    }
+
+    // z3::expr Visit(Not *op) { return uninterpreted(op, "not"); }
+
+    // z3::expr Visit(Concat *op) { return uninterpreted(op, "Concat"); }
+
+    z3::expr Visit(Select *op) { return uninterpreted(op, "Select"); }
+    z3::expr Visit(Parity *op)
+    {
+      auto operand = Dispatch(op->operands[0]);
+      auto operand_size = operand.get_sort().bv_size();
+      auto sum = operand.extract(0, 0);
+      for (auto i = 1U; i < operand_size; ++i) {
+        sum = sum ^ operand.extract(i, i);
+      }
+      return sum;
+    }
+
+    z3::expr Visit(RegConstraint *op)       { return to_bv(lhs(op) == rhs(op)); }
+    z3::expr Visit(PreservedConstraint *op) { return to_bv(lhs(op) == rhs(op)); }
+    z3::expr Visit(CopyConstraint *op)      { return to_bv(lhs(op) == rhs(op)); }
+    z3::expr Visit(AdviceConstraint *op)    { return to_bv(lhs(op) == rhs(op)); }
+    z3::expr Visit(DecodeCondition *op)     { return to_bv(lhs(op) == rhs(op)); }
+
+    z3::expr Visit(OnlyOneCondition *op)
+    {
+      return accumulate(op->operands, std::bit_xor());
+    }
+
+    z3::expr Visit(VerifyInstruction *op)
+    {
+      return accumulate(op->operands, std::bit_and());
+    }
+
+    z3::expr Visit(Circuit *op)
+    {
+      auto expr = Dispatch(op->operands[0]);
+      return expr != ctx.num_val(0, expr.get_sort());
     }
   };
 
