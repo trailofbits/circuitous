@@ -35,7 +35,7 @@ def mem_input_to_map(region, o, m):
   amm = microx.ArrayMemoryMap(o, aligned_addr, aligned_addr + 0x1000,
                               can_read=r, can_write=w, can_execute=e)
   m.add_map(amm)
-  amm.store_bytes(aligned_addr, bytes)
+  amm.store_bytes(addr, bytes)
 
 class PermissiveMemory(microx.Memory):
 
@@ -44,9 +44,6 @@ class PermissiveMemory(microx.Memory):
     self._memory_maps = {}
     self.seed = seed_
     self.additional_inputs = MIG(self.seed)
-
-  def generate_values(self, addr, count=0x1000):
-    self.mem_input.mem_(addr, count, r=True, w=True, e=True)
 
   def _find_map(self, byte_addr):
     offset = (byte_addr & self._address_mask) >> self._page_shift
@@ -89,6 +86,26 @@ class MicroxGen:
   def __init__(self):
     pass
 
+  def convert_input_bytes(self, input):
+    bytes = []
+    for i in range(0, len(input.bytes), 2):
+      bytes.append(int(input.bytes[i] + input.bytes[i + 1], 16))
+    return bytes
+
+  def store_code(self, o, m, input, size):
+    rip = input.registers.get("RIP", 0x1000)
+
+    bytes = self.convert_input_bytes(input)
+
+    breakpoint = size - (rip % size)
+    prefix = bytes[0 : breakpoint]
+    postfix = bytes[breakpoint:]
+
+    mem_input_to_map((rip, prefix, (True, True, True)), o, m)
+    if len(postfix) != 0:
+      mem_input_to_map((rip + len(prefix) , postfix, (True, True, True)), o, m)
+
+
   def get(self, input):
     # TODO(lukas): We need to handle RSP once we support memory ops.
     # assert "RSP" not in input.registers
@@ -100,10 +117,7 @@ class MicroxGen:
     m = PermissiveMemory(o, 64, 42)
 
     size = 0x1000
-    aligned_addr = (rip >> 12) << 12
-    code = microx.ArrayMemoryMap(o, aligned_addr, aligned_addr + size,
-                                 can_read=True, can_write=True, can_execute=True)
-    m.add_map(code)
+    self.store_code(o, m, input, size)
 
     #TODO(lukas): Stack & other memory
     if input.memory is not None:
@@ -115,11 +129,6 @@ class MicroxGen:
                                     can_read=r, can_write=w, can_execute=e)
         m.add_map(amm)
         amm.store_bytes(addr, bytes)
-
-    bytes = []
-    for i in range(0, len(input.bytes), 2):
-      bytes.append(int(input.bytes[i] + input.bytes[i + 1], 16))
-    code.store_bytes(rip, bytes)
 
     t = microx.EmptyThread(o)
     for reg, val in input.registers.items():
