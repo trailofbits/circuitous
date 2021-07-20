@@ -18,13 +18,14 @@ namespace circ::err {
     return op_code == BO::SDiv || op_code == BO::UDiv;
   }
 
-  static inline bool is_ctlz(llvm::Value *inst) {
+  static inline bool is_ct_(llvm::Value *inst) {
     auto call = llvm::dyn_cast< llvm::CallInst >(inst);
     if (!call)
       return false;
 
     auto callee = call->getCalledFunction();
-    return callee && callee->getIntrinsicID() == llvm::Intrinsic::ctlz;
+    return callee && (callee->getIntrinsicID() == llvm::Intrinsic::ctlz ||
+                      callee->getIntrinsicID() == llvm::Intrinsic::cttz);
   }
 
   // Returns `[explicit_errors, implicit_erros]`
@@ -52,7 +53,7 @@ namespace circ::err {
     return collect({as_it(from), as_it(to)});
   }
 
-  llvm::Value *handle_ctlz(llvm::Value *inst) {
+  llvm::Value *handle_ct_(llvm::Value *inst) {
     auto call = llvm::dyn_cast< llvm::CallInst >(inst);
     CHECK(call);
 
@@ -86,8 +87,8 @@ namespace circ::err {
       if (bin_op && is_div(bin_op)) {
         out.push_back(handle_div(bin_op));
       }
-      if (is_ctlz(err_i)) {
-        if (auto err = handle_ctlz(err_i)) {
+      if (is_ct_(err_i)) {
+        if (auto err = handle_ct_(err_i)) {
           out.push_back(err);
         }
       }
