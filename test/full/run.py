@@ -14,6 +14,7 @@ import tools.tc as TC
 import simple
 import basic
 import ebit_test
+import generated
 import tools.model_test as mp
 
 circuitous_prefix = os.environ.get("CIRCUITOUS_BUILD_DIR", "../../build")
@@ -426,6 +427,8 @@ def fetch_test(sets):
   for x in basic.circuitous_tests:
     result.update(x)
   for x in ebit_test.circuitous_tests:
+    result.update(x)
+  for x in generated.circuitous_tests:
     result.update(x)
   return result
 
