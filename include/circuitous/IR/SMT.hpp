@@ -218,7 +218,26 @@ namespace circ
 
     // z3::expr Visit(Concat *op) { return uninterpreted(op, "Concat"); }
 
-    z3::expr Visit(Select *op) { return uninterpreted(op, "Select"); }
+    z3::expr Visit(Select *op)
+    {
+      auto index = Dispatch(op->operands[0]);
+      auto value = Dispatch(op->operands[1]);
+
+      auto bw = index.get_sort().bv_size();
+      auto current = ctx.bv_val(0, bw);
+
+      auto undef = ctx.bv_val(0, value.get_sort().bv_size());
+
+      z3::expr result = z3::ite(current == index, value, undef);
+      for (auto i = 2U; i < op->operands.size(); ++i) {
+        value = Dispatch(op->operands[i]);
+        current = ctx.bv_val(i, bw);
+        result = z3::ite(current == index, value, result);
+      }
+
+      return result;
+    }
+
     z3::expr Visit(Parity *op)
     {
       auto operand = Dispatch(op->operands[0]);
