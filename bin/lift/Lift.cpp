@@ -28,6 +28,7 @@ DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "TODO(luaks): Needs update");
 DEFINE_string(smt_out, "", "Path to the output smt2 file.");
+DEFINE_string(bitblast_smt_out, "", "Path to the output smt2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
 DEFINE_string(optimizations, "",
               "TODO(lukas): Not supported atm");
@@ -264,6 +265,16 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "Printing smt";
     std::ofstream os(FLAGS_smt_out);
     circ::PrintSMT(os, circuit.get());
+    LOG(INFO) << "Done.";
+  }
+
+  if (!FLAGS_bitblast_smt_out.empty()) {
+    if (FLAGS_bitblast_smt_out == "-") {
+      FLAGS_bitblast_smt_out = "/dev/stderr";
+    }
+    LOG(INFO) << "Printing bit-blasted smt";
+    std::ofstream os(FLAGS_bitblast_smt_out);
+    circ::PrintBitBlastSMT(os, circuit.get());
     LOG(INFO) << "Done.";
   }
 

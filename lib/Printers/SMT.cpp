@@ -7,10 +7,10 @@
 
 namespace circ
 {
-  void PrintSMT(std::ostream &os, Circuit *circuit)
+
+  void PrintSMT(std::ostream &os, Circuit *circuit, auto visitor)
   {
     try {
-      IRToSMTVisitor visitor;
       auto expr = visitor.Visit(circuit);
       z3::solver solver(visitor.ctx);
       solver.add(expr);
@@ -20,4 +20,15 @@ namespace circ
       LOG(FATAL) << e.what() << '\n';
     }
   }
+
+  void PrintSMT(std::ostream &os, Circuit *circuit)
+  {
+    PrintSMT(os, circuit, IRToSMTVisitor());
+  }
+
+  void PrintBitBlastSMT(std::ostream &os, Circuit *circuit)
+  {
+    PrintSMT(os, circuit, IRToBitBlastableSMTVisitor());
+  }
+
 }  // namespace circ
