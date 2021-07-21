@@ -37,6 +37,8 @@ namespace circ
       return z3::ite(expr, ctx.bv_val(1, 1), ctx.bv_val(0, 1));
     }
 
+    z3::expr true_bv() { return ctx.bv_val(1, 1); }
+
     z3::expr uninterpreted(Operation *op, const std::string &name, z3::sort result_sort)
     {
       z3::expr_vector args(ctx);
@@ -187,6 +189,8 @@ namespace circ
     z3::expr Visit(Select *op) { return uninterpreted(op, "Select"); }
     z3::expr Visit(Parity *op) { return uninterpreted(op, "Parity"); }
 
+    z3::expr Visit(BSelect *op) { return uninterpreted(op, "BSelect"); }
+
     z3::expr Visit(RegConstraint *op)       { return uninterpreted(op, "RegisterConstraint"); }
     z3::expr Visit(PreservedConstraint *op) { return uninterpreted(op, "PreservedConstraint"); }
     z3::expr Visit(CopyConstraint *op)      { return uninterpreted(op, "CopyConstraint"); }
@@ -216,7 +220,14 @@ namespace circ
 
     // z3::expr Visit(Not *op) { return uninterpreted(op, "not"); }
 
-    // z3::expr Visit(Concat *op) { return uninterpreted(op, "Concat"); }
+    z3::expr Visit(Concat *op)
+    {
+      z3::expr_vector vec(ctx);
+      for (auto o : op->operands) {
+        vec.push_back(Dispatch(o));
+      }
+      return z3::concat(vec);
+    }
 
     z3::expr Visit(Select *op)
     {
@@ -236,6 +247,14 @@ namespace circ
       }
 
       return result;
+    }
+
+    z3::expr Visit(BSelect *op)
+    {
+      auto cond = Dispatch(op->operands[0]);
+      auto first = Dispatch(op->operands[1]);
+      auto second = Dispatch(op->operands[2]);
+      return z3::ite(cond == true_bv(), first, second);
     }
 
     z3::expr Visit(Parity *op)
