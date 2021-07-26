@@ -41,6 +41,8 @@ DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 
 DEFINE_bool(dbg, false, "Enable various debug dumps");
 
+DEFINE_bool(bitblast_stats, false, "Print smt bitblast statistics.");
+
 namespace {
 
 static const std::hash<std::string> kStringHasher;
@@ -276,6 +278,20 @@ int main(int argc, char *argv[]) {
     std::ofstream os(FLAGS_bitblast_smt_out);
     circ::PrintBitBlastSMT(os, circuit.get());
     LOG(INFO) << "Done.";
+  }
+
+  if (!FLAGS_bitblast_smt_out.empty()) {
+    if (FLAGS_bitblast_smt_out == "-") {
+      FLAGS_bitblast_smt_out = "/dev/stderr";
+    }
+    LOG(INFO) << "Printing bit-blasted smt";
+    std::ofstream os(FLAGS_bitblast_smt_out);
+    circ::PrintBitBlastSMT(os, circuit.get());
+    LOG(INFO) << "Done.";
+  }
+
+  if (FLAGS_bitblast_stats) {
+    std::cout << circ::get_stats(circuit.get()) << '\n';
   }
 
   return EXIT_SUCCESS;
