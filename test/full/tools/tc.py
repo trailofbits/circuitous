@@ -246,7 +246,7 @@ class State(StateBase):
 
   __slots__ = ('bytes', 'result')
 
-  def __init__(self, default_val = None, default_rip = 0x1000):
+  def __init__(self, default_val = None, default_rip = 0x87000):
     super().__init__()
     for x in _regs:
       self.set_reg(x, default_val)

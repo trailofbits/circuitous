@@ -20,7 +20,7 @@ test_mov = {
   Test("mov imm eax/ebx/ecx/edx") \
   .bytes("b812000000bb12000000b912000000ba12000000")
   .tags({"min", "mov"})
-  .DI(S(0x100).RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42))
+  .DI(S(0x100).RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42).RIP(0x1000))
   .case("mov rax",
     DE = MS().RAX(0x12).RIP(0x1005).ts(1),
     run_bytes = "b812000000",
@@ -49,7 +49,7 @@ test_mov = {
   Test("mov reg reg") \
   .bytes(intel(["mov rax, rbx", "mov rcx, rax", "mov rbx, rax"]))
   .tags({"min", "mov"})
-  .DI(S(0x100).RAX(0x12).RBX(0x22).RCX(0x32))
+  .DI(S(0x100).RAX(0x12).RBX(0x22).RCX(0x32).RIP(0x1000))
   .case("rax:=rbx",
     DE = MS().RAX(0x22).RIP(0x1003).ts(1),
     run_bytes = 0,
@@ -134,7 +134,7 @@ test_add = {
   Test("T_reduced:add rax imm") \
   .bytes(intel(["add rax, 0x10"])).tags({"reduce_imms", "add"})
   .case("rax+=0x20",
-    I = S(0x0).RAX(0x0).aflags(0),
+    I = S(0x0).RAX(0x0).aflags(0).RIP(0x1000),
     E = S(0x0).RAX(0x20).RIP(0x1004).aflags(0).ts(1),
     run_bytes = intel(["add rax, 0x20"])[0],
     R = True
@@ -142,7 +142,7 @@ test_add = {
   Test("T_reduced:add rax imm") \
   .bytes(intel(["add rax, 0x10", "mov rcx, 0x10"])).tags({"reduce_imms", "add"})
   .case("rax+=0x20",
-    I = S(0x0).RAX(0x0).RCX(0x0).aflags(0),
+    I = S(0x0).RAX(0x0).RCX(0x0).RIP(0x1000).aflags(0),
     E = S(0x0).RAX(0x0).RCX(0x20).RIP(0x1004).ts(1),
     run_bytes = intel(["add rcx, 0x20"])[0],
     R = True
