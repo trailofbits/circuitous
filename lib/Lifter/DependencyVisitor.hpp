@@ -14,92 +14,50 @@
 
 namespace circ {
 
-  // Keeps track of instruction dependencies.
-  template <typename T>
-  class DependencyVisitor {
-  public:
-    void VisitArgument(llvm::Use &, llvm::Argument *) {}
-    bool VisitInstruction(llvm::Use &, llvm::Instruction *) {
-      return true;
-    }
-    void VisitConstant(llvm::Use &, llvm::Constant *) {}
-    void Visit(llvm::Use &use_);
-  };
+  // TODO(lukas): Rename.
+  // For each `Source` intrinsic collects all used `Sink` intrinsics.
+  template< typename Source, typename Sink >
+  struct ContextCollector {
+    std::map< llvm::Value *, std::unordered_set< llvm::CallInst * > > data;
+    llvm::Function *fn;
 
-  // Analyze how `use_` is produced.
-  template <typename T>
-  void DependencyVisitor<T>::Visit(llvm::Use &use_) {
-    auto self = reinterpret_cast<T *>(this);
 
-    std::vector<llvm::Use *> work_list;
-    work_list.emplace_back(&use_);
+    ContextCollector(llvm::Function *fn_) : fn(fn_) {}
 
-    while (!work_list.empty()) {
-      const auto use = work_list.back();
-      work_list.pop_back();
-
-      const auto val = use->get();
-
-      // Bottom out at an argument; it should be an input register.
-      if (auto arg_val = llvm::dyn_cast<llvm::Argument>(val)) {
-        self->VisitArgument(*use, arg_val);
-        continue;
+    void try_insert(llvm::CallInst *ctx, llvm::Instruction *current) {
+      if (auto call = llvm::dyn_cast< llvm::CallInst >(current);
+          call && Sink::IsIntrinsic(call->getCalledFunction())) {
+        data[ctx].insert(call);
       }
+    }
 
-      // Instruction; follow the dependency chain.
-      if (auto inst_val = llvm::dyn_cast<llvm::Instruction>(val)) {
-        if (self->VisitInstruction(*use, inst_val)) {
-          if (auto call_val = llvm::dyn_cast<llvm::CallInst>(inst_val)) {
-            for (auto &op_use : call_val->arg_operands()) {
-              work_list.push_back(&op_use);
-            }
-          } else {
-            for (auto &op_use : inst_val->operands()) {
-              work_list.push_back(&op_use);
-            }
-          }
+    void run(llvm::CallInst *ctx, llvm::Instruction *current) {
+      try_insert(ctx, current);
+      for (auto op : current->operand_values()) {
+        if (auto as_inst = llvm::dyn_cast< llvm::Instruction >(op)) {
+          run(ctx, as_inst);
         }
-
-      // Bottom out at a constant, ignore for now.
-      } else if (auto const_val = llvm::dyn_cast<llvm::Constant>(val);
-                const_val) {
-        if (!llvm::isa<llvm::Function>(const_val)) {
-          self->VisitConstant(*use, const_val);
-        }
-
-      } else {
-        LOG(ERROR) << "Unexpected value encountered during dependency analysis: "
-                  << remill::LLVMThingToString(val);
-      }
-    }
-  }
-
-  // Collect register dependencies.
-  class RegisterDependencyCollector
-      : public DependencyVisitor<RegisterDependencyCollector> {
-  public:
-    explicit RegisterDependencyCollector(const remill::Arch *arch_)
-        : arch(arch_) {}
-
-    // Analyze how `val` is produced, and what input registers are read to
-    // compute `val` or other output registers in the same logical instruction.
-    void VisitArgument(llvm::Use &use, llvm::Argument *arg_val) {
-      CHECK(!Names::is_out_reg(arg_val))
-          << "Unexpected output register " << arg_val->getName().str()
-          << " appears in use chain for computation of next value of "
-          << remill::LLVMThingToString(use.getUser());
-
-      if (Names::is_reg(arg_val)) {
-        read_registers.insert(arg_val);
-        auto func = arg_val->getParent();
-
-        written_registers.insert(Names::dual_reg(func, arg_val));
       }
     }
 
-    const remill::Arch *const arch;
-    std::set<llvm::Argument *> read_registers;
-    std::set<llvm::Argument *> written_registers;
+    auto get() {
+      std::map< llvm::Value *, std::vector< llvm::CallInst * > > out;
+      for (auto &[ctx, entries] : data) {
+        out[ctx] = std::vector< llvm::CallInst * >(entries.begin(), entries.end());
+      }
+      return out;
+    }
+
+    auto run() {
+      std::vector< llvm::CallInst * > sources;
+      auto collect = [&](auto inst) { sources.push_back(inst); };
+      intrinsics::VerifyInst::ForAllIn(fn, collect);
+
+      for (auto source : sources) {
+        run(source, source);
+      }
+      return get();
+    }
   };
 
 }  // namespace circ
