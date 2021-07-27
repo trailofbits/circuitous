@@ -132,6 +132,8 @@ class MicroxGen:
 
     t = microx.EmptyThread(o)
     for reg, val in input.registers.items():
+      if reg in ["DF"]:
+        continue
       if val is not None:
         t.write_register(reg, val)
     t.write_register("RIP", rip)
@@ -153,7 +155,11 @@ class MicroxGen:
       out.mem_hint(mem_hint)
 
     for reg in _regs + _aflags:
-      out.set_reg(reg, t.read_register(reg, t.REG_HINT_NONE))
+      if reg not in ["DF"]:
+        out.set_reg(reg, t.read_register(reg, t.REG_HINT_NONE))
+      else:
+        out.set_reg(reg, input.registers[reg])
+
     out.ebit(False)
     input.mig(m.additional_inputs)
     return out
