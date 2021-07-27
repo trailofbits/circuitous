@@ -110,7 +110,7 @@ class MicroxGen:
     # TODO(lukas): We need to handle RSP once we support memory ops.
     # assert "RSP" not in input.registers
 
-    rip = input.registers.get("RIP", 0x1000)
+    rip = input.registers.get("RIP", 0x87000)
     rsp = input.registers.get("RSP")
 
     o = microx.Operations()
