@@ -33,6 +33,8 @@ namespace impl {
   //              is `static`.
   template<typename Self_t, template<typename ...> class Derived>
   struct CRTP {
+    using self_t = Self_t;
+
     Self_t &Self() { return static_cast<Self_t &>(*this); }
     const Self_t &Self() const { return static_cast<const Self_t &>(*this); }
   };
@@ -383,6 +385,26 @@ namespace impl {
                                 >);
   };
 
+  template <typename Self_t>
+  struct IOLeaf : ParseInts<Self_t, 2> {
+    using Parent = ParseInts<Self_t, 2>;
+
+    static std::string Name(uint64_t size, auto io) {
+      std::stringstream ss;
+      ss << Self_t::fn_prefix << Self_t::separator << size
+                              << Self_t::separator << static_cast< uint64_t >(io);
+      return ss.str();
+    }
+
+    static llvm::Function *CreateFn(llvm::Module *module, uint64_t size, auto io) {
+      llvm::IRBuilder<> ir(module->getContext());
+      auto r_ty = ir.getIntNTy(static_cast<uint32_t>(size));
+      auto fn_t = llvm::FunctionType::get(r_ty, {}, false);
+      auto callee = module->getOrInsertFunction(Name(size, io), fn_t);
+      return Parent::melt(llvm::cast<llvm::Function>(callee.getCallee()));
+    }
+  };
+
 
   template<typename I, typename C = std::vector< llvm::Value * >, typename ...Args>
   auto implement_call(llvm::IRBuilder<> &ir, const C &c_args, Args &&...args) {
@@ -445,6 +467,10 @@ namespace data {
 
   struct MemBarrier : dot_seperator { sccc_prefix("__circuitous.mem_barrier"); };
   struct ISELBarrier : dot_seperator { sccc_prefix("__circuitous.isel_barrier"); };
+
+  struct ErrorBit : dot_seperator { sccc_prefix("__circuitous.error_bit"); };
+  struct Timestamp : dot_seperator { sccc_prefix("__circuitous.timestamp"); };
+  struct InstBits : dot_seperator { sccc_prefix("__circuitous.instbits"); };
 } //namespace data
 
 // Intrinsic declaration. Overall, they all try to provide the following unified API
@@ -509,6 +535,15 @@ struct ISELBarrier : impl::Frozen<impl::Predicate<data::ISELBarrier>> {};
 
 struct Advice : impl::Allocator<data::Advice> {};
 struct AdviceConstraint : impl::BinaryPredicate<data::AdviceConstraint> {};
+
+enum io_type : uint32_t {
+  in = 0,
+  out = 1,
+};
+
+struct ErrorBit : impl::IOLeaf<data::ErrorBit> {};
+struct Timestamp : impl::IOLeaf<data::Timestamp> {};
+struct InstBits : impl::IOLeaf<data::InstBits> {};
 
 // Has always `2 ** n + 1` operands and following prototype
 // `iX select.N(iN selecort, iX v_1, iX v_2, ..., iX_(v ** n))`
@@ -679,10 +714,16 @@ struct Memory : impl::BucketAllocator<data::Memory, 16 + 64 + 64 + 64> {
   }
 };
 
-#define define_helper(name, class) \
+#define define_generic_helper(name, class) \
 template< typename C = std::vector< llvm::Value * >, typename ...Args > \
 auto make_##name(llvm::IRBuilder<> &ir, const C &c_args, Args && ... args) { \
   return impl::implement_call<class>(ir, c_args, std::forward< Args >(args)...); \
+}
+
+#define define_no_call_arg_helper(name, class) \
+template< typename ...Args > \
+auto make_##name(llvm::IRBuilder<> &ir, Args && ... args) { \
+  return impl::implement_call<class>(ir, {}, std::forward< Args >(args)...); \
 }
 
 /* Helper functions to make creation of intrinsic calls easier for the user
@@ -690,10 +731,40 @@ auto make_##name(llvm::IRBuilder<> &ir, const C &c_args, Args && ... args) { \
  * Args... - arguments to be forwarded to appropriate `CreateFn`.
  */
 
-define_helper(mem_barrier, MemBarrier)
-define_helper(isel_barrier, ISELBarrier)
+define_generic_helper(mem_barrier, MemBarrier)
+define_generic_helper(isel_barrier, ISELBarrier)
+define_generic_helper(bitcompare, BitCompare)
+define_generic_helper(read_constraint, ReadConstraint)
+define_generic_helper(write_constraint, WriteConstraint)
+define_generic_helper(select, Select)
+define_generic_helper(and, And)
+define_generic_helper(or, Or)
+define_generic_helper(verify, VerifyInst)
+define_generic_helper(raw_extract, ExtractRaw)
+define_generic_helper(alloca, AllocateDst)
+define_generic_helper(unused_constraint, UnusedConstraint)
 
-#undef define_helper
+define_no_call_arg_helper(raw_ib_extract, ExtractRaw)
+define_no_call_arg_helper(extract, Extract)
+define_no_call_arg_helper(advice, Advice)
+define_no_call_arg_helper(memory, Memory)
+
+#undef define_generic_helper
+#undef define_no_call_arg_helper
+
+template<typename ...Args>
+auto make_instbits(llvm::IRBuilder<> &ir, Args &&...args) {
+  return impl::implement_call<InstBits>(ir, {}, std::forward< Args >(args)...);
+}
+template<typename ...Args>
+auto make_ebit(llvm::IRBuilder<> &ir, Args &&...args) {
+  return impl::implement_call<ErrorBit>(ir, {}, 1ul, std::forward< Args >(args)...);
+}
+template<typename ...Args>
+auto make_timestamp(llvm::IRBuilder<> &ir, Args &&...args) {
+  return impl::implement_call<Timestamp>(ir, {}, 64ul, std::forward< Args >(args)...);
+}
+
 
 template<typename C>
 auto make_transport(llvm::IRBuilder<> &ir, const C &args) {
@@ -706,7 +777,7 @@ auto make_error(llvm::IRBuilder<> &ir, const C &arg) {
 }
 
 template<bool reduce=false, typename C>
-auto make_xor(llvm::IRBuilder<> &ir, const C &args) ->llvm::Value *
+auto make_xor(llvm::IRBuilder<> &ir, const C &args) -> llvm::Value *
 {
   if constexpr (reduce) {
     if (args.size() == 1) {
@@ -716,44 +787,6 @@ auto make_xor(llvm::IRBuilder<> &ir, const C &args) ->llvm::Value *
   return impl::implement_call<Xor>(ir, args);
 }
 
-template<typename C>
-auto make_and(llvm::IRBuilder<> &ir, const C &args) {
-  return impl::implement_call<And>(ir, args);
-}
-template<typename C>
-auto make_or(llvm::IRBuilder<> &ir, const C &args) {
-  return impl::implement_call<Or>(ir, args);
-}
-
-template<typename C>
-auto make_verify(llvm::IRBuilder<> &ir, const C &args) {
-  return impl::implement_call<VerifyInst>(ir, args);
-}
-
-template<typename ...Args>
-auto make_extract(llvm::IRBuilder<> &ir, Args &&...args) {
-  return impl::implement_call<Extract>(ir, {}, std::forward<Args>(args)...);
-}
-
-template<typename ...Args>
-auto make_raw_extract(llvm::IRBuilder<> &ir, llvm::Value *v, Args &&...args) {
-  return impl::implement_call<ExtractRaw>(ir, {v}, std::forward<Args>(args)...);
-}
-
-template<typename ...Args>
-auto make_raw_ib_extract(llvm::IRBuilder<> &ir, Args &&...args) {
-  return impl::implement_call<ExtractRaw>(ir, {}, std::forward<Args>(args)...);
-}
-
-template<typename C = std::vector<llvm::Value *>, typename ...Args>
-auto make_alloca(llvm::IRBuilder<> &ir, const C &c_args, Args &&...args) {
-  return impl::implement_call<AllocateDst>(ir, c_args, std::forward<Args>(args)...);
-}
-
-template<typename C = std::vector<llvm::Value *>, typename ...Args>
-auto make_bitcompare(llvm::IRBuilder<> &ir, const C &c_args, Args &&...args) {
-  return impl::implement_call<BitCompare>(ir, c_args, std::forward<Args>(args)...);
-}
 
 template<typename C = std::vector<llvm::Value *>>
 auto make_concat(llvm::IRBuilder<> &ir, const C &c_args) {
@@ -763,11 +796,6 @@ auto make_concat(llvm::IRBuilder<> &ir, const C &c_args) {
 
 static inline auto make_breakpoint(llvm::IRBuilder<> &ir) {
   return impl::implement_call<BreakPoint>(ir, {});
-}
-
-template<typename ...Args>
-auto make_advice(llvm::IRBuilder<> &ir, Args &&...args) {
-  return impl::implement_call<Advice>(ir, {}, std::forward<Args>(args)...);
 }
 
 template<typename C = std::vector<llvm::Value *>>
@@ -785,20 +813,6 @@ auto make_advice_constraint(llvm::IRBuilder<> &ir, llvm::Value *advice, I val) {
   return make_advice_constraint(ir, {ci, advice});
 }
 
-template<typename C = std::vector<llvm::Value *>, typename ...Args>
-auto make_read_constraint(llvm::IRBuilder<> &ir, const C &c_args, Args &&... args) {
-  return impl::implement_call<ReadConstraint>(ir, c_args, std::forward<Args>(args)...);
-}
-template<typename C = std::vector<llvm::Value *>, typename ...Args>
-auto make_write_constraint(llvm::IRBuilder<> &ir, const C &c_args, Args &&... args) {
-  return impl::implement_call<WriteConstraint>(ir, c_args, std::forward<Args>(args)...);
-}
-
-
-template<typename C = std::vector<llvm::Value *>, typename ...Args>
-auto make_select(llvm::IRBuilder<> &ir, const C &c_args, Args &&... args) {
-  return impl::implement_call<Select>(ir, c_args, std::forward<Args>(args)...);
-}
 
 template<typename C = std::vector<llvm::Value *>>
 auto make_outcheck(llvm::IRBuilder<> &ir, const C &c_args) {
@@ -807,23 +821,11 @@ auto make_outcheck(llvm::IRBuilder<> &ir, const C &c_args) {
   return impl::implement_call<OutputCheck>(ir, c_args, c_args[0]->getType());
 }
 
-template<typename ...Args>
-auto make_memory(llvm::IRBuilder<> &ir, Args &&...args) {
-  return impl::implement_call<Memory>(ir, {}, std::forward<Args>(args)...);
-}
-
-template<typename C = std::vector< llvm::Value * > >
-auto make_unused_constraint(llvm::IRBuilder<> &ir, const C &c_args) {
-  return impl::implement_call<UnusedConstraint>(ir, c_args);
-}
 
 template<typename T, typename ... Ts>
 bool one_of(llvm::Function *fn) {
-  if constexpr (sizeof...(Ts) == 0) {
-    return T::IsIntrinsic(fn);
-  } else {
-    return T::IsIntrinsic(fn) || one_of<Ts ...>(fn);
-  }
+  if constexpr (sizeof...(Ts) == 0) return T::IsIntrinsic(fn);
+  else return T::IsIntrinsic(fn) || one_of<Ts ...>(fn);
 }
 
 static inline bool is_any(llvm::Function *fn) {
