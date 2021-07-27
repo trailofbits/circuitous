@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <circuitous/Lifter/Context.hpp>
+#include <circuitous/Util/LLVMUtil.hpp>
 
 #include <remill/Arch/Arch.h>
 #include <remill/BC/IntrinsicTable.h>
@@ -37,8 +38,8 @@ namespace circ {
     const std::vector<llvm::Function *> &fns);
 
   // Flatten all control flow into pure data-flow inside of a function.
-  void FlattenControlFlow(llvm::Function *func, const remill::IntrinsicTable &intrinsics);
-  void IdentifyImms(const remill::Arch::ArchPtr &arch, InstSelections &insts);
+  void flatten_cfg(llvm::Function *func, const remill::IntrinsicTable &intrinsics);
+  void fuzz_operands(const remill::Arch::ArchPtr &arch, InstSelections &insts);
 
   // Check that the decoding of a particular instruction results in position-
   // independent operands. It's possible that some operands have PC-relative
@@ -46,175 +47,103 @@ namespace circ {
   bool IsDecodePositionIndependent(const remill::Arch::ArchPtr &arch,
                                    const remill::Instruction &inst);
 
-  // Lifter responsible for producing the ISELs and lifting the instructions
-  // using the `ILifter` (which is required to be stateless w.r.t to inst lifts).
-  template<typename ILifter>
-  struct BaseLifter {
-    using arch_ptr_t = Ctx::arch_ptr_t;
+  // Get the semantic name for an instruction encoding. We attach on the size of
+  // the instruction in bytes as on x86, the iforms from XED don't guarantee us
+  // the same size of bits.
+  static std::string isel_name(const remill::Instruction &inst) {
+    CHECK_GE(15, inst.bytes.size());
+    return inst.function + ("123456789abcdef"[inst.bytes.size()]);
+  }
+
+  struct has_ctx_ref {
     CtxRef ctx;
+    has_ctx_ref(CtxRef ctx_) : ctx(ctx_) {}
+  };
 
-    // The maximum number of bits needed to hold any instruction that can be
-    // verified by this ciruit.
-    uint64_t encoded_inst_size{0};
-    bool reduce_imms = false;
+  struct Decoder : has_ctx_ref {
+    using maybe_inst_t = std::optional< remill::Instruction >;
+    using has_ctx_ref::has_ctx_ref;
+    using self_ref = Decoder &;
 
-    BaseLifter(CtxRef ctx_) : ctx(ctx_), reduce_imms(true) {}
+    std::vector< InstructionSelection > grouped_insts;
+    std::set< std::string > inst_bytes;
+    std::unordered_map< std::string, size_t > isel_index;
 
-    // Apply a callback `cb` to every instruction in the buffer `buff`.
-    template <typename CB>
-    void ForEachInstructionInBuffer(const arch_ptr_t &arch, llvm::StringRef buff, CB &&cb) {
-      const auto max_inst_size = arch->MaxInstructionSize();
+    // Try to decode bytes in buff using arch from `ctx_ref`.
+    auto decode(std::string_view buff) -> std::tuple< maybe_inst_t, std::string_view >
+    {
+      // Nothing to do anymore.
+      if (buff.empty())
+        return std::make_tuple( std::nullopt, buff );
 
       remill::Instruction inst;
-      for (size_t i = 0u, max_i = buff.size(); i < max_i; inst.Reset()) {
-        auto next_i = std::min<std::size_t>(max_i, i + max_inst_size);
-        std::string_view bytes(&(buff.data()[i]), next_i - i);
-
-        if (!arch->DecodeInstruction(0, bytes, inst) || !inst.IsValid()) {
-          LOG(ERROR) << "Unable to decode instruction at byte offset " << i;
-          ++i;
-        } else {
-          i += inst.bytes.size();
-          cb(std::move(inst));
-        }
+      if (!ctx.arch()->DecodeInstruction(0, buff, inst) || !inst.IsValid()) {
+        // Failed, move one byte.
+        return decode(buff.substr(1));
       }
+      // Success, return inst with shorter buffer.
+      return std::make_tuple( std::make_optional(std::move(inst)), buff.substr(inst.bytes.size()) );
     }
 
-    InstSelections Run(llvm::StringRef buff) {
-      auto isels = DecodeInstructions(buff);
-      IdentifyImms(isels);
-      LiftInstructions(isels);
-      return isels;
+    // Recursively try to decode everything present, call `process` for each decoded inst.
+    auto decode_all_(std::string_view buff) {
+      if (buff.empty())
+        return;
+
+      auto [inst, rest] = decode(buff);
+      if (inst)
+        process(std::move(*inst));
+      return decode_all_(rest);
     }
 
-    // Get the semantic name for an instruction encoding. We attach on the size of
-    // the instruction in bytes as on x86, the iforms from XED don't guarantee us
-    // the same size of bits.
-    static std::string IselName(const remill::Instruction &inst) {
-      CHECK_GE(15, inst.bytes.size());
-      return inst.function + ("123456789abcdef"[inst.bytes.size()]);
+    self_ref decode_all(llvm::StringRef buff) {
+      std::string_view coerced(buff.data(), buff.size());
+      decode_all_(coerced);
+      return *this;
     }
 
-    static std::string LiftedName(const std::string &bytes) {
-      std::stringstream ss;
-      ss << "inst_";
-      for (std::size_t i = 0; i < bytes.size(); ++i) {
-        ss << std::hex << static_cast<uint32_t>(bytes[i]);
+    void process(remill::Instruction inst) {
+      if (!IsDecodePositionIndependent(ctx._arch, inst)) {
+        LOG(ERROR) << "Skipping position-dependent instruction: " << inst.Serialize();
+        return;
       }
-      LOG(INFO) << ss.str();
-      return ss.str();
-    }
 
-    static void DisableOpts(llvm::Function *func) {
-      func->removeFnAttr(llvm::Attribute::InlineHint);
-      func->removeFnAttr(llvm::Attribute::AlwaysInline);
-      func->setLinkage(llvm::GlobalValue::ExternalLinkage);
-      func->addFnAttr(llvm::Attribute::NoInline);
-    }
+      // Make sure the size of inst is not bigger than our assumption.
+      CHECK_LE(inst.bytes.size() * 8u, kMaxNumInstBits);
 
-    static void DisableOpts(const std::vector<llvm::Function *> &fns) {
-      for (auto fn : fns) {
-        DisableOpts(fn);
-      }
-    }
+      // Group the unique decoded instructions in terms of their ISELs, i.e. the
+      // general semantic category of those instructions.
+      if (auto [_, inserted] = inst_bytes.insert(inst.bytes); inserted) {
+        auto &iclass = [&]() -> InstructionSelection & {
 
-    static void EnableOpts(llvm::Function *func) {
-      func->removeFnAttr(llvm::Attribute::InlineHint);
-      func->removeFnAttr(llvm::Attribute::AlwaysInline);
-      func->setLinkage(llvm::GlobalValue::ExternalLinkage);
-      func->addFnAttr(llvm::Attribute::NoInline);
-    }
-
-    static void EnableOpts(const std::vector<llvm::Function *> &fns) {
-      for (auto fn : fns) {
-        EnableOpts(fn);
-      }
-    }
-
-    // Decode all instructions in `buff` using `arch`. Group the instructions in
-    // terms of a general semantic category/class.
-    InstSelections DecodeInstructions(llvm::StringRef buff) {
-      std::vector<InstructionSelection> grouped_insts;
-      std::set<std::string> inst_bytes;
-      std::unordered_map<std::string, size_t> isel_index;
-
-      ForEachInstructionInBuffer(ctx._arch, buff, [&](remill::Instruction inst) {
-        // It's likely that some of Remill's decoders implicitly put position-
-        // dependent operands into the operands list, so try to catch that, warn
-        // about them, and skip them.
-        if (!IsDecodePositionIndependent(ctx._arch, inst)) {
-          LOG(ERROR) << "Skipping position-dependent instruction: "
-                    << inst.Serialize();
-          return;
-        }
-
-        // Keep track of the maximum size.
-        encoded_inst_size = std::max<uint64_t>(encoded_inst_size, inst.bytes.size() * 8u);
-        // Make sure the size of inst is not bigger than our assumption.
-        CHECK_LE(encoded_inst_size, kMaxNumInstBits);
-
-        // Group the unique decoded instructions in terms of their ISELs, i.e. the
-        // general semantic category of those instructions.
-        if (auto [_, inserted] = inst_bytes.insert(inst.bytes); inserted) {
-
-          auto &iclass = [&]() -> InstructionSelection & {
-            // Make the identifier specific to the `inst.function` and its size.
-            const auto isel = IselName(inst);
-
-            // Is it present already?
-            if (auto [it, inserted] = isel_index.emplace(isel, grouped_insts.size());
-                !inserted) {
-              auto &iclass = grouped_insts[it->second];
-              CHECK_EQ(inst.bytes.size(), iclass.instructions.back().bytes.size());
-              return iclass;
-            }
-            // We need to create it -- `isel_index` was already update in the `if`,
-            return grouped_insts.emplace_back();
-          }();
-
-          iclass.PartialAdd(std::move(inst),
-                            InstructionSelection::RemillBytesToEncoding(inst.bytes));
-        }
-      });
-
-      return grouped_insts;
-    }
-
-    void LiftInstructions(std::vector<InstructionSelection> &isels) {
-      remill::IntrinsicTable intrinsics(ctx.module());
-      std::vector<llvm::Function *> inst_funcs;
-
-      for (auto &group : isels) {
-        for (auto i = 0ull; i < group.instructions.size(); ++i) {
-          auto &inst = group.instructions[i];
-
-          auto func = remill::DeclareLiftedFunction(ctx.module(), LiftedName(inst.bytes));
-          group.lifted_fns[i] = func;
-
-          remill::CloneBlockFunctionInto(func);
-          auto block = &func->getEntryBlock();
-
-          ILifter lifter(ctx.arch(), ctx.module());
-          lifter.SupplyShadow(&group.shadows[i]);
-          auto status = lifter.LiftIntoBlock(inst, block, false);
-          if (status == remill::LiftStatus::kLiftedInstruction) {
-              llvm::ReturnInst::Create(*ctx.llvm_ctx(), remill::LoadMemoryPointer(block), block);
-              inst_funcs.push_back(func);
-              continue;
+          // Is it present already?
+          if (auto [it, inserted] = isel_index.emplace(isel_name(inst), grouped_insts.size());
+              !inserted) {
+            auto &iclass = grouped_insts[it->second];
+            CHECK_EQ(inst.bytes.size(), iclass.instructions.back().bytes.size());
+            return iclass;
           }
+          // We need to create it -- `isel_index` was already update in the `if`,
+          return grouped_insts.emplace_back();
+        }();
 
-          if (status == remill::LiftStatus::kLiftedUnsupportedInstruction) {
-            LOG(ERROR) << "Missing semantics for instruction: "
-                      << inst.Serialize();
-          }
-          if (status == remill::LiftStatus::kLiftedInvalidInstruction) {
-              LOG(ERROR) << "Invalid instruction: " << inst.Serialize();
-          }
-          func->eraseFromParent();
-        }
+        iclass.PartialAdd(std::move(inst), InstructionSelection::RemillBytesToEncoding(inst.bytes));
       }
+    }
 
-      DisableOpts(inst_funcs);
+    // Take all decoded instructions.
+    auto take() { return std::move( grouped_insts ); }
+  };
+
+
+  template< typename Impl >
+  struct ILifter : has_ctx_ref {
+    using has_ctx_ref::has_ctx_ref;
+
+    void after_lift_opts(std::vector< llvm::Function * > &inst_funcs) {
+      disable_opts(inst_funcs);
+
+      remill::VerifyModule(ctx.module());
       OptimizeSilently(ctx.arch(), ctx.module(), inst_funcs);
 
       std::vector<llvm::Function *> reopt_funcs;
@@ -224,21 +153,85 @@ namespace circ {
         }
 
         reopt_funcs.push_back(func);
-        FlattenControlFlow(func, intrinsics);
-      }
 
+        remill::IntrinsicTable intrinsics(ctx.module());
+        flatten_cfg(func, intrinsics);
+      }
       // TOOD(lukas): Inline into the loop once the `OptimizeSilently` does
       //              only function verification (now does module).
       OptimizeSilently(ctx.arch(), ctx.module(), reopt_funcs);
 
       // We're done; make the instruction functions more amenable for inlining
       // and elimination.
-      EnableOpts(inst_funcs);
+      enable_opts(inst_funcs);
     }
 
-    void IdentifyImms(InstSelections &insts) {
-      circ::IdentifyImms(ctx._arch, insts);
+    static std::string lifted_name(const std::string &bytes) {
+      std::stringstream ss;
+      ss << "inst_";
+      for (std::size_t i = 0; i < bytes.size(); ++i) {
+        ss << std::hex << static_cast<uint32_t>(bytes[i]);
+      }
+      return ss.str();
     }
 
+    void lift(std::vector<InstructionSelection> &isels) {
+      std::vector<llvm::Function *> inst_funcs;
+
+      for (auto &group : isels) {
+        for (auto i = 0ull; i < group.instructions.size(); ++i) {
+          auto &inst = group.instructions[i];
+
+          auto func = remill::DeclareLiftedFunction(ctx.module(), lifted_name(inst.bytes));
+          group.lifted_fns[i] = func;
+
+          remill::CloneBlockFunctionInto(func);
+          auto block = &func->getEntryBlock();
+
+          Impl lifter(ctx.arch(), ctx.module());
+          lifter.SupplyShadow(&group.shadows[i]);
+          auto status = lifter.LiftIntoBlock(inst, block, false);
+
+          if (status == remill::LiftStatus::kLiftedInstruction) {
+              llvm::ReturnInst::Create(*ctx.llvm_ctx(), remill::LoadMemoryPointer(block), block);
+              inst_funcs.push_back(func);
+              continue;
+          }
+
+          if (status == remill::LiftStatus::kLiftedUnsupportedInstruction) {
+            LOG(ERROR) << "Missing semantics for instruction: " << inst.Serialize();
+          }
+          if (status == remill::LiftStatus::kLiftedInvalidInstruction) {
+              LOG(ERROR) << "Invalid instruction: " << inst.Serialize();
+          }
+          func->eraseFromParent();
+        }
+      }
+      after_lift_opts(inst_funcs);
+    }
+  };
+
+  // Lifter responsible for producing the ISELs and lifting the instructions
+  // using the `ILifter` (which is required to be stateless w.r.t to inst lifts).
+  template< typename ILifter_ >
+  struct BaseLifter : has_ctx_ref {
+    using arch_ptr_t = Ctx::arch_ptr_t;
+    using has_ctx_ref::has_ctx_ref;
+
+
+    InstSelections Run(llvm::StringRef buff) {
+      auto isels = decode(buff);
+      fuzz(isels);
+      lift(isels);
+      return isels;
+    }
+
+    void fuzz(InstSelections &insts) { circ::fuzz_operands(ctx._arch, insts); }
+
+    // Decode all instructions in `buff` using `arch`. Group the instructions in
+    // terms of a general semantic category/class.
+    InstSelections decode(llvm::StringRef buff) { return Decoder(ctx).decode_all(buff).take(); }
+
+    auto lift(auto &isels) { return ILifter< ILifter_ >(ctx).lift(isels); }
   };
 } // namespace circ

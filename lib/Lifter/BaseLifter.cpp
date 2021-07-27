@@ -85,7 +85,7 @@ namespace circ {
       // shifted' = x'y' << z'
       auto shifted = ir.CreateLShr(full, ir.CreateZExt(shift_c, full->getType()));
       // out' = extract.0.N(shifted')
-      return intrinsics::make_raw_extract(ir, shifted, 0ul, size);
+      return intrinsics::make_raw_extract(ir, {shifted}, 0ul, size);
     }
 
     void HandleFSHR(const std::vector<llvm::CallInst *> &calls) {
@@ -136,11 +136,11 @@ namespace circ {
 
 
   // Flatten all control flow into pure data-flow inside of a function.
-  void FlattenControlFlow(llvm::Function *func, const remill::IntrinsicTable &intrinsics) {
+  void flatten_cfg(llvm::Function *func, const remill::IntrinsicTable &intrinsics) {
     Flattener(func, intrinsics.error).Run();
   }
 
-  void IdentifyImms(const remill::Arch::ArchPtr &arch, InstSelections &insts) {
+  void fuzz_operands(const remill::Arch::ArchPtr &arch, InstSelections &insts) {
     for (auto &inst : insts) {
       for (auto i = 0U; i < inst.instructions.size(); ++i) {
         LOG(INFO) << "Searching for immediate operands regions in:";
