@@ -27,6 +27,32 @@
 
 namespace circ {
 
+  static inline void disable_opts(llvm::Function *func) {
+    func->removeFnAttr(llvm::Attribute::InlineHint);
+    func->removeFnAttr(llvm::Attribute::AlwaysInline);
+    func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+    func->addFnAttr(llvm::Attribute::NoInline);
+  }
+
+  static inline void disable_opts(const std::vector<llvm::Function *> &fns) {
+    for (auto fn : fns) {
+      disable_opts(fn);
+    }
+  }
+
+  static inline void enable_opts(llvm::Function *func) {
+    func->removeFnAttr(llvm::Attribute::InlineHint);
+    func->removeFnAttr(llvm::Attribute::AlwaysInline);
+    func->setLinkage(llvm::GlobalValue::ExternalLinkage);
+    func->addFnAttr(llvm::Attribute::NoInline);
+  }
+
+  static inline void enable_opts(const std::vector<llvm::Function *> &fns) {
+    for (auto fn : fns) {
+      enable_opts(fn);
+    }
+  }
+
   static inline void EraseFn(llvm::Module *module, const std::string &fn_name) {
     if (auto fn = module->getFunction(fn_name)) {
       fn->eraseFromParent();
@@ -168,6 +194,38 @@ namespace circ {
 
     CHECK(begin->getParent() == end->getParent());
     return std::make_tuple(begin, end);
+  }
+
+  static inline auto inst_distance(llvm::Instruction *a, llvm::Instruction *b) {
+    CHECK(a->getParent() == b->getParent());
+    using bb_it = llvm::BasicBlock::iterator;
+    return std::distance(bb_it(a), bb_it(b));
+  }
+
+  static inline auto enclosing_reg(auto arch, const std::string &name) {
+    auto remill_reg = arch->RegisterByName(name);
+    CHECK(remill_reg);
+    CHECK(remill_reg->EnclosingRegister());
+    return remill_reg->EnclosingRegister();
+  }
+
+  template< typename T > requires std::is_base_of_v< llvm::Value, T >
+  std::string dbg_dump(const std::vector< T * > &vs) {
+    std::stringstream os;
+    os << "[" << std::endl;
+    for (auto v : vs)
+      os << remill::LLVMThingToString(v) << std::endl;
+    os << "]";
+    return os.str();
+  }
+
+  template< typename T > requires std::is_base_of_v< llvm::Value, T >
+  std::string dbg_dump(const std::unordered_set< T * > &vs) {
+    LOG(FATAL) << "Not implemented";
+  }
+
+  static inline std::string dbg_dump(llvm::BasicBlock *block) {
+    return remill::LLVMThingToString(block);
   }
 
 } // namespace circ
