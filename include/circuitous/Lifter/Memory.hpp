@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <circuitous/IR/Intrinsics.hpp>
+
 namespace circ::mem {
 
   // Returns `[explicit_errors, implicit_erros]`
@@ -89,7 +91,7 @@ namespace circ::mem {
 
     auto parse_hint(llvm::IRBuilder<> &ir, llvm::CallInst *call) {
       auto extractor = [&](auto inst, auto from, auto to) {
-        return intrinsics::make_raw_extract(ir, inst, from, to);
+        return intrinsics::make_raw_extract(ir, {inst}, from, to);
       };
       return mem_t::parse< llvm::Value * >(call, extractor);
     }
@@ -164,5 +166,9 @@ namespace circ::mem {
     return Synthetizer(ts).all(from, to);
   }
 
+  auto synthetize_memory(llvm::Instruction *from, llvm::Instruction *to) {
+    llvm::IRBuilder<> ir(from);
+    return synthetize_memory(intrinsics::make_timestamp(ir, intrinsics::io_type::in), from, to);
+  }
 
 } // namespace circ::mem

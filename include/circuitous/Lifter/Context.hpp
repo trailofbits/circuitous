@@ -27,114 +27,11 @@ namespace remill {
 namespace circ {
 
   struct Names {
-    // TODO(lukas): This may deserve its own header, so we do not have to include
-    //              everything from here if only metadata names are requested.
+    // TODO(lukas): Merge into `Context`.
     struct meta {
       static constexpr const char *verify_args = "circuitous.verify_fn_args";
       static constexpr const char *dst_reg =     "circuitous.dst.reg";
     };
-
-    static constexpr const char *in = "in";
-    static constexpr const char *out = "out";
-    static constexpr const char sep = '.';
-
-    static constexpr const char *reg_type_ = "register";
-    static constexpr const char *mem_type  = "memory";
-    static constexpr const char *flag = "flag";
-    static constexpr const char *bits = "bits";
-    static constexpr const char *timestamp_type = "timestamp";
-
-    enum class mut_t : uint8_t {
-      in = 0x1,
-      out = 0x2
-    };
-
-    static constexpr uint8_t tied_c = 0x1 + 0x2;
-
-    using meta_t = std::vector<std::string>;
-    // [type, name, i/o (mut_t), metdata]
-    using parsed_t = std::tuple<std::string, std::string, std::string, std::string>;
-
-    static uint8_t _cast_mut(const std::string &mut) {
-      return _cast_mut(llvm::StringRef{mut});
-    }
-
-    static uint8_t _cast_mut(llvm::StringRef mut) {
-      if (mut == "in")   return static_cast<uint8_t>(mut_t::in);
-      if (mut == "out")  return static_cast<uint8_t>(mut_t::out);
-      LOG(FATAL) << "Unrecognized mut_t";
-    }
-
-    static auto parse(llvm::Value *arg) {
-      CHECK(arg->hasName());
-      auto [type, type_tail] = arg->getName().split(sep);
-      auto [name, name_tail] = type_tail.split(sep);
-      auto [mut, mut_tail] = name_tail.split(sep);
-      return std::make_tuple(
-          std::move(type), std::move(name), std::move(mut), std::move(mut_tail) );
-    }
-
-    static auto type(llvm::Value *arg) {
-      const auto &[type, _, _1, _2] = parse(arg);
-      return type;
-    }
-
-    static bool is_reg(llvm::Value *arg) { return type(arg) == reg_type_; }
-
-    static bool is_in_reg(llvm::Value *arg) {
-      CHECK(arg->hasName());
-      const auto &[type, _, mut, _1] = parse(arg);
-      return type == reg_type_ && mut == in;
-    }
-
-    static bool is_out_reg(llvm::Value *arg) {
-      CHECK(arg->hasName());
-      const auto &[type, _, mut, _1] = parse(arg);
-      return type == reg_type_ && mut == out;
-    }
-
-    using cstr_r = const std::string &;
-    static std::string build(cstr_r type, cstr_r base, cstr_r mut) {
-      return type + sep + base + sep + mut + sep + "_";
-    }
-
-    static std::string instruction_bits() {
-      return std::string(bits) + sep + "ibit" + sep + in + sep + "_";
-    }
-
-    static std::string as_in_reg(llvm::StringRef name) {
-      return std::string(reg_type_) + sep + name.str() + sep + in + sep + "_";
-    }
-
-    static std::string as_out_reg(llvm::StringRef name) {
-      return std::string(reg_type_) + sep + name.str() + sep + out + sep + "_";
-    }
-
-    static auto name(llvm::Value *arg) {
-      return std::get<1>(parse(arg));
-    }
-
-    static llvm::Argument *dual_reg(llvm::Function *fn, llvm::Value *val) {
-      const auto &[type, _, _1, _2] = parse(val);
-      CHECK(type == reg_type_) << "Cannot get dual_reg from thing that is not a reg!";
-
-      for (auto &arg : fn->args()) {
-        CHECK(arg.hasName());
-        if (are_tied(&arg, val)) {
-          return &arg;
-        }
-      }
-      LOG(FATAL) << "Dit not find dual_reg to " << remill::LLVMThingToString(val);
-    }
-
-    static bool are_tied(llvm::Value *lhs, llvm::Value *rhs) {
-      if (!lhs->hasName() || !rhs->hasName()) {
-        return false;
-      }
-      const auto &[ltype, lname, lmut, _] = parse(lhs);
-      const auto &[rtype, rname, rmut, _1] = parse(rhs);
-      return ltype == rtype && lname == rname && _cast_mut(lmut) + _cast_mut(rmut) == tied_c;
-    }
   };
 
   struct Ctx {
@@ -151,8 +48,11 @@ namespace circ {
     auto module() { return _module.get(); }
     auto &regs() { return _regs; }
 
+    auto ir() { return llvm::IRBuilder<>{ *llvm_ctx() }; }
+
     auto state_ptr_type() const { return _arch->StatePointerType(); }
     auto memory_ptr_type() const { return _arch->MemoryPointerType(); }
+    auto undef_mem_ptr() { return llvm::UndefValue::get(memory_ptr_type()); }
 
     static auto make_arch(
       llvm::LLVMContext *ctx, const std::string &os_name, const std::string &arch_name)
@@ -192,12 +92,23 @@ namespace circ {
       for (auto gv : gv_to_erase) { gv->eraseFromParent(); }
     }
 
+    static bool is_allowed(const std::string &name) {
+      static const std::unordered_set< std::string > allowed =
+      {
+        "AF", "CF", "PF", "DF", "OF", "SF", "ZF",
+        "RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP",
+        "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
+        "RIP"
+      };
+      return allowed.count(name) != 0;
+    }
+
     Ctx(const std::string &os_name, const std::string &arch_name)
         : _arch(make_arch(_llvm_context.get(), os_name, arch_name)),
           _module(remill::LoadArchSemantics(arch()))
     {
       _arch->ForEachRegister([&](reg_ptr_t reg_) {
-        if (auto reg = reg_->EnclosingRegister(); reg == reg_) {
+        if (auto reg = reg_->EnclosingRegister(); reg == reg_ && is_allowed(reg->name)) {
           _regs.push_back(reg);
         }
       });

@@ -243,6 +243,20 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     return out;
   }
 
+  template< typename IT, typename OT >
+  auto VisitIOLeaf(llvm::CallInst *call, llvm::Function *fn, uint32_t io_type, uint32_t size) {
+    auto leaf = [&]() {
+      if (io_type == intrinsics::io_type::in) {
+        return fetch_leave< IT >(fn, size);
+      } else if (io_type == intrinsics::io_type::out) {
+        return fetch_leave< OT >(fn, size);
+      }
+      LOG(FATAL) << "Unreachable";
+    }();
+    val_to_op[call] = leaf;
+    return leaf;
+  }
+
   auto value_size(llvm::Value *val) {
     return static_cast<uint32_t>(dl.getTypeSizeInBits(val->getType()));
   }
@@ -340,6 +354,14 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
     if (intrinsics::UnusedConstraint::IsIntrinsic(fn)) {
       return VisitGenericIntrinsic< UnusedConstraint >(call, fn);
+    }
+    if (intrinsics::ErrorBit::IsIntrinsic(fn)) {
+      auto [size, io_type] = intrinsics::ErrorBit::ParseArgs< uint32_t >(fn);
+      return VisitIOLeaf< InputErrorFlag, OutputErrorFlag >(call, fn, io_type, size);
+    }
+    if (intrinsics::Timestamp::IsIntrinsic(fn)) {
+      auto [size, io_type] = intrinsics::Timestamp::ParseArgs< uint32_t >(fn);
+      return VisitIOLeaf< InputTimestamp, OutputTimestamp >(call, fn, io_type, size);
     }
     LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(call);
   }
@@ -518,6 +540,19 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     VisitAPInt(val, val->getValueAPF().bitcastToAPInt());
   }
 
+  void conjure_instbits(uint32_t size) {
+    inst_bits[size] = impl->Create< InputInstructionBits >(size);
+  }
+
+  template< typename I >
+  Operation *fetch_leave(llvm::Function *fn, uint32_t size) {
+    if (!leaves.count(fn)) {
+      // TODO(lukas): What about possible metadata?
+      leaves[fn] = impl->Create< I >(size);
+    }
+    return leaves[fn];
+  }
+
   Operation *Fetch(llvm::Function *fn, llvm::Value *val) {
     if (!val_to_op.count(val)) {
       Visit(fn, val);
@@ -550,6 +585,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
   llvm::SmallString<128> bits;
   std::unordered_map<llvm::Value *, Operation *> val_to_op;
+  std::unordered_map<llvm::Value *, Operation *> leaves;
+  std::unordered_map<uint32_t, Operation *> inst_bits;
+
   std::unordered_map<std::string, Constant *> bits_to_constants;
 
  private:
@@ -578,7 +616,6 @@ auto Circuit::make_circuit(
 
   circ::Ctx ctx{ std::string(os_name), std::string(arch_name) };
   circ::CircuitBuilder builder(ctx);
-  builder.reduce_imms = opts.reduce_imms;
 
   const auto arch = builder.ctx.arch();
   const auto circuit_func = builder.Build(buff);
@@ -593,24 +630,20 @@ auto Circuit::make_circuit(
   auto impl = std::make_unique<Circuit>();
   IRImporter importer(arch, dl, impl.get());
 
-  importer.Emplace<InputInstructionBits>(remill::NthArgument(circuit_func, 0), kMaxNumInstBits);
-  importer.Emplace<InputErrorFlag>(remill::NthArgument(circuit_func, 1));
-  importer.Emplace<OutputErrorFlag>(remill::NthArgument(circuit_func, 2));
-
-  importer.Emplace<InputTimestamp>(remill::NthArgument(circuit_func, 3));
-  importer.Emplace<OutputTimestamp>(remill::NthArgument(circuit_func, 4));
+  //TODO(lukas): Since extract does need operand, we need to have the node already present
+  importer.conjure_instbits(kMaxNumInstBits);
 
   auto num_input_regs = 0u;
   auto num_output_regs = 0u;
   for (auto &arg : circuit_func->args()) {
     auto arg_size = static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
     // Expected output register.
-    if (Names::is_out_reg(&arg)) {
-      importer.Emplace<OutputRegister>(&arg, Names::name(&arg).str(), arg_size);
+    if (auto name = circuit_builder::is_output_reg(&arg)) {
+      importer.Emplace<OutputRegister>(&arg, *name, arg_size);
       ++num_output_regs;
     // Input register.
-    } else if (Names::is_in_reg(&arg)) {
-      importer.Emplace<InputRegister>(&arg, Names::name(&arg).str(), arg_size);
+    } else if (auto name = circuit_builder::is_input_reg(&arg)) {
+      importer.Emplace<InputRegister>(&arg, *name, arg_size);
       ++num_input_regs;
     }
   }
