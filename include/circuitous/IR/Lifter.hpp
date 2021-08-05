@@ -77,6 +77,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
   llvm::LLVMContext *llvm_ctx;
   llvm::IntegerType *word_type;
   uint64_t word_size = 0;
+  uint64_t select_counter = 0;
 
   std::unordered_map< uint64_t, llvm::Value * > reg_op_dsts;
 
@@ -518,6 +519,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
 
     // TODO(lukas): Handle holes.
     auto [cond, select] = shadowinst::make_intrinsics_decoder(s_reg, ir, safe_locate_reg);
+    AddMetadata(select, "__circuitous.ordering", select_counter++);
     if (cond) {
       auto wrapped = irops::make< irops::Transport >(ir, cond);
       AddMetadata(llvm::dyn_cast<llvm::Instruction>(wrapped), "circuitous.verify_fn_args", 0);
