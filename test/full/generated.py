@@ -228,7 +228,9 @@ bt_src = {
 
   ModelTest("bts-s_z_ext_lifter") \
   .bytes(intel(["bts QWORD PTR [rax + 2 *rsi + 0xff], 0xf2"]))
-  .tags({"bts", "min"}).seed(4123).all_defined(random=True),
+  .tags({"bts", "min", "something"}).seed(4123)
+  .DI(random_state(4123))
+  .case(run_bytes = 0, DE=MS().uOF().uSF().uAF().uPF(), R=True),
 
   # NOTE(lukas): Microx has bug when immediate is grater than size
   Test("bts_corner_big_imm") \
