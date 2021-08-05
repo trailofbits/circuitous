@@ -39,6 +39,7 @@ namespace circ::ifuzz::permutate {
 
         remill::Instruction tmp;
         if (arch->DecodeInstruction(0, flipped, tmp)) {
+          LOG(INFO) << tmp.Serialize();
           out[index] = std::move(tmp);
         }
       }
@@ -46,8 +47,40 @@ namespace circ::ifuzz::permutate {
     return out;
   }
 
+  struct Verbose {
+    std::stringstream ss;
+
+    template<typename S>
+    void _raw(S &&s) { ss << std::forward<S>(s); }
+
+    void _raw(const remill::Instruction &inst) {
+      ss << inst.Serialize();
+    }
+
+    template<typename H, typename ...Args>
+    void _log(const std::string &delim, H &&h, Args &&...args) {
+      _raw(std::forward<H>(h));
+      if constexpr (sizeof...(Args) != 0) {
+        ss << delim;
+        return _log(delim, std::forward<Args>(args)...);
+      } else {
+        ss << std::endl;
+      }
+    }
+
+    template<typename ...Args>
+    void dbg(Args &&...args) {
+      return _log(" ", std::forward<Args>(args)...);
+    }
+
+    template<typename ...Args>
+    void dbg_neq(uint8_t indent, Args &&...args) {
+      return _log(std::string(indent * 2, ' '), std::forward<Args>(args)...);
+    }
+  };
+
   // Everything equals to everything
-  struct TrueBase {
+  struct TrueBase : Verbose {
     using OpType = remill::Operand::Type;
     using operands_t = std::vector<const remill::Operand *>;
 
@@ -105,6 +138,7 @@ namespace circ::ifuzz::permutate {
 
         if (self.segment_base_reg.name != flipped.segment_base_reg.name ||
             self.segment_base_reg.size != flipped.segment_base_reg.size) {
+          this->dbg_neq(2, "Segment base failure.");
           return false;
         }
 
@@ -144,6 +178,7 @@ namespace circ::ifuzz::permutate {
         if (self.displacement != flipped.displacement) {
           ++corrections;
         }
+        this->dbg("Corrections needed:", static_cast<uint32_t>(corrections));
         return corrections <= 1;
       };
     }
@@ -197,11 +232,14 @@ namespace circ::ifuzz::permutate {
     std::tuple<bool, bool> CheckStructure(
       cri original, cri permutation, const Item_t &items, Fn &&on_self)
     {
+      this->dbg("Checking structure of:", permutation);
       if (original.bytes.size() != permutation.bytes.size()) {
+        this->dbg_neq(1, "Sizes did not match.");
         return { false, false };
       }
 
       if (original.function != permutation.function) {
+        this->dbg_neq(1, "Function did not match.");
         return { false, false };
       }
 
@@ -216,6 +254,7 @@ namespace circ::ifuzz::permutate {
       }
 
       if (original.operands.size() != permutation.operands.size()) {
+        this->dbg_neq(1, "Operands size did not match.");
         return { false, false };
       }
 
@@ -227,6 +266,7 @@ namespace circ::ifuzz::permutate {
       }
 
       if (!on_self_check) {
+        this->dbg_neq(1, "on self_check failed.");
         return { false, exact_check };
       }
 
@@ -235,6 +275,7 @@ namespace circ::ifuzz::permutate {
       std::vector<const remill::Operand *> raw_items;
       for (auto [_, op] : items) raw_items.push_back(op);
       if (!Next::Depends(raw_items)) {
+        this->dbg_neq(1, "Next::Depends failed.");
         return { false, exact_check };
       }
 
@@ -245,6 +286,7 @@ namespace circ::ifuzz::permutate {
         }
 
         if (!Next::full_compare(original.operands[i], permutation.operands[i])) {
+          this->dbg_neq(1, "full_compare for operand", i, "failed.");
           return { false, exact_check };
         }
       }
@@ -280,6 +322,13 @@ namespace circ::ifuzz::permutate {
         case OpType::kTypeAddress  : return Check(original, permutation, items, Next::identity_addr());
         default                    : return false;
       }
+    }
+
+  template< typename ... Args >
+   bool verbose_compare( Args &&...args ) {
+      auto x = compare(std::forward< Args >(args) ...);
+      LOG(INFO) << this->ss.str();
+      return x;
     }
 
     using citem = const Item_t;
