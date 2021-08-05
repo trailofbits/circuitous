@@ -14,6 +14,40 @@
 
 namespace circ {
 
+  template< typename I, typename F >
+  auto order(const I &insts, F &&get_idx)
+  {
+    using val_t = typename I::value_type;
+
+    std::array< val_t, 16 > ordered_selects;
+    std::size_t last = 8;
+    for (auto i = 0u; i < ordered_selects.size(); ++i) ordered_selects[i] = nullptr;
+
+    for (auto x : insts) {
+      if (auto idx = get_idx(x)) {
+        // TODO(lukas): For now it is assumed no intrinsic has more than 4 operands.
+        CHECK(*idx < 8);
+        CHECK(!ordered_selects[*idx]);
+        ordered_selects[*idx] = x;
+      } else {
+        CHECK(last < ordered_selects.size() - 1);
+        ordered_selects[++last] = x;
+      }
+    }
+
+    std::vector< val_t > vs;
+    for (std::size_t i = 0; i < ordered_selects.size(); ++i)
+      if (ordered_selects[i]) vs.push_back(ordered_selects[i]);
+    return vs;
+  }
+
+  template< typename I, typename F >
+  auto order_by_metadata(const I& insts, F &&kind)
+  {
+    auto get_idx = [&](auto value){ return GetMetadata(value, kind); };
+    return order(insts, get_idx);
+  }
+
   // TODO(lukas): Rename.
   // For each `Source` intrinsic collects all used `Sink` intrinsics.
   template< typename Source, typename Sink >
@@ -42,9 +76,11 @@ namespace circ {
 
     auto get() {
       std::map< llvm::Value *, std::vector< llvm::CallInst * > > out;
-      for (auto &[ctx, entries] : data) {
-        out[ctx] = std::vector< llvm::CallInst * >(entries.begin(), entries.end());
+
+      for (auto &[ctx, selects] : data) {
+        out[ctx] = order_by_metadata(selects, "__circuitous.ordering");
       }
+
       return out;
     }
 
