@@ -63,6 +63,7 @@ target_include_directories(circuitous_settings INTERFACE
 add_library(circuitous_ir STATIC
   lib/IR/Hash.cpp
   lib/IR/IR.cpp
+  lib/IR/SMT.cpp
   lib/IR/Serialize.cpp
 )
 
