@@ -139,18 +139,24 @@ namespace circ::shadowinst {
       std::vector<llvm::Value *> input_fragments;
       std::size_t current = 0;
 
+      if (s_reg.regions.empty()) {
+        translation_checks.push_back(ir.getTrue());
+        continue;
+      }
+
+
       for (auto &[from, size] : s_reg.regions) {
         auto extract = irops::make< irops::Extract >(ir, std::vector< llvm::Value * >{}, from, size);
         input_fragments.push_back(extract);
         current += size;
       }
+      CHECK(!input_fragments.empty());
       // We need to match the order of the entry in `translation_map`
       std::reverse(input_fragments.begin(), input_fragments.end());
       auto full_input = irops::make< irops::Concat >(ir, input_fragments);
       auto expected_value = ir.getInt(make_APInt(mats, 0, current));
       translation_checks.push_back(ir.CreateICmpEQ(full_input, expected_value));
     }
-
     return translation_checks;
   }
 
