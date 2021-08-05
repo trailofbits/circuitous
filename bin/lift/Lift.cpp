@@ -28,6 +28,7 @@ DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "TODO(luaks): Needs update");
 DEFINE_string(smt_out, "", "Path to the output smt2 file.");
+DEFINE_string(smt_in, "", "Path to the input smt2 file.");
 DEFINE_string(bitblast_smt_out, "", "Path to the output smt2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
 DEFINE_string(optimizations, "",
@@ -137,9 +138,17 @@ std::unique_ptr<circ::Circuit> LoadCircuit() {
       return {};
     }
     return circ::Circuit::Deserialize(is);
-
   }
-  LOG(WARNING) << "Expected one of `--binary_in` or `--ir_in` or `--bytes_int`" << std::endl;
+
+  if (!FLAGS_smt_in.empty()) {
+    if (FLAGS_ir_in == "-") {
+      FLAGS_ir_in = "/dev/stdin";
+    }
+
+    return circ::smt::deserialize(FLAGS_smt_in);
+  }
+
+  LOG(WARNING) << "Expected one of `--binary_in` or `--ir_in` or `--smt_in` or `--bytes_int`" << std::endl;
   return {};
 }
 
