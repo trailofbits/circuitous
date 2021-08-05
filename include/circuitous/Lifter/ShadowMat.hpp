@@ -160,6 +160,15 @@ namespace circ::shadowinst {
     return translation_checks;
   }
 
+  static inline auto decoder_conditions(auto arch, const Reg &s_reg, llvm::IRBuilder<> &ir)
+  {
+    std::map< Reg::reg_t, std::vector< llvm::Value * > > out;
+    for (const auto &[reg, _] : s_reg.translation_map) {
+      out[enclosing_reg(arch, reg)->name] = decoder_conditions(s_reg, reg, ir);
+    }
+    return out;
+  }
+
   template<typename Getter>
   auto make_intrinsics_decoder(const Reg &s_reg, llvm::IRBuilder<> &ir, Getter &get_reg) {
     auto entries = s_reg.translation_entries_count();
