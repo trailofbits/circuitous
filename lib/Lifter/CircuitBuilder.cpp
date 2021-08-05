@@ -29,7 +29,6 @@
 #pragma clang diagnostic pop
 
 #include <sstream>
-#include <iomanip>
 
 namespace circ {
 namespace {
