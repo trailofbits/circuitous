@@ -432,6 +432,15 @@ namespace circ::shadowinst {
       return false;
     }
 
+    bool validate() {
+      uint32_t dirty_count = 0;
+      for (const auto &op : operands) {
+        if (op.reg && !op.reg->dirty.empty())
+          ++dirty_count;
+      }
+      return dirty_count <= 1;
+    }
+
     template<typename T, typename ...Args>
     auto &Add(Args && ... args) {
       return operands.emplace_back(Operand::As<T>(std::forward<Args>(args)...));
