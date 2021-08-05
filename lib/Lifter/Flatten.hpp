@@ -178,7 +178,7 @@ struct Flattener {
           auto callee = call->getCalledFunction();
           if (callee->getName() == "__remill_error") {
             llvm::IRBuilder<> ir(new_block);
-            intrinsics::make_error(ir, reaching_cond[block]);
+            irops::make< irops::Error >(ir, reaching_cond[block]);
             call->replaceAllUsesWith(call->getArgOperand(2u));
             continue;
           }

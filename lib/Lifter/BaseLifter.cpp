@@ -74,7 +74,7 @@ namespace circ {
       std::vector<llvm::Value *> args { call->getArgOperand(1u), call->getArgOperand(0u) };
       // iN out = fshr(iN x, iN y, iZ z)
       // i(N * 2) x'y' = concat(x, y)
-      auto full = intrinsics::make_concat(ir, args);
+      auto full = irops::make< irops::Concat >(ir, args);
 
       auto size = static_cast<uint32_t>(
           dl.getTypeSizeInBits(call->getArgOperand(0u)->getType()));
@@ -85,7 +85,7 @@ namespace circ {
       // shifted' = x'y' << z'
       auto shifted = ir.CreateLShr(full, ir.CreateZExt(shift_c, full->getType()));
       // out' = extract.0.N(shifted')
-      return intrinsics::make_raw_extract(ir, {shifted}, 0ul, size);
+      return irops::make< irops::ExtractRaw >(ir, shifted, 0ul, size);
     }
 
     void HandleFSHR(const std::vector<llvm::CallInst *> &calls) {
