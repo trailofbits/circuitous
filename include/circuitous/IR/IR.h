@@ -240,8 +240,8 @@ struct Advice final : Operation, make_kind< LeafValue, tag_fragment< 5 > > {
 
   inline explicit Advice(unsigned size_) : Operation(size_, kind) {}
 
-  static std::string op_code_str() { return "hint"; }
-  std::string Name() const override { return "hint"; }
+  static std::string op_code_str() { return "advice"; }
+  std::string Name() const override { return "advice"; }
 };
 
 // Input bits that

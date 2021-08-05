@@ -24,7 +24,7 @@ struct Verifier {
   std::string Report() { return ss.str(); }
 
   bool LogError(Operation *op) {
-    ss << op->Name() << " has " << op->operands.Size() << " operands which is invalid.\n";
+    ss << to_string(op->op_code) << " has " << op->operands.Size() << " operands which is invalid.\n";
     return false;
   }
 
@@ -134,7 +134,7 @@ struct Verifier {
     bool out = true;
     for (auto hint_check : circuit->Attr<AdviceConstraint>()) {
       if (collector.op_to_ctxs[hint_check].size() != 1) {
-        _warnings << "HINT_CHECK is member of multiple contexts.\n";
+        _warnings << "ADVICE_CONSTRAINT is member of multiple contexts.\n";
         out &= true;
       }
     }
@@ -153,7 +153,7 @@ struct Verifier {
           ctx[op] = verif;
 
           if (op->operands[AdviceConstraint::kFixed]->op_code != Advice::kind) {
-            ss << "HINT_CHECK hint operand is not HINT";
+            ss << "ADVICE_CONSTRAINT hint operand is not ADVICE\n";
             status = false;
           }
 
@@ -161,7 +161,7 @@ struct Verifier {
           for (auto hint : op->operands) {
             if (hint->op_code == Advice::kind) {
               if (found_hint) {
-                _warnings << "HINT_CHECK has at least two direct HINT operands!\n";
+                _warnings << "ADVICE_CONSTRAINT has at least two direct ADVICE operands!\n";
               }
               found_hint = true;
               if (hint_to_ctxs[hint].count(verif)) {
@@ -171,7 +171,7 @@ struct Verifier {
             }
           }
           if (!found_hint) {
-            ss << "HINT_CHECK does not have HINT as direct operand!\n";
+            ss << "ADVICE_CONSTRAINT does not have ADVICE as direct operand!\n";
             status = false;
           }
         }
