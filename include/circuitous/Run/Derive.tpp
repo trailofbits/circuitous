@@ -88,9 +88,10 @@ void CSem<S>::Visit(ReadConstraint *op_) {
 
     // Is hint supplied?
     if (this->supplied.count(op->hint_arg())) {
+      CHECK(this->has_value(op->hint_arg()));
       auto parsed = this->deconstruct(*this->get(op->hint_arg()));
 
-      intrinsics::Memory::Parsed< llvm::APInt > args {
+      irops::memory::Parsed< llvm::APInt > args {
         this->TrueVal(),
         this->FalseVal(),
 
@@ -115,7 +116,7 @@ void CSem<S>::Visit(ReadConstraint *op_) {
       return this->FalseVal();
     }
 
-    llvm::APInt val { intrinsics::Memory::allocated_size, 0, false };
+    llvm::APInt val { irops::Memory::allocated_size, 0, false };
 
     val.insertBits(this->TrueVal(), 0);
     val.insertBits(this->FalseVal(), 1);
@@ -147,9 +148,10 @@ void CSem<S>::Visit(WriteConstraint *op_) {
 
     // Is hint supplied?
     if (this->supplied.count(op->hint_arg())) {
+      CHECK(this->has_value(op->hint_arg()));
       auto parsed = this->deconstruct(*this->get(op->hint_arg()));
 
-      intrinsics::Memory::Parsed< llvm::APInt > args {
+      irops::memory::Parsed< llvm::APInt > args {
         this->TrueVal(),
         this->FalseVal(),
 
@@ -163,7 +165,7 @@ void CSem<S>::Visit(WriteConstraint *op_) {
       return this->BoolVal(args == parsed);
     }
 
-    llvm::APInt val { intrinsics::Memory::allocated_size, 0, false };
+    llvm::APInt val { irops::Memory::allocated_size, 0, false };
 
     val.insertBits(this->TrueVal(), 0);
     val.insertBits(this->TrueVal(), 1);
@@ -193,7 +195,7 @@ void CSem<S>::Visit(WriteConstraint *op_) {
 
 template<typename S>
 void CSem<S>::Visit(UnusedConstraint *op) {
-  llvm::APInt unused { intrinsics::Memory::allocated_size, 0, false };
+  llvm::APInt unused { irops::Memory::allocated_size, 0, false };
   if (this->supplied.count(op->operands[0])) {
     self().SetNodeVal(op, this->BoolVal(this->get(op, 0) == llvm::APInt(unused)));
     return;
