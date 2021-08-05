@@ -163,7 +163,7 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
   //            the sign bit, getting the low N bits of an instruction (i.e.
   //            convert the AND into a function call.
 
-  auto isels = BaseLifter<InstructionLifter>(ctx).Run(buff);
+  auto isels = BaseLifter< OpaqueILifter >(ctx).Run(buff);
   EraseFns(ctx.module(), { "__remill_intrinsics", "__remill_mark_as_used" });
 
   // These improve optimizability.
@@ -210,9 +210,64 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
     return fn;
   };
 
+  auto merge_ctxs = [&](llvm::Function *fn) {
+    using args_t = std::unordered_set< llvm::Value * >;
+    std::map< llvm::CallInst *, args_t > ctxs;
+    std::map< llvm::CallInst *, llvm::CallInst * > to_replace;
+
+    auto collect = [&](auto call) {
+      LOG(INFO) << "COLLECTING";
+      args_t args{ call->data_operands_begin(), call->data_operands_end() };
+
+      for (auto &[ctx, c_args] : ctxs) {
+        if (c_args == args) {
+          to_replace.emplace(call, ctx);
+          return;
+        }
+      }
+      LOG(INFO) << "Unique: " << remill::LLVMThingToString(call);
+      ctxs.emplace(call, std::move(args));
+    };
+
+    irops::VerifyInst::for_all_in(fn, collect);
+
+    std::stringstream ss;
+    ss << "Merging equivalent ctxs";
+    for (auto &[old, eq] : to_replace) {
+      // TOOD(lukas): What about metadata?
+      ss << " merging:\n";
+      ss << "  " << remill::LLVMThingToString(old) << std::endl;
+      ss << "  " << remill::LLVMThingToString(eq) << std::endl;
+
+      old->replaceAllUsesWith(eq);
+      old->eraseFromParent();
+    }
+    LOG(INFO) << ss.str();
+
+    return fn;
+  };
+
+  auto remove_unused = [&](llvm::Function *fn) {
+    std::vector< llvm::CallInst * > unused;
+    for (auto &bb : *fn)
+      for (auto &inst : bb)
+        if (auto call = llvm::dyn_cast< llvm::CallInst >(&inst); irops::is_any(call))
+          if (call->hasNUses(0))
+            unused.push_back(call);
+    std::stringstream ss;
+    ss << "Removing unused:\n";
+    for (auto call : unused) {
+      ss << "\t" << remill::LLVMThingToString(call) << std::endl;
+      call->eraseFromParent();
+    }
+    LOG(INFO) << ss.str();
+    return fn;
+  };
+
   circuit_builder builder(ctx, "circuit.1.0");
   builder.inject_isels(isels);
-  return crop_return(builder.finish());
+  LOG(INFO) << "ISELs injected.";
+  return remove_unused(crop_return(merge_ctxs(builder.finish())));
 }
 
 /**
@@ -338,12 +393,15 @@ void Circuit0::constraint_unused() {
   }
 
   llvm::Function *circuit_builder::finish() {
+    LOG(INFO) << "Finishing!";
     tie_head();
     tie_entry();
 
     values_t ctx_vals;
     for (auto &c : ctxs) {
-      ctx_vals.push_back(c.regenerate());
+      // Skip terminator
+      llvm::IRBuilder<> irb(&*std::prev(c.current->getParent()->end(), 1));
+      ctx_vals.push_back(c.regenerate(irb));
     }
 
     llvm::IRBuilder<> irb(exit);
@@ -422,6 +480,191 @@ void Circuit0::constraint_unused() {
 
     add_isel_metadata(ctxs.back().current, isel);
   }
+
+  void circuit_builder::inject_semantic_modular(ISEL_view isel)
+  {
+    CHECK(isel.lifted);
+
+    State state { this->head, ctx.state_ptr_type()->getElementType() };
+    auto state_ptr = state.raw();
+    llvm::IRBuilder<> ir(this->head);
+
+    for (const auto &[reg, arg, _] : arg_map)
+      state.store(ir, reg, arg);
+
+    // Call semantic function
+    auto sem_call = call_semantic(ir, isel.lifted, state_ptr, pc(), ctx.undef_mem_ptr());
+    // Inline it
+    auto make_breakpoint = [](auto ir) { return irops::make< irops::Breakpoint >(ir, ir.getTrue()); };
+    auto [begin, end] = inline_flattened(sem_call, make_breakpoint);
+    ir.SetInsertPoint(this->head);
+
+    auto params = decoder(ctx, ir, isel).byte_fragments();
+
+    auto mem_checks = mem::synthetize_memory(begin, end);
+    ir.SetInsertPoint(this->head);
+
+    auto [err_checks, c_ebit] = handle_errors(begin, end);
+    //err_checks.push_back(emit_error_transitions(c_ebit));
+
+    // Collect annotated instructions - this is the way separate components
+    // of the lfiting pipleline communicate
+    auto collected = shadowinst::collect_annotated(begin, end);
+    auto dst_intrinsics = std::move(collected[Names::meta::dst_reg]);
+
+    auto extra_params = std::move(collected[Names::meta::verify_args]);
+    for (std::size_t i = 0; i < extra_params.size(); ++i) {
+      extra_params[i] = irops::unwrap< irops::Transport >(extra_params[i]);
+    }
+
+    begin->eraseFromParent();
+    end->eraseFromParent();
+
+    auto dst_regs = lower_dst_regs(dst_intrinsics);
+    auto additional_checks = handle_dst_regs(c_ebit, dst_regs, isel, state);
+    LOG(INFO) << "Emitting preserved_checks.";
+    //auto preserved = emit_preserved_checks(dst_regs, isel, state);
+
+    ctxs.emplace_back(this->head,
+                      saturation_prop, timestamp_prop, params,
+                      mem_checks, err_checks, extra_params
+                      , additional_checks
+                      //,preserved
+                      );
+    LOG(INFO) << "Emitting handle_dst_regs_.";
+    //auto additional_checks_ = handle_dst_regs_(dst_regs, isel, state);
+    LOG(INFO) << "Done.";
+    //if (additional_checks_) {
+    //  ctxs.back()._add(additional_checks_);
+    //}
+
+
+    add_isel_metadata(ctxs.back().current, isel);
+  }
+
+
+  const shadowinst::Reg *get_written(std::size_t idx, ISEL_view isel)
+  {
+    for (std::size_t i = 0; i < isel.instruction.operands.size(); ++i) {
+      // We care only for write operands
+      if (isel.instruction.operands[i].action != remill::Operand::Action::kActionWrite) {
+        continue;
+      }
+
+      if (!isel.shadow.operands[i].reg) continue;
+      if (idx == 0) return &(*isel.shadow.operands[i].reg);
+      --idx;
+    }
+    return nullptr;
+  }
+
+  llvm::Value *current_val(llvm::Value *dst_reg) {
+    std::vector< llvm::StoreInst * > stores;
+
+    // Filter all stores
+    for (auto user : dst_reg->users())
+      if (auto store = llvm::dyn_cast< llvm::StoreInst >(user))
+        stores.push_back(store);
+
+    //LOG(INFO) << dbg_dump(llvm::dyn_cast< llvm::Instruction >(dst_reg)->getParent());
+    CHECK(stores.size() <= 2 && stores.size() != 0) << dbg_dump(stores);
+
+    // Next they are being ordered to determine which is last, therefore
+    // they need to be in the same basic block
+    auto bb = stores[0]->getParent();
+    llvm::StoreInst *last = stores[0];
+
+    for (auto store : stores)
+    {
+      if (inst_distance(&*bb->begin(), store) > inst_distance(&*bb->begin(), last))
+        last = store;
+      LOG(INFO) << remill::LLVMThingToString(store);
+    }
+    LOG(INFO) << remill::LLVMThingToString(last->getOperand(0));
+    return last->getOperand(0);
+  }
+
+  llvm::Value *circuit_builder::handle_dst_regs_(
+      std::vector< llvm::Instruction * > &dst_regs, ISEL_view isel, State &state)
+  {
+    if (dst_regs.empty()) return nullptr;
+    CHECK(dst_regs.size() == 1) << "TODO(lukas): Implement more general case.";
+
+    auto dst_reg = dst_regs[0];
+    auto s_reg = get_written(0, isel);
+    CHECK(s_reg);
+
+    auto locate_reg = [&](auto &ir, auto &name) {
+      // We know this is going to be a reasonably small number of iterations
+      for (const auto &[reg, _, out] : arg_map)
+        if (enclosing_reg(ctx.arch(), name) == reg)
+          return out;
+      LOG(FATAL) << "Could not locate register: " << name;
+    };
+
+    llvm::IRBuilder<> irb(this->head);
+    auto [cond, select] = shadowinst::make_intrinsics_decoder(*s_reg, irb, locate_reg);
+    return irops::make< irops::OutputCheck >(irb, {current_val(dst_reg), select});
+  }
+
+  llvm::Value *circuit_builder::emit_preserved_checks(
+      instructions_t &dst_regs, ISEL_view &isel, State &state)
+  {
+    llvm::IRBuilder<> ir(this->head);
+
+    auto combine = [&](auto vals) {
+      llvm::Value *init = ir.getFalse();
+      for (auto val : vals) {
+        init = ir.CreateOr(init, val);
+      }
+      return init;
+    };
+
+    auto update = [&](llvm::Value *rhs, llvm::Value *lhs) {
+      if (!rhs) rhs = ir.getFalse();
+      if (!lhs) lhs = ir.getFalse();
+      return ir.CreateOr(lhs, rhs);
+    };
+
+    std::map< std::string, llvm::Value * > conditions;
+    std::unordered_set< std::string > dirty;
+
+    auto current_value = [&](const auto &reg, auto reg_in) {
+      return (dirty.count(reg->name) || !conditions.count(reg->name)) ? state.load(ir, reg) : reg_in;
+    };
+
+    auto guard = [&](const auto &name, auto cmp) -> llvm::Value * {
+      if (conditions.count(name))
+        return ir.CreateOr(ir.CreateNot(conditions[name]), cmp);
+      return cmp;
+    };
+
+    for (std::size_t i = 0; i < isel.instruction.operands.size(); ++i) {
+      if (isel.instruction.operands[i].action != remill::Operand::Action::kActionWrite)
+        continue;
+
+      auto &s_op = isel.shadow.operands[i];
+      if (!s_op.reg) {
+        continue;
+      }
+      auto &s_reg = *s_op.reg;
+      dirty.insert(s_reg.dirty.begin(), s_reg.dirty.end());
+
+      for (auto &[reg, vals] : shadowinst::decoder_conditions(ctx.arch(), s_reg, ir)) {
+        conditions[reg] = update(combine(vals), conditions[reg]);
+      }
+    }
+
+    std::vector< llvm::Value * > args;
+    for (auto [reg, reg_in, reg_out] : arg_map) {
+      auto cmp = irops::make< irops::OutputCheck >(ir, {current_value(reg, reg_in), reg_out});
+      args.push_back(guard(reg->name, cmp));
+    }
+    auto all = irops::make< irops::And >(ir, args);
+    LOG(INFO) << "Preserved checks emitted.";
+    return all;
+  }
+
 
   auto circuit_builder::handle_dst_regs(
       llvm::Value *current_ebit,
@@ -520,6 +763,20 @@ void Circuit0::constraint_unused() {
     return out;
   }
 
+  llvm::Value *circuit_builder::emit_error_transitions(llvm::Value *current_ebit) {
+    std::vector< llvm::Value * > args;
+    for (const auto &[_, rc] : default_rcs)
+      args.push_back(rc);
+    llvm::IRBuilder<> irb(this->entry);
+    auto all_def_rcs = irops::make< irops::And >(irb, args);
+    // In case `current_ebit` is a constant, which probably can happen when a special
+    // set of instructions is lifted (i.e. error can never occur).
+    if (auto inst = llvm::dyn_cast< llvm::Instruction >(current_ebit))
+      irb.SetInsertPoint(inst);
+    auto negated = irb.CreateNot(current_ebit);
+    return irb.CreateOr(negated, all_def_rcs);
+  }
+
   auto circuit_builder::handle_errors(llvm::Value *begin, llvm::Value *end)
   -> std::tuple< values_t, llvm::Value * >
   {
@@ -528,15 +785,15 @@ void Circuit0::constraint_unused() {
     llvm::IRBuilder<> irb(this->head);
     auto [ebit_in, ebit_out] = irops::make_all_leaves< irops::ErrorBit >(irb);
 
-    auto current_err = [&]() -> llvm::Value * {
+    auto current_err = [&](llvm::Value *ebit_in_ = ebit_in) -> llvm::Value * {
       auto delta_err = err::synthesise_current(irb, begin, end);
       if (delta_err) {
         // Error bit can be saturated, so we need to `or` input and current.
-        return irb.CreateOr(ebit_in, delta_err);
+        return irb.CreateOr(ebit_in_, delta_err);
       }
       // This instruction cannot raise error bit -> input error bit
       // cannot be set.
-      out.push_back(irb.CreateICmpEQ(ebit_in, irb.getFalse()));
+      out.push_back(irb.CreateICmpEQ(ebit_in_, irb.getFalse()));
       return irb.getFalse();
     }();
     out.push_back(irops::make< irops::OutputCheck >(irb, {current_err, ebit_out}));

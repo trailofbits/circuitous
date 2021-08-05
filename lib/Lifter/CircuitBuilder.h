@@ -191,12 +191,19 @@ struct circuit_builder : CircuitFunction {
   }
 
   void inject_semantic(ISEL_view isel);
+  // TODO(lukas): Fix and replace the old way of lifting.
+  void inject_semantic_modular(ISEL_view isel);
   llvm::Function *finish();
 
   std::tuple< values_t, llvm::Value * > handle_errors(llvm::Value *begin, llvm::Value *end);
+  llvm::Value *emit_error_transitions(llvm::Value *current_ebit);
   instructions_t lower_dst_regs(const values_t & dtst);
 
   values_t handle_dst_regs(llvm::Value *c_ebit, instructions_t &dst_regs, ISEL_view isel, State &state);
+  llvm::Value *handle_dst_regs_(
+      std::vector< llvm::Instruction * > &dst_regs, ISEL_view isel, State &state);
+
+  llvm::Value *emit_preserved_checks(instructions_t &dst_regs, ISEL_view &isel, State &state);
 
   void add_isel_metadata(llvm::Instruction *call, ISEL_view isel) {
     std::stringstream ss;
