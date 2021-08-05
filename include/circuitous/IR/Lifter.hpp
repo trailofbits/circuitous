@@ -673,4 +673,31 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
   }
 };
 
+struct OpaqueILifter : InstructionLifter {
+
+  using InstructionLifter::InstructionLifter;
+
+
+  llvm::Value *LiftOperand(remill::Instruction &inst, llvm::BasicBlock *bb,
+                           llvm::Value *state_ptr, llvm::Argument *arg,
+                           remill::Operand &op) override
+  {
+    // TODO(lukas): Determine when is `current_op` supposed to be incremented
+    auto op_idx = this->current_op;
+    auto out = this->InstructionLifter::LiftOperand(inst, bb, state_ptr, arg, op);
+    LOG(INFO) << "HOHOHO " << static_cast<uint16_t>(op_idx) << " " << static_cast<uint16_t>(current_op);
+    if (inst.operands[op_idx].action == remill::Operand::kActionWrite) {
+      return out;
+    }
+
+    LOG(INFO) << "Emtting dummy read operand.";
+    llvm::IRBuilder<> irb(bb);
+    auto dummy = irops::make_leaf< irops::Operand >(irb, op_idx, out->getType());
+    auto wrap = irops::make< irops::AdviceConstraint >(irb, {out, dummy});
+    AddMetadata(wrap, "circuitous.verify_fn_args", 0);
+
+    return dummy;
+  }
+};
+
 } // namespace circ
