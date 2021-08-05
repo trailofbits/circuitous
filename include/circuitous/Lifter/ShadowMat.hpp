@@ -106,12 +106,12 @@ namespace circ::shadowinst {
     std::vector<llvm::Value *> input_fragments;
 
     for (auto &[from, size] : s_reg.regions) {
-      auto extract = intrinsics::make_extract(ir, from, size);
+      auto extract = irops::make_leaf< irops::Extract >(ir, from, size);
       input_fragments.push_back(extract);
     }
     // We need to match the order of the entry in `translation_map`
     std::reverse(input_fragments.begin(), input_fragments.end());
-    return intrinsics::make_concat(ir, input_fragments);
+    return irops::make< irops::Concat >(ir, input_fragments);
   }
 
   // Emit instructions that will check the encoding of the register `reg_name`
@@ -140,13 +140,13 @@ namespace circ::shadowinst {
       std::size_t current = 0;
 
       for (auto &[from, size] : s_reg.regions) {
-        auto extract = intrinsics::make_extract(ir, from, size);
+        auto extract = irops::make< irops::Extract >(ir, std::vector< llvm::Value * >{}, from, size);
         input_fragments.push_back(extract);
         current += size;
       }
       // We need to match the order of the entry in `translation_map`
       std::reverse(input_fragments.begin(), input_fragments.end());
-      auto full_input = intrinsics::make_concat(ir, input_fragments);
+      auto full_input = irops::make< irops::Concat >(ir, input_fragments);
       auto expected_value = ir.getInt(make_APInt(mats, 0, current));
       translation_checks.push_back(ir.CreateICmpEQ(full_input, expected_value));
     }
@@ -198,7 +198,7 @@ namespace circ::shadowinst {
     // We do not need to do any extra checking if we decoded something because
     // the select is "saturated" -- each possible return is a valid register
     CHECK(select_args.size() > 1);
-    auto select = intrinsics::make_select(ir, select_args, bits, select_args[1]->getType());
+    auto select = irops::make< irops::Select >(ir, select_args);
     return std::make_tuple(cond, select);
   }
 
@@ -206,7 +206,6 @@ namespace circ::shadowinst {
   static inline auto make_explicit_decode(
       llvm::IRBuilder<> &ir, const Reg &s_reg, const std::string &reg)
   {
-    LOG(INFO) << reg;
     auto selector = region_selector(ir, s_reg);
 
     auto it = s_reg.translation_map.find(reg);

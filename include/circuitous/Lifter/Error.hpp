@@ -32,7 +32,7 @@ namespace circ::err {
   template<typename R = llvm::iterator_range<llvm::BasicBlock::iterator>>
   static inline auto collect(R range)
   {
-    auto explicit_errs = intrinsics::collect<intrinsics::Error>(range);
+    auto explicit_errs = irops::collect< irops::Error >(range);
     std::vector<llvm::Value *> implicit_errs;
     for (auto &inst : range) {
       if (auto bin_op = llvm::dyn_cast<llvm::BinaryOperator>(&inst)) {
@@ -106,11 +106,11 @@ namespace circ::err {
       return nullptr;
     }
 
-    auto args = intrinsics::Error::unwrap(explicit_errs);
+    auto args = irops::unwrap< irops::Error >(explicit_errs);
 
     auto args_ = handle_implicit(ir, implicit_errs);
     args.insert(args.end(), args_.begin(), args_.end());
-    return intrinsics::make_or(ir, args);
+    return irops::make< irops::Or >(ir, args);
   }
 
 } // namespace circ::err

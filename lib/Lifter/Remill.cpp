@@ -4,6 +4,7 @@
 
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Lifter.hpp>
+#include <circuitous/IR/Verify.hpp>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
@@ -170,7 +171,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     auto triple = llvm::Triple(fn->getParent()->getTargetTriple());
     CHECK(remill::GetArchName(triple) == remill::kArchAMD64);
 
-    auto [from, size] = intrinsics::Extract::ParseArgs< uint32_t >(fn);
+    auto [from, size] = irops::Extract::parse_args< uint32_t >(fn);
 
     CHECK(impl->Attr<InputInstructionBits>().Size() == 1);
     const auto &inst_bytes = *impl->Attr<InputInstructionBits>().begin();
@@ -222,7 +223,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     CHECK(impl->Attr<InputInstructionBits>().Size() == 1);
     const auto &inst_bytes = impl->input_inst_bits();
 
-    auto [from, size] = intrinsics::ExtractRaw::ParseArgs< uint32_t >(fn);
+    auto [from, size] = irops::ExtractRaw::parse_args< uint32_t >(fn);
     auto op = Emplace< Extract >(call, from, from + size);
 
     auto args = CallArgs(call);
@@ -246,9 +247,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   template< typename IT, typename OT >
   auto VisitIOLeaf(llvm::CallInst *call, llvm::Function *fn, uint32_t io_type, uint32_t size) {
     auto leaf = [&]() {
-      if (io_type == intrinsics::io_type::in) {
+      if (io_type == irops::io_type::in) {
         return fetch_leave< IT >(fn, size);
-      } else if (io_type == intrinsics::io_type::out) {
+      } else if (io_type == irops::io_type::out) {
         return fetch_leave< OT >(fn, size);
       }
       LOG(FATAL) << "Unreachable";
@@ -299,68 +300,72 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     if (name.startswith("__remill_undefined_")) {
       return Emplace< Undefined >(call, SizeFromSuffix(name));
     }
-    if (intrinsics::Extract::IsIntrinsic(fn)) {
+    if (irops::Extract::is(fn)) {
       return VisitExtractIntrinsic(call, fn);
     }
-    if (intrinsics::ExtractRaw::IsIntrinsic(fn)) {
+    if (irops::ExtractRaw::is(fn)) {
       return VisitExtractRawIntrinsic(call, fn);
     }
-    if (intrinsics::InputImmediate::IsIntrinsic(fn)) {
-      auto [size] = intrinsics::InputImmediate::ParseArgs<uint32_t>(fn);
+    if (irops::InputImmediate::is(fn)) {
+      auto [size] = irops::InputImmediate::parse_args<uint32_t>(fn);
       return VisitGenericIntrinsic< InputImmediate >(call, fn, size);
     }
-    if (intrinsics::Xor::IsIntrinsic(fn)) {
+    if (irops::Xor::is(fn)) {
       return VisitGenericIntrinsic< OnlyOneCondition >(call, fn);
     }
-    if (intrinsics::Concat::IsIntrinsic(fn)) {
-      auto [size] = intrinsics::Concat::ParseArgs< uint32_t >(fn);
+    if (irops::Concat::is(fn)) {
+      auto [size] = irops::Concat::parse_args< uint32_t >(fn);
       return VisitGenericIntrinsic< Concat >(call, fn, size);
     }
-    if (intrinsics::Select::IsIntrinsic(fn)) {
-      auto [bits, size] = intrinsics::Select::ParseArgs< uint32_t >(fn);
+    if (irops::Select::is(fn)) {
+      auto [bits, size] = irops::Select::parse_args< uint32_t >(fn);
       return VisitGenericIntrinsic< Select >(call, fn, bits, size);
     }
-    if (intrinsics::OutputCheck::IsIntrinsic(fn)) {
+    if (irops::OutputCheck::is(fn)) {
       return VisitGenericIntrinsic< RegConstraint >(call, fn);
     }
-    if (intrinsics::BitCompare::IsIntrinsic(fn)) {
+    if (irops::DecodeCondition::is(fn)) {
       return VisitGenericIntrinsic< DecodeCondition >(call, fn);
     }
-    if (intrinsics::VerifyInst::IsIntrinsic(fn)) {
+    if (irops::VerifyInst::is(fn)) {
       return VisitGenericIntrinsic< VerifyInstruction >(call, fn);
     }
-    if (intrinsics::Advice::IsIntrinsic(fn)) {
-      auto [size] = intrinsics::Advice::ParseArgs< uint32_t >(fn);
+    if (irops::Advice::is(fn)) {
+      auto [size] = irops::Advice::parse_args< uint32_t >(fn);
       return VisitGenericIntrinsic< Advice >(call, fn, size);
     }
-    if (intrinsics::AdviceConstraint::IsIntrinsic(fn)) {
+    if ( irops::Operand::is(fn)) {
+      auto [_, size] = irops::Operand::parse_args< uint32_t >(fn);
+      return VisitGenericIntrinsic< Advice >(call, fn, size);
+    }
+    if (irops::AdviceConstraint::is(fn)) {
       return VisitGenericIntrinsic< AdviceConstraint >(call, fn);
     }
-    if (intrinsics::Or::IsIntrinsic(fn)) {
+    if (irops::Or::is(fn)) {
       return VisitGenericIntrinsic< Or >(call, fn);
     }
-    if (intrinsics::Memory::IsIntrinsic(fn)) {
-      auto [id, _] = intrinsics::Memory::ParseArgs< uint32_t >(fn);
+    if (irops::Memory::is(fn)) {
+      auto [_, id] = irops::Memory::parse_args< uint32_t >(fn);
       return VisitGenericIntrinsic< Memory >(call, fn, id);
     }
-    if (intrinsics::And::IsIntrinsic(fn)) {
+    if (irops::And::is(fn)) {
       return VisitGenericIntrinsic< And >(call, fn);
     }
-    if (intrinsics::ReadConstraint::IsIntrinsic(fn)) {
+    if (irops::ReadConstraint::is(fn)) {
       return VisitGenericIntrinsic< ReadConstraint >(call, fn);
     }
-    if (intrinsics::WriteConstraint::IsIntrinsic(fn)) {
+    if (irops::WriteConstraint::is(fn)) {
       return VisitGenericIntrinsic< WriteConstraint >(call, fn);
     }
-    if (intrinsics::UnusedConstraint::IsIntrinsic(fn)) {
+    if (irops::UnusedConstraint::is(fn)) {
       return VisitGenericIntrinsic< UnusedConstraint >(call, fn);
     }
-    if (intrinsics::ErrorBit::IsIntrinsic(fn)) {
-      auto [size, io_type] = intrinsics::ErrorBit::ParseArgs< uint32_t >(fn);
+    if (irops::ErrorBit::is(fn)) {
+      auto [size, io_type] = irops::ErrorBit::parse_args< uint32_t >(fn);
       return VisitIOLeaf< InputErrorFlag, OutputErrorFlag >(call, fn, io_type, size);
     }
-    if (intrinsics::Timestamp::IsIntrinsic(fn)) {
-      auto [size, io_type] = intrinsics::Timestamp::ParseArgs< uint32_t >(fn);
+    if (irops::Timestamp::is(fn)) {
+      auto [size, io_type] = irops::Timestamp::parse_args< uint32_t >(fn);
       return VisitIOLeaf< InputTimestamp, OutputTimestamp >(call, fn, io_type, size);
     }
     LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(call);
@@ -660,8 +665,9 @@ auto Circuit::make_circuit(
     CHECK(importer.get(verify_inst)->op_code == VerifyInstruction::kind);
     all_verifications->AddUse(importer.get(verify_inst));
   };
-  intrinsics::VerifyInst::ForAllIn(circuit_func, visit_context);
+  irops::VerifyInst::for_all_in(circuit_func, visit_context);
 
+  VerifyCircuit("Lowered llvm circuit.", impl.get(), "Lowered circuit is valid.");
   return impl;
 }
 

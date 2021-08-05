@@ -14,7 +14,7 @@
 
 namespace circ {
 
-  struct SelectFolder : private intrinsics::Select {
+  struct SelectFolder {
     using blueprint_t = llvm::CallInst *;
     using ctx_to_selects_t = std::map<llvm::Value *, std::vector<llvm::CallInst *>>;
 
@@ -42,13 +42,13 @@ namespace circ {
         for (auto select : selects) {
           // If call is not complete we leave it for later when we called
           // all complete blueprints.
-          if (!is_complete(select)) {
+          if (!irops::Instance< irops::Select >(select).is_complete()) {
             continue;
           }
 
           bool found = false;
           for (std::size_t i = 0; i < blueprints.size() && !found; ++i) {
-            if (are_compatible(select, blueprints[i])) {
+            if (irops::Instance< irops::Select >::are_compatible(select, blueprints[i])) {
               // They are compatible but current has more operands -> is more general
               if (select->getNumArgOperands() > blueprints[i]->getNumArgOperands()) {
                 blueprints[i] = select;
@@ -67,7 +67,7 @@ namespace circ {
     std::unordered_map<blueprint_t, uint64_t> assign_blueprints() {
       auto assign = [&](auto select) -> llvm::CallInst * {
         for (auto blueprint : blueprints) {
-          if (are_compatible(select, blueprint)) {
+          if (irops::Instance< irops::Select >::are_compatible(select, blueprint)) {
             return blueprint;
           }
         }
@@ -131,8 +131,8 @@ namespace circ {
       };
 
       auto ir = get_ir(get_ip());
-      args[0] = intrinsics::make_advice(ir, args[0]->getType());
-      return intrinsics::make_select(ir, args, std::forward<Ts>(ts)...);
+      args[0] = irops::make_leaf< irops::Advice >(ir, args[0]->getType());
+      return irops::make< irops::Select >(ir, args, std::forward<Ts>(ts)...);
     }
 
     void generate_blueprints(std::unordered_map<blueprint_t, uint64_t> stats) {
@@ -140,7 +140,7 @@ namespace circ {
         llvm::IRBuilder<> ir(&*fn->begin()->begin());
 
         std::vector<llvm::Value *> args{ blueprint->arg_begin(), blueprint->arg_end() };
-        auto [bitsize, type] = intrinsics::Select::ParseArgs(blueprint->getCalledFunction());
+        auto [bitsize, type] = irops::Select::parse_args(blueprint->getCalledFunction());
         for (std::size_t i = 0; i < count; ++i) {
           // Replace the selector with hint
           auto select = make_blueprint(args, bitsize, type);
@@ -156,14 +156,14 @@ namespace circ {
 
     void use_blueprints() {
       auto coerce_selector = [](auto &ir, auto original, auto node) -> llvm::Value * {
-        auto selector = intrinsics::Select::selector(original);
-        auto [obits, _] = intrinsics::Select::ParseArgs(original->getCalledFunction());
-        auto [nbits, _1] = intrinsics::Select::ParseArgs(node->getCalledFunction());
+        auto selector = irops::Instance< irops::Select >(original).selector();
+        auto [obits, _] = irops::Select::parse_args(original->getCalledFunction());
+        auto [nbits, _1] = irops::Select::parse_args(node->getCalledFunction());
         if (obits == nbits) {
           return selector;
         }
         if (obits == 3 && nbits == 4) {
-          return intrinsics::make_concat(ir, {ir.getInt1(0), selector});
+          return irops::make< irops::Concat >(ir, {ir.getInt1(0), selector});
         }
         LOG(FATAL) << "Cannot coerce selector";
       };
@@ -190,7 +190,7 @@ namespace circ {
           // where N > M)
           auto selector = coerce_selector(ir, selects[i], node);
           selects[i]->replaceAllUsesWith(node);
-          ctx_args.push_back(intrinsics::make_advice_constraint(ir, {selector, hint}));
+          ctx_args.push_back(irops::make< irops::AdviceConstraint >(ir, {selector, hint}));
           selects[i]->eraseFromParent();
         }
 
