@@ -173,7 +173,7 @@ struct circuit_builder : CircuitFunction {
   void build_default_rcs() {
     llvm::IRBuilder<> irb(this->entry);
     for (auto &[reg, in, out] : this->arg_map) {
-      default_rcs[reg->name] = intrinsics::make_outcheck(irb, {in, out});
+      default_rcs[reg->name] = irops::make< irops::OutputCheck >(irb, {in, out});
     }
   }
 

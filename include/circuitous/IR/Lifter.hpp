@@ -34,7 +34,7 @@ namespace circ {
 
 // Adds knowledge of a `shadowinst::Instruction` to a class that
 // inherits from it.
-struct WithShadow : public intrinsics::Extract {
+struct WithShadow  {
   // TODO(lukas): We do not have it at the time of the construction (yet at least)
   //              so we cannot take it by `const &`.
   shadowinst::Instruction *shadow = nullptr;
@@ -51,7 +51,7 @@ struct WithShadow : public intrinsics::Extract {
 
     std::vector<llvm::Function *> out;
     for (auto [from, to] : current) {
-      out.push_back(CreateFn(module, from, to));
+      out.push_back(irops::Extract::create_fn(module, from, to));
     }
     return out;
   }
@@ -201,8 +201,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
 
       llvm::IRBuilder<> ir(load);
       auto cond = shadowinst::make_explicit_decode(ir, *s_reg, name);
-      auto select = intrinsics::make_select(
-          ir, {cond, ir.CreateLoad(gep), ir.CreateLoad(val)}, 1ul, load->getType());
+      auto select = irops::make< irops::Select >(ir, {cond, ir.CreateLoad(gep), ir.CreateLoad(val)});
       load->replaceAllUsesWith(select);
     }
   }
@@ -251,7 +250,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     };
 
     for (auto fn : funcs) {
-      const auto &[from, size] = this->ParseArgs(fn);
+      const auto &[from, size] = irops::Extract::parse_args(fn);
       if (size == arch_op_size || (arch_op_size % size == 0 && size % 8 == 0 ) ) {
         set_candidate(fn);
       }
@@ -263,7 +262,8 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
   // optimize it away.
   llvm::Value *HideValue(llvm::Value *val, llvm::BasicBlock *bb, uint64_t size) {
     llvm::IRBuilder<> ir(bb);
-    return ir.CreateCall(intrinsics::InputImmediate::CreateFn(bb->getModule(), size), val);
+    CHECK(size == val->getType()->getIntegerBitWidth());
+    return irops::make< irops::InputImmediate >(ir, val);
   }
 
   template<typename I>
@@ -272,8 +272,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     auto as_constant = llvm::ConstantInt::get(word_type,
                                               static_cast<uint64_t>(val),
                                               std::is_signed_v<I>);
-    auto intrinsic = intrinsics::InputImmediate::CreateFn(bb->getModule(), word_type);
-    return ir.CreateCall(intrinsic, { as_constant });
+    return irops::make< irops::InputImmediate >(ir, as_constant);
   }
 
   llvm::Value *LiftOperand(remill::Instruction &inst, llvm::BasicBlock *bb,
@@ -463,7 +462,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
 
     auto dst = [&](auto what) -> llvm::Value * {
       if (llvm::isa<llvm::PointerType>(concrete->getType())) {
-        auto dst = intrinsics::make_alloca(
+        auto dst = irops::make< irops::AllocateDst >(
             ir, { state_ptr }, llvm::PointerType::getUnqual(what->getType()));
         dst->setName("DST_" + std::to_string(current_op));
 
@@ -520,7 +519,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     // TODO(lukas): Handle holes.
     auto [cond, select] = shadowinst::make_intrinsics_decoder(s_reg, ir, safe_locate_reg);
     if (cond) {
-      auto wrapped = intrinsics::make_transport(ir, cond);
+      auto wrapped = irops::make< irops::Transport >(ir, cond);
       AddMetadata(llvm::dyn_cast<llvm::Instruction>(wrapped), "circuitous.verify_fn_args", 0);
     }
     return mask_coerce(shift_coerce(select));

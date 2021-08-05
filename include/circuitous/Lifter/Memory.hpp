@@ -55,29 +55,27 @@ namespace circ::mem {
       auto call = llvm::dyn_cast<llvm::CallInst>(ctx->getArgOperand(i));
 
       if (!call ||
-          !intrinsics::one_of<intrinsics::ReadConstraint,
-                              intrinsics::WriteConstraint>(call->getCalledFunction()))
+          !irops::one_of< irops::ReadConstraint,
+                          irops::WriteConstraint >(call->getCalledFunction()))
       {
         continue;
       }
 
-      auto mem_hint = llvm::dyn_cast< llvm::CallInst >(call->getArgOperand(0u));
-      CHECK(mem_hint && intrinsics::Memory::IsIntrinsic(mem_hint->getCalledFunction()));
-      constrained.insert(intrinsics::Memory::id(mem_hint->getCalledFunction()));
+      auto mem_hint = irops::Instance< irops::Memory >(call->getArgOperand(0u));
+      constrained.insert(mem_hint.id());
     }
     return constrained;
   }
 
   static inline auto get_all(llvm::Module *m) {
     std::unordered_map<uint64_t, llvm::Function *> out;
-    for (auto fn : intrinsics::Memory::All(m)) {
-      out[intrinsics::Memory::id(fn)] = fn;
+    for (auto fn : irops::Memory::all(m)) {
+      out[irops::Instance< irops::Memory >(fn)] = fn;
     }
     return out;
   }
 
   struct Synthetizer {
-    using mem_t = intrinsics::Memory;
 
     using call_t = std::tuple< llvm::CallInst *, uint64_t >;
     std::vector< call_t > reads;
@@ -91,13 +89,13 @@ namespace circ::mem {
 
     auto parse_hint(llvm::IRBuilder<> &ir, llvm::CallInst *call) {
       auto extractor = [&](auto inst, auto from, auto to) {
-        return intrinsics::make_raw_extract(ir, {inst}, from, to);
+        return irops::make< irops::ExtractRaw >(ir, {inst}, from, to);
       };
-      return mem_t::parse< llvm::Value * >(call, extractor);
+      return irops::memory::parse< llvm::Value * >(call, extractor);
     }
 
     auto next_hint(llvm::IRBuilder<> &ir, llvm::CallInst *call) {
-      auto hint = intrinsics::make_memory(ir, next);
+      auto hint = irops::make_leaf< irops::Memory >(ir, next);
       ++next;
       return hint;
     }
@@ -119,7 +117,7 @@ namespace circ::mem {
       }(size);
 
       auto llvm_size = ir.getIntN(4u, size / 8);
-      checks.push_back(intrinsics::make_read_constraint(ir, {hint, llvm_size, addr, ts}));
+      checks.push_back(irops::make< irops::ReadConstraint >(ir, {hint, llvm_size, addr, ts}));
 
       call->replaceAllUsesWith(coerced_value);
       call->eraseFromParent();
@@ -142,9 +140,8 @@ namespace circ::mem {
       }(size);
 
       CHECK(size / 8 <= 8) << "Cannot emit read bigger than 64 bytes.";
-      auto llvm_size = ir.getIntN(4u, size / 8);
-      checks.push_back(
-          intrinsics::make_write_constraint(ir, {hint, llvm_size, addr, ts, coerced_value}));
+      auto s = ir.getIntN(4u, size / 8);
+      checks.push_back(irops::make< irops::WriteConstraint >(ir, {hint, s, addr, ts, coerced_value}));
       call->eraseFromParent();
     }
 
@@ -168,7 +165,7 @@ namespace circ::mem {
 
   auto synthetize_memory(llvm::Instruction *from, llvm::Instruction *to) {
     llvm::IRBuilder<> ir(from);
-    return synthetize_memory(intrinsics::make_timestamp(ir, intrinsics::io_type::in), from, to);
+    return synthetize_memory(irops::make_leaf< irops::Timestamp >(ir, irops::io_type::in), from, to);
   }
 
 } // namespace circ::mem

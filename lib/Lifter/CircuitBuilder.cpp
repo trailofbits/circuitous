@@ -185,7 +185,7 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
     auto returned = rets[0]->getOperand(0u);
 
     auto call = llvm::dyn_cast< llvm::CallInst >(returned);
-    CHECK(returned && intrinsics::Xor::IsIntrinsic(call->getCalledFunction()));
+    CHECK(returned && irops::Xor::is(call->getCalledFunction()));
 
     // Eliminate all duplicates
     std::unordered_set<llvm::Value *> verifies;
@@ -193,7 +193,7 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
     std::vector<llvm::Value *> others;
     for (uint32_t i = 0; i < call->getNumArgOperands(); ++i) {
       if (auto verif = llvm::dyn_cast< llvm::CallInst >(call->getArgOperand(i))) {
-        if (intrinsics::VerifyInst::IsIntrinsic(verif->getCalledFunction())) {
+        if (irops::VerifyInst::is(verif->getCalledFunction())) {
           verifies.insert(verif);
           continue;
         }
@@ -204,7 +204,7 @@ llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
     llvm::IRBuilder<> ir(call);
     others.insert(others.end(), verifies.begin(), verifies.end());
 
-    auto xor_ = intrinsics::make_xor(ir, others);
+    auto xor_ = irops::make< irops::Xor >(ir, others);
     call->replaceAllUsesWith(xor_);
     call->eraseFromParent();
     return fn;
@@ -347,24 +347,24 @@ void Circuit0::constraint_unused() {
     }
 
     llvm::IRBuilder<> irb(exit);
-    auto all = intrinsics::make_xor(irb, ctx_vals);
+    auto all = irops::make< irops::Xor >(irb, ctx_vals);
     tie_exit(all);
 
     ctx.clean_module({circuit_fn});
 
-    intrinsics::disable_opts<intrinsics::VerifyInst, intrinsics::Select>(ctx.module());
+    irops::disable_opts<irops::VerifyInst, irops::Select>(ctx.module());
 
     remill::VerifyModule(ctx.module());
     OptimizeSilently(ctx.arch(), ctx.module(), {circuit_fn});
 
-    auto selects_map = ContextCollector< intrinsics::VerifyInst, intrinsics::Select >(circuit_fn).run();
+    auto selects_map = ContextCollector< irops::VerifyInst, irops::Select >(circuit_fn).run();
     SelectFolder folder{ std::move(selects_map), circuit_fn };
     folder.run();
 
     remill::VerifyModule(ctx.module());
-    intrinsics::disable_opts<intrinsics::Select, intrinsics::Advice>(ctx.module());
-    intrinsics::enable_opts<intrinsics::VerifyInst, intrinsics::AdviceConstraint,
-                            intrinsics::ReadConstraint, intrinsics::WriteConstraint>(ctx.module());
+    irops::disable_opts< irops::Select, irops::Advice >(ctx.module());
+    irops::enable_opts< irops::VerifyInst, irops::AdviceConstraint,
+                        irops::ReadConstraint, irops::WriteConstraint >(ctx.module());
 
     OptimizeSilently(ctx.arch(), ctx.module(), {circuit_fn});
     remill::VerifyModule(ctx.module());
@@ -386,7 +386,7 @@ void Circuit0::constraint_unused() {
     // Call semantic function
     auto sem_call = call_semantic(ir, isel.lifted, state_ptr, pc(), ctx.undef_mem_ptr());
     // Inline it
-    auto make_breakpoint = [](auto ir) { return intrinsics::make_breakpoint(ir); };
+    auto make_breakpoint = [](auto ir) { return irops::make< irops::Breakpoint >(ir, ir.getTrue()); };
     auto [begin, end] = inline_flattened(sem_call, make_breakpoint);
     ir.SetInsertPoint(this->head);
 
@@ -404,7 +404,7 @@ void Circuit0::constraint_unused() {
 
     auto extra_params = std::move(collected[Names::meta::verify_args]);
     for (std::size_t i = 0; i < extra_params.size(); ++i) {
-      extra_params[i] = intrinsics::Transport::unwrap(extra_params[i]);
+      extra_params[i] = irops::unwrap< irops::Transport >(extra_params[i]);
     }
 
     begin->eraseFromParent();
@@ -415,7 +415,11 @@ void Circuit0::constraint_unused() {
 
     ctxs.emplace_back(this->head,
                       saturation_prop, timestamp_prop, params,
-                      mem_checks, err_checks, extra_params, additional_checks);
+                      mem_checks, err_checks
+                      ,extra_params
+                      ,additional_checks
+                      );
+
     add_isel_metadata(ctxs.back().current, isel);
   }
 
@@ -480,7 +484,7 @@ void Circuit0::constraint_unused() {
 
           // Check if everything is still valid.
           CHECK(proccessed - 1 < dst_regs.size()) << proccessed - 1 << " >= " << dst_regs.size();
-          auto eq = intrinsics::make_xor<true>(ir, reg_checks);
+          auto eq = irops::make< irops::Xor >(ir, reg_checks);
           auto dst_load = ir.CreateLoad(dst_regs[proccessed - 1]);
           auto reg_addr = reg_part->AddressOf(state.raw(), ir);
 
@@ -496,7 +500,7 @@ void Circuit0::constraint_unused() {
       CHECK_NOTNULL(reg_val);
       // If error bit is raised we are not moving anywhere
       auto guard = ir.CreateSelect(current_ebit, input_reg, reg_val);
-      params.push_back(intrinsics::make_outcheck(ir, {guard, expected_reg_val}));
+      params.push_back(irops::make< irops::OutputCheck >(ir, {guard, expected_reg_val}));
     }
     return params;
   }
@@ -522,8 +526,7 @@ void Circuit0::constraint_unused() {
     values_t out;
 
     llvm::IRBuilder<> irb(this->head);
-    auto ebit_in = intrinsics::make_ebit(irb, intrinsics::io_type::in);
-    auto ebit_out = intrinsics::make_ebit(irb, intrinsics::io_type::out);
+    auto [ebit_in, ebit_out] = irops::make_all_leaves< irops::ErrorBit >(irb);
 
     auto current_err = [&]() -> llvm::Value * {
       auto delta_err = err::synthesise_current(irb, begin, end);
@@ -536,7 +539,7 @@ void Circuit0::constraint_unused() {
       out.push_back(irb.CreateICmpEQ(ebit_in, irb.getFalse()));
       return irb.getFalse();
     }();
-    out.push_back(intrinsics::make_outcheck(irb, {current_err, ebit_out}));
+    out.push_back(irops::make< irops::OutputCheck >(irb, {current_err, ebit_out}));
     return std::make_tuple(out, current_err);
   }
 
@@ -567,8 +570,8 @@ void Circuit0::constraint_unused() {
     CHECK(size == to - from) << size << " != " << to - from;
 
     auto expected_v = ir.getInt(llvm::APInt(size, expected, 2));
-    auto extracted = intrinsics::make_raw_ib_extract(ir, from, to - from);
-    return intrinsics::make_bitcompare(ir, {expected_v, extracted}, size);
+    auto extracted = irops::make_leaf< irops::ExtractRaw >(ir, from, to - from);
+    return irops::make< irops::DecodeCondition >(ir, {expected_v, extracted}, size);
   }
 
   auto decoder::byte_fragments() -> values_t
@@ -587,8 +590,8 @@ void Circuit0::constraint_unused() {
     auto tail_size = static_cast<uint32_t>(kMaxNumInstBits - rinst_size());
     auto tail = ir.getInt(llvm::APInt(tail_size, 0, false));
 
-    auto extracted = intrinsics::make_raw_ib_extract(ir, rinst_size(), tail_size);
-    auto compare = intrinsics::make_bitcompare(ir, {tail, extracted}, tail_size);
+    auto extracted = irops::make_leaf< irops::ExtractRaw >(ir, rinst_size(), tail_size);
+    auto compare = irops::make< irops::DecodeCondition >(ir, {tail, extracted}, tail_size);
     out.push_back(compare);
     return out;
   }

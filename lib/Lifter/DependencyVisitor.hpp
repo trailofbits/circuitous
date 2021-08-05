@@ -26,7 +26,7 @@ namespace circ {
 
     void try_insert(llvm::CallInst *ctx, llvm::Instruction *current) {
       if (auto call = llvm::dyn_cast< llvm::CallInst >(current);
-          call && Sink::IsIntrinsic(call->getCalledFunction())) {
+          call && Sink::is(call->getCalledFunction())) {
         data[ctx].insert(call);
       }
     }
@@ -51,7 +51,7 @@ namespace circ {
     auto run() {
       std::vector< llvm::CallInst * > sources;
       auto collect = [&](auto inst) { sources.push_back(inst); };
-      intrinsics::VerifyInst::ForAllIn(fn, collect);
+      irops::VerifyInst::for_all_in(fn, collect);
 
       for (auto source : sources) {
         run(source, source);
