@@ -56,6 +56,11 @@ class PermissiveMemory(microx.Memory):
 
     return self._memory_maps[offset]
 
+  def add_map(self, nmap):
+    if nmap.base() in self._memory_maps:
+      return
+    return super().add_map(nmap)
+
 
 # Watch out, exceptions works funky
 class Process_(microx.Process):
