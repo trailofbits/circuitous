@@ -89,11 +89,7 @@ namespace circ
     z3::expr Visit(InputRegister *op) { return constant(op); }
     z3::expr Visit(OutputRegister *op) { return constant(op); }
 
-    z3::expr Visit(Advice *op)
-    {
-      auto name = "Advice." + std::to_string(reinterpret_cast<uint64_t>(op));
-      return ctx.bv_const(name.c_str(), op->size);
-    }
+    z3::expr Visit(Advice *op) { return constant(op, "Advice"); }
 
     z3::expr Visit(PopulationCount *op)     { return constant(op, "Population"); }
     z3::expr Visit(CountLeadingZeroes *op)  { return constant(op, "LeadingZeros"); }
@@ -109,7 +105,6 @@ namespace circ
     z3::expr Visit(Constant *op)
     {
       auto bits = std::make_unique<bool[]>(op->size);
-
       std::size_t idx = 0;
       for (auto bit : op->bits)
         bits[idx++] = bit != '0';
@@ -186,7 +181,7 @@ namespace circ
     z3::expr Visit(Not *op) { return uninterpreted(op, "not"); }
 
     z3::expr Visit(Concat *op) { return uninterpreted(op, "Concat"); }
-    z3::expr Visit(Select *op) { return uninterpreted(op, "Select"); }
+    z3::expr Visit(Select *op) { return uninterpreted(op, "Select." + std::to_string(op->bits)); }
     z3::expr Visit(Parity *op) { return uninterpreted(op, "Parity"); }
 
     z3::expr Visit(BSelect *op) { return uninterpreted(op, "BSelect"); }
@@ -376,4 +371,10 @@ namespace circ
       auto expr = visitor.Visit(circuit);
       return get_stats( bitblast(expr, visitor.ctx).assertions() );
   }
+
+  namespace smt
+  {
+    std::unique_ptr<Circuit> deserialize(const std::string &path);
+  } // namespace smt
+
 } // namespace circ
