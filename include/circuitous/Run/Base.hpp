@@ -64,7 +64,7 @@ namespace circ::run {
       }
     }
 
-    using Parsed = intrinsics::Memory::Parsed<llvm::APInt>;
+    using Parsed = irops::memory::Parsed< llvm::APInt >;
 
     Parsed deconstruct(const llvm::APInt &value);
     llvm::APInt construct(const Parsed &parsed);
