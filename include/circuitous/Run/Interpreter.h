@@ -120,6 +120,17 @@ namespace circ::run {
       return acceptors == 1;
     }
 
+    auto dump_spawn(VerifyInstruction *v, Spawn &runner) {
+      std::stringstream ss;
+      ss << runner.GetNodeVal(v)->toString(16, false) << std::endl;;
+      ss << pretty_print(v) << std::endl;
+      for (auto op : v->operands) {
+        ss << "\t" << to_string(op->op_code) << " " << op->id() << " "
+           << runner.GetNodeVal(op)->toString(16, false) << std::endl;
+      }
+      return ss.str();
+    }
+
     bool Run() {
       init();
 

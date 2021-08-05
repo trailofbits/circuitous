@@ -104,6 +104,12 @@ namespace circ::run {
 
     State& operator=(State) = delete;
 
+    std::string status(Operation *op) {
+      std::stringstream ss;
+      ss << "[ " << blocked[op] << " / " << op->operands.size() << "]";
+      return ss.str();
+    }
+
     auto Pop() {
       auto x = todo.front();
       todo.pop_front();
@@ -121,7 +127,28 @@ namespace circ::run {
       waiting[*mem_idx].push_back(op);
     }
 
-    void Notify(Operation *op) {
+    // Generic notify call, allows for callback - either extra preprocessing or dbg info
+    template<typename F>
+    void notify(Operation *from, Operation *to, F &&fn) {
+      fn(from, to);
+      _notify(to);
+    }
+
+    // Verbose notification for debug purposes
+    void notify_verbose(Operation *from, Operation *to) {
+      auto dbg_info = [](auto from, auto to) {
+        LOG(INFO) << pretty_print< false >(from) << " -- notifies -> " << pretty_print(to);
+      };
+      return notify(from, to, dbg_info);
+    }
+
+    // General notify that does no extra work
+    void notify(Operation *from, Operation *to) {
+      return notify(from, to, [](auto, auto){});
+    }
+
+    // Implementation
+    void _notify(Operation *op) {
       auto [it, inserted] = blocked.emplace(op, op->operands.size());
       if (it->second <= 1) {
         Push(it->first);
@@ -144,7 +171,7 @@ namespace circ::run {
 
     void SetNodeVal(Operation *op) {
       for (auto user : op->users) {
-        Notify(user);
+        notify(op, user);
       }
       notify_mem(op);
     }
@@ -224,7 +251,7 @@ namespace circ::run {
         }
         for (auto user : node->users) {
           if (constrained_by(node, user)) {
-            state.Notify(user);
+            state.notify(node, user);
           }
         }
       }
@@ -238,6 +265,20 @@ namespace circ::run {
     void init() {
       parent_t::init();
       init_notify<Advice, OutputRegister, OutputErrorFlag, OutputTimestamp, Memory>();
+    }
+
+    std::string dbg_context_dump() {
+      std::stringstream ss;
+      if (!this->has_value(current)) {
+        ss << state.status(current) << std::endl;
+      }
+      for (auto x : current->operands) {
+        ss << state.status(x) << " " << this->has_value(x) << " " << pretty_print(x) << std::endl;
+        for (auto y : x->operands) {
+          ss << "\t" << state.status(y) << " " << this->has_value(y) << " " << pretty_print(y) << std::endl;
+        }
+      }
+      return ss.str();
     }
 
     bool Run() {
