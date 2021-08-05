@@ -16,6 +16,7 @@
 #include <remill/BC/Optimizer.h>
 #include <remill/BC/Util.h>
 
+#include <iomanip>
 #include <unordered_map>
 #include <vector>
 
