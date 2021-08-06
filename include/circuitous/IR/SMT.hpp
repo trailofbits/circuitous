@@ -137,7 +137,6 @@ namespace circ
 
     z3::expr true_bv() { return ctx.bv_val(1, 1); }
 
-
     z3::expr Visit(Add *op) { return record(op, lhs(op) + rhs(op)); }
     z3::expr Visit(Sub *op) { return record(op, lhs(op) - rhs(op)); }
     z3::expr Visit(Mul *op) { return record(op, lhs(op) * rhs(op)); }
@@ -283,7 +282,7 @@ namespace circ
       for (auto o : op->operands) {
         vec.push_back(Dispatch(o));
       }
-      return z3::concat(vec);
+      return record(op, z3::concat(vec));
     }
 
     z3::expr Visit(Select *op)
@@ -303,7 +302,7 @@ namespace circ
         result = z3::ite(current == index, value, result);
       }
 
-      return result;
+      return record(op, result);
     }
 
     z3::expr Visit(BSelect *op)
@@ -311,7 +310,7 @@ namespace circ
       auto cond = Dispatch(op->operands[0]);
       auto first = Dispatch(op->operands[1]);
       auto second = Dispatch(op->operands[2]);
-      return z3::ite(cond == true_bv(), first, second);
+      return record(op, z3::ite(cond == true_bv(), first, second));
     }
 
     z3::expr Visit(Parity *op)
@@ -322,27 +321,27 @@ namespace circ
       for (auto i = 1U; i < operand_size; ++i) {
         sum = sum ^ operand.extract(i, i);
       }
-      return sum;
+      return record(op, sum);
     }
 
-    z3::expr Visit(RegConstraint *op)       { return to_bv(lhs(op) == rhs(op)); }
-    z3::expr Visit(PreservedConstraint *op) { return to_bv(lhs(op) == rhs(op)); }
-    z3::expr Visit(CopyConstraint *op)      { return to_bv(lhs(op) == rhs(op)); }
-    z3::expr Visit(AdviceConstraint *op)    { return to_bv(lhs(op) == rhs(op)); }
-    z3::expr Visit(DecodeCondition *op)     { return to_bv(lhs(op) == rhs(op)); }
+    z3::expr Visit(RegConstraint *op)       { return record(op, to_bv(lhs(op) == rhs(op))); }
+    z3::expr Visit(PreservedConstraint *op) { return record(op, to_bv(lhs(op) == rhs(op))); }
+    z3::expr Visit(CopyConstraint *op)      { return record(op, to_bv(lhs(op) == rhs(op))); }
+    z3::expr Visit(AdviceConstraint *op)    { return record(op, to_bv(lhs(op) == rhs(op))); }
+    z3::expr Visit(DecodeCondition *op)     { return record(op, to_bv(lhs(op) == rhs(op))); }
 
-    z3::expr Visit(ReadConstraint *op)      { return to_bv(lhs(op) == rhs(op)); }
-    z3::expr Visit(WriteConstraint *op)     { return to_bv(lhs(op) == rhs(op)); }
-    z3::expr Visit(UnusedConstraint *op)    { return to_bv(lhs(op) == rhs(op)); }
+    // z3::expr Visit(ReadConstraint *op)      { return record(op, to_bv(lhs(op) == rhs(op))); }
+    // z3::expr Visit(WriteConstraint *op)     { return record(op, to_bv(lhs(op) == rhs(op))); }
+    // z3::expr Visit(UnusedConstraint *op)    { return record(op, to_bv(lhs(op) == rhs(op))); }
 
     z3::expr Visit(OnlyOneCondition *op)
     {
-      return accumulate(op->operands, std::bit_xor());
+      return record(op, accumulate(op->operands, std::bit_xor()));
     }
 
     z3::expr Visit(VerifyInstruction *op)
     {
-      return accumulate(op->operands, std::bit_and());
+      return record(op, accumulate(op->operands, std::bit_and()));
     }
 
     z3::expr Visit(Circuit *op)
