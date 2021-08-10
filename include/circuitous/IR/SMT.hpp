@@ -21,6 +21,7 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/IR/Storage.hpp>
 #include <circuitous/IR/Circuit.hpp>
+#include <circuitous/IR/Intrinsics.hpp>
 
 namespace circ
 {
@@ -331,9 +332,38 @@ namespace circ
     z3::expr Visit(AdviceConstraint *op)    { return record(op, to_bv(lhs(op) == rhs(op))); }
     z3::expr Visit(DecodeCondition *op)     { return record(op, to_bv(lhs(op) == rhs(op))); }
 
-    // z3::expr Visit(ReadConstraint *op)      { return record(op, to_bv(lhs(op) == rhs(op))); }
-    // z3::expr Visit(WriteConstraint *op)     { return record(op, to_bv(lhs(op) == rhs(op))); }
-    // z3::expr Visit(UnusedConstraint *op)    { return record(op, to_bv(lhs(op) == rhs(op))); }
+    auto deconstruct_memory(const z3::expr &memory)
+    {
+      auto extractor = [&](auto thing, auto from, auto size) -> z3::expr {
+        return thing->extract(from + size - 1, from);
+      };
+      CHECK_EQ(memory.get_sort().bv_size(), irops::Memory::allocated_size);
+      // NOTE(lukas): `z3::expr` is not default constructible.
+      return irops::memory::parse< std::optional< z3::expr > >(memory, extractor);
+    }
+
+    z3::expr Visit(ReadConstraint *op) {
+      auto parsed = deconstruct_memory(Dispatch(op->hint_arg()));
+      auto used = *parsed.used == true_bv();
+      auto mode = !*parsed.mode;
+      auto id = *parsed.id == ctx.bv_val(static_cast< unsigned int >(op->id()), 4);
+      auto size = *parsed.size == Dispatch(op->size_arg());
+      auto addr = *parsed.addr == Dispatch(op->addr_arg());
+      auto value = *parsed.value == Dispatch(op->val_arg());
+      auto ts = *parsed.timestamp == Dispatch(op->ts_arg());
+      return record(op, to_bv(used && mode && id && size && addr && value && ts));
+    }
+    z3::expr Visit(WriteConstraint *op) {
+      auto parsed = deconstruct_memory(Dispatch(op->hint_arg()));
+      auto used = *parsed.used == true_bv();
+      auto mode = *parsed.mode;
+      auto id = *parsed.id == ctx.bv_val(static_cast< unsigned int >(op->id()), 4);
+      auto size = *parsed.size == Dispatch(op->size_arg());
+      auto addr = *parsed.addr == Dispatch(op->addr_arg());
+      auto ts = *parsed.timestamp == Dispatch(op->ts_arg());
+      return record(op, to_bv(used && mode && id && size & addr && ts));
+    }
+    z3::expr Visit(UnusedConstraint *op)    { LOG(FATAL) << "Not implemented"; }
 
     z3::expr Visit(OnlyOneCondition *op)
     {
