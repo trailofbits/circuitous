@@ -28,7 +28,12 @@ namespace circ::eqsat {
 
   using Id = UnionFind::Id;
 
-  using CircuitENode = ENode< Operation* >;
+  struct OperationTemplate
+  {
+    const unsigned op_code;
+  };
+
+  using CircuitENode = ENode< OperationTemplate >;
   using CircuitEGraph = EGraph< CircuitENode >;
 
   static inline std::string name(const CircuitENode *node)
