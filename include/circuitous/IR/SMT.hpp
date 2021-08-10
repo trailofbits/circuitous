@@ -317,7 +317,7 @@ namespace circ
       z3::expr result = z3::ite(current == index, value, undef);
       for (auto i = 2U; i < op->operands.size(); ++i) {
         value = Dispatch(op->operands[i]);
-        current = ctx.bv_val(i, bw);
+        current = ctx.bv_val(i - 1, bw);
         result = z3::ite(current == index, value, result);
       }
 
