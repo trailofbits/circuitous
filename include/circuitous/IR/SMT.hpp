@@ -33,8 +33,7 @@ namespace circ
     using Base::Dispatch;
     using Base::Visit;
 
-    z3::context ctx;
-
+    BaseSMTVisitor() : consts(ctx) {}
 
     z3::expr uninterpreted(Operation *op, const std::string &name, z3::sort result_sort)
     {
@@ -57,6 +56,9 @@ namespace circ
     z3::expr constant(Operation *op, const std::string &name)
     {
       auto e = ctx.bv_const(name.c_str(), op->size);
+      if (!seen.count(op)) {
+        consts.push_back(e);
+      }
       return record(op, e);
     }
 
@@ -86,7 +88,9 @@ namespace circ
       return it->second;
     }
 
-    std::map<Operation *, z3::expr> seen;
+    z3::context ctx;
+    z3::expr_vector consts;
+    std::map< Operation *, z3::expr > seen;
   };
 
   template< typename Derived >
@@ -399,7 +403,14 @@ namespace circ
     z3::expr Visit(Circuit *op)
     {
       auto expr = Dispatch(op->operands[0]);
-      return expr != ctx.num_val(0, expr.get_sort());
+
+      z3::sort_vector args_sorts(ctx);
+      for (const auto &con : consts) {
+        args_sorts.push_back(con.get_sort());
+      }
+
+      auto sem = z3::function("sem", args_sorts, ctx.bool_sort());
+      return implies(sem(consts), expr == true_bv());
     }
   };
 
@@ -524,19 +535,23 @@ namespace circ
     goal.add(expr);
     expr = tactic(goal)[0].as_expr();
 
-    solver.add(eq_to_xnor(ctx).run(expr));
+    // solver.add(eq_to_xnor(ctx).run(expr));
+    solver.add(expr);
+
     return solver;
   }
 
   struct CircuitStats
   {
     unsigned and_gates = 0;
+    unsigned or_gates = 0;
     unsigned xor_gates = 0;
     unsigned not_gates = 0;
 
     CircuitStats& operator +=(const CircuitStats &other)
     {
       and_gates += other.and_gates;
+      or_gates += other.or_gates;
       xor_gates += other.xor_gates;
       not_gates += other.not_gates;
       return *this;
@@ -548,6 +563,7 @@ namespace circ
   {
     return os << "bit-blasting statistics:\n"
         << "and gates: " << std::to_string(stats.and_gates) << '\n'
+        << "or gates: " << std::to_string(stats.or_gates) << '\n'
         << "xor gates: " << std::to_string(stats.xor_gates) << '\n'
         << "not gates: " << std::to_string(stats.not_gates) << '\n';
   }
@@ -560,12 +576,14 @@ namespace circ
       return stats;
     cache.insert(e.id());
 
-    e = optimizer(e);
+    // e = optimizer(e);
 
     if (e.is_app()) {
 
       if (e.is_and())
         stats.and_gates += e.num_args() - 1;
+      else if (e.is_or())
+        stats.or_gates += e.num_args() - 1;
       else if (e.is_xor())
         stats.xor_gates += e.num_args() - 1;
       else if (e.is_not())
