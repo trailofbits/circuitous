@@ -4,6 +4,7 @@
 
 #include <circuitous/IR/IR.h>
 #include <circuitous/Transforms.h>
+#include <llvm/ADT/StringRef.h>
 
 #include <circuitous/ADT/EGraph.hpp>
 
@@ -27,7 +28,7 @@ namespace eqsat {
 
     Id add_node_recurse(Operation *op, CircuitEGraph &egraph)
     {
-        ENode node(op);
+        ENode node( OperationTemplate{op->op_code} );
         for (const auto &child : op->operands) {
           node.children.push_back(add_node_recurse(child, egraph));
         }
@@ -38,9 +39,7 @@ namespace eqsat {
     CircuitEGraph build(Circuit *circuit)
     {
       CircuitEGraph egraph;
-      circuit->AllAttributes::ForEachOperation([&] (Operation *op) {
-        add_node_recurse(op, egraph);
-      });
+      add_node_recurse(circuit, egraph);
       return egraph;
     }
   };
@@ -174,7 +173,10 @@ namespace eqsat {
 
     // TODO(Heno) extract best circuit
     std::ofstream out("egraph.dot");
-    to_dot(runner.egraph(), out, [] (auto *node) { return to_string(node->term->op_code); });
+    to_dot(runner.egraph(), out, [] (auto *node) {
+      auto str = to_string(node->term.op_code);
+      return llvm::StringRef(str).split(':').second.str();
+    });
 
     return true;
   }
