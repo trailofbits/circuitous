@@ -103,7 +103,7 @@ namespace circ
     z3::expr Visit(InputRegister *op) { return constant(op); }
     z3::expr Visit(OutputRegister *op) { return constant(op); }
 
-    z3::expr Visit(Advice *op) { return constant(op, "Advice"); }
+    z3::expr Visit(Advice *op) { return constant(op, advice_name(op)); }
 
     z3::expr Visit(PopulationCount *op)     { return constant(op, "Population"); }
     z3::expr Visit(CountLeadingZeroes *op)  { return constant(op, "LeadingZeros"); }
@@ -126,6 +126,14 @@ namespace circ
         bits[idx++] = bit != '0';
       return record(op, ctx.bv_val(op->size, bits.get()));
     }
+
+    std::string advice_name(Advice *op)
+    {
+      auto [it, _] = advice_names.try_emplace(op, "A." + std::to_string(advice_names.size()));
+      return it->second;
+    }
+
+    std::unordered_map< Advice *, std::string > advice_names;
   };
 
   template< typename Derived >
