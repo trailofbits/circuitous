@@ -48,7 +48,7 @@ namespace circ {
     friend bool operator<(const underlying_t &a, const strong_type &b) { return a < b._value; }
 
     template< typename stream >
-    friend stream& operator<<(stream &out, const strong_type &a) noexcept
+    friend auto operator<<(stream &out, const strong_type &a) noexcept -> decltype( out << "" )
     {
       return out << std::to_string(a._value);
     }
