@@ -9,6 +9,7 @@
 #include <numeric>
 #include <sstream>
 #include <string>
+#include <unordered_map>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wconversion"
@@ -351,6 +352,110 @@ namespace circ
     }
   };
 
+  template< typename derived >
+  struct optimization
+  {
+    using expr_cache = std::unordered_map< unsigned, z3::expr >;
+
+    derived& next() { return static_cast< derived& >(*this); }
+    derived const& next() const { return static_cast< const derived & >(*this); }
+
+    optimization(z3::context &ctx) : ctx(ctx), evec(ctx) {}
+
+    z3::expr run(const z3::expr &e)
+    {
+      cache.clear();
+      return optimize(e);
+    }
+
+    z3::expr optimize(const z3::expr &e)
+    {
+      if (cached(e))
+        return cache.at(e.id());
+      return next().optimize(e);
+    }
+
+    bool cached(const z3::expr &e) const { return cache.count(e.id()); }
+
+    z3::expr store(const z3::expr &from, z3::expr to)
+    {
+      cache.emplace( from, to );
+      return to;
+    }
+
+    z3::context &ctx;
+    z3::expr_vector evec;
+    expr_cache cache;
+  };
+
+  template< typename derived >
+  struct app_optimization : optimization< app_optimization< derived > >
+  {
+    using base = optimization< app_optimization< derived > >;
+    using base::base;
+
+    derived& next() { return static_cast< derived& >(*this); }
+    derived const& next() const { return static_cast< const derived & >(*this); }
+
+    z3::expr optimize(const z3::expr &e)
+    {
+      return e.is_app() ? next().optimize(e) : e;
+    }
+  };
+
+  struct or_to_and : app_optimization< or_to_and >
+  {
+    using base = app_optimization< or_to_and >::base;
+    using app_optimization::app_optimization;
+
+    z3::expr demorgan(const z3::expr_vector &args)
+    {
+      auto second = ++(args.begin());
+      return !std::accumulate(second, args.end(), args[0], std::logical_and<>());
+    }
+
+    z3::expr optimize(const z3::expr &e)
+    {
+      z3::expr_vector args(ctx);
+      for (auto i = 0U; i < e.num_args(); ++i) {
+        auto arg = base::optimize(e.arg(i));
+        args.push_back(e.is_or() ? !(arg) : arg);
+      }
+
+      return store( e, e.is_or() ? demorgan(args) : e.decl()(args) );
+    }
+  };
+
+  struct eq_to_xnor : app_optimization< eq_to_xnor >
+  {
+    using base = app_optimization< eq_to_xnor >::base;
+    using app_optimization::app_optimization;
+
+    z3::expr optimize(const z3::expr &e)
+    {
+      z3::expr_vector args(ctx);
+      for (auto i = 0U; i < e.num_args(); ++i)
+        args.push_back(base::optimize(e.arg(i)));
+
+      return store( e, e.is_eq() ? !(args[0] ^ args[1]) : e.decl()(args));
+    }
+  };
+
+  struct elim_not : app_optimization< elim_not >
+  {
+    using base = app_optimization< elim_not >::base;
+    using app_optimization::app_optimization;
+
+    z3::expr optimize(const z3::expr &e)
+    {
+      z3::expr_vector args(ctx);
+      for (auto i = 0U; i < e.num_args(); ++i)
+        args.push_back(base::optimize(e.arg(i)));
+
+      return store( e, e.is_not() && args[0].is_not() ? args[0].arg(0) : e.decl()(args) );
+    }
+  };
+
   static z3::solver bitblast(z3::expr expr, z3::context &ctx)
   {
     z3::solver solver(ctx);
@@ -368,12 +473,9 @@ namespace circ
     goal.add(expr);
     expr = tactic(goal)[0].as_expr();
 
-    // Custom optimizations
-
-    solver.add(expr);
+    solver.add(eq_to_xnor(ctx).run(expr));
     return solver;
   }
-
 
   struct CircuitStats
   {
@@ -388,7 +490,6 @@ namespace circ
       not_gates += other.not_gates;
       return *this;
     }
-
   };
 
   template< typename stream >
@@ -400,11 +501,18 @@ namespace circ
         << "not gates: " << std::to_string(stats.not_gates) << '\n';
   }
 
-  static inline CircuitStats get_stats(const z3::expr &e)
+  static inline CircuitStats get_stats(z3::expr e, auto optimizer, auto &cache)
   {
     CircuitStats stats;
 
+    if (cache.count(e.id()))
+      return stats;
+    cache.insert(e.id());
+
+    e = optimizer(e);
+
     if (e.is_app()) {
+
       if (e.is_and())
         stats.and_gates += e.num_args() - 1;
       else if (e.is_xor())
@@ -414,7 +522,8 @@ namespace circ
 
       auto args = e.num_args();
       for (unsigned i = 0; i < args; ++i)
-        stats += get_stats(e.arg(i));
+        stats += get_stats(e.arg(i), optimizer, cache);
+
     } else {
       LOG(FATAL) << "unknown operation " << e << '\n';
     }
@@ -422,19 +531,29 @@ namespace circ
     return stats;
   }
 
-  static inline CircuitStats get_stats(const z3::expr_vector &vec)
-  {
-    CircuitStats stats;
-    for (const auto &e : vec)
-      stats += get_stats(e);
-    return stats;
-  }
-
   static inline CircuitStats get_stats(Circuit *circuit)
   {
       auto visitor = IRToBitBlastableSMTVisitor();
       auto expr = visitor.Visit(circuit);
-      return get_stats( bitblast(expr, visitor.ctx).assertions() );
+      auto &ctx = visitor.ctx;
+
+      CircuitStats stats;
+      auto assertions = bitblast(expr, ctx).assertions();
+
+      auto elimnot = [&ctx] (const z3::expr &e) { return elim_not(ctx).run(e); };
+      auto ortoand = [&ctx] (const z3::expr &e) { return or_to_and(ctx).run(e); };
+
+      auto optimizer = [&] (const z3::expr &e)
+      {
+        return elimnot( ortoand(e) );
+      };
+
+      std::unordered_set< unsigned > cache;
+
+      for (const auto &e : assertions)
+        stats += get_stats(e, optimizer, cache);
+
+      return stats;
   }
 
   namespace smt
