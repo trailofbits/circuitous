@@ -384,7 +384,11 @@ namespace circ
 
     z3::expr Visit(OnlyOneCondition *op)
     {
-      return record(op, accumulate(op->operands, std::bit_xor()));
+      auto size = static_cast< unsigned int >((op->operands.size() / 2) + 1);
+      auto total = ctx.bv_val(0, size);
+      for (auto x : op->operands)
+        total = total + z3::zext(Dispatch(x), size - x->size);
+      return record(op, to_bv(total == ctx.bv_val(1, size)));
     }
 
     z3::expr Visit(VerifyInstruction *op)
