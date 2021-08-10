@@ -68,6 +68,13 @@ namespace circ
     z3::expr lhs(Operation *op) { return Dispatch(op->operands[0]); };
     z3::expr rhs(Operation *op) { return Dispatch(op->operands[1]); };
 
+    z3::expr accumulate(const auto &operands, const auto &fn)
+    {
+      auto dispatched = [&, fn] (const auto &lhs, auto rhs) { return fn(lhs, Dispatch(rhs)); };
+      auto init = Dispatch(operands[0]);
+      return std::accumulate(std::next(operands.begin()), operands.end(), init, dispatched);
+    }
+
     z3::expr Visit(Operation *op)
     {
       LOG(FATAL) << "Unhandled operation: " << op->Name();
@@ -150,8 +157,14 @@ namespace circ
     z3::expr Visit(COr *op)  { return record(op, lhs(op) | rhs(op)); }
     z3::expr Visit(CXor *op) { return record(op, lhs(op) ^ rhs(op)); }
 
-    z3::expr Visit(And *op) { return record(op, lhs(op) & rhs(op)); }
-    z3::expr Visit(Or *op)  { return record(op, lhs(op) | rhs(op)); }
+    z3::expr Visit(And *op)
+    {
+      return record(op, this->accumulate(op->operands, std::bit_and()));
+    }
+    z3::expr Visit(Or *op)
+    {
+      return record(op, this->accumulate(op->operands, std::bit_or()));
+    }
 
     z3::expr Visit(Shl *op)  { return record(op, z3::shl(lhs(op), rhs(op))); }
     z3::expr Visit(LShr *op) { return record(op, z3::lshr(lhs(op), rhs(op))); }
@@ -268,15 +281,6 @@ namespace circ
     using Base = IRToSMTOpsVisitor<  IRToBitBlastableSMTVisitor >;
     using Base::Dispatch;
     using Base::Visit;
-
-    z3::expr accumulate(const auto &operands, const auto &fn)
-    {
-      auto dispatched = [&, fn] (const auto &lhs, auto rhs) { return fn(lhs, Dispatch(rhs)); };
-      auto init = Dispatch(operands[0]);
-      return std::accumulate(std::next(operands.begin()), operands.end(), init, dispatched);
-    }
-
-    // z3::expr Visit(Not *op) { return uninterpreted(op, "not"); }
 
     z3::expr Visit(Concat *op)
     {
