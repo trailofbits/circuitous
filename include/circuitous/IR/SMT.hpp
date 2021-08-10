@@ -210,6 +210,11 @@ namespace circ
       auto lo = op->low_bit_inc;
       return record(op, val.extract(hi, lo));
     }
+
+    z3::expr Visit(InputImmediate *op)
+    {
+      return record(op, Dispatch(op->operands[0]));
+    }
   };
 
   struct IRToSMTVisitor : IRToSMTConstantsVisitor<IRToSMTVisitor>
