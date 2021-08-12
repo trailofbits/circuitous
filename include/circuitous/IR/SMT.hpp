@@ -535,7 +535,10 @@ namespace circ
     goal.add(expr);
     expr = tactic(goal)[0].as_expr();
 
+    // FIXME: optimize eq_to_xnor pass,
+    // at the moment it timeouts on simple cases
     // solver.add(eq_to_xnor(ctx).run(expr));
+
     solver.add(expr);
 
     return solver;
@@ -576,6 +579,8 @@ namespace circ
       return stats;
     cache.insert(e.id());
 
+    // FIXME: optimize optimizer passes,
+    // at the moment it timeout on simple cases
     // e = optimizer(e);
 
     if (e.is_app()) {
