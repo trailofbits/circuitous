@@ -25,6 +25,11 @@ namespace circ {
     using Term = Term_;
     using Children = std::vector< Id >;
 
+    template< typename ...Args >
+    explicit ENode(Args && ...args)
+      : term( std::forward< Args >(args)... )
+    {}
+
     explicit ENode(const Term &t) : term(t) {}
 
     template< typename Fn >
