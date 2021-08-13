@@ -8,6 +8,7 @@
 
 #include <circuitous/ADT/EGraph.hpp>
 
+#include <circuitous/Transforms/Pattern.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
 
 #include <functional>
@@ -15,6 +16,7 @@
 #include <fstream>
 #include <memory>
 #include <optional>
+#include <string>
 #include <vector>
 #include <span>
 
@@ -47,36 +49,43 @@ namespace eqsat {
   template< typename Graph >
   struct PatternCircuitBuilder
   {
-    using Id       = typename Graph::Id;
+    using ENode = typename Graph::ENode;
+    using Id    = typename Graph::Id;
 
-    PatternCircuitBuilder(Circuit *circuit_) : circuit(circuit_) {}
+    PatternCircuitBuilder(Graph &graph) : graph(graph) {}
 
-    Operation* constant(const Constant &con) const
+    Id make_constant(std::string_view con) const
     {
-      return nullptr;
+      LOG(FATAL) << "not implemented";
     }
 
-    Operation* operation(const eqsat::operation &op, std::span< Operation * > args) const
+    unsigned to_op_code(std::string_view name) const
     {
-      auto res = [&] () -> Operation* {
-        LOG(FATAL) << "unsupported operation";
-      } ();
-
-      for (auto arg : args)
-        res->AddUse(arg);
-
-      return res;
+      LOG(FATAL) << "unknown op code" << name;
     }
 
     Id synthesize(const expr &e, const auto &subs, const auto &places, const auto &subexprs) const
     {
       CHECK(subs.size() == places.size());
+      auto synth = [&] (const auto &sub) { return synthesize(sub, subs, places, subexprs); };
 
-      // TODO(Heno): addnodes to egraph
-      return Id(0);
+      return std::visit( overloaded {
+        [&] (const constant &con) -> Id { return make_constant(std::to_string(con.ref())); },
+        [&] (const place &plc)    -> Id { return subs.id(places.at(plc)); },
+        [&] (const label &lab)    -> Id { return synth(subexprs.at(lab)); },
+        [&] (const operation &op) -> Id {
+          ENode node(to_op_code(op.ref()));
+          for (const auto &child : children(e))
+            node.children.push_back(synth(child));
+
+          return graph.add(std::move(node)).first;
+        },
+        [&] (const auto&)         -> Id { LOG(FATAL) << "unsupported node"; },
+      }, root(e));
     }
 
-    Circuit *circuit;
+  private:
+    Graph &graph;
   };
 
 
@@ -91,7 +100,7 @@ namespace eqsat {
 
     EqSatRunner(Circuit *circuit)
       : _egraph(EGraphBuilder().build(circuit))
-      , _builder(circuit)
+      , _builder(_egraph)
       , _scheduler(_builder)
     {}
 
@@ -158,7 +167,6 @@ namespace eqsat {
 
   bool EqualitySaturation(Circuit *circuit)
   {
-    using GraphBuilder = eqsat::EGraphBuilder;
     using Runner = eqsat::DefaultRunner;
     using RewriteRules = eqsat::CircuitRewriteRules;
 

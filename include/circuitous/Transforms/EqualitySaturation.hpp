@@ -30,6 +30,7 @@ namespace circ::eqsat {
 
   struct OperationTemplate
   {
+    explicit OperationTemplate(unsigned op) : op_code(op) {}
     const unsigned op_code;
   };
 
@@ -424,12 +425,12 @@ namespace circ::eqsat {
 
     void apply(const expr &e, const Matches &matches) const
     {
-      return std::visit( overloaded {
+      std::visit( overloaded {
         [&] (const atom &a)       {
           throw std::runtime_error("rewrite rule is applied on the level of expression lists");
         },
-        [&] (const expr_list  &e) { return apply(e, matches); },
-        [&] (const union_expr &e) { return apply(e, matches); },
+        [&] (const expr_list  &e) { apply(e, matches); },
+        [&] (const union_expr &e) { apply(e, matches); },
         [&] (const match_expr & ) {
           throw std::runtime_error("match clause is forbidden in the rewrite pattern");
         }
