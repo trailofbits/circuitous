@@ -75,6 +75,34 @@ namespace circ {
   template< typename Derived >
   using Visitor = Visitor_< Derived, node_list_t >;
 
+  template< typename D, typename L > struct NonRecursiveVisitor_ {};
+
+  template< typename Derived, typename ... Ops >
+  struct NonRecursiveVisitor_< Derived, tl::TL< Ops ... > >
+  {
+    Derived &self() { return static_cast<Derived &>(*this); }
+
+    template<typename T, typename ...Tail, typename ... Args>
+    auto Visit_(Operation *op, Args &&...args) {
+      if (is_specialization< T >(op->op_code))
+        return self().Visit(dynamic_cast<T *>(op), std::forward<Args>(args)...);
+
+      if constexpr (sizeof...(Tail) != 0) {
+        return this->Visit_<Tail ...>(op, std::forward<Args>(args)...);
+      } else {
+        LOG(FATAL) << "unhandled operation";
+      }
+    }
+
+    template<typename ...Args>
+    auto Dispatch(Operation *op, Args &&...args) {
+      return this->Visit_<Ops...>(op, std::forward<Args>(args)...);
+    }
+  };
+
+  template< typename Derived >
+  using NonRecursiveVisitor = NonRecursiveVisitor_< Derived, node_list_t >;
+
   template< typename D, typename L > struct DVisitor_ {};
 
   template<typename Derived, typename ... Ops >
