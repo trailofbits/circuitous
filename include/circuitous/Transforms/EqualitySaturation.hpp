@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iterator>
 #include <map>
@@ -28,13 +29,58 @@ namespace circ::eqsat {
 
   using Id = UnionFind::Id;
 
-  struct OperationTemplate
+  struct OpCode
   {
-    explicit OperationTemplate(unsigned op) : op_code(op) {}
-    const unsigned op_code;
+    std::string op_code_name;
   };
 
-  using CircuitENode = ENode< OperationTemplate >;
+  struct SizedOp
+  {
+    std::string op_code_name;
+    std::uint32_t size;
+  };
+
+  struct RegOp
+  {
+    std::string op_code_name;
+    std::uint32_t size;
+    std::string reg_name;
+  };
+
+  struct ConstOp
+  {
+    std::string op_code_name;
+    std::uint32_t size;
+    std::string bits;
+  };
+
+  struct MemOp
+  {
+    std::string op_code_name;
+    std::uint32_t mem_idx;
+  };
+
+  struct ExtractOp
+  {
+    std::string op_code_name;
+    std::uint32_t low_bit_inc, high_bit_exc;
+  };
+
+  struct SelectOp
+  {
+    std::string op_code_name;
+    std::uint32_t size;
+    std::uint32_t bits;
+  };
+
+  using OpTemplate = std::variant< OpCode, SizedOp, RegOp, ConstOp, MemOp, ExtractOp, SelectOp >;
+
+  std::string to_string(const OpTemplate &op)
+  {
+    return std::visit([] (const auto &o) { return o.op_code_name; }, op);
+  }
+
+  using CircuitENode = ENode< OpTemplate >;
   using CircuitEGraph = EGraph< CircuitENode >;
 
   static inline std::string name(const CircuitENode *node)

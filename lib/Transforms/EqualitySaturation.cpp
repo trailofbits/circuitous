@@ -23,19 +23,111 @@
 namespace circ {
 namespace eqsat {
 
-  struct EGraphBuilder : public Visitor< EGraphBuilder >
+  struct OpTemplateBuilder : NonRecursiveVisitor< OpTemplateBuilder >
+  {
+    using Base = Visitor< OpTemplateBuilder >;
+
+    OpCode    opcode(auto *op)      { return {op->op_code_str()}; }
+    SizedOp   sized(auto *op)       { return {op->op_code_str(), op->size}; }
+    RegOp     regop(auto *op)       { return {op->op_code_str(), op->size, op->reg_name}; }
+    ConstOp   constop(Constant *op) { return {op->op_code_str(), op->size, op->bits}; }
+    MemOp     memop(Memory *op)     { return {op->op_code_str(), op->mem_idx}; }
+    ExtractOp extract(Extract *op)  { return {op->op_code_str(), op->low_bit_inc, op->high_bit_exc}; }
+    SelectOp  select(Select *op)    { return {op->op_code_str(), op->size, op->bits}; }
+
+    OpTemplate Visit(InputRegister *op)  { return regop(op); }
+    OpTemplate Visit(OutputRegister *op) { return regop(op); }
+
+    OpTemplate Visit(InputTimestamp *op)  { return sized(op); }
+    OpTemplate Visit(OutputTimestamp *op) { return sized(op); }
+    OpTemplate Visit(InputErrorFlag *op)  { return sized(op); }
+    OpTemplate Visit(OutputErrorFlag *op) { return sized(op); }
+
+    OpTemplate Visit(Undefined *op) { return sized(op); }
+
+    OpTemplate Visit(Memory *op)   { return memop(op); }
+
+    OpTemplate Visit(Constant *op) { return constop(op); }
+
+    OpTemplate Visit(Advice *op) { return sized(op); }
+
+    OpTemplate Visit(InputInstructionBits *op) { return sized(op); }
+
+    OpTemplate Visit(RegConstraint *op)       { return opcode(op); }
+    OpTemplate Visit(AdviceConstraint *op)    { return opcode(op); }
+    OpTemplate Visit(PreservedConstraint *op) { return opcode(op); }
+    OpTemplate Visit(CopyConstraint *op)      { return opcode(op); }
+    OpTemplate Visit(WriteConstraint *op)     { return opcode(op); }
+    OpTemplate Visit(ReadConstraint *op)      { return opcode(op); }
+    OpTemplate Visit(UnusedConstraint *op)    { return opcode(op); }
+
+    OpTemplate Visit(Add *op) { return sized(op); }
+    OpTemplate Visit(Sub *op) { return sized(op); }
+    OpTemplate Visit(Mul *op) { return sized(op); }
+
+    OpTemplate Visit(UDiv *op) { return sized(op); }
+    OpTemplate Visit(SDiv *op) { return sized(op); }
+
+    OpTemplate Visit(Shl *op)  { return sized(op); }
+    OpTemplate Visit(LShr *op) { return sized(op); }
+    OpTemplate Visit(AShr *op) { return sized(op); }
+
+    OpTemplate Visit(Trunc *op) { return sized(op); }
+    OpTemplate Visit(ZExt *op)  { return sized(op); }
+    OpTemplate Visit(SExt *op)  { return sized(op); }
+
+    OpTemplate Visit(Icmp_ult *op)  { return sized(op); }
+    OpTemplate Visit(Icmp_slt *op)  { return sized(op); }
+    OpTemplate Visit(Icmp_ugt *op)  { return sized(op); }
+    OpTemplate Visit(Icmp_eq *op)   { return sized(op); }
+    OpTemplate Visit(Icmp_ne *op)   { return sized(op); }
+    OpTemplate Visit(Icmp_uge *op)  { return sized(op); }
+    OpTemplate Visit(Icmp_ule *op)  { return sized(op); }
+    OpTemplate Visit(Icmp_sgt *op)  { return sized(op); }
+    OpTemplate Visit(Icmp_sge *op)  { return sized(op); }
+    OpTemplate Visit(Icmp_sle *op)  { return sized(op); }
+
+    OpTemplate Visit(BSelect *op)   { return sized(op); }
+
+    OpTemplate Visit(CAnd *op) { return sized(op); }
+    OpTemplate Visit(COr *op)  { return sized(op); }
+    OpTemplate Visit(CXor *op) { return sized(op); }
+
+    OpTemplate Visit(InputImmediate *op) { return sized(op); }
+
+    OpTemplate Visit(Extract *op) { return extract(op); }
+
+    OpTemplate Visit(Concat *op) { return sized(op); }
+
+    OpTemplate Visit(PopulationCount *op)     { return sized(op); }
+    OpTemplate Visit(CountLeadingZeroes *op)  { return sized(op); }
+    OpTemplate Visit(CountTrailingZeroes *op) { return sized(op); }
+
+    OpTemplate Visit(Not *op) { return sized(op); }
+
+    OpTemplate Visit(Parity *op) { return opcode(op); }
+
+    OpTemplate Visit(Select *op) { return select(op); }
+
+    OpTemplate Visit(DecodeCondition *op)   { return opcode(op); }
+    OpTemplate Visit(VerifyInstruction *op) { return opcode(op); }
+    OpTemplate Visit(OnlyOneCondition *op)  { return opcode(op); }
+
+    OpTemplate Visit(Or *op)  { return opcode(op); }
+    OpTemplate Visit(And *op) { return opcode(op); }
+  };
+
+  struct EGraphBuilder
   {
     using ENode = CircuitEGraph::ENode;
     using Id = CircuitEGraph::Id;
 
-    Id add_node_recurse(Operation *op, CircuitEGraph &egraph)
+    Id add_node_recurse(auto *op, CircuitEGraph &egraph)
     {
-        ENode node( OperationTemplate{op->op_code} );
-        for (const auto &child : op->operands) {
+        ENode node(make_template(op));
+        for (const auto &child : op->operands)
           node.children.push_back(add_node_recurse(child, egraph));
-        }
-        auto [id, _] = egraph.add(std::move(node));
-        return id;
+        return egraph.add(std::move(node)).first;
     }
 
     CircuitEGraph build(Circuit *circuit)
@@ -44,6 +136,18 @@ namespace eqsat {
       add_node_recurse(circuit, egraph);
       return egraph;
     }
+
+    OpTemplate make_template(Circuit *ci)
+    {
+      return template_builder.opcode(ci);
+    }
+
+    OpTemplate make_template(Operation *op)
+    {
+      return template_builder.Dispatch(op);
+    }
+
+    OpTemplateBuilder template_builder;
   };
 
   template< typename Graph >
@@ -57,11 +161,6 @@ namespace eqsat {
     Id make_constant(std::string_view con) const
     {
       LOG(FATAL) << "not implemented";
-    }
-
-    unsigned to_op_code(std::string_view name) const
-    {
-      LOG(FATAL) << "unknown op code" << name;
     }
 
     Id synthesize(const expr &e, const auto &subs, const auto &places, const auto &subexprs) const
@@ -182,7 +281,7 @@ namespace eqsat {
     // TODO(Heno) extract best circuit
     std::ofstream out("egraph.dot");
     to_dot(runner.egraph(), out, [] (auto *node) {
-      auto str = to_string(node->term.op_code);
+      auto str = to_string(node->term);
       return llvm::StringRef(str).split(':').second.str();
     });
 
