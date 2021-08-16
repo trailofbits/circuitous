@@ -6,6 +6,7 @@
 
 #include <compare>
 #include <string>
+#include <type_traits>
 
 namespace circ {
 
@@ -50,7 +51,11 @@ namespace circ {
     template< typename stream >
     friend auto operator<<(stream &out, const strong_type &a) noexcept -> decltype( out << "" )
     {
-      return out << std::to_string(a._value);
+      if constexpr ( std::is_integral_v< underlying_t > ) {
+        return out << std::to_string(a._value);
+      } else {
+        return out << a._value;
+      }
     }
 
   private:
