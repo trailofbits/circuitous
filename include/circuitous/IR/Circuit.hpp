@@ -38,11 +38,11 @@ namespace circ {
 
     static std::unique_ptr<Circuit> Deserialize(std::istream &is);
 
+    static std::string op_code_str() { return "circuit"; }
 
     std::string Name() const override { return "circuit"; }
     Circuit() : Operation(this->bool_size, kind) {}
   };
-
 
   template< typename D, typename L > struct Visitor_ {};
 
