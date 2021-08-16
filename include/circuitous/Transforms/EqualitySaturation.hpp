@@ -37,7 +37,7 @@ namespace circ::eqsat {
   struct SizedOp
   {
     std::string op_code_name;
-    std::uint32_t size;
+    std::optional< std::uint32_t > size;
   };
 
   struct RegOp
