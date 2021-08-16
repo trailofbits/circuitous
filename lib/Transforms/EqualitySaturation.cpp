@@ -5,6 +5,7 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/Transforms.h>
 #include <llvm/ADT/StringRef.h>
+#include <llvm/ADT/StringSwitch.h>
 
 #include <circuitous/ADT/EGraph.hpp>
 
@@ -158,9 +159,108 @@ namespace eqsat {
 
     PatternCircuitBuilder(Graph &graph) : graph(graph) {}
 
-    Id make_constant(std::string_view con) const
+    OpTemplate make_constant_template(const constant &con) const
     {
       LOG(FATAL) << "not implemented";
+    }
+
+    OpTemplate make_operation_template(const operation &op) const
+    {
+      auto name = op.ref();
+
+      auto sized = [] (auto name) { return SizedOp{std::string(name), {}}; };
+      auto opcode = [] (auto name) { return OpCode{std::string(name)}; };
+
+      auto value = llvm::StringSwitch< std::optional< OpTemplate > >(name)
+        // .Case("circuit")
+        // .Case("in.register")
+        // .Case("out.register")
+        // .Case("in.timestamp")
+        // .Case("out.timestamp")
+        // .Case("in.error_flag")
+        // .Case("out.error_flag")
+        .Case("undefined", sized(name))
+        // .Case("memory")
+        .Case("advice", sized(name))
+        // .Case("instruction_bits")
+        .Case("register_constraint",  opcode(name))
+        .Case("advice_constraint",    opcode(name))
+        .Case("preserved_constraint", opcode(name))
+        .Case("copy_constraint",      opcode(name))
+        .Case("write_constraint",     opcode(name))
+        .Case("read_constraint",      opcode(name))
+        .Case("unused_constraint",    opcode(name))
+
+        .Case("Add",   sized(name))
+        .Case("+",     sized("Add"))
+        .Case("Sub",   sized(name))
+        .Case("-",     sized("Sub"))
+        .Case("Mul",   sized(name))
+        .Case("*",     sized("Mul"))
+        .Case("UDiv",  sized(name))
+        .Case("/",     sized("UDiv"))
+        .Case("SDiv",  sized(name))
+        .Case("Shl",   sized(name))
+        .Case("<<",    sized("Shl"))
+        .Case("LShr",  sized(name))
+        .Case(">>",    sized("LShr"))
+        .Case("AShr",  sized(name))
+        .Case("Trunc", sized(name))
+        .Case("ZExt",  sized(name))
+        .Case("SExt",  sized(name))
+
+        .Case("Icmp_ult", sized(name))
+        .Case("<",        sized(name))
+        .Case("Icmp_slt", sized(name))
+        .Case("Icmp_ugt", sized(name))
+        .Case(">",        sized(name))
+        .Case("Icmp_eq",  sized(name))
+        .Case("==",       sized(name))
+        .Case("Icmp_ne",  sized(name))
+        .Case("!=",       sized(name))
+        .Case("Icmp_uge", sized(name))
+        .Case(">=",       sized(name))
+        .Case("Icmp_ule", sized(name))
+        .Case("<=",       sized(name))
+        .Case("Icmp_sgt", sized(name))
+        .Case("Icmp_sge", sized(name))
+        .Case("Icmp_sle", sized(name))
+
+        .Case("BSelect",  sized(name))
+
+        .Case("CAnd", sized(name))
+        .Case("COr",  sized(name))
+        .Case("CXor", sized(name))
+
+        .Case("input_immediate", opcode(name))
+        // .Case("extract")
+
+        .Case("concat", sized(name))
+
+        .Case("pop_count",             sized(name))
+        .Case("count_lead_zeroes",     sized(name))
+        .Case("count_trailing_zeroes", sized(name))
+        .Case("parity",                sized(name))
+        .Case("not",                   sized(name))
+
+        // .Case(Select::op_code_str())
+
+        .Case("DecodeCondition",   opcode(name))
+        .Case("VerifyInstruction", opcode(name))
+        .Case("OnlyOneCondition",  opcode(name))
+        .Case("Or",  opcode(name))
+        .Case("And", opcode(name))
+
+        .Default( std::nullopt );
+
+        if ( !value )
+          LOG(FATAL) << "unhadled operation " << name;
+        return value.value();
+    }
+
+    Id make_constant(const constant &con) const
+    {
+      return graph.add(ENode(make_constant_template(con))).first;
     }
 
     Id synthesize(const expr &e, const auto &subs, const auto &places, const auto &subexprs) const
@@ -169,14 +269,13 @@ namespace eqsat {
       auto synth = [&] (const auto &sub) { return synthesize(sub, subs, places, subexprs); };
 
       return std::visit( overloaded {
-        [&] (const constant &con) -> Id { return make_constant(std::to_string(con.ref())); },
+        [&] (const constant &con) -> Id { return make_constant(con); },
         [&] (const place &plc)    -> Id { return subs.id(places.at(plc)); },
         [&] (const label &lab)    -> Id { return synth(subexprs.at(lab)); },
         [&] (const operation &op) -> Id {
-          ENode node(to_op_code(op.ref()));
+          ENode node(make_operation_template(op));
           for (const auto &child : children(e))
-            node.children.push_back(synth(child));
-
+            node.children.push_back( synth(child) );
           return graph.add(std::move(node)).first;
         },
         [&] (const auto&)         -> Id { LOG(FATAL) << "unsupported node"; },
