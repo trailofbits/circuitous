@@ -123,19 +123,23 @@ namespace eqsat {
     using ENode = CircuitEGraph::ENode;
     using Id = CircuitEGraph::Id;
 
+    using Nodes = std::map< Operation *, ENode * >;
+
     Id add_node_recurse(auto *op, CircuitEGraph &egraph)
     {
         ENode node(make_template(op));
         for (const auto &child : op->operands)
           node.children.push_back(add_node_recurse(child, egraph));
-        return egraph.add(std::move(node)).first;
+        auto [id, enode] = egraph.add(std::move(node));
+        nodes[op] = enode;
+        return id;
     }
 
-    CircuitEGraph build(Circuit *circuit)
+    std::pair< CircuitEGraph, Nodes > build(Circuit *circuit)
     {
       CircuitEGraph egraph;
       add_node_recurse(circuit, egraph);
-      return egraph;
+      return {std::move(egraph), nodes};
     }
 
     OpTemplate make_template(Circuit *ci)
@@ -148,6 +152,7 @@ namespace eqsat {
       return template_builder.Dispatch(op);
     }
 
+    Nodes nodes;
     OpTemplateBuilder template_builder;
   };
 
@@ -296,8 +301,20 @@ namespace eqsat {
     using RulesScheduler = Scheduler< Graph >;
     using PatternCircuitBuilder = PatternCircuitBuilder< Graph >;
 
-    EqSatRunner(Circuit *circuit)
-      : _egraph(EGraphBuilder().build(circuit))
+    using EGraph = Graph;
+    using ENode  = typename Graph::ENode;
+    using Nodes  = std::map< Operation *, ENode * >;
+
+    static EqSatRunner make_runner(Circuit *circuit)
+    {
+      EGraphBuilder builder;
+      auto [graph, nodes] = builder.build(circuit);
+      return {std::move(graph), std::move(nodes)};
+    }
+
+    EqSatRunner(Graph &&graph, Nodes &&nodes)
+      : _egraph(std::move(graph))
+      , _nodes(std::move(nodes))
       , _builder(_egraph)
       , _scheduler(_builder)
     {}
@@ -350,8 +367,11 @@ namespace eqsat {
 
     const Graph& egraph() const { return _egraph; }
 
+    ENode* node(Operation *op) { return _nodes[op]; }
+
   private:
     Graph _egraph;
+    Nodes _nodes;
     PatternCircuitBuilder _builder;
     RulesScheduler _scheduler;
   };
@@ -367,10 +387,11 @@ namespace eqsat {
   {
     using Runner = eqsat::DefaultRunner;
     using RewriteRules = eqsat::CircuitRewriteRules;
+    using EGraph = typename Runner::EGraph;
 
     LOG(INFO) << "Start equality saturation";
 
-    auto runner = Runner(circuit);
+    auto runner = Runner::make_runner(circuit);
 
     RewriteRules rules;
     runner.run(rules);
