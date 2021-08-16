@@ -85,7 +85,7 @@ namespace circ::eqsat {
 
   static inline std::string name(const CircuitENode *node)
   {
-    throw std::runtime_error("not implemented");
+    return std::visit( [] (const auto &value) { return value.op_code_name; }, node->term );
   }
 
   static inline bool is_context_node(const CircuitENode *node)
