@@ -7,22 +7,28 @@
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringSwitch.h>
 
+#include <algorithm>
 #include <circuitous/ADT/EGraph.hpp>
 
 #include <circuitous/Transforms/Pattern.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
 
+#include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <iostream>
 #include <fstream>
 #include <memory>
+#include <numeric>
 #include <optional>
 #include <string>
 #include <vector>
+#include <queue>
 #include <span>
 
 namespace circ {
 namespace eqsat {
+
 
   struct OpTemplateBuilder : NonRecursiveVisitor< OpTemplateBuilder >
   {
@@ -383,6 +389,52 @@ namespace eqsat {
 
 } // namespace eqsat
 
+  using Id = UnionFind::Id;
+
+  template< typename Graph, typename CostFunction >
+  struct CostGraph
+  {
+    using ENode = typename Graph::ENode;
+    using CostMap = std::map< const ENode*, std::uint64_t >;
+
+    CostGraph(const Graph &graph, CostFunction eval)
+      : graph(graph), eval(eval)
+    {
+      for (const auto &[node, id] : graph.nodes())
+        costs.try_emplace(node, eval_cost(node));
+      for (const auto &[node, id] : graph.nodes())
+      {
+        LOG(INFO) << to_string(node->term) << " " << costs[node];
+      }
+    }
+
+  private:
+
+    std::uint64_t eval_cost(const ENode *node)
+    {
+      if (auto cost = costs.find(node); cost != costs.end())
+        return cost->second;
+
+      auto fold = [&] (unsigned cost, auto id) -> std::uint64_t {
+        const auto &eclass = graph.eclass(id).nodes;
+        for (const auto *node : eclass)
+          costs.try_emplace(node, eval_cost(node));
+
+        auto cmp = [&] (const auto &a, const auto &b) { return costs[a] < costs[b]; };
+        auto min = std::min_element(eclass.begin(), eclass.end(), cmp);
+        return cost + costs[*min];
+      };
+
+      const auto &children = node->children;
+      return std::accumulate(children.begin(), children.end(), eval(node), fold);
+    }
+
+    const Graph &graph;
+
+    CostFunction eval;
+    CostMap costs;
+  };
+
   bool EqualitySaturation(Circuit *circuit)
   {
     using Runner = eqsat::DefaultRunner;
@@ -394,6 +446,8 @@ namespace eqsat {
     auto runner = Runner::make_runner(circuit);
 
     RewriteRules rules;
+    // TODO(Heno): this is just a test rule
+    rules.emplace_back("commutativity", "(op_Add ?x ?y)", "(op_Add ?y ?x)");
     runner.run(rules);
 
     LOG(INFO) << "Equality saturation stopped";
@@ -401,9 +455,21 @@ namespace eqsat {
     // TODO(Heno) extract best circuit
     std::ofstream out("egraph.dot");
     to_dot(runner.egraph(), out, [] (auto *node) {
-      auto str = to_string(node->term);
-      return llvm::StringRef(str).split(':').second.str();
+      return to_string(node->term);
     });
+
+    auto eval = [] (const auto &node) -> std::uint64_t {
+      // TODO(Heno) implement cost function
+      auto name = to_string(node->term);
+      if (name == "Mul")
+        return 3;
+      if (name == "Add")
+        return 2;
+      return 1;
+    };
+
+    auto costgraph = CostGraph( runner.egraph(), eval );
+    // TODO(Heno): extract optimal graph
 
     return true;
   }
