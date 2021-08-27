@@ -603,7 +603,8 @@ static inline std::string pretty_print(Operation *op) {
   std::stringstream ss;
   ss << op->id() << ": " << to_string(op->op_code);
   if constexpr (with_meta) {
-    ss << std::endl << op->dump_meta();
+    if (op->meta_size())
+      ss << std::endl << op->dump_meta();
   }
   return ss.str();
 }
