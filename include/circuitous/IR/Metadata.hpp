@@ -32,6 +32,7 @@ namespace circ {
 
     std::unordered_map< key_t, value_t > meta;
 
+    auto meta_size() const { return meta.size(); }
     bool has_meta(const key_t &key) const { return meta.count(key); }
 
     maybe_value_t get_meta(const key_t &key) const {
