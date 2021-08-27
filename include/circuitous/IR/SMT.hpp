@@ -33,7 +33,7 @@ namespace circ
     using Base::Dispatch;
     using Base::Visit;
 
-    BaseSMTVisitor() : consts(ctx) {}
+    BaseSMTVisitor(auto ptr_size_) : ptr_size(ptr_size_), consts(ctx) {}
 
     z3::expr uninterpreted(Operation *op, const std::string &name, z3::sort result_sort)
     {
@@ -88,6 +88,7 @@ namespace circ
       return it->second;
     }
 
+    uint32_t ptr_size = 0;
     z3::context ctx;
     z3::expr_vector consts;
     std::map< Operation *, z3::expr > seen;
@@ -102,6 +103,8 @@ namespace circ
     using Base::constant;
     using Base::ctx;
     using Base::record;
+
+    using Base::Base;
 
     z3::expr Visit(InputInstructionBits *op) { return constant(op, "InputBits"); }
     z3::expr Visit(InputRegister *op) { return constant(op); }
@@ -150,6 +153,8 @@ namespace circ
     using Base::lhs;
     using Base::rhs;
     using Base::record;
+
+    using Base::Base;
 
     z3::expr to_bv(z3::expr expr)
     {
@@ -228,6 +233,8 @@ namespace circ
     using Base::Dispatch;
     using Base::Visit;
 
+    using Base::Base;
+
     z3::expr Visit(Add *op) { return uninterpreted(op, "add"); }
     z3::expr Visit(Sub *op) { return uninterpreted(op, "sub"); }
     z3::expr Visit(Mul *op) { return uninterpreted(op, "mul"); }
@@ -300,6 +307,8 @@ namespace circ
     using Base::Dispatch;
     using Base::Visit;
 
+    using Base::Base;
+
     z3::expr Visit(Concat *op)
     {
       z3::expr_vector vec(ctx);
@@ -357,32 +366,31 @@ namespace circ
     auto deconstruct_memory(const z3::expr &memory)
     {
       auto extractor = [&](auto thing, auto from, auto size) -> z3::expr {
-        return thing->extract(from + size - 1, from);
+        return thing.extract(from + size - 1, from);
       };
-      CHECK_EQ(memory.get_sort().bv_size(), irops::Memory::allocated_size);
-      // NOTE(lukas): `z3::expr` is not default constructible.
-      return irops::memory::parse< std::optional< z3::expr > >(memory, extractor);
+      CHECK_EQ(memory.get_sort().bv_size(), irops::memory::size(ptr_size));
+      return irops::memory::parse< z3::expr >(memory, extractor, ptr_size);
     }
 
     z3::expr Visit(ReadConstraint *op) {
       auto parsed = deconstruct_memory(Dispatch(op->hint_arg()));
-      auto used = *parsed.used == true_bv();
-      auto mode = !*parsed.mode;
-      auto id = *parsed.id == ctx.bv_val(static_cast< unsigned int >(op->id()), 4);
-      auto size = *parsed.size == Dispatch(op->size_arg());
-      auto addr = *parsed.addr == Dispatch(op->addr_arg());
-      auto value = *parsed.value == Dispatch(op->val_arg());
-      auto ts = *parsed.timestamp == Dispatch(op->ts_arg());
+      auto used =  parsed.used() == true_bv();
+      auto mode =  parsed.mode() == false_bv();
+      auto id =    parsed.id() == ctx.bv_val(static_cast< unsigned int >(op->id()), 4);
+      auto size =  parsed.size() == Dispatch(op->size_arg());
+      auto addr =  parsed.addr() == Dispatch(op->addr_arg());
+      auto value = parsed.value() == Dispatch(op->val_arg());
+      auto ts =    parsed.timestamp() == Dispatch(op->ts_arg());
       return record(op, to_bv(used && mode && id && size && addr && value && ts));
     }
     z3::expr Visit(WriteConstraint *op) {
       auto parsed = deconstruct_memory(Dispatch(op->hint_arg()));
-      auto used = *parsed.used == true_bv();
-      auto mode = *parsed.mode;
-      auto id = *parsed.id == ctx.bv_val(static_cast< unsigned int >(op->id()), 4);
-      auto size = *parsed.size == Dispatch(op->size_arg());
-      auto addr = *parsed.addr == Dispatch(op->addr_arg());
-      auto ts = *parsed.timestamp == Dispatch(op->ts_arg());
+      auto used = parsed.used() == true_bv();
+      auto mode = parsed.mode() == true_bv();
+      auto id =   parsed.id() == ctx.bv_val(static_cast< unsigned int >(op->id()), 4);
+      auto size = parsed.size() == Dispatch(op->size_arg());
+      auto addr = parsed.addr() == Dispatch(op->addr_arg());
+      auto ts =   parsed.timestamp() == Dispatch(op->ts_arg());
       return record(op, to_bv(used && mode && id && size & addr && ts));
     }
     z3::expr Visit(UnusedConstraint *op)    { LOG(FATAL) << "Not implemented"; }
@@ -608,7 +616,7 @@ namespace circ
 
   static inline CircuitStats get_stats(Circuit *circuit)
   {
-      auto visitor = IRToBitBlastableSMTVisitor();
+      auto visitor = IRToBitBlastableSMTVisitor(circuit->ptr_size);
       auto expr = visitor.Visit(circuit);
       auto &ctx = visitor.ctx;
 
