@@ -9,6 +9,7 @@
 
 #include <circuitous/Fuzz/InstNavigation.hpp>
 #include <circuitous/Lifter/Shadows.hpp>
+#include <circuitous/Lifter/SReg.hpp>
 #include <circuitous/Lifter/ShadowMat.hpp>
 
 #include <remill/Arch/Arch.h>
@@ -222,7 +223,6 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
       CHECK(call);
       consolidate_isel(call->getCalledFunction());
 
-
       // We need to actually store the new value of instruction pointer
       // into the corresponding register.
       // NOTE(lukas): This should technically be responsiblity of remill::InstructionLifter
@@ -320,91 +320,12 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     llvm::Value * hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
 
     if (hidden_imm->getType() != constant_imm->getType()) {
-      LOG(INFO) << "Coercing immediate operand of type "
-                << remill::LLVMThingToString(hidden_imm->getType())
-                << " to type "
-                << remill::LLVMThingToString(constant_imm->getType());
       if (arch_op.imm.is_signed)
         hidden_imm = ir.CreateSExtOrTrunc(hidden_imm, constant_imm->getType());
       else
         hidden_imm = ir.CreateZExtOrTrunc(hidden_imm, constant_imm->getType());
     }
     return HideValue(hidden_imm, bb, size);
-  }
-
-  // Some registers may require additional shifts
-  auto ShiftCoerceInfo(const shadowinst::Reg &s_reg) {
-    std::map<uint64_t, std::vector<std::string>> out;
-
-    auto fetch_offset = [&](auto reg) -> uint64_t {
-      if (auto orig = arch->RegisterByName(reg)) {
-        auto big = orig->EnclosingRegister();
-        return orig->offset - big->offset;
-      }
-      return 0ul;
-    };
-
-    for (auto &[reg, bits] : s_reg.translation_map) {
-      auto key = fetch_offset(reg);
-
-      for (auto &bstr : bits) {
-        out[key].push_back(s_reg.make_bitstring(bstr));
-      }
-    }
-    return out;
-  }
-
-  // Some regsiters may require additional masks (most notably smaller version
-  // of its widest version - e.g. edi needs mask to be extracted from rdi)
-  auto MaskCoerceInfo(const shadowinst::Reg &s_reg) {
-    std::map<std::tuple<uint64_t, uint64_t>, std::vector<std::string>> out;
-
-    std::vector<std::string> defaulted;
-    auto defaults = [&](auto reg) -> bool {
-      return !arch->RegisterByName(reg);
-    };
-
-    auto fetch_info = [&](auto reg) -> std::tuple< uint32_t, uint32_t > {
-      if (auto orig = arch->RegisterByName(reg)) {
-        auto big = orig->EnclosingRegister();
-        return std::make_tuple(orig->size, big->size);
-      }
-      LOG(FATAL) << "Cannot fetch info for reg that is not in arch.";
-    };
-
-    for (auto &[reg, bits] : s_reg.translation_map) {
-      if (defaults(reg)) {
-        defaulted.push_back(reg);
-        continue;
-      }
-
-      auto key = fetch_info(reg);
-      for (auto &bstr : bits) {
-        out[key].push_back(s_reg.make_bitstring(bstr));
-      }
-    }
-
-    CHECK(defaulted.size() <= 1);
-    CHECK(!out.empty());
-    // Check with extra dbg message
-    if (out.size() != 1) {
-      // Build dbg message
-      std::stringstream ss;
-      for (auto &[key, _] : out) {
-        auto [x, y] = key;
-        ss << "[ " << std::to_string(x) << " , " << std::to_string(y) << " ]";
-      }
-      LOG(FATAL) << "out.size() != 1\n" << ss.str() << " in:\n" << s_reg.to_string();
-    }
-
-    auto &[key, _] = *(out.begin());
-    for (auto reg : defaulted) {
-      for (auto &bstr : s_reg.translation_map.find(reg)->second) {
-        out[key].push_back(s_reg.make_bitstring(bstr));
-      }
-    }
-
-    return out.begin()->first;
   }
 
   std::string input_name(std::string_view name) {
@@ -494,29 +415,6 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
       return retrieved;
     };
 
-    auto shift_coerce = [&](auto what) {
-      shadowinst::SelectMaker selects{ ir };
-      for (auto &[shift_val, conds] : ShiftCoerceInfo(s_reg)) {
-        std::vector<llvm::Value *> args;
-        auto reg_selector = shadowinst::region_selector(ir, s_reg);
-        for (auto &bstr : conds) {
-          auto constant = llvm::APInt{static_cast<uint32_t>(bstr.size()), bstr, 2};
-          args.push_back(ir.CreateICmpEQ(reg_selector, ir.getInt(constant)));
-        }
-        auto cond = make_or(ir, args);
-        selects.chain(cond, ir.getInt64(shift_val * 8));
-      }
-      return ir.CreateLShr(what, selects.get());
-    };
-
-    auto mask_coerce = [&](auto what) {
-      auto [size, total_size] = MaskCoerceInfo(s_reg);
-      std::string mask_bits(size * 8, '1');
-      llvm::APInt mask{ static_cast<uint32_t>(total_size * 8), mask_bits, 2};
-      CHECK(ir.getInt(mask)->getType() == what->getType());
-      return ir.CreateAnd(what, ir.getInt(mask));
-    };
-
     // TODO(lukas): Handle holes.
     auto [cond, select] = shadowinst::make_intrinsics_decoder(s_reg, ir, safe_locate_reg);
     AddMetadata(select, "__circuitous.ordering", select_counter++);
@@ -524,7 +422,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
       auto wrapped = irops::make< irops::Transport >(ir, cond);
       AddMetadata(llvm::dyn_cast<llvm::Instruction>(wrapped), "circuitous.verify_fn_args", 0);
     }
-    return mask_coerce(shift_coerce(select));
+    return shadowinst::mask_shift_coerce(select, ir, s_reg, *arch);
   }
 
 
@@ -652,7 +550,8 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
         CurrentShade().address->scale,
         static_cast<uint64_t>(r_op.addr.scale));
     CHECK(scale);
-    auto displacement = LiftSImmediate(block, CurrentShade().address->displacement, r_op.addr.displacement);
+    auto displacement = LiftSImmediate(block, CurrentShade().address->displacement,
+                                       r_op.addr.displacement);
 
     auto zero = llvm::ConstantInt::get(word_type, 0, false);
     auto segment_reg = this->parent::LoadWordRegValOrZero(
@@ -686,12 +585,10 @@ struct OpaqueILifter : InstructionLifter {
     // TODO(lukas): Determine when is `current_op` supposed to be incremented
     auto op_idx = this->current_op;
     auto out = this->InstructionLifter::LiftOperand(inst, bb, state_ptr, arg, op);
-    LOG(INFO) << "HOHOHO " << static_cast<uint16_t>(op_idx) << " " << static_cast<uint16_t>(current_op);
     if (inst.operands[op_idx].action == remill::Operand::kActionWrite) {
       return out;
     }
 
-    LOG(INFO) << "Emtting dummy read operand.";
     llvm::IRBuilder<> irb(bb);
     auto dummy = irops::make_leaf< irops::Operand >(irb, op_idx, out->getType());
     auto wrap = irops::make< irops::AdviceConstraint >(irb, {out, dummy});
