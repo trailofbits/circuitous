@@ -17,6 +17,7 @@
 #include <utility>
 
 #include <circuitous/IR/IntrinsicsHelpers.hpp>
+#include <circuitous/IR/Memory.hpp>
 
 namespace circ::irops {
 
@@ -268,68 +269,32 @@ namespace circ::irops {
     return out;
   }
 
+  template< typename S, typename P >
+  auto make_eqs(llvm::IRBuilder<> &irb, const std::map< llvm::Value *, S > &vals, P &&promote)
+  {
+    std::vector< llvm::Value * > c_args;
+    for (const auto &[fst, snd] : vals)
+      c_args.push_back(irb.CreateICmpEQ(fst, promote(snd)));
+    return c_args;
+  }
 
-  namespace memory {
+  template< typename S, typename P >
+  auto make_eqs(llvm::IRBuilder<> &irb, llvm::Value *fst, const S &vals, P &&promote)
+  {
+    std::vector< llvm::Value * > c_args;
+    for (const auto &snd : vals)
+      c_args.push_back(irb.CreateICmpEQ(fst, promote(snd)));
+    return c_args;
+  }
 
-    // Layout of data inside Memory.
-    template< typename V >
-    struct Parsed {
-      V used; // 1 bit
-      V mode; // 1 bit
-      // 6 bits reserved
-      V id; // 4 bits
-      V size; // 4 bits
-      V addr; // 64 bits
-      V value; // 64 bits
-      V timestamp; // 64 buts
-
-      bool operator==(const Parsed< V > &other) const = default;
+  template< typename T >
+  requires std::is_same_v< typename std::remove_cvref_t< T >::value_type, std::string >
+  auto is_one_of(llvm::IRBuilder<> &irb, llvm::Value *fst, T &&vals)
+  {
+    auto promote = [&](auto bstr) {
+      return irb.getInt(llvm::APInt(static_cast< uint32_t >(bstr.size()), bstr, 2));
     };
-
-    // TODO(lukas): This two can probably be merged (easily) if reserved bits
-    //              got their attribute.
-    template< typename V, typename Inserter >
-    static void construct(const Parsed< V > &parsed, Inserter &insert_) {
-      auto current = 0u;
-      auto exec = [&](auto elem, auto size) {
-        insert_(elem, current, size);
-        current += size;
-      };
-
-      exec(parsed.used, 1u);
-      exec(parsed.mode, 1u);
-
-      current += 6;
-
-      exec(parsed.id, 4u);
-      exec(parsed.size, 4u);
-      exec(parsed.addr, 64u);
-      exec(parsed.value, 64u);
-      exec(parsed.timestamp, 64u);
-    }
-
-    template< typename V = llvm::Value *, typename Extractor >
-    static Parsed< V > parse(V call, Extractor extract_) {
-      auto current = 0u;
-      auto extract = [&](auto size) -> V {
-        auto out = extract_( call, current, size );
-        current += size;
-        return out;
-      };
-
-      Parsed< V > out;
-      out.used = extract( 1u );
-      out.mode = extract( 1u );
-      std::ignore = extract( 6u );
-      out.id = extract( 4u );
-      out.size = extract( 4u );
-
-      out.addr = extract( 64u  );
-      out.value = extract( 64u );
-      out.timestamp = extract( 64u );
-
-      return out;
-    }
-  } // namespace memory
+    return make< Or >(irb, make_eqs(irb, fst, std::forward< T >(vals), promote));
+  }
 
 } // namespace circ::irops
