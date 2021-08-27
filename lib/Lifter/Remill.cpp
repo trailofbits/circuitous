@@ -165,16 +165,30 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     LOG(FATAL) << "Unsupported memory read intrinsic: " << name.str();
   }
 
+  auto is_supported(auto triple) {
+    auto arch = remill::GetArchName(triple);
+    return arch == remill::kArchAMD64 || arch == remill::kArchX86;
+  }
+
+  auto inst_bits_node() {
+    CHECK(impl->Attr<InputInstructionBits>().Size() == 1);
+    return *impl->Attr<InputInstructionBits>().begin();
+  }
+
+  Operation *extract_argument(llvm::CallInst *call, llvm::Function *fn) {
+    auto args = CallArgs(call);
+    CHECK(args.size() <= 1);
+    return (args.size() == 0) ? inst_bits_node() : Fetch(fn, args[0]);
+  }
+
   Operation *VisitExtractIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
     // TODO(lukas): Refactor into separate method and check in a better way
     //              that includes `_avx` variants.
     auto triple = llvm::Triple(fn->getParent()->getTargetTriple());
-    CHECK(remill::GetArchName(triple) == remill::kArchAMD64);
+    CHECK(is_supported(triple));
 
     auto [from, size] = irops::Extract::parse_args< uint32_t >(fn);
-
-    CHECK(impl->Attr<InputInstructionBits>().Size() == 1);
-    const auto &inst_bytes = *impl->Attr<InputInstructionBits>().begin();
+    auto arg = extract_argument(call, fn);
 
     // We split extract to sepratate bytes. This is so we can reorder them,
     // which can be handy if the extracted data are in a different order
@@ -186,7 +200,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       while (true) {
         uint32_t y = std::min(from + (step - from % step), to);
         auto op = impl->Create<Extract>(from, y);
-        op->AddUse(inst_bytes);
+        op->AddUse(arg);
         partials.push_front(op);
         if (y == to) {
           return partials;
@@ -218,11 +232,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     // TODO(lukas): Refactor into separate method and check in a better way
     //              that includes `_avx` variants.
     auto triple = llvm::Triple(fn->getParent()->getTargetTriple());
-    CHECK(remill::GetArchName(triple) == remill::kArchAMD64);
+    CHECK(is_supported(triple));
 
-    CHECK(impl->Attr<InputInstructionBits>().Size() == 1);
-    const auto &inst_bytes = impl->input_inst_bits();
-
+    auto arg = extract_argument(call, fn);
     auto [from, size] = irops::ExtractRaw::parse_args< uint32_t >(fn);
     auto op = Emplace< Extract >(call, from, from + size);
 
@@ -230,7 +242,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     if (!args.empty()) {
       op->AddUse(Fetch(call->getParent()->getParent(), args[0]));
     } else {
-      op->AddUse(inst_bytes);
+      op->AddUse(arg);
     }
     return op;
   }
