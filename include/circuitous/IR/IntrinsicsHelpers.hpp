@@ -360,7 +360,7 @@ namespace circ::irops {
       }
     };
 
-    template< uint64_t S, typename N >
+    template< typename N >
     struct IdxIAllocator : N {
       using values_t = typename N::values_t;
       using self_t = typename N::self_t;
@@ -368,11 +368,9 @@ namespace circ::irops {
       using N::create_fn;
       static_assert(N::encoded_args_size == 2);
 
-      static inline constexpr uint64_t allocated_size = S;
-
-      static auto create_fn(llvm::Module *module, auto idx) {
-        auto fnt = llvm::FunctionType::get(N::llvm_t(module, S), {}, true);
-        return N::create_fn(module, self_t::name(S, idx), fnt);
+      static auto create_fn(llvm::Module *module, auto size, auto idx) {
+        auto fnt = llvm::FunctionType::get(N::llvm_t(module, size), {}, true);
+        return N::create_fn(module, self_t::name(size, idx), fnt);
       }
     };
 
@@ -462,7 +460,7 @@ namespace circ::irops {
 
       static auto make(llvm::IRBuilder<> &ir, const values_t &c_args) {
         auto size = uniform_size(c_args.begin(), c_args.end());
-        CHECK(size);
+        CHECK(size) << "Operands are not of unique size!\n" << dbg_dump(c_args);
         return N::make(ir, c_args, *size);
       }
     };
@@ -516,11 +514,8 @@ namespace circ::irops {
     template< typename S, typename D >
     using select_t = Melted< Select < def_base_t< S, D, 2 > > >;
 
-    template< typename S, typename D, uint64_t C >
-    using idx_iallocator_t = Melted< IdxIAllocator< C, def_base_t < S, D, 2 > > >;
-
     template< typename S, typename D >
-    using mem_allocator_t = idx_iallocator_t< S, D, 64 + 64 + 64 + 16 >;
+    using mem_allocator_t = Melted< IdxIAllocator< def_base_t < S, D, 2 > > >;
 
     template< typename S, typename D >
     using advice_allocator_t = Melted< AdviceAllocator< def_base_t< S, D, 2 > > >;
