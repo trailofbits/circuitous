@@ -45,6 +45,7 @@ struct FileConfig {
 };
 
 /* Format in the ir file is following
+ * 32 - `ptr_size` of Circuit.
  * 8: selector, 64: id, 64: opcode, ... rest of the data dependeing on opcode
  * 8: selector, 64: id it references
  * NOTE(lukas): In attempt to make this deterministic I have chosen to replace
@@ -127,6 +128,9 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
     }
   }
 
+  // TODO(lukas): This should be called, but is not.
+  void Visit(Circuit *op) { LOG(FATAL) << "Not implemented."; }
+
   void Visit(InputRegister *op) { write(op->reg_name, op->size); }
   void Visit(OutputRegister *op) { write(op->reg_name, op->size); }
 
@@ -189,10 +193,21 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
 
   using DeserializeComputational< DeserializeVisitor >::Visit;
 
-  explicit DeserializeVisitor(std::istream &is_, Circuit *circuit_)
-      : is(is_),
-        circuit(circuit_)
+  std::istream &is;
+  std::unordered_map<uint64_t, Operation *> id_to_op;
+  std::unique_ptr< Circuit > circuit;
+
+  explicit DeserializeVisitor(std::istream &is_)
+      : is(is_)
   {}
+
+  void read_header() {
+    auto [ptr_size] = read< uint32_t >();
+    circuit = std::make_unique< Circuit >(ptr_size);
+  }
+
+  Circuit *get_circuit() { CHECK(circuit); return circuit.get(); }
+  std::unique_ptr< Circuit > take_circuit() { return std::move(circuit); }
 
   void Read(Selector &sel) {
     std::underlying_type_t<Selector> out;
@@ -406,15 +421,14 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
   DECODE_CONDITION(VerifyInstruction)
   DECODE_CONDITION(OnlyOneCondition)
 
-  std::istream &is;
-  Circuit *const circuit;
-  std::unordered_map<uint64_t, Operation *> id_to_op;
 };
 
 }  // namespace
 
 void Circuit::Serialize(std::ostream &os) {
   SerializeVisitor vis(os);
+  // TODO(lukas): `Write` should be called on Circuit.
+  vis.Write(ptr_size);
   for (auto xor_all_op : Attr<OnlyOneCondition>()) {
     for (auto op : xor_all_op->operands) {
       vis.Write(op);
@@ -455,16 +469,18 @@ void Circuit::Serialize(std::function<std::ostream &(const std::string &)> os_op
 }
 
 std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
-  std::unique_ptr<Circuit> circuit(new Circuit);
-  DeserializeVisitor vis(is, circuit.get());
+  // TODO(lukas): Configurable.
+  DeserializeVisitor vis(is);
 
   auto old_flags = is.flags();
   is.unsetf(std::ios::skipws);
 
+  vis.read_header();
   while (is.good() && !is.eof() && EOF != is.peek()) {
     std::ignore = vis.Read();
   }
   is.flags(old_flags);
+  auto circuit = vis.get_circuit();
 
   std::unordered_map<std::string, OutputRegister *> out_regs;
   std::unordered_map<std::string, InputRegister *> in_regs;
@@ -537,7 +553,7 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   // TODO(lukas): I think this is not supposed to be here.
   circuit->RemoveUnused();
 
-  return circuit;
+  return vis.take_circuit();
 }
 
 }  // namespace circ
