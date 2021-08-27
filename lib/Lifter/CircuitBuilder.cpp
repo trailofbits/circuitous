@@ -64,24 +64,6 @@ static llvm::IntegerType *IntegralRegisterType(llvm::Module &module,
           module.getDataLayout().getTypeAllocSize(reg->type) * 8u));
 }
 
-// Looks for calls to a function like `__remill_error`, and
-// replace its state pointer with a null pointer so that the state
-// pointer never escapes.
-static void MuteStateEscape(llvm::Module &module, const char *func_name) {
-  auto func = module.getFunction(func_name);
-  if (!func) {
-    return;
-  }
-
-  for (auto user : func->users()) {
-    if (auto call_inst = llvm::dyn_cast<llvm::CallInst>(user)) {
-      auto arg_op = call_inst->getArgOperand(remill::kStatePointerArgNum);
-      call_inst->setArgOperand(remill::kStatePointerArgNum,
-                               llvm::UndefValue::get(arg_op->getType()));
-    }
-  }
-}
-
 using reg_ptr_t = const remill::Register *;
 std::vector<reg_ptr_t> EnclosedClosure(reg_ptr_t ptr) {
   std::vector<reg_ptr_t> out;
@@ -141,133 +123,83 @@ llvm::Value *State::load(llvm::IRBuilder<> &ir, const reg_ptr_t reg) {
   return loaded;
 }
 
-llvm::Function *CircuitBuilder::Build(llvm::StringRef buff) {
-  if (auto used = ctx.module()->getGlobalVariable("llvm.used"); used) {
-    used->eraseFromParent();
+
+// After optimizations some context may be merged, but llvm opt will not remove them
+// from the top-level xor function.
+llvm::Function *PostLiftOpt::crop_returns(llvm::Function *fn) {
+  std::vector< llvm::Instruction * > rets;
+  for (auto &bb : *fn)
+    for (auto &inst : bb)
+      if (auto ret = llvm::dyn_cast< llvm::ReturnInst >(&inst))
+        rets.push_back(ret);
+
+  // There should always be one return
+  CHECK(rets.size() == 1);
+  auto returned = rets[0]->getOperand(0u);
+
+  auto call = llvm::dyn_cast< llvm::CallInst >(returned);
+  CHECK(returned && irops::Xor::is(call->getCalledFunction()));
+
+  // Eliminate all duplicates
+  std::unordered_set<llvm::Value *> verifies;
+  // Skip all other operands
+  std::vector<llvm::Value *> others;
+  for (uint32_t i = 0; i < call->getNumArgOperands(); ++i) {
+    if (auto verif = llvm::dyn_cast< llvm::CallInst >(call->getArgOperand(i))) {
+      if (irops::VerifyInst::is(verif->getCalledFunction())) {
+        verifies.insert(verif);
+        continue;
+      }
+    }
+    others.push_back(call->getArgOperand(i));
   }
 
-  // TODO(pag): Create an immediate operand analysis that can identify bits
-  //            associated with immediates (e.g. by bit flipping, re-decoding,
-  //            then structurally comparing the decoded instructions for
-  //            near-equivalence). Feed results of this analysis into a class
-  //            deriving from the instruction lifter, and then use it to
-  //            lift all immediates as something like:
-  //
-  //                __circuitous_immediate(i64 val, iN mask)
-  //
-  //            Where the `iN mask` is a bitmask on the instruction encoding
-  //            representing the bits that produced `val`.
+  llvm::IRBuilder<> ir(call);
+  others.insert(others.end(), verifies.begin(), verifies.end());
 
-  // TODO(pag): Simplify certain patterns into intrinsic calls, e.g. getting
-  //            the sign bit, getting the low N bits of an instruction (i.e.
-  //            convert the AND into a function call.
-
-  auto isels = BaseLifter< OpaqueILifter >(ctx).Run(buff);
-  EraseFns(ctx.module(), { "__remill_intrinsics", "__remill_mark_as_used" });
-
-  // These improve optimizability.
-  MuteStateEscape(*ctx.module(), "__remill_function_return");
-  MuteStateEscape(*ctx.module(), "__remill_error");
-  MuteStateEscape(*ctx.module(), "__remill_missing_block");
-
-  // After optimizations some context may be merged, but llvm opt will not remove them
-  // from the top-level xor function.
-  auto crop_return = [](auto fn) {
-    std::vector< llvm::Instruction * > rets;
-    for (auto &bb : *fn)
-      for (auto &inst : bb)
-        if (auto ret = llvm::dyn_cast< llvm::ReturnInst >(&inst))
-          rets.push_back(ret);
-
-    // There should always be one return
-    CHECK(rets.size() == 1);
-    auto returned = rets[0]->getOperand(0u);
-
-    auto call = llvm::dyn_cast< llvm::CallInst >(returned);
-    CHECK(returned && irops::Xor::is(call->getCalledFunction()));
-
-    // Eliminate all duplicates
-    std::unordered_set<llvm::Value *> verifies;
-    // Skip all other operands
-    std::vector<llvm::Value *> others;
-    for (uint32_t i = 0; i < call->getNumArgOperands(); ++i) {
-      if (auto verif = llvm::dyn_cast< llvm::CallInst >(call->getArgOperand(i))) {
-        if (irops::VerifyInst::is(verif->getCalledFunction())) {
-          verifies.insert(verif);
-          continue;
-        }
-      }
-      others.push_back(call->getArgOperand(i));
-    }
-
-    llvm::IRBuilder<> ir(call);
-    others.insert(others.end(), verifies.begin(), verifies.end());
-
-    auto xor_ = irops::make< irops::Xor >(ir, others);
-    call->replaceAllUsesWith(xor_);
-    call->eraseFromParent();
-    return fn;
-  };
-
-  auto merge_ctxs = [&](llvm::Function *fn) {
-    using args_t = std::unordered_set< llvm::Value * >;
-    std::map< llvm::CallInst *, args_t > ctxs;
-    std::map< llvm::CallInst *, llvm::CallInst * > to_replace;
-
-    auto collect = [&](auto call) {
-      LOG(INFO) << "COLLECTING";
-      args_t args{ call->data_operands_begin(), call->data_operands_end() };
-
-      for (auto &[ctx, c_args] : ctxs) {
-        if (c_args == args) {
-          to_replace.emplace(call, ctx);
-          return;
-        }
-      }
-      LOG(INFO) << "Unique: " << remill::LLVMThingToString(call);
-      ctxs.emplace(call, std::move(args));
-    };
-
-    irops::VerifyInst::for_all_in(fn, collect);
-
-    std::stringstream ss;
-    ss << "Merging equivalent ctxs";
-    for (auto &[old, eq] : to_replace) {
-      // TOOD(lukas): What about metadata?
-      ss << " merging:\n";
-      ss << "  " << remill::LLVMThingToString(old) << std::endl;
-      ss << "  " << remill::LLVMThingToString(eq) << std::endl;
-
-      old->replaceAllUsesWith(eq);
-      old->eraseFromParent();
-    }
-    LOG(INFO) << ss.str();
-
-    return fn;
-  };
-
-  auto remove_unused = [&](llvm::Function *fn) {
-    std::vector< llvm::CallInst * > unused;
-    for (auto &bb : *fn)
-      for (auto &inst : bb)
-        if (auto call = llvm::dyn_cast< llvm::CallInst >(&inst); irops::is_any(call))
-          if (call->hasNUses(0))
-            unused.push_back(call);
-    std::stringstream ss;
-    ss << "Removing unused:\n";
-    for (auto call : unused) {
-      ss << "\t" << remill::LLVMThingToString(call) << std::endl;
-      call->eraseFromParent();
-    }
-    LOG(INFO) << ss.str();
-    return fn;
-  };
-
-  circuit_builder builder(ctx, "circuit.1.0");
-  builder.inject_isels(isels);
-  LOG(INFO) << "ISELs injected.";
-  return remove_unused(crop_return(merge_ctxs(builder.finish())));
+  auto xor_ = irops::make< irops::Xor >(ir, others);
+  call->replaceAllUsesWith(xor_);
+  call->eraseFromParent();
+  return fn;
 }
+
+llvm::Function *PostLiftOpt::merge_ctxs(llvm::Function *fn) {
+  using args_t = std::unordered_set< llvm::Value * >;
+  std::map< llvm::CallInst *, args_t > ctxs;
+  std::map< llvm::CallInst *, llvm::CallInst * > to_replace;
+
+  auto collect = [&](auto call) {
+    args_t args{ call->data_operands_begin(), call->data_operands_end() };
+
+    for (auto &[ctx, c_args] : ctxs) {
+      if (c_args == args) {
+        to_replace.emplace(call, ctx);
+        return;
+      }
+    }
+    ctxs.emplace(call, std::move(args));
+  };
+
+  irops::VerifyInst::for_all_in(fn, collect);
+  for (auto &[old, eq] : to_replace) {
+    // TOOD(lukas): What about metadata?
+    old->replaceAllUsesWith(eq);
+    old->eraseFromParent();
+  }
+  return fn;
+};
+
+llvm::Function *PostLiftOpt::remove_unused(llvm::Function *fn) {
+  std::vector< llvm::CallInst * > unused;
+  for (auto &bb : *fn)
+    for (auto &inst : bb)
+      if (auto call = llvm::dyn_cast< llvm::CallInst >(&inst); irops::is_any(call))
+        if (call->hasNUses(0))
+          unused.push_back(call);
+  for (auto call : unused)
+    call->eraseFromParent();
+  return fn;
+};
 
 /**
 void constraint_unused_advices(verif_diff_t &out) {
@@ -346,7 +278,6 @@ void Circuit0::constraint_unused() {
 **/
 
   llvm::Function *CircuitFunction::_make_fn(const std::string &name) {
-    LOG(INFO) << "CircuitFunction::_make_fn";
     std::vector< llvm::Type * > params_types;
     for (auto reg : ctx.regs()) {
       const auto reg_type = IntegralRegisterType(*ctx.module(), reg);
@@ -354,13 +285,11 @@ void Circuit0::constraint_unused() {
       params_types.push_back(reg_type);
     }
     auto fn_t = llvm::FunctionType::get(ctx.ir().getInt1Ty(), params_types, false);
-    LOG(INFO) << "\tFunction type created";
 
-    auto linkage = llvm::GlobalValue::ExternalLinkage;
+  auto linkage = llvm::GlobalValue::ExternalLinkage;
     auto fn = llvm::Function::Create(fn_t, linkage, name, ctx.module());
     fn->addFnAttr(llvm::Attribute::ReadNone);
 
-    LOG(INFO) << "\tFunction created.";
     CHECK(fn->arg_size() % 2 == 0 && fn->arg_size() == ctx.regs().size() * 2);
     for (uint32_t i = 0; i < fn->arg_size(); i += 2) {
       const auto &name = ctx.regs()[ i / 2 ]->name;
@@ -369,7 +298,6 @@ void Circuit0::constraint_unused() {
 
       arg_map.emplace_back(ctx.regs()[ i / 2 ], fn->getArg(i), fn->getArg(i + 1));
     }
-    LOG(INFO) << "\tArguments named.";
     return fn;
   }
 
@@ -392,7 +320,6 @@ void Circuit0::constraint_unused() {
   }
 
   llvm::Function *circuit_builder::finish() {
-    LOG(INFO) << "Finishing!";
     tie_head();
     tie_entry();
 
@@ -426,7 +353,6 @@ void Circuit0::constraint_unused() {
     OptimizeSilently(ctx.arch(), ctx.module(), {circuit_fn});
     remill::VerifyModule(ctx.module());
 
-    //this->inspect_corpse();
     return circuit_fn;
   }
 
@@ -443,13 +369,15 @@ void Circuit0::constraint_unused() {
     // Call semantic function
     auto sem_call = call_semantic(ir, isel.lifted, state_ptr, pc(), ctx.undef_mem_ptr());
     // Inline it
-    auto make_breakpoint = [](auto ir) { return irops::make< irops::Breakpoint >(ir, ir.getTrue()); };
+    auto make_breakpoint = [](auto ir) {
+      return irops::make< irops::Breakpoint >(ir, ir.getTrue());
+    };
     auto [begin, end] = inline_flattened(sem_call, make_breakpoint);
     ir.SetInsertPoint(this->head);
 
     auto params = decoder(ctx, ir, isel).byte_fragments();
 
-    auto mem_checks = mem::synthetize_memory(begin, end);
+    auto mem_checks = mem::synthetize_memory(begin, end, ctx.ptr_size);
     ir.SetInsertPoint(this->head);
 
     auto [err_checks, c_ebit] = handle_errors(begin, end);
@@ -494,17 +422,18 @@ void Circuit0::constraint_unused() {
     // Call semantic function
     auto sem_call = call_semantic(ir, isel.lifted, state_ptr, pc(), ctx.undef_mem_ptr());
     // Inline it
-    auto make_breakpoint = [](auto ir) { return irops::make< irops::Breakpoint >(ir, ir.getTrue()); };
+    auto make_breakpoint = [](auto ir) {
+      return irops::make< irops::Breakpoint >(ir, ir.getTrue());
+    };
     auto [begin, end] = inline_flattened(sem_call, make_breakpoint);
     ir.SetInsertPoint(this->head);
 
     auto params = decoder(ctx, ir, isel).byte_fragments();
 
-    auto mem_checks = mem::synthetize_memory(begin, end);
+    auto mem_checks = mem::synthetize_memory(begin, end, ctx.ptr_size);
     ir.SetInsertPoint(this->head);
 
     auto [err_checks, c_ebit] = handle_errors(begin, end);
-    //err_checks.push_back(emit_error_transitions(c_ebit));
 
     // Collect annotated instructions - this is the way separate components
     // of the lfiting pipleline communicate
@@ -520,22 +449,17 @@ void Circuit0::constraint_unused() {
     end->eraseFromParent();
 
     auto dst_regs = lower_dst_regs(dst_intrinsics);
-    auto additional_checks = handle_dst_regs(c_ebit, dst_regs, isel, state);
-    LOG(INFO) << "Emitting preserved_checks.";
-    //auto preserved = emit_preserved_checks(dst_regs, isel, state);
+    auto preserved = emit_preserved_checks(dst_regs, isel, state);
 
     ctxs.emplace_back(this->head,
                       saturation_prop, timestamp_prop, params,
                       mem_checks, err_checks, extra_params
-                      , additional_checks
-                      //,preserved
+                      ,preserved
                       );
-    LOG(INFO) << "Emitting handle_dst_regs_.";
-    //auto additional_checks_ = handle_dst_regs_(dst_regs, isel, state);
-    LOG(INFO) << "Done.";
-    //if (additional_checks_) {
-    //  ctxs.back()._add(additional_checks_);
-    //}
+    auto additional_checks_ = handle_dst_regs_(dst_regs, isel, state);
+    if (additional_checks_) {
+      ctxs.back()._add(additional_checks_);
+    }
 
 
     add_isel_metadata(ctxs.back().current, isel);
@@ -558,14 +482,21 @@ void Circuit0::constraint_unused() {
   }
 
   llvm::Value *current_val(llvm::Value *dst_reg) {
-    std::vector< llvm::StoreInst * > stores;
-
     // Filter all stores
-    for (auto user : dst_reg->users())
-      if (auto store = llvm::dyn_cast< llvm::StoreInst >(user))
-        stores.push_back(store);
+    std::vector< llvm::StoreInst * > stores;
+    auto collect_stores = [&](auto src, auto next) -> void {
+      for (auto user : src->users()) {
+        if (auto store = llvm::dyn_cast< llvm::StoreInst >(user))
+          stores.push_back(store);
+        if (auto bc = llvm::dyn_cast< llvm::BitCastInst >(user))
+          next(bc, next);
+        CHECK(!llvm::isa< llvm::PtrToIntInst >(user) &&
+              !llvm::isa< llvm::GetElementPtrInst >(user));
+      }
+    };
+    collect_stores(dst_reg, collect_stores);
 
-    //LOG(INFO) << dbg_dump(llvm::dyn_cast< llvm::Instruction >(dst_reg)->getParent());
+
     CHECK(stores.size() <= 2 && stores.size() != 0) << dbg_dump(stores);
 
     // Next they are being ordered to determine which is last, therefore
@@ -577,9 +508,7 @@ void Circuit0::constraint_unused() {
     {
       if (inst_distance(&*bb->begin(), store) > inst_distance(&*bb->begin(), last))
         last = store;
-      LOG(INFO) << remill::LLVMThingToString(store);
     }
-    LOG(INFO) << remill::LLVMThingToString(last->getOperand(0));
     return last->getOperand(0);
   }
 
@@ -593,7 +522,7 @@ void Circuit0::constraint_unused() {
     auto s_reg = get_written(0, isel);
     CHECK(s_reg);
 
-    auto locate_reg = [&](auto &ir, auto &name) {
+    auto locate_out_reg = [&](auto &ir, auto &name) {
       // We know this is going to be a reasonably small number of iterations
       for (const auto &[reg, _, out] : arg_map)
         if (enclosing_reg(ctx.arch(), name) == reg)
@@ -601,9 +530,20 @@ void Circuit0::constraint_unused() {
       LOG(FATAL) << "Could not locate register: " << name;
     };
 
+    auto locate_in_reg = [&](auto &ir, auto &name) {
+      // We know this is going to be a reasonably small number of iterations
+      for (const auto &[reg, in, _] : arg_map)
+        if (enclosing_reg(ctx.arch(), name) == reg)
+          return in;
+      LOG(FATAL) << "Could not locate register: " << name;
+    };
+
     llvm::IRBuilder<> irb(this->head);
-    auto [cond, select] = shadowinst::make_intrinsics_decoder(*s_reg, irb, locate_reg);
-    return irops::make< irops::OutputCheck >(irb, {current_val(dst_reg), select});
+    auto [cond, select] = shadowinst::make_intrinsics_decoder(*s_reg, irb, locate_out_reg);
+    auto [_, full] = shadowinst::make_intrinsics_decoder(*s_reg, irb, locate_in_reg);
+    auto updated = shadowinst::store_fragment(
+        current_val(dst_reg), full, irb, *s_reg, *ctx.arch());
+    return irops::make< irops::OutputCheck >(irb, {updated, select});
   }
 
   llvm::Value *circuit_builder::emit_preserved_checks(
@@ -634,7 +574,7 @@ void Circuit0::constraint_unused() {
 
     auto guard = [&](const auto &name, auto cmp) -> llvm::Value * {
       if (conditions.count(name))
-        return ir.CreateOr(ir.CreateNot(conditions[name]), cmp);
+        return ir.CreateOr(conditions[name], cmp);
       return cmp;
     };
 
@@ -660,7 +600,6 @@ void Circuit0::constraint_unused() {
       args.push_back(guard(reg->name, cmp));
     }
     auto all = irops::make< irops::And >(ir, args);
-    LOG(INFO) << "Preserved checks emitted.";
     return all;
   }
 
