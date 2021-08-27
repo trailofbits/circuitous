@@ -153,10 +153,11 @@ namespace circ
 
     z3::expr to_bv(z3::expr expr)
     {
-      return z3::ite(expr, ctx.bv_val(1, 1), ctx.bv_val(0, 1));
+      return z3::ite(expr, true_bv(), false_bv());
     }
 
     z3::expr true_bv() { return ctx.bv_val(1, 1); }
+    z3::expr false_bv() { return ctx.bv_val(0, 1); }
 
     z3::expr Visit(Add *op) { return record(op, lhs(op) + rhs(op)); }
     z3::expr Visit(Sub *op) { return record(op, lhs(op) - rhs(op)); }
