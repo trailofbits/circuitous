@@ -387,14 +387,11 @@ namespace eqsat {
   using DefaultRunner = EqSatRunner< CircuitEGraph, Scheduler >;
   using CircuitRewriteRules = Rules< CircuitEGraph >;
 
-} // namespace eqsat
-
-  using Id = UnionFind::Id;
-
   template< typename Graph, typename CostFunction >
   struct CostGraph
   {
     using ENode = typename Graph::ENode;
+    using EClass = typename Graph::EClass;
     using CostMap = std::map< const ENode*, std::uint64_t >;
 
     CostGraph(const Graph &graph, CostFunction eval)
@@ -402,10 +399,31 @@ namespace eqsat {
     {
       for (const auto &[node, id] : graph.nodes())
         costs.try_emplace(node, eval_cost(node));
-      for (const auto &[node, id] : graph.nodes())
+    }
+
+    struct OptimalGraphView
+    {
+      OptimalGraphView(const CostGraph &costgraph)
+        : graph(costgraph.graph)
       {
-        LOG(INFO) << to_string(node->term) << " " << costs[node];
+        for (const auto &[id, eclass] : graph.classes())
+          optimal.emplace(&eclass, costgraph.minimal(&eclass));
       }
+
+    private:
+      const Graph &graph;
+      std::map< const EClass *, const ENode * > optimal;
+    };
+
+    OptimalGraphView optimal() const { return {*this}; }
+
+    const ENode* minimal(const EClass *eclass) const
+    {
+      const auto &nodes = eclass->nodes;
+      auto cmp = [&] (const auto &a, const auto &b) {
+        return costs.at(a) < costs.at(b);
+      };
+      return *std::min_element(nodes.begin(), nodes.end(), cmp);
     }
 
   private:
@@ -416,13 +434,11 @@ namespace eqsat {
         return cost->second;
 
       auto fold = [&] (unsigned cost, auto id) -> std::uint64_t {
-        const auto &eclass = graph.eclass(id).nodes;
-        for (const auto *node : eclass)
+        const auto &eclass = graph.eclass(id);
+        for (const auto *node : eclass.nodes)
           costs.try_emplace(node, eval_cost(node));
 
-        auto cmp = [&] (const auto &a, const auto &b) { return costs[a] < costs[b]; };
-        auto min = std::min_element(eclass.begin(), eclass.end(), cmp);
-        return cost + costs[*min];
+        return cost + costs[minimal(&eclass)];
       };
 
       const auto &children = node->children;
@@ -434,6 +450,8 @@ namespace eqsat {
     CostFunction eval;
     CostMap costs;
   };
+
+} // namespace eqsat
 
   bool EqualitySaturation(Circuit *circuit)
   {
@@ -452,7 +470,6 @@ namespace eqsat {
 
     LOG(INFO) << "Equality saturation stopped";
 
-    // TODO(Heno) extract best circuit
     std::ofstream out("egraph.dot");
     to_dot(runner.egraph(), out, [] (auto *node) {
       return to_string(node->term);
@@ -468,10 +485,12 @@ namespace eqsat {
       return 1;
     };
 
-    auto costgraph = CostGraph( runner.egraph(), eval );
+    auto costgraph = eqsat::CostGraph(runner.egraph(), eval);
+    auto optimal = costgraph.optimal();
+
     // TODO(Heno): extract optimal graph
 
     return true;
   }
 
-} // namesapce circuitous
+} // namesapce circ
