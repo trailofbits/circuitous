@@ -387,6 +387,13 @@ namespace eqsat {
   using DefaultRunner = EqSatRunner< CircuitEGraph, Scheduler >;
   using CircuitRewriteRules = Rules< CircuitEGraph >;
 
+  // CostGraph precomputes cost for all equality nodes
+  // in the underlying egraph according to a given cost function
+  // CostFunction :: EnodePtr -> std::uintptr_t
+  //
+  // For all non-leaf nodes, the cost is equal to the sum of costs of its
+  // children and the cost of a given node. Evaluator takes the minimal cost
+  // from nodes children equality class.
   template< typename Graph, typename CostFunction >
   struct CostGraph
   {
@@ -401,6 +408,10 @@ namespace eqsat {
         costs.try_emplace(node, eval_cost(node));
     }
 
+    // OptimalGraphView serves as a view on equality graph where for each equality
+    // class is picked a single node with the lowest cost. GraphView provides
+    // helper functions that return an optimal substitution for a given node or a
+    // list of optimal children.
     struct OptimalGraphView
     {
       using EClassPtr = const EClass *;
@@ -413,11 +424,13 @@ namespace eqsat {
           optimal.emplace( &eclass, costgraph.minimal(&eclass) );
       }
 
+      // Returns an optimal substitution for a given enode.
       ENodePtr node(ENodePtr enode) const
       {
         return optimal.at( &graph.eclass(enode) );
       }
 
+      // Returns an optimal set of children for a given enode.
       std::vector< ENodePtr > children(ENodePtr enode) const
       {
         std::vector< ENodePtr > res;
@@ -587,6 +600,7 @@ namespace eqsat {
     }
   } // namespace detail
 
+  // Lowers equality graph back to circuit using a optimal view graph.
   template< typename OptimalGraphView >
   struct CircuitExtractor
   {
@@ -663,6 +677,8 @@ namespace eqsat {
 
     eqsat::CircuitExtractor extractor(optimal);
     auto circ = extractor.run( runner.node(circuit) );
+
+    // TODO(Heno): Return from pass
 
     return true;
   }
