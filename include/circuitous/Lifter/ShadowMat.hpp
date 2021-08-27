@@ -85,6 +85,12 @@ namespace circ::shadowinst {
       return head;
     }
 
+    llvm::Value *chain(const std::map< llvm::Value *, llvm::Value *> &vals) {
+      for (const auto &[c, v] : vals)
+        chain(c, v);
+      return get();
+    }
+
     template<typename T=llvm::Value>
     llvm::Value *get() { return llvm::cast_or_null< T >(head); }
   };
