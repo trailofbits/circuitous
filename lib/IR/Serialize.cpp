@@ -532,20 +532,6 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
         seen_reg_names.insert(out_reg->reg_name);
       }
     }
-
-    // Make sure that all verify instruction calls end up verifying the
-    // transitions of all registers.
-    for (const auto &[name, out_reg] : out_regs) {
-      if (!seen_reg_names.count(name)) {
-        auto &cond = preserved_regs[name];
-        if (!cond) {
-          cond = circuit->Create<PreservedConstraint>();
-          cond->AddUse(in_regs[name]);
-          cond->AddUse(out_regs[name]);
-        }
-        verify->AddUse(cond);
-      }
-    }
   }
 
   // TODO(lukas): I think this is not supposed to be here.
