@@ -41,7 +41,9 @@ namespace circ {
     static std::string op_code_str() { return "circuit"; }
 
     std::string Name() const override { return "circuit"; }
-    Circuit() : Operation(this->bool_size, kind) {}
+    Circuit(uint32_t ptr_size_) : Operation(this->bool_size, kind), ptr_size(ptr_size_) {}
+
+    uint32_t ptr_size;
   };
 
   template< typename D, typename L > struct Visitor_ {};
