@@ -141,7 +141,7 @@ struct Verifier {
     return out;
   }
 
-  // We try to check if there is not a HINT with more than one HINT_CHECK
+  // We try to check if there is not a ADVICE with more than one constraint
   // in the same context, since that is an error.
   bool VerifyAdviceChecks(Circuit *circuit) {
     bool out = true;
@@ -195,11 +195,22 @@ struct Verifier {
     hint_users_t collected;
     CollectAdviceUsers(circuit, collected);
 
+    auto advice_to_str = [](auto op) {
+      return "ADVICE [ " + std::to_string(op->id()) + " ]";
+    };
+
     bool out = true;
-    for (auto &[hint, users] : collected) {
-      if (users.size() <= 1) {
-        ss << "HINT has only one user. High possibility of error!\n";
-        out = false;
+    for (auto &[a, users] : collected) {
+      if (users.size() == 0) {
+        ss << advice_to_str(a) << " has no users.";
+        out &= false;
+      }
+      if (users.size() == 1) {
+        if ((*users.begin())->op_code == AdviceConstraint::kind)
+          ss << advice_to_str(a) << " has only one user but it is a constraint.";
+        else
+          ss << advice_to_str(a) << " has only one user that is not a constraint.";
+        out &= false;
       }
     }
     return out;
@@ -254,8 +265,8 @@ static inline void VerifyCircuit(const std::string &prefix,
   LOG(INFO) << prefix;
   const auto &[status, msg, warnings] = VerifyCircuit(circuit);
   if (!status) {
-    LOG(ERROR) << warnings;
-    LOG(ERROR) << msg;
+    LOG(ERROR) << "WARNINGS:\n" << warnings;
+    LOG(ERROR) << "FATAL ERRORS:\n" << msg;
     LOG(FATAL) << "Circuit is invalid";
   }
   if (PrintWarnings) {
