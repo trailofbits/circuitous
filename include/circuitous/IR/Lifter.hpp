@@ -509,7 +509,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     }
     auto &s_imm = *maybe_s_imm;
 
-    auto arch_op_size = sizeof(I) * 8;
+    auto arch_op_size = arch->address_size;
     auto inst_fn = ChooseImm(arch_op_size, ImmediateOperand(module, s_imm));
     // Similar situation as with empty map
     if (!inst_fn) {
