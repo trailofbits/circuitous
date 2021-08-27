@@ -43,6 +43,8 @@ namespace circ {
     std::unique_ptr<llvm::Module> _module;
     std::vector<reg_ptr_t> _regs;
 
+    uint32_t ptr_size = 0;
+
     auto llvm_ctx() { return _llvm_context.get(); }
     auto arch() { return _arch.get(); }
     auto module() { return _module.get(); }
@@ -92,20 +94,32 @@ namespace circ {
       for (auto gv : gv_to_erase) { gv->eraseFromParent(); }
     }
 
-    static bool is_allowed(const std::string &name) {
-      static const std::unordered_set< std::string > allowed =
+    bool is_allowed(const std::string &name) {
+      static const std::unordered_set< std::string > allowed64 =
       {
         "AF", "CF", "PF", "DF", "OF", "SF", "ZF",
         "RAX", "RBX", "RCX", "RDX", "RSI", "RDI", "RBP", "RSP",
         "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15",
         "RIP"
       };
-      return allowed.count(name) != 0;
+      static const std::unordered_set< std::string > allowed32 =
+      {
+        "AF", "CF", "PF", "DF", "OF", "SF", "ZF",
+        "EAX", "EBX", "ECX", "EDX", "ESI", "EDI", "EBP", "ESP",
+        "R8D", "R9D", "R10D", "R11D", "R12D", "R13D", "R14D", "R15D",
+        "EIP"
+      };
+      switch (ptr_size) {
+        case 64: return allowed64.count(name) != 0;
+        case 32: return allowed32.count(name) != 0;
+        default: LOG(FATAL) << "Unsupported ptr size";
+      }
     }
 
     Ctx(const std::string &os_name, const std::string &arch_name)
         : _arch(make_arch(_llvm_context.get(), os_name, arch_name)),
-          _module(remill::LoadArchSemantics(arch()))
+          _module(remill::LoadArchSemantics(arch())),
+          ptr_size(_arch->address_size)
     {
       _arch->ForEachRegister([&](reg_ptr_t reg_) {
         if (auto reg = reg_->EnclosingRegister(); reg == reg_ && is_allowed(reg->name)) {
