@@ -9,13 +9,6 @@
 
 namespace circ {
 
-  // We can try to do some optimizations, but we want to be
-  // able to toggle them (if for nothing we want to be able to
-  // test them)
-  struct Optimizations {
-    bool reduce_imms = false;
-  };
-
   struct Circuit : CircuitStorage, Operation {
     static constexpr inline uint32_t kind = 0x1;
 
@@ -25,13 +18,11 @@ namespace circ {
 
     static circuit_ptr_t make_circuit(std::string_view arch_name,
                                       std::string_view os_name,
-                                      const llvm::StringRef &bytes,
-                                      const Optimizations &opts={});
+                                      const llvm::StringRef &bytes);
 
     static circuit_ptr_t make_circuit(std::string_view arch_name,
                                       std::string_view os_name,
-                                      std::string_view bytes,
-                                      const Optimizations &opts={});
+                                      std::string_view bytes);
     void Serialize(std::ostream &os);
 
     void Serialize(std::function<std::ostream &(const std::string &)> os_opener);

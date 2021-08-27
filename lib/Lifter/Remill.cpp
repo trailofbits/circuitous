@@ -604,18 +604,15 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
 auto Circuit::make_circuit(
     std::string_view arch_name, std::string_view os_name,
-    std::string_view bytes, const Optimizations &opts)
+    std::string_view bytes)
 -> circuit_ptr_t
 {
-  return make_circuit(arch_name, os_name,
-                      llvm::StringRef{bytes.data(),
-                                      bytes.size()},
-                      opts);
+  return make_circuit(arch_name, os_name, llvm::StringRef{bytes.data(),bytes.size()});
 }
 
 auto Circuit::make_circuit(
     std::string_view arch_name, std::string_view os_name,
-    const llvm::StringRef &buff, const Optimizations &opts)
+    const llvm::StringRef &buff)
 -> circuit_ptr_t
 {
 
