@@ -16,7 +16,7 @@ namespace circ::tl {
     template< typename List > struct front_ {};
     template< typename List > struct pop_front_ {};
     template< typename H, typename List > struct push_front_ {};
-    template< template< typename > class F, typename List > struct apply_ {};
+    template< typename F, typename List > struct apply_ {};
     template< typename List > struct materialize_ {};
     template< typename L1, typename L2 > struct merge_ {};
 
@@ -40,9 +40,9 @@ namespace circ::tl {
       return sizeof...( Es );
     }
 
-    template< template< typename > class F, typename ... Es >
+    template< typename F, typename ... Es >
     struct apply_< F, TL< Es ... > >{
-      using type = TL< typename F< Es >::type ... >;
+      using type = TL< typename F::template type< Es > ... >;
     };
 
     template< typename ... Es >
@@ -74,7 +74,7 @@ namespace circ::tl {
   template< typename ... Ls >
   using merge = decltype( detail::merge< Ls ... >() );
 
-  template< typename L, template< typename > class F >
+  template< typename L, typename F >
   using apply = typename detail::apply_< F, L >::type;
 
   template< typename L > using materialized = detail::materialize_< L >;
@@ -103,9 +103,8 @@ namespace circ::tl {
     static_assert( size< TL<> > == 0u );
     static_assert( size< TL< int > > == 1u );
 
-    template< typename T >
     struct _mutate {
-      using type = const T;
+      template< typename T > using type = const T;
     };
 
     static_assert( std::is_same_v< apply< TL< int >, _mutate >, TL< const int > > );
