@@ -286,7 +286,7 @@ void Circuit0::constraint_unused() {
     }
     auto fn_t = llvm::FunctionType::get(ctx.ir().getInt1Ty(), params_types, false);
 
-  auto linkage = llvm::GlobalValue::ExternalLinkage;
+    auto linkage = llvm::GlobalValue::ExternalLinkage;
     auto fn = llvm::Function::Create(fn_t, linkage, name, ctx.module());
     fn->addFnAttr(llvm::Attribute::ReadNone);
 
