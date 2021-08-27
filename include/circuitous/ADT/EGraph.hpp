@@ -149,8 +149,8 @@ namespace circ {
       return new_id;
     }
 
-    EClass& eclass(ENode *enode) { return _classes[ _nodes[enode] ]; }
-    const EClass& eclass(ENode *enode) const { return _classes[ _nodes[enode] ]; }
+    EClass& eclass(const ENode *enode) { return _classes.at( _nodes.at(enode) ); }
+    const EClass& eclass(const ENode *enode) const { return _classes.at( _nodes.at(enode) ); }
 
     EClass& eclass(Id id) { return _classes[ _unions.find(id) ]; }
     const EClass& eclass(Id id) const { return _classes.at( _unions.find(id) ); }
