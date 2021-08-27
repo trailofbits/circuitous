@@ -443,7 +443,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       case llvm::BinaryOperator::LShr: return Emplace<LShr>(inst, size);
       case llvm::BinaryOperator::AShr: return Emplace<AShr>(inst, size);
 
-      case llvm::BinaryOperator::Trunc: LOG(INFO) << size; return Emplace<Trunc>(inst, size);
+      case llvm::BinaryOperator::Trunc: return Emplace<Trunc>(inst, size);
       case llvm::BinaryOperator::ZExt: return Emplace<ZExt>(inst, size);
       case llvm::BinaryOperator::SExt: return Emplace<SExt>(inst, size);
       case llvm::BinaryOperator::ICmp: return handle_predicate(inst);
