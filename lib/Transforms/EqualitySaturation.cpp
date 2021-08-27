@@ -403,16 +403,32 @@ namespace eqsat {
 
     struct OptimalGraphView
     {
+      using EClassPtr = const EClass *;
+      using ENodePtr  = const ENode *;
+
       OptimalGraphView(const CostGraph &costgraph)
         : graph(costgraph.graph)
       {
         for (const auto &[id, eclass] : graph.classes())
-          optimal.emplace(&eclass, costgraph.minimal(&eclass));
+          optimal.emplace( &eclass, costgraph.minimal(&eclass) );
+      }
+
+      ENodePtr node(ENodePtr enode) const
+      {
+        return optimal.at( &graph.eclass(enode) );
+      }
+
+      std::vector< ENodePtr > children(ENodePtr enode) const
+      {
+        std::vector< ENodePtr > res;
+        for (const auto &child : enode->children)
+          res.push_back( optimal.at( &graph.eclass(child) ) );
+        return res;
       }
 
     private:
       const Graph &graph;
-      std::map< const EClass *, const ENode * > optimal;
+      std::map< EClassPtr, ENodePtr > optimal;
     };
 
     OptimalGraphView optimal() const { return {*this}; }
@@ -449,6 +465,163 @@ namespace eqsat {
 
     CostFunction eval;
     CostMap costs;
+  };
+
+  namespace detail {
+
+    Operation* make_operation(const OpCode &op, Circuit *circuit)
+    {
+      return llvm::StringSwitch< Operation* >(op.op_code_name)
+        .Case("register_constraint",  circuit->Create< RegConstraint >())
+        .Case("advice_constraint",    circuit->Create< AdviceConstraint >())
+        .Case("preserved_constraint", circuit->Create< PreservedConstraint >())
+        .Case("copy_constraint",      circuit->Create< CopyConstraint >())
+        .Case("write_constraint",     circuit->Create< WriteConstraint >())
+        .Case("read_constraint",      circuit->Create< ReadConstraint >())
+        .Case("unused_constraint",    circuit->Create< UnusedConstraint >())
+
+        .Case("parity",                circuit->Create< Parity >())
+
+        .Case("DecodeCondition",      circuit->Create< DecodeCondition >())
+        .Case("VerifyInstruction",    circuit->Create< VerifyInstruction >())
+        .Case("OnlyOneCondition",     circuit->Create< OnlyOneCondition >())
+
+        .Case("Or",  circuit->Create< Or >())
+        .Case("And", circuit->Create< And >())
+
+        .Default( nullptr );
+
+    }
+
+    Operation* make_operation(const SizedOp &op, Circuit *circuit)
+    {
+      CHECK(op.size.has_value());
+      auto size = op.size.value();
+      return llvm::StringSwitch< Operation* >(op.op_code_name)
+        .Case("in.timestamp",     circuit->Create< InputTimestamp >( size ))
+        .Case("out.timestamp",    circuit->Create< OutputTimestamp >( size ))
+        .Case("in.error_flag",    circuit->Create< InputErrorFlag >( size ))
+        .Case("out.error_flag",   circuit->Create< OutputErrorFlag >( size ))
+        .Case("undefined",        circuit->Create< Undefined >( size ))
+        .Case("advice",           circuit->Create< Advice >( size ))
+        .Case("instruction_bits", circuit->Create< InputInstructionBits >( size ))
+
+        .Case("Add",   circuit->Create< Add >( size ))
+        .Case("Sub",   circuit->Create< Sub >( size ))
+        .Case("Mul",   circuit->Create< Mul >( size ))
+        .Case("UDiv",  circuit->Create< UDiv >( size ))
+        .Case("SDiv",  circuit->Create< SDiv >( size ))
+        .Case("Shl",   circuit->Create< Shl >( size ))
+        .Case("LShr",  circuit->Create< LShr >( size ))
+        .Case("AShr",  circuit->Create< AShr >( size ))
+        .Case("Trunc", circuit->Create< Trunc >( size ))
+        .Case("ZExt",  circuit->Create< ZExt >( size ))
+        .Case("SExt",  circuit->Create< SExt >( size ))
+
+        .Case("Icmp_ult", circuit->Create< Icmp_ult >( size ))
+        .Case("Icmp_slt", circuit->Create< Icmp_slt >( size ))
+        .Case("Icmp_ugt", circuit->Create< Icmp_ugt >( size ))
+        .Case("Icmp_eq",  circuit->Create< Icmp_eq >( size ))
+        .Case("Icmp_ne",  circuit->Create< Icmp_ne >( size ))
+        .Case("Icmp_uge", circuit->Create< Icmp_uge >( size ))
+        .Case("Icmp_ule", circuit->Create< Icmp_ule >( size ))
+        .Case("Icmp_sgt", circuit->Create< Icmp_sgt >( size ))
+        .Case("Icmp_sge", circuit->Create< Icmp_sge >( size ))
+        .Case("Icmp_sle", circuit->Create< Icmp_sle >( size ))
+
+        .Case("BSelect",  circuit->Create< BSelect >( size ))
+
+        .Case("CAnd", circuit->Create< CAnd >( size ))
+        .Case("COr",  circuit->Create< COr >( size ))
+        .Case("CXor", circuit->Create< CXor >( size ))
+
+        .Case("input_immediate", circuit->Create< InputImmediate >( size ))
+
+        .Case("concat", circuit->Create< Concat >( size ))
+
+        .Case("pop_count",             circuit->Create< PopulationCount >( size ))
+        .Case("count_lead_zeroes",     circuit->Create< CountLeadingZeroes >( size ))
+        .Case("count_trailing_zeroes", circuit->Create< CountTrailingZeroes >( size ))
+        .Case("not",                   circuit->Create< Not >( size ))
+
+        .Default( nullptr );
+    }
+
+    Operation* make_operation(const RegOp &op, Circuit *circuit)
+    {
+      return llvm::StringSwitch< Operation* >(op.op_code_name)
+        .Case("in.register",  circuit->Create< InputRegister >( op.reg_name, op.size ))
+        .Case("out.register", circuit->Create< InputRegister >( op.reg_name, op.size ))
+        .Default( nullptr );
+    }
+
+    Operation* make_operation(const ConstOp &op, Circuit *circuit)
+    {
+      return circuit->Create< Constant >( op.bits, op.size );
+    }
+
+    Operation* make_operation(const MemOp &op, Circuit *circuit)
+    {
+      return circuit->Create< Memory >( op.mem_idx );
+    }
+
+    Operation* make_operation(const ExtractOp &op, Circuit *circuit)
+    {
+      return circuit->Create< Extract >( op.low_bit_inc, op.high_bit_exc );
+    }
+
+    Operation* make_operation(const SelectOp &op, Circuit *circuit)
+    {
+      return circuit->Create< Select >( op.bits, op.size );
+    }
+
+    Operation* make_operation(const OpTemplate &op, Circuit *circuit)
+    {
+      auto value = std::visit( [circuit] (const auto &op) {
+        return make_operation(op, circuit);
+      }, op);
+
+      if ( !value )
+        LOG(FATAL) << "unhadled opcode " << to_string(op);
+      return value;
+    }
+  } // namespace detail
+
+  template< typename OptimalGraphView >
+  struct CircuitExtractor
+  {
+    using ENodePtr = typename OptimalGraphView::ENodePtr;
+
+    CircuitExtractor(const OptimalGraphView &graph) : graph(graph) {}
+
+    std::unique_ptr<circ::Circuit> run(ENodePtr root) const
+    {
+      auto circuit = std::make_unique<Circuit>();
+
+      auto node = graph.node(root);
+      CHECK(name(node) == "circuit");
+
+      for (const auto &child : graph.children(node))
+        circuit->AddUse( extract(child, circuit.get()) );
+      return circuit;
+    }
+
+  private:
+
+    Operation *make_operation(ENodePtr enode, Circuit *circuit) const
+    {
+      return detail::make_operation(enode->term, circuit);
+    }
+
+    Operation *extract(ENodePtr enode, Circuit *circuit) const
+    {
+      auto op = make_operation(enode, circuit);
+      for (const auto &child : graph.children(enode))
+        op->AddUse( extract(child, circuit) );
+      return op;
+    }
+
+    const OptimalGraphView &graph;
   };
 
 } // namespace eqsat
@@ -488,9 +661,10 @@ namespace eqsat {
     auto costgraph = eqsat::CostGraph(runner.egraph(), eval);
     auto optimal = costgraph.optimal();
 
-    // TODO(Heno): extract optimal graph
+    eqsat::CircuitExtractor extractor(optimal);
+    auto circ = extractor.run( runner.node(circuit) );
 
     return true;
   }
 
-} // namesapce circ
+} // namespace circ
