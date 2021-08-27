@@ -224,7 +224,8 @@ namespace circ::smt
     z3::context ctx;
     auto exprs = ctx.parse_file(path.c_str());
 
-    auto circuit = std::make_unique< Circuit >();
+    // TODO(lukas): Make configurable.
+    auto circuit = std::make_unique< Circuit >(64u);
     CHECK(exprs.size() == 1);
 
     expr_cache seen(10, expr_hash, expr_equal);
