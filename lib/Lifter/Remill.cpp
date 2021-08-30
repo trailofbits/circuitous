@@ -628,11 +628,12 @@ auto Circuit::make_circuit(
 -> circuit_ptr_t
 {
 
+  // TODO(lukas): Make configurable.
   circ::Ctx ctx{ std::string(os_name), std::string(arch_name) };
-  circ::CircuitBuilder builder(ctx);
+  circ::CircuitMaker builder(ctx);
 
   const auto arch = builder.ctx.arch();
-  const auto circuit_func = builder.Build(buff);
+  const auto circuit_func = builder.make(buff);
   LOG(INFO) << "FINAL";
   circuit_func->print(llvm::errs());
   llvm::errs().flush();
@@ -641,7 +642,7 @@ auto Circuit::make_circuit(
   const auto module = circuit_func->getParent();
   const auto &dl = module->getDataLayout();
 
-  auto impl = std::make_unique<Circuit>();
+  auto impl = std::make_unique<Circuit>(ctx.ptr_size);
   IRImporter importer(arch, dl, impl.get());
 
   //TODO(lukas): Since extract does need operand, we need to have the node already present
