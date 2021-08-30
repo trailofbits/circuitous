@@ -311,10 +311,11 @@ namespace circ::run {
 
     template<typename T>
     void handle_cond(T *op) {
-      if (supplied.count(op->operands[1])) {
+      if (supplied.count(op->operands[1]))
         return verify_cond(op);
-      }
-      return derive_cond(op);
+      if (derived.count(op->operands[1]))
+        return derive_cond(op);
+      return verify_cond(op);
     }
 
 
@@ -406,11 +407,16 @@ namespace circ::run {
 
       void init() {
         parent_t::init();
+        std::unordered_set<Operation *> preserved;
         for (auto op : this->derived) {
+          if (op->op_code == Advice::kind) {
+            preserved.insert(op);
+            continue;
+          }
           this->supplied.insert(op);
           self().SetNodeVal(op, this->Undef());
         }
-        this->derived.clear();
+        this->derived = std::move(preserved);
       }
     };
 
