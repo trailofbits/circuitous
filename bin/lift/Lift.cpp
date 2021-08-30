@@ -35,8 +35,6 @@ DEFINE_string(optimizations, "",
               "TODO(lukas): Not supported atm");
 DEFINE_bool(append, false,
             "Append to output IR files, rather than overwriting.");
-DEFINE_bool(reduce_imms, false,
-            "Experimental: Try optimizations that extract immediates from inst_bytes");
 
 DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 
@@ -106,14 +104,8 @@ struct DefaultLog {
 };
 
 std::unique_ptr<circ::Circuit> LoadCircuit() {
-  auto choose_opts = [&](){
-    circ::Optimizations out;
-    out.reduce_imms = FLAGS_reduce_imms;
-    return out;
-  };
-
   auto make_circuit = [&](auto buf) {
-    return circ::Circuit::make_circuit(FLAGS_arch, FLAGS_os, buf, choose_opts());
+    return circ::Circuit::make_circuit(FLAGS_arch, FLAGS_os, buf);
   };
 
   if (!FLAGS_bytes_in.empty()) {
@@ -233,6 +225,7 @@ int main(int argc, char *argv[]) {
         }
         auto x = circ::Circuit::Deserialize(is);
         VerifyCircuit("Verifyinh loaded.", x.get(), "Reload test successful.");
+        CHECK(x->ptr_size == circuit->ptr_size);
       }
     }
   }
