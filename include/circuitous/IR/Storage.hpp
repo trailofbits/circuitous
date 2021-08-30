@@ -92,8 +92,8 @@ namespace circ {
     template<typename CB> auto match_d(uint32_t k, CB cb) { (this->Ops::match_d(k, cb), ...); }
   };
 
-  template< typename T >
   struct to_mat_def_list {
+    template< typename T >
     using type = MaterializedDefList< T >;
   };
   using m_def_lists = tl::apply< node_list_t, to_mat_def_list >;
