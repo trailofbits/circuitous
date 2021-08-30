@@ -108,14 +108,14 @@ void export_derived(I inspect) {
 
     for (const auto &val : inspect->get_derived_mem()) {
       llvm::json::Object mem_hint;
-      mem_hint["used"]  = str(val.used);
-      mem_hint["mode"]  = str(val.mode);
-      mem_hint["id"]    = str(val.id);
-      mem_hint["size"]  = str(val.size);
-      mem_hint["addr"]  = str(val.addr);
-      mem_hint["value"] = str(val.value);
-      mem_hint["ts"]    = str(val.timestamp);
-      output_mem_hints[str(val.id)] = std::move(mem_hint);
+      mem_hint["used"]  = str(val.used());
+      mem_hint["mode"]  = str(val.mode());
+      mem_hint["id"]    = str(val.id());
+      mem_hint["size"]  = str(val.size());
+      mem_hint["addr"]  = str(val.addr());
+      mem_hint["value"] = str(val.value());
+      mem_hint["ts"]    = str(val.timestamp());
+      output_mem_hints[str(val.id())] = std::move(mem_hint);
     }
   }
 
