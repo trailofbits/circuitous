@@ -92,14 +92,15 @@ void CSem<S>::Visit(ReadConstraint *op_) {
       auto parsed = this->deconstruct(*this->get(op->hint_arg()));
 
       irops::memory::Parsed< llvm::APInt > args {
-        this->TrueVal(),
-        this->FalseVal(),
-
-        parsed.id,
-        *this->get(op->size_arg()),
-        *this->get(op->addr_arg()),
-        parsed.value,
-        *this->get(op->ts_arg())
+        this->circuit->ptr_size,
+        {this->TrueVal(),
+         this->FalseVal(),
+         llvm::APInt(6, 0, false),
+         parsed.id(),
+         *this->get(op->size_arg()),
+         *this->get(op->addr_arg()),
+         parsed.value(),
+         *this->get(op->ts_arg())}
       };
 
       return this->BoolVal(args == parsed);
@@ -116,7 +117,7 @@ void CSem<S>::Visit(ReadConstraint *op_) {
       return this->FalseVal();
     }
 
-    llvm::APInt val { irops::Memory::allocated_size, 0, false };
+    llvm::APInt val { irops::memory::size(this->circuit->ptr_size), 0, false };
 
     val.insertBits(this->TrueVal(), 0);
     val.insertBits(this->FalseVal(), 1);
@@ -124,8 +125,8 @@ void CSem<S>::Visit(ReadConstraint *op_) {
     val.insertBits(*this->get(op->size_arg()), 12);
 
     val.insertBits(*this->get(op->addr_arg()), 16);
-    val.insertBits(*this->load(addr, size), 16 + 64);
-    val.insertBits(*this->get(op->ts_arg()), 16 + 128);
+    val.insertBits(*this->load(addr, size), 16 + this->circuit->ptr_size);
+    val.insertBits(*this->get(op->ts_arg()), 16 + this->circuit->ptr_size * 2);
 
     self().SetNodeVal(op->hint_arg(), val);
     return this->TrueVal();
@@ -152,20 +153,20 @@ void CSem<S>::Visit(WriteConstraint *op_) {
       auto parsed = this->deconstruct(*this->get(op->hint_arg()));
 
       irops::memory::Parsed< llvm::APInt > args {
-        this->TrueVal(),
-        this->FalseVal(),
-
-        parsed.id,
-        *this->get(op->size_arg()),
-        *this->get(op->addr_arg()),
-        *this->get(op->val_arg()),
-        *this->get(op->ts_arg())
+        this->circuit->ptr_size,
+        {this->TrueVal(),
+         this->FalseVal(),
+         llvm::APInt(6, 0, false),
+         parsed.id(),
+         *this->get(op->size_arg()),
+         *this->get(op->addr_arg()),
+         *this->get(op->val_arg()),
+         *this->get(op->ts_arg())}
       };
 
       return this->BoolVal(args == parsed);
     }
-
-    llvm::APInt val { irops::Memory::allocated_size, 0, false };
+    llvm::APInt val { irops::memory::size(this->circuit->ptr_size), 0, false };
 
     val.insertBits(this->TrueVal(), 0);
     val.insertBits(this->TrueVal(), 1);
@@ -195,7 +196,7 @@ void CSem<S>::Visit(WriteConstraint *op_) {
 
 template<typename S>
 void CSem<S>::Visit(UnusedConstraint *op) {
-  llvm::APInt unused { irops::Memory::allocated_size, 0, false };
+  llvm::APInt unused { irops::memory::size(this->circuit->ptr_size), 0, false };
   if (this->supplied.count(op->operands[0])) {
     self().SetNodeVal(op, this->BoolVal(this->get(op, 0) == llvm::APInt(unused)));
     return;
