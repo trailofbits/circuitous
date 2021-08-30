@@ -6,7 +6,7 @@
 
 template<typename S>
 void Ctx_<S>::init() {
-  init<OutputRegister, OutputErrorFlag, OutputTimestamp>();
+  init<OutputRegister, OutputErrorFlag, OutputTimestamp, Advice>();
   S::init();
 }
 
