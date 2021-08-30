@@ -29,7 +29,10 @@ namespace circ::run {
     using raw_value_type = llvm::APInt;
     using value_type = std::optional<raw_value_type>;
 
+    uint32_t hint_size;
     std::unordered_map<uint64_t, raw_value_type> memory;
+
+    HasMemory(Circuit *circuit) : hint_size(circuit->ptr_size) {}
 
     template< typename U >
     bool defined(uint64_t addr, U size) {
@@ -88,7 +91,7 @@ namespace circ::run {
     llvm::APInt FalseVal() const { return llvm::APInt(1, 0); }
     llvm::APInt BoolVal(bool v) const { return (v) ? TrueVal() : FalseVal(); }
 
-    Base_(Circuit *circuit_) : circuit(circuit_) {}
+    Base_(Circuit *circuit_) : HasMemory(circuit_), circuit(circuit_) {}
 
     void init() {}
 
@@ -148,6 +151,12 @@ namespace circ::run {
     template<typename T>
     std::unordered_map<T *, value_type> get_derived() const {
       LOG(FATAL) << "Base_ cannot export derived values.";
+    }
+
+    std::string val_as_str(Operation *op)
+    {
+      if (self().has_value(op)) return self().GetNodeVal(op)->toString(16, false);
+      return "(no value)";
     }
 
     // Default
