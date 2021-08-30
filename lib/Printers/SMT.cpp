@@ -10,7 +10,7 @@ namespace circ
   void PrintSMT(std::ostream &os, Circuit *circuit)
   {
     try {
-      auto visitor = IRToSMTVisitor();
+      auto visitor = IRToSMTVisitor(circuit->ptr_size);
       auto expr = visitor.Visit(circuit);
       z3::solver solver(visitor.ctx);
       solver.add(expr);
@@ -24,7 +24,7 @@ namespace circ
   void PrintBitBlastSMT(std::ostream &os, Circuit *circuit)
   {
     try {
-      auto visitor = IRToBitBlastableSMTVisitor();
+      auto visitor = IRToBitBlastableSMTVisitor(circuit->ptr_size);
       auto expr = visitor.Visit(circuit);
       auto bitblasted = bitblast(expr, visitor.ctx);
       os << bitblasted.to_smt2() << '\n';
