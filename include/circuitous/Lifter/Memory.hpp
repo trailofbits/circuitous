@@ -82,20 +82,22 @@ namespace circ::mem {
     std::vector< call_t > writes;
 
     uint32_t next = 0;
-    llvm::Value *ts;
+    llvm::Value *ts = nullptr;
+    uint32_t ptr_size = 0;
     std::vector<llvm::Value *> checks;
 
-    Synthetizer(llvm::Value *ts_) : ts( ts_ ) {}
+    Synthetizer(llvm::Value *ts_, uint32_t ptr_size_)
+        : ts( ts_ ), ptr_size(ptr_size_) {}
 
     auto parse_hint(llvm::IRBuilder<> &ir, llvm::CallInst *call) {
       auto extractor = [&](auto inst, auto from, auto to) {
         return irops::make< irops::ExtractRaw >(ir, {inst}, from, to);
       };
-      return irops::memory::parse< llvm::Value * >(call, extractor);
+      return irops::memory::parse< llvm::Value * >(call, extractor, ptr_size);
     }
 
     auto next_hint(llvm::IRBuilder<> &ir, llvm::CallInst *call) {
-      auto hint = irops::make_leaf< irops::Memory >(ir, next);
+      auto hint = irops::make_leaf< irops::Memory >(ir, irops::memory::size(ptr_size), next);
       ++next;
       return hint;
     }
@@ -110,10 +112,10 @@ namespace circ::mem {
       auto out = parse_hint(ir, hint);
 
       auto coerced_value = [&](auto size_) {
-        CHECK( size_ <= 64 && size_ > 0);
+        CHECK( size_ <= ptr_size && size_ > 0);
 
-        if (size_ == 64) return out.value;
-        return ir.CreateTrunc(out.value, ir.getIntNTy(static_cast< uint32_t >(size_)));
+        if (size_ == ptr_size) return out.value();
+        return ir.CreateTrunc(out.value(), ir.getIntNTy(static_cast< uint32_t >(size_)));
       }(size);
 
       auto llvm_size = ir.getIntN(4u, size / 8);
@@ -133,15 +135,16 @@ namespace circ::mem {
       auto hint = next_hint(ir, call);
 
       auto coerced_value = [&](auto size_) {
-        CHECK( size_ <= 64 && size_ > 0);
+        CHECK( size_ <= ptr_size && size_ > 0);
 
-        if (size_ == 64) return value;
+        if (size_ == ptr_size) return value;
         return ir.CreateZExt(value, ir.getIntNTy(static_cast< uint32_t >(size_)));
       }(size);
 
-      CHECK(size / 8 <= 8) << "Cannot emit read bigger than 64 bytes.";
+      CHECK(size <= ptr_size) << "Cannot emit read bigger than ptr_size.";
       auto s = ir.getIntN(4u, size / 8);
-      checks.push_back(irops::make< irops::WriteConstraint >(ir, {hint, s, addr, ts, coerced_value}));
+      checks.push_back(irops::make< irops::WriteConstraint >(
+            ir, {hint, s, addr, ts, coerced_value}));
       call->eraseFromParent();
     }
 
@@ -159,13 +162,16 @@ namespace circ::mem {
 
   };
 
-  auto synthetize_memory(llvm::Value *ts, llvm::Value *from, llvm::Value *to) {
-    return Synthetizer(ts).all(from, to);
+  auto synthetize_memory(llvm::Value *ts, llvm::Value *from,
+                         llvm::Value *to, uint32_t ptr_size)
+  {
+    return Synthetizer(ts, ptr_size).all(from, to);
   }
 
-  auto synthetize_memory(llvm::Instruction *from, llvm::Instruction *to) {
+  auto synthetize_memory(llvm::Instruction *from, llvm::Instruction *to, uint32_t ptr_size) {
     llvm::IRBuilder<> ir(from);
-    return synthetize_memory(irops::make_leaf< irops::Timestamp >(ir, irops::io_type::in), from, to);
+    return synthetize_memory(irops::make_leaf< irops::Timestamp >(ir, irops::io_type::in),
+                             from, to, ptr_size);
   }
 
 } // namespace circ::mem
