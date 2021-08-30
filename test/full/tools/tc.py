@@ -217,6 +217,8 @@ class StateBase:
     return self
 
   def mem_hint(self, val):
+    if self.mem_hints is None:
+      self.mem_hints = []
     if isinstance(val, list):
       for x in val:
         self.mem_hint(x)
