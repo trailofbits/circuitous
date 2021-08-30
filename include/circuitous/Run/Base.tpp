@@ -6,12 +6,12 @@ auto HasMemory::deconstruct(const llvm::APInt &value) -> Parsed {
   auto extractor = [](auto thing, auto from, auto size) -> llvm::APInt {
     return thing.extractBits(size, from);
   };
-  CHECK_EQ(value.getBitWidth(), irops::Memory::allocated_size);
-  return irops::memory::parse< llvm::APInt >(value, extractor);
+  CHECK_EQ(value.getBitWidth(), irops::memory::size(hint_size));
+  return irops::memory::parse< llvm::APInt >(value, extractor, hint_size);
 }
 
 llvm::APInt HasMemory::construct(const Parsed &parsed) {
-  llvm::APInt out { irops::Memory::allocated_size, 0, false };
+  llvm::APInt out { irops::memory::size(hint_size), 0, false };
   auto inserter_ = [&](auto thing, auto from, auto size) {
     CHECK(size == thing.getBitWidth());
     out.insertBits(thing, from);

@@ -207,7 +207,7 @@ namespace circ::run {
     void SetNodeVal(Operation *op, const value_type &val) {
       if (node_values.count(op)) {
         CHECK(node_values[op] == val)
-            << op->op_code_str() << " already has value "
+            << pretty_print(op) << " already has value "
             << node_values[op]->toString(16, false) << " "
             << node_values[op]->getBitWidth()
             << " yet we try to set "
@@ -273,9 +273,11 @@ namespace circ::run {
         ss << state.status(current) << std::endl;
       }
       for (auto x : current->operands) {
-        ss << state.status(x) << " " << this->has_value(x) << " " << pretty_print(x) << std::endl;
+        ss << state.status(x) << " " << this->has_value(x)
+           << " " << pretty_print< false >(x) << " " << this->val_as_str(x) << std::endl;
         for (auto y : x->operands) {
-          ss << "\t" << state.status(y) << " " << this->has_value(y) << " " << pretty_print(y) << std::endl;
+          ss << "\t" << state.status(y) << " " << this->has_value(y)
+             << " " << pretty_print< false >(y) << " " << this->val_as_str(y) << std::endl;
         }
       }
       return ss.str();
