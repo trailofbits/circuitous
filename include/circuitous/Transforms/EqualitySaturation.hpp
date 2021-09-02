@@ -90,7 +90,7 @@ namespace circ::eqsat {
 
   static inline bool is_context_node(const CircuitENode *node)
   {
-    throw std::runtime_error("not implemented");
+    return name(node) == "VerifyInstruction";
   }
 
   static inline std::optional<std::int64_t> extract_constant(const CircuitENode *node)
