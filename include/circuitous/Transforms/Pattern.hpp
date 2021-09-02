@@ -79,7 +79,15 @@ namespace circ::eqsat {
   // serves to specify disjoint contexts
   struct disjoint_expr { std::vector<context> contexts; };
 
-  using contexts_constraints = disjoint_expr;
+  // expression of form: (equiv [places])
+  // serves to specify semantically equivalend places
+  struct equiv_expr { std::vector<place> places; };
+
+  using context_constraint = disjoint_expr;
+  using place_constraint = equiv_expr;
+
+  using constraint  = std::variant< context_constraint, place_constraint >;
+  using constraints = std::vector< constraint >;
 
   using context_name = std::string_view;
 
@@ -119,15 +127,27 @@ namespace circ::eqsat {
     explicit pattern(const expr &e) : expr(e) {}
     explicit pattern(expr &&e) : expr(std::move(e)) {}
 
-    pattern(const named_exprs &subs, const contexts_constraints &c, const expr &e)
-      : expr(e), constraints(c), subexprs(subs)
-    {}
+    pattern(const named_exprs &subs, const constraints &c, const expr &e)
+      : expr(e), subexprs(subs)
+    { filter_constraints(c); }
 
-    pattern(named_exprs &&subs, contexts_constraints &&c, expr &&e)
-      : expr(std::move(e)), constraints(std::move(c)), subexprs(std::move(subs))
-    {}
+    pattern(named_exprs &&subs, constraints &&c, expr &&e)
+      : expr(std::move(e)), subexprs(std::move(subs))
+    { filter_constraints(c); }
 
-    contexts_constraints constraints;
+    void filter_constraints(const constraints &cons)
+    {
+      for (const auto &con : cons) {
+        std::visit( overloaded {
+          [&] (const context_constraint &e) { context_constraints.push_back(e); },
+          [&] (const place_constraint &e)   { place_constraints.push_back(e); }
+        }, con);
+      }
+    }
+
+    std::vector< place_constraint > place_constraints;
+    std::vector< context_constraint > context_constraints;
+
     named_exprs subexprs;
   };
 
@@ -323,12 +343,37 @@ namespace circ::eqsat {
     return to_vector_parser(context_parser());
   }
 
+  static inline parser<std::vector<place>> auto places_parser()
+  {
+    return to_vector_parser(place_parser());
+  }
+
   // TODO(Heno): constexpr
   // match expression has form: (disjoint [labels])
   static inline parser<disjoint_expr> auto disjoint_expr_parser()
   {
     auto match_prefix = (string_parser("disjoint") & skip(isspace));
     return construct< disjoint_expr >(parenthesized(match_prefix < contexts_parser()));
+  }
+
+  // TODO(Heno): constexpr
+  // match expression has form: (equiv [places])
+  static inline parser<equiv_expr> auto equiv_expr_parser()
+  {
+    auto match_prefix = (string_parser("equiv") & skip(isspace));
+    return construct< equiv_expr >(parenthesized(match_prefix < places_parser()));
+  }
+
+  static inline parser<constraint> auto constraint_parser()
+  {
+    auto dis = construct< constraint >(disjoint_expr_parser());
+    auto eqv = construct< constraint >(equiv_expr_parser());
+    return dis | eqv;
+  }
+
+  static inline parser<constraints> auto constraints_parser()
+  {
+    return to_vector_parser(constraint_parser() > skip(isspace));
   }
 
   atom root(const auto& e)
@@ -370,17 +415,17 @@ namespace circ::eqsat {
       (named_expr_parser() > skip(isspace)), named_exprs{}, insert_named_expr
     );
 
-    auto constraints = option(contexts_constraints{}, (disjoint_expr_parser() > skip(isspace)));
+    auto cons = option(constraints{}, (constraints_parser() > skip(isspace)));
 
     return
       // pattern is either expression
       construct< pattern >( expr_parser() ) |
       // or list of named expressions and final anonymous expression
       // that we are matching against
-      from_tuple< pattern >( parenthesized( combine(subexpr_parser, constraints, expr_parser()) ) ) |
+      from_tuple< pattern >( parenthesized( combine(subexpr_parser, cons, expr_parser()) ) ) |
       // or list of named expressions and final match expression
       // that allows to specify multi-pattern rules
-      from_tuple< pattern >( parenthesized( combine(subexpr_parser, constraints, match_expr_parser()) ) ) |
+      from_tuple< pattern >( parenthesized( combine(subexpr_parser, cons, match_expr_parser()) ) ) |
       // or union expression that allows to specify unification of matched rules
       construct< pattern >( union_expr_parser() );
   }
