@@ -653,8 +653,14 @@ namespace eqsat {
     auto runner = Runner::make_runner(circuit);
 
     RewriteRules rules;
-    // TODO(Heno): this is just a test rule
-    rules.emplace_back("commutativity", "(op_Add ?x ?y)", "(op_Add ?y ?x)");
+    rules.emplace_back( "binary-unification",
+      "((let A (?opa ?xa ?ya)) (let B (?opb ?xb ?yb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (equiv ?ya ?yb) (match $A $B))",
+      "(union $A $B)"
+    );
+    rules.emplace_back( "unary-unification",
+      "((let A (?opa ?xa)) (let B (?opb ?xb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (match $A $B))",
+      "(union $A $B)"
+    );
     runner.run(rules);
 
     LOG(INFO) << "Equality saturation stopped";
