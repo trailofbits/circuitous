@@ -133,12 +133,14 @@ namespace eqsat {
 
     Id add_node_recurse(auto *op, CircuitEGraph &egraph)
     {
-        ENode node(make_template(op));
-        for (const auto &child : op->operands)
-          node.children.push_back(add_node_recurse(child, egraph));
-        auto [id, enode] = egraph.add(std::move(node));
-        nodes[op] = enode;
-        return id;
+      if (nodes.count(op))
+        return egraph.find(nodes[op]);
+      ENode node(make_template(op));
+      for (const auto &child : op->operands)
+        node.children.push_back(add_node_recurse(child, egraph));
+      auto [id, enode] = egraph.add(std::move(node));
+      nodes[op] = enode;
+      return id;
     }
 
     std::pair< CircuitEGraph, Nodes > build(Circuit *circuit)
