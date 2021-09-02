@@ -77,7 +77,30 @@ namespace circ::eqsat {
 
   std::string to_string(const OpTemplate &op)
   {
-    return std::visit([] (const auto &o) { return o.op_code_name; }, op);
+    return std::visit( overloaded {
+      [] (const OpCode    &o) { return o.op_code_name; },
+      [] (const SizedOp   &o) { return o.op_code_name + "." + std::to_string(o.size.value()); },
+      [] (const RegOp     &o) { return o.op_code_name + "." + o.reg_name; },
+      [] (const MemOp     &o) { return o.op_code_name + "." + std::to_string(o.mem_idx); },
+      [] (const ExtractOp &o) { return o.op_code_name + "." + std::to_string(o.low_bit_inc) + "." + std::to_string(o.high_bit_exc); },
+      [] (const SelectOp  &o) { return o.op_code_name + "." + std::to_string(o.size) + "." + std::to_string(o.bits); },
+      [] (const ConstOp   &o) {
+        llvm::SmallVector< char > str;
+        llvm::APSInt(o.bits).toStringUnsigned(str);
+        return llvm::Twine(str).str();
+      }
+    }, op );
+  }
+
+  template< typename stream >
+  auto operator<<(stream &os, const OpTemplate &op) -> decltype(os << "")
+  {
+    return os << to_string(op);
+  }
+
+  bool operator==(const OpTemplate &lhs, const OpTemplate &rhs)
+  {
+    return to_string(lhs) == to_string(rhs);
   }
 
   using CircuitENode = ENode< OpTemplate >;
@@ -216,17 +239,57 @@ namespace circ::eqsat {
     const Pattern &pattern;
     const Places &places;
 
+    using ENode  = typename Graph::ENode;
+    using EClass = typename Graph::EClass;
+
+    // Filters out matches that does not satisfy pattern constraints (context
+    // constraints and place constraints).
     Matches filter_constrained(Matches &&matches) const
     {
-      if (pattern.constraints.contexts.size() < 2)
+      for (const auto &con : pattern.context_constraints)
+        matches = filter_constrained_disjoint_contexts(std::move(matches), con);
+
+      for (const auto &con : pattern.place_constraints)
+        matches = filter_constrained_equivalent_places(std::move(matches), con);
+
+      return std::move(matches);
+    }
+
+    // Filters out matches that does not satisfy disjoint contexts
+    Matches filter_constrained_disjoint_contexts(Matches &&matches, const disjoint_expr &constraint) const
+    {
+      if (constraint.contexts.size() < 2)
         return std::move(matches);
 
-      matches.erase(
-        std::remove_if(matches.begin(), matches.end(), [&](const auto &match) {
-          return constrained(match);
-        }),
-        matches.end()
-      );
+      auto filter = [&] (const auto &match) { return has_disjoint_contexts(match, constraint.contexts); };
+      matches.erase( std::remove_if(matches.begin(), matches.end(), filter), matches.end() );
+
+      return std::move(matches);
+    }
+
+    // Filters out matches that does not satisfy semantic equivalence of
+    // constrained places, e.g., for constraint (equiv ?x ?y), the match needs
+    // to have semanticaly equivalent matched places ?x and ?y.  Places are
+    // semantically equivalent if corresponding classes contain at least one
+    // semantically equivalent node, that is:
+    // 1) its the same operation with sem. equivalent children
+    // 2) the sem. equivalent leaf node.
+    Matches filter_constrained_equivalent_places(Matches &&matches, const equiv_expr &constraint) const
+    {
+      if (places.empty())
+        return std::move(matches);
+
+      if (constraint.places.size() < 2)
+        return std::move(matches);
+
+      auto filter_places = [&] (const auto &sub) { return !has_equivalent_places(sub, constraint.places); };
+
+      for (auto &match : matches) {
+        std::erase_if(match.substitutions, filter_places);
+      }
+
+      auto filter_empty_matches = [&] (const auto &match) { return match.substitutions.empty(); };
+      matches.erase( std::remove_if(matches.begin(), matches.end(), filter_empty_matches), matches.end() );
 
       return std::move(matches);
     }
@@ -246,18 +309,64 @@ namespace circ::eqsat {
       return res;
     }
 
-    bool constrained(const LabeledMatch &match) const
+    // Returns true if 'match' has non overlapping context sets
+    bool has_disjoint_contexts(const LabeledMatch &match, const auto &contexts) const
     {
       auto named = get_named_contexts(match.labels);
 
       std::unordered_map< context_node, int > counts;
-      for (const auto &name : pattern.constraints.contexts)
+      for (const auto &name : contexts)
         for (const auto &node : named.at(name.ref()))
           counts[node]++;
 
       return std::any_of(counts.begin(), counts.end(), [] (const auto &elem) {
         const auto &[_, count] = elem;
         return count > 1;
+      });
+    }
+
+    // Returns true if nodes are semantically equivalent: node terms satisfies
+    // its == relation and all children classes are sem. equivalent
+    bool semantically_equivalent_nodes(const ENode * lhs, const ENode * rhs) const
+    {
+        if (lhs->term != rhs->term)
+          return false;
+        for (const auto &[lch, rch] : llvm::zip(lhs->children, rhs->children)) {
+          auto lclass = egraph.eclass(lch);
+          auto rclass = egraph.eclass(rch);
+          if (!semantically_equivalent_classes(lclass, rclass))
+            return false;
+        }
+        return true;
+    }
+
+    // Equility class is semantically equivalent to other class if it contains
+    // semantically equivalent node to some of nodes of the other class.
+    bool semantically_equivalent_classes(const EClass &lhs, const EClass &rhs) const
+    {
+      for (const auto &lnode : lhs.nodes) {
+        for (const auto &rnode : rhs.nodes) {
+          if (semantically_equivalent_nodes(lnode, rnode)) {
+            return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    // Returns true if substitution satisfy semantic equivalence constraint 'con_places'.
+    bool has_equivalent_places(const Substitution &sub, const auto &con_places) const
+    {
+      auto equivalent = [&] (const place &lhs, const place &rhs) {
+        auto eclass = [&] (const place &p) {
+          return egraph.eclass( sub.id( places.at(p) ) );
+        };
+        return semantically_equivalent_classes(eclass(lhs), eclass(rhs));
+      };
+
+      // if all places are equivalent with the first place than they are all equivalent
+      return std::all_of(con_places.begin(),con_places.end(), [&] (const auto &place) {
+        return equivalent(place, con_places.front());
       });
     }
 
@@ -306,7 +415,6 @@ namespace circ::eqsat {
     // match multiple labeled expressions and unify the result
     Matches match(const match_expr &e) const
     {
-      // MatchedClasses matched;
       std::vector< Matches > matches;
       for (const auto &label : e.labels) {
         matches.push_back(match(pattern.subexprs.at(label), label));
@@ -361,6 +469,9 @@ namespace circ::eqsat {
       if (auto head = match_enode(enode, e.front()); !head.empty()) {
         if (tail(e).empty())
           return head;
+
+        if (tail(e).size() != enode->children.size())
+          return {};
 
         // gather substitutions for all children
         std::vector< Substitutions > subs;
