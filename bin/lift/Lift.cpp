@@ -112,23 +112,21 @@ std::unique_ptr<circ::Circuit> LoadCircuit() {
   return {};
 }
 
+using CircuitPtr = circ::CircuitPtr;
+
 // Optimize the circuit.
-template<typename Optimizer>
-void Optimize(circ::Circuit *circuit) {
-  Optimizer opt_manager;
+template< typename Optimizer >
+circ::CircuitPtr Optimize(CircuitPtr &&circuit)
+{
+  Optimizer opt;
 
   // Populate by default passes we want to always run
-  //opt_manager.AddPass("dagify");
-  opt_manager.AddPass("popcount2parity");
-  opt_manager.AddPass("reducepopcount");
-  // TODO(lukas): Broken fix.
-  //opt_manager.AddPass("extractcommon");
-  opt_manager.AddPass("eqsat");
-  opt_manager.AddPass("depbreaker");
+  opt.add_pass("eqsat");
 
-  opt_manager.Run(circuit);
+  auto result = opt.run(std::move(circuit));
   LOG(INFO) << "Optimizations done.";
-  LOG(INFO) << opt_manager.Stats();
+  LOG(INFO) << opt.report();
+  return result;
 }
 
 }  // namespace
@@ -163,9 +161,9 @@ int main(int argc, char *argv[]) {
   LOG(INFO) << "Debug mode: " << FLAGS_dbg;
 
   if (FLAGS_dbg) {
-    Optimize<circ::DebugOptimizer<DefaultLog>>(circuit.get());
+    circuit = Optimize< circ::DebugOptimizer< DefaultLog > >(std::move(circuit));
   } else {
-    Optimize<circ::DefaultOptimizer<DefaultLog>>(circuit.get());
+    circuit = Optimize< circ::DefaultOptimizer< DefaultLog > >(std::move(circuit));
   }
 
 
