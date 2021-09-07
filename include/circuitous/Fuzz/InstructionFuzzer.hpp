@@ -9,6 +9,7 @@
 #include <circuitous/Lifter/Shadows.hpp>
 #include <circuitous/Fuzz/InstNavigation.hpp>
 #include <circuitous/Fuzz/Permute.hpp>
+#include <circuitous/Fuzz/Husks.hpp>
 
 #include <bitset>
 #include <optional>
@@ -121,6 +122,12 @@ namespace circ {
     }
 
     auto empty_bits() const { return bits_t(rinst.bytes.size() * 8, false); }
+    auto are_empty(const bits_t &bits) {
+      for (auto b : bits)
+        if (b)
+          return false;
+      return true;
+    }
 
     auto generate_bits() {
       std::vector< bits_t > op_bits( rinst.operands.size(), empty_bits() );
@@ -131,7 +138,7 @@ namespace circ {
             continue;
           }
           using C = ifuzz::permutate::Comparator;
-          op_bits[op_i][i] = C().compare(rinst, *permutations[i], op_i);
+          op_bits[op_i][i] = C(arch.get()).compare(rinst, *permutations[i], op_i);
         }
       }
       return op_bits;
@@ -173,12 +180,12 @@ namespace circ {
 
       // It is possible some operands were not properly populated
       // (due to being read+write operands), so they need special attention.
-      ResolveHusks(shadow_inst);
+      //ResolveHusks(shadow_inst);
+      HuskResolver(*this).resolve_husks(shadow_inst);
       if (generate_all) {
         PopulateTranslationTables(shadow_inst);
       }
 
-      LOG(INFO) << shadow_inst.to_string();
       return shadow_inst;
     }
 
@@ -229,91 +236,6 @@ namespace circ {
         if (fst.type == OpType::kTypeAddress) {
           handle(has_base_reg, std::make_tuple(1, 0));
           handle(has_index_reg, std::make_tuple(1, 1));
-        }
-      }
-    }
-
-    using rops_map_t = std::map<std::size_t, const remill::Operand *>;
-    using rops_maps_t = std::vector<rops_map_t>;
-
-    // TODO(lukas): This is heurisitc. Later we are most likely going to need
-    //              support multiple strategies. Also the selected heuristic
-    //              implies the permutate::Comparator stack configuration.
-    rops_maps_t GroupHusks(const rops_map_t &ops) {
-      // TODO(lukas): First we need to sort by type
-      using entry_t = std::pair<std::size_t, const remill::Operand *>;
-      using OPT = remill::Operand::Type;
-
-      std::unordered_map<OPT, rops_map_t> by_type;
-      for (auto &x : ops) {
-        by_type[x.second->type].emplace(x.first, x.second);
-      }
-
-      auto str_hash = [](auto op) -> std::string {
-        switch(op->type) {
-          case OPT::kTypeImmediate: return std::to_string(op->imm.val);
-          case OPT::kTypeRegister: return op->reg.name + std::to_string(op->size);
-          case OPT::kTypeAddress:
-              return op->addr.base_reg.name + op->addr.index_reg.name
-                    + std::to_string(op->addr.scale)
-                    + std::to_string(op->addr.displacement);
-          default: LOG(FATAL) << "Cannot hash operand";
-        }
-      };
-
-      std::unordered_map<std::string, rops_map_t> by_hash;
-      for (auto &[_, g_by_type] : by_type) {
-        for (auto &[idx, op] : g_by_type) {
-          by_hash[str_hash(op)].emplace(idx, op);
-        }
-      }
-
-      rops_maps_t out;
-      for (auto &[_, maps] : by_hash) {
-        out.push_back(std::move(maps));
-      }
-      return out;
-    }
-
-    void ResolveHusks(shadowinst::Instruction &s_inst) {
-      std::map<std::size_t, shadowinst::Operand *> husks;
-      std::map<std::size_t, const remill::Operand *> r_husks;
-
-      // TODO(lukas): Filter husks
-      for (std::size_t i = 0; i < rinst.operands.size(); ++i) {
-        if (s_inst[i].IsHusk()) {
-          husks[i] = &s_inst[i];
-          r_husks[i] = &rinst.operands[i];
-        }
-      }
-
-      // Cannot work with only one husks nor with none
-      if (husks.size() <= 1) {
-        return;
-      }
-
-      for (auto &group : GroupHusks(r_husks)) {
-        // There is no point working with smaller than 2 group
-        if (group.size() <= 1) {
-          continue;
-        }
-
-        std::vector<bool> husk_bits(rinst.bytes.size() * 8, false);
-        for (std::size_t i = 0; i < permutations.size(); ++i) {
-          if (!permutations[i]) {
-            continue;
-          }
-          using CMP = ifuzz::permutate::HuskComparator;
-          husk_bits[i] = CMP().compare(rinst, *permutations[i], group);
-        }
-
-        s_inst.deps.push_back({});
-        for (auto &[i, op] : group) {
-          s_inst.deps.back().emplace_back(i, &s_inst.Replace(i, op->type, husk_bits));
-
-          if (op->type == remill::Operand::Type::kTypeAddress) {
-            distribute_addr(husk_bits, i, *s_inst[i].address);
-          }
         }
       }
     }
@@ -397,7 +319,7 @@ namespace circ {
           items.emplace(idx, &inst.operands[idx]);
         }
 
-        return ifuzz::permutate::HuskEnlargerComparator().compare(rinst, inst, items);
+        return ifuzz::permutate::HuskEnlargerComparator(arch.get()).verbose_compare(rinst, inst, items);
       };
 
       auto for_valid = [](auto fn, auto &group) {
@@ -535,7 +457,6 @@ namespace circ {
         for (auto &navigation : idxs_) {
           auto maybe_reg = ifuzz::fetch_reg(tmp, navigation);
           if (!maybe_reg) {
-            LOG(INFO) << "get_reg returned no value";
             continue;
           }
           const auto &reg = **maybe_reg;
