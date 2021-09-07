@@ -89,11 +89,7 @@ add_library(circuitous_printers STATIC
 target_link_libraries(circuitous_printers PUBLIC circuitous_settings)
 
 add_library(circuitous_transforms STATIC
-  lib/Transforms/ConvertPopCountToParity.cpp
-  lib/Transforms/ExtractCommonTopologies.cpp
   lib/Transforms/MergeHints.cpp
-  lib/Transforms/StrengthReducePopulationCount.cpp
-  lib/Transforms/MergeByBytes.cpp
   lib/Transforms/EqualitySaturation.cpp
 )
 

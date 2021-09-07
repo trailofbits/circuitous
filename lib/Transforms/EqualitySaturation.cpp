@@ -26,9 +26,7 @@
 #include <queue>
 #include <span>
 
-namespace circ {
-namespace eqsat {
-
+namespace circ::eqsat {
 
   struct OpTemplateBuilder : NonRecursiveVisitor< OpTemplateBuilder >
   {
@@ -313,10 +311,10 @@ namespace eqsat {
     using ENode  = typename Graph::ENode;
     using Nodes  = std::map< Operation *, ENode * >;
 
-    static EqSatRunner make_runner(Circuit *circuit)
+    static EqSatRunner make_runner(const CircuitPtr &circuit)
     {
       EGraphBuilder builder;
-      auto [graph, nodes] = builder.build(circuit);
+      auto [graph, nodes] = builder.build(circuit.get());
       return {std::move(graph), std::move(nodes)};
     }
 
@@ -640,9 +638,7 @@ namespace eqsat {
     const OptimalGraphView &graph;
   };
 
-} // namespace eqsat
-
-  bool EqualitySaturation(Circuit *circuit)
+  CircuitPtr EqualitySaturation(const CircuitPtr &circuit)
   {
     using Runner = eqsat::DefaultRunner;
     using RewriteRules = eqsat::CircuitRewriteRules;
@@ -661,12 +657,18 @@ namespace eqsat {
       "((let A (?opa ?xa)) (let B (?opb ?xb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (match $A $B))",
       "(union $A $B)"
     );
+
+    std::ofstream outb("egraph-before.dot");
+    to_dot(runner.egraph(), outb, [] (auto *node) {
+      return to_string(node->term);
+    });
+
     runner.run(rules);
 
     LOG(INFO) << "Equality saturation stopped";
 
-    std::ofstream out("egraph.dot");
-    to_dot(runner.egraph(), out, [] (auto *node) {
+    std::ofstream outa("egraph-after.dot");
+    to_dot(runner.egraph(), outa, [] (auto *node) {
       return to_string(node->term);
     });
 
@@ -674,9 +676,9 @@ namespace eqsat {
       // TODO(Heno) implement cost function
       auto name = to_string(node->term);
       if (name == "Mul")
-        return 3;
+        return 100;
       if (name == "Add")
-        return 2;
+        return 10;
       return 1;
     };
 
@@ -684,11 +686,7 @@ namespace eqsat {
     auto optimal = costgraph.optimal();
 
     eqsat::CircuitExtractor extractor(optimal);
-    auto circ = extractor.run( runner.node(circuit), circuit->ptr_size );
-
-    // TODO(Heno): Return from pass
-
-    return true;
+    return extractor.run(runner.node(circuit.get()), circuit->ptr_size);
   }
 
-} // namespace circ
+} // namespace circ::eqsat

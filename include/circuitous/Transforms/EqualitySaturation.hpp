@@ -4,7 +4,6 @@
 
 #pragma once
 
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -22,8 +21,10 @@
 #include <string_view>
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/ADT/EGraph.hpp>
 #include <circuitous/ADT/UnionFind.hpp>
 #include <circuitous/Transforms/Pattern.hpp>
+#include <circuitous/Transforms/PassBase.hpp>
 
 namespace circ::eqsat {
 
@@ -75,7 +76,7 @@ namespace circ::eqsat {
 
   using OpTemplate = std::variant< OpCode, SizedOp, RegOp, ConstOp, MemOp, ExtractOp, SelectOp >;
 
-  std::string to_string(const OpTemplate &op)
+  inline std::string to_string(const OpTemplate &op)
   {
     return std::visit( overloaded {
       [] (const OpCode    &o) { return o.op_code_name; },
@@ -98,7 +99,7 @@ namespace circ::eqsat {
     return os << to_string(op);
   }
 
-  bool operator==(const OpTemplate &lhs, const OpTemplate &rhs)
+  inline bool operator==(const OpTemplate &lhs, const OpTemplate &rhs)
   {
     return to_string(lhs) == to_string(rhs);
   }
@@ -699,5 +700,7 @@ namespace circ::eqsat {
   private:
     Builder _builder;
   };
+
+  CircuitPtr EqualitySaturation(const CircuitPtr &);
 
 } // namespace circ::eqsat
