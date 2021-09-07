@@ -79,19 +79,25 @@ namespace circ::ifuzz::permutate {
     }
   };
 
+  // TODO(lukas): Actually this is a few separate components in one template stack.
+  //              It would be best if components could be identified and refactored.
   // Everything equals to everything
   struct TrueBase : Verbose {
     using OpType = remill::Operand::Type;
     using operands_t = std::vector<const remill::Operand *>;
 
-    static auto identity_imm() { return [](auto &, auto &) { return true; }; }
-    static auto identity_reg() { return [](auto &, auto &) { return true; }; }
+    const remill::Arch *arch;
 
-    static bool full_compare(const remill::Operand &lhs, const remill::Operand &rhs) {
+    TrueBase(const remill::Arch *arch_) : arch(arch_) {}
+
+    auto identity_imm() { return [](auto &, auto &) { return true; }; }
+    auto identity_reg() { return [](auto &, auto &) { return true; }; }
+
+    bool full_compare(const remill::Operand &lhs, const remill::Operand &rhs) {
       return lhs.Serialize() == rhs.Serialize();
     }
 
-    static bool full_compare(const remill::Register *lhs, const remill::Register *rhs) {
+    bool full_compare(const remill::Register *lhs, const remill::Register *rhs) {
       if (!lhs && !rhs) {
         return true;
       }
@@ -101,12 +107,13 @@ namespace circ::ifuzz::permutate {
       return lhs->name == rhs->name;
     }
 
-    static bool Depends(const operands_t &) { return true; }
+    bool Depends(const operands_t &) { return true; }
   };
 
   template<typename Next>
   struct UnitCompares : Next {
     using OpType = typename Next::OpType;
+    using Next::Next;
 
     static auto identity_imm() {
       return [](auto &self, auto &flipped) {
@@ -185,30 +192,54 @@ namespace circ::ifuzz::permutate {
   };
 
   template<typename Next>
-  struct EqDependency : Next {
-    using OpType = typename Next::OpType;
+  struct EqDep_ : Next {
+    using Next::Next;
 
     template<typename R>
-    static bool reg_dependency(const R &a, const R &b) {
+    bool reg_dependency(const R &a, const R &b) {
       return a.name == b.name && a.size == b.size;
     }
     template<typename A>
-    static bool addr_dependency(const A &a, const A &b) {
+    bool addr_dependency(const A &a, const A &b) {
       return reg_dependency(a.base_reg, b.base_reg)
              && reg_dependency(a.index_reg, b.index_reg)
              && a.scale == b.scale
              && a.displacement == b.displacement;
     }
+  };
 
-    static bool Depends(const std::vector<const remill::Operand *> &ops) {
+  template< typename Next >
+  struct EqDepAmd64Hack_ : Next {
+
+    using Next::Next;
+
+    template<typename R>
+    bool reg_dependency(const R &a, const R &b) {
+      // Since this class represents a special case, general condition is still
+      // enough.
+      auto a_reg = try_enclosing_reg(this->arch, a.name);
+      auto b_reg = try_enclosing_reg(this->arch, b.name);
+      if (!a_reg || !b_reg)
+        return this->Next::reg_dependency(a, b);
+      return this->Next::reg_dependency(a, b) ||
+             ((a.size + b.size == 64 + 32) && ((*a_reg)->name == (*b_reg)->name));
+    }
+  };
+
+  template< typename Next >
+  struct EqDepFront : Next {
+    using OpType = typename Next::OpType;
+    using Next::Next;
+
+    bool Depends(const std::vector<const remill::Operand *> &ops) {
       for (auto op : ops) {
         CHECK(op->type == OpType::kTypeRegister || op->type == OpType::kTypeAddress)
           << "Can check eq dependency only on reg and addr operands.";
       }
-      auto compare = [](auto a, auto b) {
+      auto compare = [=](auto a, auto b) {
         switch (a->type) {
-          case OpType::kTypeRegister: return reg_dependency(a->reg, b->reg);
-          case OpType::kTypeAddress: return addr_dependency(a->addr, b->addr);
+          case OpType::kTypeRegister: return this->Next::reg_dependency(a->reg, b->reg);
+          case OpType::kTypeAddress: return this->Next::addr_dependency(a->addr, b->addr);
           default: LOG(FATAL) << "Unreachable, should be caught be ealier assert";
         }
       };
@@ -223,10 +254,17 @@ namespace circ::ifuzz::permutate {
     }
   };
 
+  template< typename N >
+  using EqDep = EqDepFront< EqDep_< N > >;
+  template< typename N >
+  using EqDepAmd64Hack = EqDepFront< EqDepAmd64Hack_< EqDep_< N > > >;
+
   template<typename Next>
   struct DependencyComparator : Next {
     using Item_t = std::map<std::size_t, const remill::Operand *>;
     using cri = const remill::Instruction &;
+
+    using Next::Next;
 
     template<typename Fn>
     std::tuple<bool, bool> CheckStructure(
@@ -298,12 +336,14 @@ namespace circ::ifuzz::permutate {
   // are exactly the same in both instructions.
   // NOTE(lukas): See permutation generation and register enlarging heuristics for examples
   //              of when this was flag is used.
-  template<typename Next, bool exact_mod = false>
+  template< typename Next, bool exact_mod = false >
   struct Dispatch : Next {
     using OpType = typename Next::OpType;
     using Item_t = typename Next::Item_t;
 
     using cri = const remill::Instruction;
+
+    Dispatch(const remill::Arch *arch_) : Next(arch_) {}
 
     bool compare(cri &original, cri &permuation, std::size_t idx) {
       return compare(original, permuation, {{ idx, &original.operands[idx] }});
@@ -316,10 +356,12 @@ namespace circ::ifuzz::permutate {
       for (auto [_, op] : items) {
         CHECK (op->type == type) << "Cannot compare as group operands of different types!";
       }
+      auto check = [&](auto identity) { return Check(original, permutation, items, identity); };
+
       switch(type) {
-        case OpType::kTypeImmediate: return Check(original, permutation, items, Next::identity_imm());
-        case OpType::kTypeRegister : return Check(original, permutation, items, Next::identity_reg());
-        case OpType::kTypeAddress  : return Check(original, permutation, items, Next::identity_addr());
+        case OpType::kTypeImmediate: return check(Next::identity_imm());
+        case OpType::kTypeRegister : return check(Next::identity_reg());
+        case OpType::kTypeAddress  : return check(Next::identity_addr());
         default                    : return false;
       }
     }
@@ -343,11 +385,16 @@ namespace circ::ifuzz::permutate {
   // Comparator stack handles the identification of relevant bits per Operand.
   // The layers allow customizations of smaller chunks so the bigger parts can
   // be reused.
+  using base_t = UnitCompares< TrueBase >;
+  template< typename N >
+  using front_t = Dispatch< DependencyComparator< N > >;
+
   template<bool exact_mod>
-  using RComparator = Dispatch<DependencyComparator<UnitCompares<TrueBase>>, exact_mod>;
+  using RComparator = Dispatch< DependencyComparator< base_t >, exact_mod>;
+
   using Comparator = RComparator<false>;
-  using HuskComparator = Dispatch<DependencyComparator<EqDependency<UnitCompares<TrueBase>>>>;
-  using HuskEnlargerComparator =
-      Dispatch<DependencyComparator<EqDependency<UnitCompares<TrueBase>>>, true>;
+  using HuskComparator = front_t< EqDep< base_t > >;
+  using HuskComparatorAmd64Hack = front_t< EqDepAmd64Hack< base_t > >;
+  using HuskEnlargerComparator = Dispatch< DependencyComparator< EqDep< base_t > >, true >;
 
 } // circ::ifuzz::permutate
