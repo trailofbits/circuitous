@@ -45,7 +45,7 @@ struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
   auto Export() { return *this; }
 
   template<typename CB>
-  void Diff(RawNodesCounter_ &o, CB cb) {
+  void Diff(const RawNodesCounter_ &o, CB cb) const {
     auto diff = [&cb](auto self_, auto other_) {
       auto self = self_.begin();
       auto other = other_.begin();
@@ -82,7 +82,7 @@ template<typename Collector>
 struct Printer {
 
   template<typename OS>
-  static void Print(OS &ss, Collector &self) {
+  static void Print(OS &ss, const Collector &self) {
     ss << "Node counts:" << std::endl;
     for (auto &[op_code, count] : self.nodes) {
       ss << " " << to_string(op_code) << " " << count << std::endl;
@@ -99,7 +99,7 @@ struct Printer {
   }
 
   template<typename OS>
-  static void Diff(OS &os, Collector &self, Collector &other) {
+  static void Diff(OS &os, const Collector &self, const Collector &other) {
     auto red = [](auto what) -> std::string {
       return "\033[91m" + std::to_string(what) + "\033[0m";
     };
