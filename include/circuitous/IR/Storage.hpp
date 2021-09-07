@@ -111,7 +111,6 @@ namespace circ {
     std::size_t RemoveUnused() {
       return this->AllAttributes::parent<T>::RemoveUnused();
     }
-    // clang-format off
 
     using AllAttributes::ForEachOperation;
 

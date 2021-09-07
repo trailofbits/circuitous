@@ -80,6 +80,11 @@ bool is_one_of(Operation *op) {
   return (is_specialization<Ts>(op->op_code) || ...);
 }
 
+template< typename T >
+bool is_of(Operation *op) {
+  return (op->op_code & T::mask) == T::apply(0u);
+}
+
 template< typename Base, Base root_, uint8_t position_ >
 struct kind_fragment {
   static constexpr Base root = root_;
@@ -98,7 +103,7 @@ template< uint16_t root > using tag_fragment = kind_fragment< uint16_t, root, 8 
 template< uint8_t root > using meta_fragment = kind_fragment< uint8_t, root, 0 >;
 
 template< typename ... Fragments >
-struct make_kind_ {
+struct make_kind_ : Fragments ... {
 
   template<typename T, typename ...Ts>
   static constexpr uint32_t _apply(uint32_t to) {
