@@ -319,6 +319,25 @@ void Circuit0::constraint_unused() {
     return std::make_optional(name.str());
   }
 
+  void circuit_builder::handle_undef(const std::string &name) {
+    auto fn = ctx.module()->getFunction(name);
+    // TODO(lukas): For now be defensive and demand that each intrinsic is
+    //              at least declared.
+    CHECK(fn);
+    std::vector< llvm::CallInst * > to_replace;
+    for (auto user : fn->users())
+      if (auto call = llvm::dyn_cast< llvm::CallInst >(user))
+        to_replace.push_back(call);
+    for (auto v : to_replace)
+     v->replaceAllUsesWith(llvm::UndefValue::get(v->getType()));
+
+  }
+
+  void circuit_builder::handle_undefs() {
+    for (auto s : { 8, 16, 32, 64 })
+      handle_undef("__remill_undefined_" + std::to_string(s));
+  }
+
   llvm::Function *circuit_builder::finish() {
     tie_head();
     tie_entry();
@@ -333,6 +352,7 @@ void Circuit0::constraint_unused() {
     llvm::IRBuilder<> irb(exit);
     auto all = irops::make< irops::Xor >(irb, ctx_vals);
     tie_exit(all);
+    handle_undefs();
 
     ctx.clean_module({circuit_fn});
 
