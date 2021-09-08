@@ -168,9 +168,16 @@ namespace circ::shadowinst {
 
   static inline auto decoder_conditions(auto arch, const Reg &s_reg, llvm::IRBuilder<> &ir)
   {
+    // Insert elements from vector `from` into vector `into`.
+    // Usefull if `from` is rvalue, since then `begin(), end()` cannot be easily
+    // retrieved at the same time.
+    auto append = [](auto &into, auto from) {
+      into.insert(into.end(), from.begin(), from.end());
+    };
+
     std::map< Reg::reg_t, std::vector< llvm::Value * > > out;
     for (const auto &[reg, _] : s_reg.translation_map) {
-      out[enclosing_reg(arch, reg)->name] = decoder_conditions(s_reg, reg, ir);
+      append(out[enclosing_reg(arch, reg)->name], decoder_conditions(s_reg, reg, ir));
     }
     return out;
   }
