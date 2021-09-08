@@ -524,6 +524,13 @@ namespace circ::shadowinst {
     std::string to_string() const {
       std::stringstream ss;
       ss << "Shadowinst:" << std::endl;
+      for (const auto &cluster : deps) {
+        ss << "Deps cluster: [ ";
+        for (auto const &[idx, _] : cluster)
+          ss << idx << " ";
+        ss << "]" << std::endl;
+      }
+
       for (const auto &op : operands) {
         ss << " OP" << std::endl;
         // TODO(lukas): Sanity check may be in order here
