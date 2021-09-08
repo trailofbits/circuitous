@@ -11,7 +11,7 @@ from itertools import permutations
 _regs = [ "RIP", "RSP", "RBP",
           "RAX", "RBX", "RCX", "RDX", "RSI", "RDI",
           "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
-_e_regs = ["EAX, EBX", "ECX", "EDX"]
+_e_regs = ["EAX, EBX", "ECX", "EDX", "ESI", "EDI", "EIP", "ESP", "EBP"]
 _b_regs = ["AX", "BX", "CX", "DX"]
 _a_regs = ["AL", "AH"]
 _aflags = ["AF", "CF", "OF", "ZF", "PF", "SF", "DF"]
