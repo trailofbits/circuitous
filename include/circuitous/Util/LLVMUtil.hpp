@@ -202,9 +202,20 @@ namespace circ {
     return std::distance(bb_it(a), bb_it(b));
   }
 
+  static inline auto try_enclosing_reg(auto arch, const std::string &name)
+  -> std::optional< const remill::Register * >
+  {
+    auto remill_reg = arch->RegisterByName(name);
+    if (!remill_reg)
+      return {};
+    if (auto enclosed = remill_reg->EnclosingRegister())
+      return { enclosed };
+    return {};
+  }
+
   static inline auto enclosing_reg(auto arch, const std::string &name) {
     auto remill_reg = arch->RegisterByName(name);
-    CHECK(remill_reg);
+    CHECK(remill_reg) << "Was not able to retrieve " << name;
     CHECK(remill_reg->EnclosingRegister());
     return remill_reg->EnclosingRegister();
   }
