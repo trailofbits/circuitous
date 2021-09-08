@@ -516,8 +516,10 @@ void Circuit0::constraint_unused() {
     };
     collect_stores(dst_reg, collect_stores);
 
-
-    CHECK(stores.size() <= 2 && stores.size() != 0) << dbg_dump(stores);
+    // NOTE(lukas): It is expected that if there are multiple stores,
+    //              Flattener component will make sure they are properly guarded
+    //              wrt path condition.
+    CHECK(stores.size() >= 1) << dbg_dump(stores);
 
     // Next they are being ordered to determine which is last, therefore
     // they need to be in the same basic block
