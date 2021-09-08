@@ -53,13 +53,21 @@ namespace circ
   };
 
 
+  struct DummyPass : PassBase
+  {
+    CircuitPtr run(CircuitPtr &&circuit) override { return std::move(circuit); }
+
+    static Pass get() { return std::make_shared< DummyPass >(); }
+  };
+
   struct PassesBase
   {
     // list of recognized passes
     static inline std::map< std::string, Pass > known_passes
     {
       { "eqsat",           EqualitySaturationPass::get() },
-      { "mergeadvices",    MergeAdvicesPass::get() }
+      { "merge-advices",   MergeAdvicesPass::get() },
+      { "dummy-pass",      DummyPass::get() }
     };
 
     void add_pass(const std::string &name)

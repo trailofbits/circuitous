@@ -121,7 +121,9 @@ circ::CircuitPtr Optimize(CircuitPtr &&circuit)
   Optimizer opt;
 
   // Populate by default passes we want to always run
-  opt.add_pass("eqsat");
+  // opt.add_pass("eqsat");
+  // opt.add_pass("merge-advices");
+  opt.add_pass("dummy-pass");
 
   auto result = opt.run(std::move(circuit));
   LOG(INFO) << "Optimizations done.";
