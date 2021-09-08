@@ -9,6 +9,8 @@
 #include <circuitous/Transforms.h>
 #include <circuitous/IR/Cost.hpp>
 
+#include <circuitous/Printers/Verilog.hpp>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
@@ -24,57 +26,23 @@ DECLARE_string(arch);
 DECLARE_string(os);
 
 DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
+DEFINE_string(smt_in, "", "Path to the input smt2 file.");
+
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(python_out, "", "TODO(luaks): Needs update");
 DEFINE_string(smt_out, "", "Path to the output smt2 file.");
-DEFINE_string(smt_in, "", "Path to the input smt2 file.");
-DEFINE_string(bitblast_smt_out, "", "Path to the output smt2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
-DEFINE_string(optimizations, "",
-              "TODO(lukas): Not supported atm");
-DEFINE_bool(append, false,
-            "Append to output IR files, rather than overwriting.");
+DEFINE_string(verilog_out, "", "Path to the output verilog file.");
+
+DEFINE_string(bitblast_smt_out, "", "Path to the output smt2 file.");
+DEFINE_bool(bitblast_stats, false, "Print smt bitblast statistics.");
 
 DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 
 DEFINE_bool(dbg, false, "Enable various debug dumps");
 
-DEFINE_bool(bitblast_stats, false, "Print smt bitblast statistics.");
-
 namespace {
-
-static const std::hash<std::string> kStringHasher;
-
-void TopologySpecificIRPrinter(circ::Circuit *circuit) {
-  std::unordered_map<uint64_t, std::ofstream> streams;
-  LOG(INFO) << "Veryfing before serialization";
-  VerifyCircuit(circuit);
-  LOG(INFO) << "Valid";
-  circuit->Serialize([&](const std::string &topology) -> std::ostream & {
-    const auto hash = kStringHasher(topology);
-    auto it = streams.find(hash);
-    if (it == streams.end()) {
-      std::stringstream ss;
-      for (auto c : FLAGS_ir_out) {
-        if (c == '%') {
-          ss << std::hex << hash << std::dec;
-        } else {
-          ss << c;
-        }
-      }
-
-      std::ofstream os(
-          ss.str(),
-          std::ios::binary | (FLAGS_append ? std::ios::app : std::ios::trunc));
-      auto added = false;
-      std::tie(it, added) = streams.emplace(hash, std::move(os));
-      CHECK(added);
-    }
-
-    return it->second;
-  });
-}
 
 struct DefaultLog {
 
@@ -205,28 +173,19 @@ int main(int argc, char *argv[]) {
     if (FLAGS_ir_out == "-") {
       FLAGS_ir_out = "/dev/stdout";
     }
-
-    // If the output IR file name has a `%` in it, then we'll use that as a
-    // signal that we want to group the output files by topology, so that
-    // later we can optimize within a cohort, then merge, then optimize.
-    if (FLAGS_ir_out.find("%") != std::string::npos) {
-      TopologySpecificIRPrinter(circuit.get());
-
-    } else {
-      std::ofstream os(
-          FLAGS_ir_out,
-          std::ios::binary | (FLAGS_append ? std::ios::app : std::ios::trunc));
-      circuit->Serialize(os);
-      if (FLAGS_dbg){
-        LOG(INFO) << "Proceeding to reload test";
-        std::ifstream is(FLAGS_ir_out, std::ios::binary);
-        if (!is.good()) {
-          LOG(FATAL) << "Error while re-checking.";
-        }
-        auto x = circ::Circuit::Deserialize(is);
-        VerifyCircuit("Verifyinh loaded.", x.get(), "Reload test successful.");
-        CHECK(x->ptr_size == circuit->ptr_size);
+    std::ofstream os(
+        FLAGS_ir_out,
+        std::ios::binary | std::ios::trunc);
+    circuit->Serialize(os);
+    if (FLAGS_dbg){
+      LOG(INFO) << "Proceeding to reload test";
+      std::ifstream is(FLAGS_ir_out, std::ios::binary);
+      if (!is.good()) {
+        LOG(FATAL) << "Error while re-checking.";
       }
+      auto x = circ::Circuit::Deserialize(is);
+      VerifyCircuit("Verifyinh loaded.", x.get(), "Reload test successful.");
+      CHECK(x->ptr_size == circuit->ptr_size);
     }
   }
 
@@ -262,6 +221,13 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "Done";
   }
 
+  if (!FLAGS_verilog_out.empty()) {
+    LOG(INFO) << "Printing smt";
+    std::ofstream os(FLAGS_verilog_out);
+    circ::print::Verilog::print(os, circuit.get());
+    LOG(INFO) << "Done.";
+  }
+
   if (!FLAGS_smt_out.empty()) {
     if (FLAGS_smt_out == "-") {
       FLAGS_smt_out = "/dev/stderr";
@@ -269,16 +235,6 @@ int main(int argc, char *argv[]) {
     LOG(INFO) << "Printing smt";
     std::ofstream os(FLAGS_smt_out);
     circ::PrintSMT(os, circuit.get());
-    LOG(INFO) << "Done.";
-  }
-
-  if (!FLAGS_bitblast_smt_out.empty()) {
-    if (FLAGS_bitblast_smt_out == "-") {
-      FLAGS_bitblast_smt_out = "/dev/stderr";
-    }
-    LOG(INFO) << "Printing bit-blasted smt";
-    std::ofstream os(FLAGS_bitblast_smt_out);
-    circ::PrintBitBlastSMT(os, circuit.get());
     LOG(INFO) << "Done.";
   }
 
