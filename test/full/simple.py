@@ -20,7 +20,7 @@ test_mov = {
   Test("mov imm eax/ebx/ecx/edx") \
   .bytes("b812000000bb12000000b912000000ba12000000")
   .tags({"min", "mov"})
-  .DI(S(0x100).RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42).RIP(0x1000))
+  .DI(S(0x100).RAX(0x42).RBX(0x42).RCX(0x42).RDX(0x42).RIP(0x1000).ts(0))
   .case("mov rax",
     DE = MS().RAX(0x12).RIP(0x1005).ts(1),
     run_bytes = "b812000000",
@@ -49,7 +49,7 @@ test_mov = {
   Test("mov reg reg") \
   .bytes(intel(["mov rax, rbx", "mov rcx, rax", "mov rbx, rax"]))
   .tags({"min", "mov"})
-  .DI(S(0x100).RAX(0x12).RBX(0x22).RCX(0x32).RIP(0x1000))
+  .DI(S(0x100).RAX(0x12).RBX(0x22).RCX(0x32).RIP(0x1000).ts(0))
   .case("rax:=rbx",
     DE = MS().RAX(0x22).RIP(0x1003).ts(1),
     run_bytes = 0,
@@ -66,7 +66,7 @@ test_mov = {
   Test("F: mov reg reg") \
   .bytes(intel(["mov rax, rbx", "mov rcx, rax", "mov rbx, rax"]))
   .tags({"min", "mov"})
-  .DI(S(0x100).RAX(0x12).RBX(0x22).RCX(0x32))
+  .DI(S(0x100).RAX(0x12).RBX(0x22).RCX(0x32).ts(0))
   .case("rax:=rbx",
     DE = MS().RAX(0x32).RIP(0x1003).ts(1),
     run_bytes = 0,
