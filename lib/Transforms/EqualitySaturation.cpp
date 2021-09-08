@@ -608,7 +608,7 @@ namespace circ::eqsat {
 
     CircuitExtractor(const OptimalGraphView &graph) : graph(graph) {}
 
-    std::unique_ptr<circ::Circuit> run(ENodePtr root, uint32_t ptr_size) const
+    std::unique_ptr<circ::Circuit> run(ENodePtr root, uint32_t ptr_size)
     {
       auto circuit = std::make_unique<Circuit>(ptr_size);
 
@@ -627,14 +627,21 @@ namespace circ::eqsat {
       return detail::make_operation(enode->term, circuit);
     }
 
-    Operation *extract(ENodePtr enode, Circuit *circuit) const
+    Operation *extract(ENodePtr enode, Circuit *circuit)
     {
+      if (cached.count(enode))
+        return cached.at(enode);
+
       auto op = make_operation(enode, circuit);
+      cached.emplace(enode, op);
+
       for (const auto &child : graph.children(enode))
         op->AddUse( extract(child, circuit) );
+
       return op;
     }
 
+    std::map< ENodePtr, Operation * > cached;
     const OptimalGraphView &graph;
   };
 
