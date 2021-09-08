@@ -2,6 +2,7 @@
 
 from tools.byte_generator import intel
 from tools.model_test import ModelTest, Test
+from tools.verify_test import VerifyTest
 from tools.tc import State, S, MS
 
 test_adc = {
@@ -198,6 +199,20 @@ test_idiv = {
         DE = MS().aflags(0), R = True)
   .case(DI = MS().RIP(0x1000).RAX(0xffffff).RDX(0x1).RDI(0xfffff),
         DE = MS().aflags(0), R = True)
+}
+
+test_mul = {
+    VerifyTest("mul_r32_r32").tags({"min", "mul"}).bytes(intel(["mul eax"]))
+    .DI(S(0x100).RIP(0x10000).RAX(0xff4).RBX(0x5).RCX(0x21).RDX(0x121).aflags(0))
+    .scases(intel, ["mul eax", "mul edx"], R = True)
+    .scases(intel, ["mul r8d", "mul r10d"], R = False)
+}
+
+test_imul = {
+    VerifyTest("imul_r32_r32").tags({"min", "imul"}).bytes(intel(["imul eax, ebx"]))
+    .DI(S(0x100).RIP(0x10000).RAX(0xff4).RBX(0x5).RCX(0x21).RDX(0x121).aflags(0))
+    .scases(intel, ["imul eax, ebx", "imul ecx, edx"], R = True)
+    .scases(intel, ["imul r8d, ecx", "imul edx, r10d"], R = False)
 }
 
 test_rcr = {
@@ -778,6 +793,7 @@ circuitous_tests = \
     test_rcl, test_ror, test_rcr,
     test_xor, test_or, test_and,
     test_div, test_idiv,
+    test_mul, test_imul,
     test_ip,
     test_all,
     test_reduce_regs,
