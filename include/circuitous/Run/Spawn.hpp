@@ -215,7 +215,7 @@ namespace circ::run {
         return;
       }
       // This node is not used in current context, just skip.
-      if (!collector->op_to_ctxs[op].count(current)) {
+      if (!collector->op_to_ctxs[op].count(current) && !is_of< LeafValue >(op)) {
         return;
       }
       this->parent_t::SetNodeVal(op, val);
