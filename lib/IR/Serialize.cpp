@@ -551,8 +551,6 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   }
 
   // TODO(lukas): I think this is not supposed to be here.
-  circuit->RemoveUnused();
-
   return vis.take_circuit();
 }
 
