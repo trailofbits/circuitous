@@ -214,6 +214,7 @@ struct Undefined final : Operation, make_kind< LeafValue, tag_fragment< 2 > > {
 
 struct Memory : Operation, make_kind< LeafValue, tag_fragment< 8 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
+  // TODO(lukas): Make configurable.
   static constexpr uint32_t default_size = 208;
 
   explicit Memory(uint32_t mem_idx_) : Operation(default_size, kind), mem_idx(mem_idx_) {}
@@ -405,7 +406,16 @@ declare_llvm_op(Icmp_sgt, 18)
 declare_llvm_op(Icmp_sge, 19)
 declare_llvm_op(Icmp_sle, 20)
 
-declare_llvm_op(BSelect, 21)
+struct BSelect final : Operation, make_kind< Computational, tag_fragment< 21 > > {
+  static constexpr uint32_t kind = apply(Operation::kind);
+  BSelect(unsigned size_) : Operation(size_, kind) {}
+  static std::string op_code_str() { return "BSelect"; }
+  std::string Name() const override { return "BSelect"; }
+
+  Operation *cond() { return operands[0]; }
+  Operation *true_v() { return operands[1]; }
+  Operation *false_v() { return operands[2]; }
+};
 
 declare_llvm_op(CAnd, 22);
 declare_llvm_op(COr, 23);
@@ -516,6 +526,8 @@ struct Select : Operation, make_kind< Uncat, tag_fragment< 0 > > {
     ss << "select." << bits;
     return ss.str();
   }
+
+  Operation *selector() { return operands[0]; }
 
   // Return one of the `2 ^ bits` values. It is also expected that this node
   // has `2 ^ bits + 1` operands.
