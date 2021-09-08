@@ -564,7 +564,7 @@ namespace circ::eqsat {
     {
       return llvm::StringSwitch< Operation* >(op.op_code_name)
         .Case("in.register",  circuit->Create< InputRegister >( op.reg_name, op.size ))
-        .Case("out.register", circuit->Create< InputRegister >( op.reg_name, op.size ))
+        .Case("out.register", circuit->Create< OutputRegister >( op.reg_name, op.size ))
         .Default( nullptr );
     }
 
