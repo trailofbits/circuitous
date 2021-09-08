@@ -89,7 +89,7 @@ add_library(circuitous_printers STATIC
 target_link_libraries(circuitous_printers PUBLIC circuitous_settings)
 
 add_library(circuitous_transforms STATIC
-  lib/Transforms/MergeHints.cpp
+  lib/Transforms/MergeAdvices.cpp
   lib/Transforms/EqualitySaturation.cpp
 )
 
