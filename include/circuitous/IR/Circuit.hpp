@@ -32,7 +32,8 @@ namespace circ {
     static std::string op_code_str() { return "circuit"; }
 
     std::string Name() const override { return "circuit"; }
-    Circuit(uint32_t ptr_size_) : Operation(this->bool_size, kind), ptr_size(ptr_size_) {}
+    // TODO(lukas): Will be deprecated in the future.
+    Circuit(uint32_t ptr_size_=64) : Operation(this->bool_size, kind), ptr_size(ptr_size_) {}
 
     uint32_t ptr_size;
   };
