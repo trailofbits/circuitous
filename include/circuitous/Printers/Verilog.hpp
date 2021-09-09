@@ -21,19 +21,19 @@ namespace circ::print {
     using parent_t::Dispatch;
 
     auto &self() { return static_cast< Self & >(*this); }
-    auto get(Operation *op) {
+    std::string get(Operation *op) {
       if (!self().op_names.count(op))
         self().op_names[op] = this->Dispatch(op);
       return self().op_names[op];
     }
 
-    auto wire_name(Operation *op) {
+    std::string wire_name(Operation *op) {
       std::stringstream ss;
       ss << std::hex << "v" << op->id();
       return ss.str();
     }
 
-    auto wire_decl(const std::string &name, std::string lhs) {
+    std::string wire_decl(const std::string &name, std::string lhs) {
       return "wire " + name + " = " + lhs + ";\n";
     }
 
@@ -127,11 +127,11 @@ namespace circ::print {
       };
     }
 
-    auto make(auto F, Operation *op) {
+    std::string make(auto F, Operation *op) {
       return make_wire(op, F(get_symbol(op), op->operands));
     }
 
-    auto make(auto F, Operation *op, std::string f) {
+    std::string make(auto F, Operation *op, std::string f) {
       return make_wire(op, F(f, op->operands));
     }
 
@@ -183,7 +183,7 @@ namespace circ::print {
       }
     }
 
-    auto bin_zero(auto size) -> std::string {
+    std::string bin_zero(auto size) {
       return std::to_string(size) + "'b" + std::string(size, '0');
     }
 
@@ -327,7 +327,7 @@ namespace circ::print {
       return ss.str();
     }
 
-    auto &give_name(Operation *op, std::string name) {
+    std::string &give_name(Operation *op, std::string name) {
       dbg << "Naming: " << pretty_print< false >(op) << " -> " << name << std::endl;
       auto [it, flag] = op_names.emplace(op, std::move(name));
       CHECK(flag) << std::endl << dbg.str();
