@@ -526,7 +526,7 @@ namespace circ::shadowinst {
       ss << "Shadowinst:" << std::endl;
       for (const auto &cluster : deps) {
         ss << "Deps cluster: [ ";
-        for (auto const &[idx, _] : cluster)
+        for (const auto &[idx, _] : cluster)
           ss << idx << " ";
         ss << "]" << std::endl;
       }
