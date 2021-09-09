@@ -610,9 +610,9 @@ namespace eqsat {
 
     CircuitExtractor(const OptimalGraphView &graph) : graph(graph) {}
 
-    std::unique_ptr<circ::Circuit> run(ENodePtr root) const
+    std::unique_ptr<circ::Circuit> run(ENodePtr root, uint32_t ptr_size) const
     {
-      auto circuit = std::make_unique<Circuit>();
+      auto circuit = std::make_unique<Circuit>(ptr_size);
 
       auto node = graph.node(root);
       CHECK(name(node) == "circuit");
@@ -684,7 +684,7 @@ namespace eqsat {
     auto optimal = costgraph.optimal();
 
     eqsat::CircuitExtractor extractor(optimal);
-    auto circ = extractor.run( runner.node(circuit) );
+    auto circ = extractor.run( runner.node(circuit), circuit->ptr_size );
 
     // TODO(Heno): Return from pass
 
