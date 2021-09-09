@@ -10,10 +10,13 @@
 namespace circ::shadowinst {
 
   // Returns mapping { offset -> [ bitstring identifying the regs ] }
+  using bstr_t = std::string;
+  using bstrs_t = std::vector< bstr_t >;
+
   template< typename Arch >
-  auto shift_coerce_info(const Reg &s_reg, const Arch &arch)
+  std::map< uint64_t, bstrs_t > shift_coerce_info(const Reg &s_reg, const Arch &arch)
   {
-    std::map<uint64_t, std::vector<std::string>> out;
+    std::map< uint64_t, bstrs_t > out;
 
     auto fetch_offset = [&](auto reg) -> uint64_t {
       if (auto orig = arch.RegisterByName(reg)) {
@@ -34,11 +37,13 @@ namespace circ::shadowinst {
 
   // Some regsiters may require additional masks (most notably smaller version
   // of its widest version - e.g. edi needs mask to be extracted from rdi)
+  // Returns `[original size, enclosing size]`.
   template< typename Arch >
   auto mask_coerce_info(const Reg &s_reg, const Arch &arch)
+  -> std::tuple< uint64_t, uint64_t >
   {
-    std::map<std::tuple<uint64_t, uint64_t>, std::vector<std::string>> out;
-    std::vector<std::string> defaulted;
+    std::map< std::tuple< uint64_t, uint64_t >, bstrs_t > out;
+    std::vector< std::string > defaulted;
 
     auto defaults = [&](auto reg) -> bool { return !arch.RegisterByName(reg); };
 
@@ -82,7 +87,8 @@ namespace circ::shadowinst {
     return out.begin()->first;
   }
 
-  auto mask_coerce(llvm::Value *what, auto &irb, const Reg &s_reg, const auto &arch)
+  llvm::Value *mask_coerce(llvm::Value *what, auto &irb,
+                           const Reg &s_reg, const auto &arch)
   {
     auto [size, total_size] = mask_coerce_info(s_reg, arch);
     std::string mask_bits(size * 8, '1');
@@ -91,7 +97,8 @@ namespace circ::shadowinst {
     return irb.CreateAnd(what, irb.getInt(mask));
   }
 
-  auto shift_coerce(llvm::Value *what, auto &irb, const Reg &s_reg, const auto &arch)
+  llvm::Value *shift_coerce(llvm::Value *what, auto &irb,
+                            const Reg &s_reg, const auto &arch)
   {
     shadowinst::SelectMaker selects{ irb };
     for (auto &[shift_val, conds] : shift_coerce_info(s_reg, arch)) {
@@ -109,13 +116,14 @@ namespace circ::shadowinst {
 
 
   template< typename ...Args >
-  auto mask_shift_coerce(llvm::Value *what, Args && ...args)
+  llvm::Value *mask_shift_coerce(llvm::Value *what, Args && ...args)
   {
     return mask_coerce( shift_coerce( what, std::forward< Args >(args) ...),
                         std::forward< Args >(args) ...);
   }
 
-  auto store_fragment(auto what, auto full, auto &irb, const Reg &s_reg, const auto &arch)
+  llvm::Value *store_fragment(auto what, auto full, auto &irb,
+                              const Reg &s_reg, const auto &arch)
   {
     std::map< uint64_t, llvm::Value * > shifts;
     for (auto &[shift_val, conds] : shift_coerce_info(s_reg, arch)) {

@@ -85,7 +85,7 @@ namespace circ::shadowinst {
       return head;
     }
 
-    llvm::Value *chain(const std::map< llvm::Value *, llvm::Value *> &vals) {
+    llvm::Value *chain(const std::map< llvm::Value *, llvm::Value * > &vals) {
       for (const auto &[c, v] : vals)
         chain(c, v);
       return get();
@@ -152,7 +152,8 @@ namespace circ::shadowinst {
 
 
       for (auto &[from, size] : s_reg.regions) {
-        auto extract = irops::make< irops::Extract >(ir, std::vector< llvm::Value * >{}, from, size);
+        auto extract =
+          irops::make< irops::Extract >(ir, std::vector< llvm::Value * >{}, from, size);
         input_fragments.push_back(extract);
         current += size;
       }
@@ -171,7 +172,7 @@ namespace circ::shadowinst {
     // Insert elements from vector `from` into vector `into`.
     // Usefull if `from` is rvalue, since then `begin(), end()` cannot be easily
     // retrieved at the same time.
-    auto append = [](auto &into, auto from) {
+    auto append = [](auto &into, const auto &from) {
       into.insert(into.end(), from.begin(), from.end());
     };
 
