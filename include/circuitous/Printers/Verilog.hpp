@@ -357,15 +357,12 @@ namespace circ::print {
     void write_inputs() {
       auto fmt_io = [](auto op) { return op->Name(); };
 
-      uint32_t idx = 0;
-      auto fmt_advice = [&](auto op) { return op->Name() + "." + std::to_string(++idx); };
-
-      write_input< Advice >(fmt_advice);
       write_input< OutputRegister, InputRegister,
                    InputErrorFlag, OutputErrorFlag,
                    InputTimestamp, OutputTimestamp,
                    Memory,
-                   InputInstructionBits >( fmt_io );
+                   InputInstructionBits,
+                   Advice >( fmt_io );
     }
 
     void write_output() {
