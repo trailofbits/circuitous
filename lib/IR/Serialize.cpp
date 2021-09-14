@@ -141,6 +141,7 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
   void Visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc, op->operands[0]); }
   void Visit(Select *op) { write(op->size, op->bits, op->operands); }
   void Visit(Memory *op) { write(op->size, op->mem_idx); }
+  void Visit(Advice *op) { write(op->size, op->advice_idx); }
   void Visit(InputErrorFlag *op) {}
   void Visit(OutputErrorFlag *op) {}
   void Visit(InputTimestamp *op) {}
@@ -347,6 +348,11 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
     return circuit->Adopt<Memory>(id, mem_id);
   }
 
+  Operation *Visit(Advice *, uint64_t id) {
+    auto [size, advice_idx] = read<unsigned, unsigned>();
+    return circuit->Adopt<Advice>(id, size, advice_idx);
+  }
+
   Operation *Visit(Constant *, uint64_t id) {
     auto [size, bits] = read<unsigned, std::string>();
     return circuit->Adopt<Constant>(id, std::move(bits), size);
@@ -415,7 +421,6 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
 
   DECODE_GENERIC(InputInstructionBits)
   DECODE_CONDITION(DecodeCondition)
-  DECODE_GENERIC(Advice)
   DECODE_CONDITION(Or)
   DECODE_CONDITION(And)
   DECODE_CONDITION(VerifyInstruction)

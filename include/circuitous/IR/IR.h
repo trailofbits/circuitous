@@ -244,10 +244,13 @@ struct Constant final : Operation, make_kind< LeafValue, tag_fragment< 1 > > {
 struct Advice final : Operation, make_kind< LeafValue, tag_fragment< 5 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
 
-  inline explicit Advice(unsigned size_) : Operation(size_, kind) {}
+  inline explicit Advice(unsigned size_, uint32_t advice_idx_)
+    : Operation(size_, kind), advice_idx(advice_idx_) {}
 
   static std::string op_code_str() { return "advice"; }
-  std::string Name() const override { return "advice"; }
+  std::string Name() const override { return "advice." + std::to_string(advice_idx) ; }
+
+  uint32_t advice_idx = 0;
 };
 
 // Input bits that
