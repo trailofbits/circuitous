@@ -41,6 +41,13 @@ namespace circ::eqsat {
     std::optional< std::uint32_t > size;
   };
 
+  struct AdviceOp
+  {
+    std::string op_code_name;
+    std::optional< std::uint32_t > size;
+    std::optional< uint32_t > idx;
+  };
+
   struct RegOp
   {
     std::string op_code_name;
@@ -74,13 +81,14 @@ namespace circ::eqsat {
     std::uint32_t bits;
   };
 
-  using OpTemplate = std::variant< OpCode, SizedOp, RegOp, ConstOp, MemOp, ExtractOp, SelectOp >;
+  using OpTemplate = std::variant< OpCode, SizedOp, AdviceOp, RegOp, ConstOp, MemOp, ExtractOp, SelectOp >;
 
   inline std::string to_string(const OpTemplate &op)
   {
     return std::visit( overloaded {
       [] (const OpCode    &o) { return o.op_code_name; },
       [] (const SizedOp   &o) { return o.op_code_name + "." + std::to_string(o.size.value()); },
+      [] (const AdviceOp  &o) { return o.op_code_name + "." + std::to_string(o.idx.value()); },
       [] (const RegOp     &o) { return o.op_code_name + "." + o.reg_name; },
       [] (const MemOp     &o) { return o.op_code_name + "." + std::to_string(o.mem_idx); },
       [] (const ExtractOp &o) { return o.op_code_name + "." + std::to_string(o.low_bit_inc) + "." + std::to_string(o.high_bit_exc); },
