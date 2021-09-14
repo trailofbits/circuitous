@@ -344,11 +344,11 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
     if (irops::Advice::is(fn)) {
       auto [size] = irops::Advice::parse_args< uint32_t >(fn);
-      return VisitGenericIntrinsic< Advice >(call, fn, size);
+      return VisitGenericIntrinsic< Advice >(call, fn, size, ++advice_idx);
     }
     if ( irops::Operand::is(fn)) {
       auto [_, size] = irops::Operand::parse_args< uint32_t >(fn);
-      return VisitGenericIntrinsic< Advice >(call, fn, size);
+      return VisitGenericIntrinsic< Advice >(call, fn, size, ++advice_idx);
     }
     if (irops::AdviceConstraint::is(fn)) {
       return VisitGenericIntrinsic< AdviceConstraint >(call, fn);
@@ -552,7 +552,9 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     Emplace< Undefined >(val, num_bits);
   }
 
-  void VisitConstantInt(llvm::Function *, llvm::ConstantInt *val) { VisitAPInt(val, val->getValue()); }
+  void VisitConstantInt(llvm::Function *, llvm::ConstantInt *val) {
+    VisitAPInt(val, val->getValue());
+  }
   void VisitConstantFP(llvm::Function *, llvm::ConstantFP *val) {
     VisitAPInt(val, val->getValueAPF().bitcastToAPInt());
   }
@@ -600,6 +602,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   Circuit *impl;
   VerifyInstruction *verifier{nullptr};
 
+  uint32_t advice_idx = 0;
+
   llvm::SmallString<128> bits;
   std::unordered_map<llvm::Value *, Operation *> val_to_op;
   std::unordered_map<llvm::Value *, Operation *> leaves;
@@ -608,7 +612,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
   std::unordered_map<std::string, Constant *> bits_to_constants;
 
  private:
-  IRImporter(void) = delete;
+  IRImporter() = delete;
 };
 
 }  // namespace
