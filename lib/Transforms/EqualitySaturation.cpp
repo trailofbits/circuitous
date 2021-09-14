@@ -34,6 +34,7 @@ namespace circ::eqsat {
 
     OpCode    opcode(auto *op)      { return {op->op_code_str()}; }
     SizedOp   sized(auto *op)       { return {op->op_code_str(), op->size}; }
+    AdviceOp  advice(Advice *op)    { return {op->op_code_str(), op->size, op->advice_idx}; }
     RegOp     regop(auto *op)       { return {op->op_code_str(), op->size, op->reg_name}; }
     ConstOp   constop(Constant *op) { return {op->op_code_str(), op->size, op->bits}; }
     MemOp     memop(Memory *op)     { return {op->op_code_str(), op->mem_idx}; }
@@ -54,7 +55,7 @@ namespace circ::eqsat {
 
     OpTemplate Visit(Constant *op) { return constop(op); }
 
-    OpTemplate Visit(Advice *op) { return sized(op); }
+    OpTemplate Visit(Advice *op) { return advice(op); }
 
     OpTemplate Visit(InputInstructionBits *op) { return sized(op); }
 
@@ -516,7 +517,6 @@ namespace circ::eqsat {
         .Case("in.error_flag",    circuit->Create< InputErrorFlag >( size ))
         .Case("out.error_flag",   circuit->Create< OutputErrorFlag >( size ))
         .Case("undefined",        circuit->Create< Undefined >( size ))
-        .Case("advice",           circuit->Create< Advice >( size ))
         .Case("instruction_bits", circuit->Create< InputInstructionBits >( size ))
 
         .Case("Add",   circuit->Create< Add >( size ))
@@ -558,6 +558,11 @@ namespace circ::eqsat {
         .Case("not",                   circuit->Create< Not >( size ))
 
         .Default( nullptr );
+    }
+
+    Operation* make_operation(const AdviceOp &op, Circuit *circuit)
+    {
+      return circuit->Create< Advice >( op.size.value(), op.idx.value() );
     }
 
     Operation* make_operation(const RegOp &op, Circuit *circuit)
