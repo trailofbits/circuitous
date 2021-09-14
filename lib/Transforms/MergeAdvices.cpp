@@ -67,7 +67,8 @@ bool MergeAdvices(Circuit *circuit) {
   std::unordered_map<Advice *, Extract *> prev_extract;
   std::vector<bool> used_bits;
 
-  const auto wide_hint = circuit->Create<Advice>(max_size);
+  // Can be `0` since all other Advices will be removed.
+  const auto wide_hint = circuit->Create<Advice>(max_size, 0u);
   for (auto &[inst_check, hints] : used_hints) {
 
     used_bits.clear();
