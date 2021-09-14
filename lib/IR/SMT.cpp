@@ -17,7 +17,13 @@
 
 namespace circ::smt
 {
-  Operation* app(const z3::expr &e, Circuit *circuit)
+  // Keeps track of already assigned ids.
+  struct IdxCache {
+    uint32_t mem_idx = 0;
+    uint32_t advice_idx = 0;
+  };
+
+  Operation* app(const z3::expr &e, Circuit *circuit, IdxCache &idxs)
   {
     auto decl = e.decl();
     auto name = decl.name().str();
@@ -49,7 +55,7 @@ namespace circ::smt
     }
 
     else if (name == "Advice") {
-      return circuit->Create< Advice >(bv);
+      return circuit->Create< Advice >(bv, ++idxs.advice_idx);
     }
 
     else if (name == "Population")
@@ -159,7 +165,7 @@ namespace circ::smt
       return circuit->Create< UnusedConstraint >();
 
     else if (name == "Memory")
-      return circuit->Create< Memory >(bv);
+      return circuit->Create< Memory >(++idxs.mem_idx);
 
     else if (name == "InputImmediate")
       return circuit->Create< InputImmediate >(bv);
@@ -192,14 +198,14 @@ namespace circ::smt
 
   using expr_cache = std::unordered_map< z3::expr, Operation*, decltype(expr_hash), decltype(expr_equal) >;
 
-  Operation* deserialize(const z3::expr &e, Circuit *circuit, expr_cache &seen)
+  Operation* deserialize(const z3::expr &e, Circuit *circuit, expr_cache &seen, IdxCache &idxs)
   {
     if (e.is_numeral()) {
       return constant(e, circuit);
     }
 
     if (e.is_app()) {
-      auto op = app(e, circuit);
+      auto op = app(e, circuit, idxs);
 
       unsigned num = e.num_args();
       for (unsigned i = 0; i < num; i++) {
@@ -207,7 +213,7 @@ namespace circ::smt
         if (auto it = seen.find(arg); it != seen.end()) {
           op->AddUse(it->second);
         } else {
-          auto darg = deserialize(e.arg(i), circuit, seen);
+          auto darg = deserialize(e.arg(i), circuit, seen, idxs);
           seen.emplace(arg, darg);
           op->AddUse(darg);
         }
@@ -229,7 +235,8 @@ namespace circ::smt
     CHECK(exprs.size() == 1);
 
     expr_cache seen(10, expr_hash, expr_equal);
-    deserialize(exprs[0], circuit.get(), seen);
+    IdxCache idxs;
+    deserialize(exprs[0], circuit.get(), seen, idxs);
     return circuit;
   }
 
