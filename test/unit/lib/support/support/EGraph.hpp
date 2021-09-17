@@ -9,17 +9,14 @@
 #include <doctest/doctest.h>
 #include <circuitous/ADT/EGraph.hpp>
 #include <circuitous/Transforms/Pattern.hpp>
-
-#include <glog/logging.h>
+#include <circuitous/Util/Overloads.hpp>
+#include <circuitous/Util/Logging.hpp>
 
 #include <fstream>
 #include <string>
 #include <map>
 
 namespace circ::eqsat {
-
-  template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
-  template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
   using StringNode = ENode< std::string >;
 
