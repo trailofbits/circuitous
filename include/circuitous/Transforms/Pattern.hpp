@@ -4,12 +4,13 @@
 
 #pragma once
 
-#include <circuitous/Util/StrongType.hpp>
-#include <glog/logging.h>
 
 #include <circuitous/Util/Parser.hpp>
+#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Overloads.hpp>
 #include <circuitous/Util/ConstExprVector.hpp>
 #include <circuitous/Util/FixedString.hpp>
+#include <circuitous/Util/StrongType.hpp>
 
 #include <algorithm>
 #include <cctype>
@@ -32,9 +33,6 @@
 
 namespace circ::eqsat {
 
-  // helper for Pattern visitor
-  template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
-  template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
   using namespace circ::parser;
 
