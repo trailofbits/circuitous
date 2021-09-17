@@ -2,16 +2,13 @@
  * Copyright (c) 2020-2021 Trail of Bits, Inc.
  */
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <gflags/gflags.h>
-#include <glog/logging.h>
+#include <circuitous/Util/Logging.hpp>
 
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/Support/JSON.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
-#pragma clang diagnostic pop
+CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <circuitous/Run/Inspect.hpp>
 #include <circuitous/Run/Interpreter.h>

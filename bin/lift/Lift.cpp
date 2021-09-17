@@ -11,12 +11,7 @@
 
 #include <circuitous/Printers/Verilog.hpp>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <gflags/gflags.h>
-#include <glog/logging.h>
-#pragma clang diagnostic pop
+#include <circuitous/Util/Logging.hpp>
 
 #include <fstream>
 #include <iostream>

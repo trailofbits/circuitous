@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <vector>
 
+#include <circuitous/Util/Logging.hpp>
 #include <circuitous/Util/StrongType.hpp>
 
 namespace circ {

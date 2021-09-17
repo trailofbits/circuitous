@@ -16,17 +16,15 @@
 
 #include <remill/BC/Compat/CallSite.h>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <gflags/gflags.h>
-#include <glog/logging.h>
+#include <circuitous/Util/Logging.hpp>
+
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Verifier.h>
 #include <llvm/CodeGen/IntrinsicLowering.h>
 #include <llvm/Transforms/Utils/Cloning.h>
-#pragma clang diagnostic pop
+CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <sstream>
 
