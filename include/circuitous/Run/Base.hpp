@@ -9,18 +9,13 @@
 
 #include <circuitous/Run/Trace.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
+#include <circuitous/Util/Logging.hpp>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <gflags/gflags.h>
-#include <glog/logging.h>
-
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/ADT/StringRef.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/ADT/APInt.h>
-#pragma clang diagnostic pop
-
+CIRCUITOUS_UNRELAX_WARNINGS
 namespace circ::run {
 
   // TODO(lukas): Most likely it will be required for this to be an attribute
