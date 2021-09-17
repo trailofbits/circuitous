@@ -16,7 +16,7 @@
 #include <string>
 #include <map>
 
-namespace circ {
+namespace circ::eqsat {
 
   template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
   template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
