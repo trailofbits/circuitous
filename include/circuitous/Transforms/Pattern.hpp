@@ -32,7 +32,7 @@
 
 namespace circ::eqsat {
 
-  // helper for pattern visitor
+  // helper for Pattern visitor
   template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
   template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
@@ -120,18 +120,18 @@ namespace circ::eqsat {
     label name;
   };
 
-  struct pattern : expr
+  struct Pattern : expr
   {
     using named_exprs = std::unordered_map< label, expr >;
 
-    explicit pattern(const expr &e) : expr(e) {}
-    explicit pattern(expr &&e) : expr(std::move(e)) {}
+    explicit Pattern(const expr &e) : expr(e) {}
+    explicit Pattern(expr &&e) : expr(std::move(e)) {}
 
-    pattern(const named_exprs &subs, const constraints &c, const expr &e)
+    Pattern(const named_exprs &subs, const constraints &c, const expr &e)
       : expr(e), subexprs(subs)
     { filter_constraints(c); }
 
-    pattern(named_exprs &&subs, constraints &&c, expr &&e)
+    Pattern(named_exprs &&subs, constraints &&c, expr &&e)
       : expr(std::move(e)), subexprs(std::move(subs))
     { filter_constraints(c); }
 
@@ -401,9 +401,9 @@ namespace circ::eqsat {
   }
 
   // TODO(Heno): constexpr
-  static inline parser<pattern> auto pattern_parser()
+  static inline parser<Pattern> auto pattern_parser()
   {
-    using named_exprs = pattern::named_exprs;
+    using named_exprs = Pattern::named_exprs;
 
     // TODO(Heno): do not copy exprs
     auto insert_named_expr = [] (auto &&exprs, auto &&e) {
@@ -418,20 +418,20 @@ namespace circ::eqsat {
     auto cons = option(constraints{}, (constraints_parser() > skip(isspace)));
 
     return
-      // pattern is either expression
-      construct< pattern >( expr_parser() ) |
+      // Pattern is either expression
+      construct< Pattern >( expr_parser() ) |
       // or list of named expressions and final anonymous expression
       // that we are matching against
-      from_tuple< pattern >( parenthesized( combine(subexpr_parser, cons, expr_parser()) ) ) |
+      from_tuple< Pattern >( parenthesized( combine(subexpr_parser, cons, expr_parser()) ) ) |
       // or list of named expressions and final match expression
       // that allows to specify multi-pattern rules
-      from_tuple< pattern >( parenthesized( combine(subexpr_parser, cons, match_expr_parser()) ) ) |
+      from_tuple< Pattern >( parenthesized( combine(subexpr_parser, cons, match_expr_parser()) ) ) |
       // or union expression that allows to specify unification of matched rules
-      construct< pattern >( union_expr_parser() );
+      construct< Pattern >( union_expr_parser() );
   }
 
   // TODO(Heno): constexpr
-  static inline pattern make_pattern(std::string_view pat)
+  static inline Pattern make_pattern(std::string_view pat)
   {
     auto parser = pattern_parser();
     if (auto p = parser(pat))
@@ -464,13 +464,13 @@ namespace circ::eqsat {
     }, e.get());
   }
 
-  inline places_t places(const pattern &pat)
+  inline places_t places(const Pattern &pat)
   {
     return places(pat, pat.subexprs);
   }
 
   using indexed_places = std::unordered_map< eqsat::place, unsigned >;
-  inline indexed_places get_indexed_places(const pattern &pat)
+  inline indexed_places get_indexed_places(const Pattern &pat)
   {
     indexed_places places;
     unsigned id = 0;
@@ -480,7 +480,7 @@ namespace circ::eqsat {
   }
 
   template< typename stream >
-  auto operator<<(stream &os, const pattern &pat) -> decltype(os << "")
+  auto operator<<(stream &os, const Pattern &pat) -> decltype(os << "")
   {
     os << '(' << root(pat);
     for (const auto &ch : children(pat))
