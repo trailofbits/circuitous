@@ -16,7 +16,7 @@
 
 #include <circuitous/ADT/UnionFind.hpp>
 
-namespace circ {
+namespace circ::eqsat {
 
   template< typename Term_ >
   struct ENode
@@ -267,4 +267,4 @@ namespace circ {
     out << "}\n";
   }
 
-} // namespace circ
+} // namespace circ::eqsat
