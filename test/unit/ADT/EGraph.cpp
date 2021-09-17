@@ -12,7 +12,7 @@
 
 #include <fstream>
 
-namespace circ {
+namespace circ::eqsat {
 
   TEST_CASE("EGraph Merge Leaf Nodes")
   {
@@ -137,4 +137,4 @@ namespace circ {
     CHECK(egraph.eclass(idp).size() == 1);
     CHECK(egraph.eclass(idm).size() == 1);
   }
-} // namespace circ
+} // namespace circ::eqsat
