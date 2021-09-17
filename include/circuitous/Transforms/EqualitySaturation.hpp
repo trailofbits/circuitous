@@ -670,8 +670,8 @@ namespace circ::eqsat {
     const std::string name;
     // Rewrite rule 'lhs -> rhs' that allows to match
     // left-hand-side and replace it with right-hand-side
-    pattern lhs;
-    pattern rhs;
+    Pattern lhs;
+    Pattern rhs;
 
     // Places that occur in the rewrite pattern
     // Note: it is required that place occurs on the left hand side
