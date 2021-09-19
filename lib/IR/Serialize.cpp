@@ -4,6 +4,7 @@
 
 #include <circuitous/IR/Hash.h>
 #include <circuitous/IR/Circuit.hpp>
+#include <circuitous/IR/Memory.hpp>
 #include <circuitous/Printers.h>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
@@ -344,8 +345,8 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
 
   Operation *Visit(Memory *, uint64_t id) {
     auto [size, mem_id] = read<unsigned, unsigned>();
-    CHECK(size == Memory::default_size);
-    return circuit->Adopt<Memory>(id, mem_id);
+    CHECK(size == Memory::expected_size(circuit->ptr_size));
+    return circuit->Adopt<Memory>(id, size, mem_id);
   }
 
   Operation *Visit(Advice *, uint64_t id) {
