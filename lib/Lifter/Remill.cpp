@@ -473,12 +473,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     CHECK(true_val->op_code != Undefined::kind || false_val->op_code != Undefined::kind);
 
     auto define = [&](auto what) -> Operation * {
-      if (what->op_code != Undefined::kind)
-        return what;
-
-      auto op = impl->Create< Not >(value_size(val));
-      op->AddUse((what == true_val) ? false_val : true_val);
-      return op;
+      return what;
     };
 
     auto op = HandleLLVMOP(val);
