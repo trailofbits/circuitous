@@ -165,7 +165,7 @@ namespace circ::smt
       return circuit->Create< UnusedConstraint >();
 
     else if (name == "Memory")
-      return circuit->Create< Memory >(++idxs.mem_idx);
+      return circuit->Create< Memory >(irops::memory::size(circuit->ptr_size), ++idxs.mem_idx);
 
     else if (name == "InputImmediate")
       return circuit->Create< InputImmediate >(bv);
