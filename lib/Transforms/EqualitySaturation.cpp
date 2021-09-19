@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <circuitous/ADT/EGraph.hpp>
 
+#include <circuitous/IR/Memory.hpp>
+
 #include <circuitous/Transforms/Pattern.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
 
@@ -580,7 +582,7 @@ namespace circ::eqsat {
 
     Operation* make_operation(const MemOp &op, Circuit *circuit)
     {
-      return circuit->Create< Memory >( op.mem_idx );
+      return circuit->Create< Memory >( irops::memory::size(circuit->ptr_size), op.mem_idx );
     }
 
     Operation* make_operation(const ExtractOp &op, Circuit *circuit)
