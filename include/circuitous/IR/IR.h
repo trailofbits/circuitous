@@ -214,10 +214,12 @@ struct Undefined final : Operation, make_kind< LeafValue, tag_fragment< 2 > > {
 
 struct Memory : Operation, make_kind< LeafValue, tag_fragment< 8 > > {
   static constexpr uint32_t kind = apply(Operation::kind);
-  // TODO(lukas): Make configurable.
-  static constexpr uint32_t default_size = 208;
 
-  explicit Memory(uint32_t mem_idx_) : Operation(default_size, kind), mem_idx(mem_idx_) {}
+  explicit Memory(unsigned size_, uint32_t mem_idx_)
+      : Operation(size_, kind), mem_idx(mem_idx_) {}
+
+  static uint32_t  expected_size(uint32_t ptr_size);
+
   static std::string op_code_str() { return "memory"; }
   std::string Name() const override { return "memory"; }
 
