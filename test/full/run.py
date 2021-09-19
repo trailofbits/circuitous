@@ -241,6 +241,7 @@ class Comparator(SimulateCWDMixin):
         accept, msg = self.compare_verify(case.input, case.simulated, case.expected)
       else:
         accept, msg = self.compare_case(case.input, case.simulated, case.expected)
+      assert case.name not in out
       out[case.name] = TestResult(TestResult.ok if accept else TestResult.fail, msg)
       if not out[case.name]:
         msg = out[case.name].msg
