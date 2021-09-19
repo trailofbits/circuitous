@@ -3,10 +3,10 @@
  */
 
 #include "CircuitBuilder.h"
-#include "DependencyVisitor.hpp"
 
 #include "Flatten.hpp"
 
+#include <circuitous/Lifter/DependencyVisitor.hpp>
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/Component.hpp>
 #include <circuitous/Lifter/SelectFold.hpp>
@@ -371,6 +371,8 @@ void Circuit0::constraint_unused() {
                         irops::ReadConstraint, irops::WriteConstraint >(ctx.module());
 
     OptimizeSilently(ctx.arch(), ctx.module(), {circuit_fn});
+    unfold_advice_constraints(circuit_fn);
+    OptimizeSilently(ctx.arch(), ctx.module(), {circuit_fn});
     remill::VerifyModule(ctx.module());
 
     return circuit_fn;
@@ -474,13 +476,13 @@ void Circuit0::constraint_unused() {
     ctxs.emplace_back(this->head,
                       saturation_prop, timestamp_prop, params,
                       mem_checks, err_checks, extra_params
-                      ,preserved
                       );
-    auto additional_checks_ = handle_dst_regs_(dst_regs, isel, state);
-    if (additional_checks_) {
-      ctxs.back()._add(additional_checks_);
-    }
-
+    auto dst_regs_checks = handle_dst_regs_(dst_regs, isel, state);
+    ir.SetInsertPoint(this->head);
+    auto computational_transition = ir.CreateAnd(dst_regs_checks, preserved);
+    auto error_transition = emit_error_transitions(c_ebit);
+    ir.SetInsertPoint(this->head);
+    ctxs.back()._add(ir.CreateOr(computational_transition, error_transition));
 
     add_isel_metadata(ctxs.back().current, isel);
   }
@@ -537,7 +539,8 @@ void Circuit0::constraint_unused() {
   llvm::Value *circuit_builder::handle_dst_regs_(
       std::vector< llvm::Instruction * > &dst_regs, ISEL_view isel, State &state)
   {
-    if (dst_regs.empty()) return nullptr;
+    llvm::IRBuilder<> irb(this->head);
+    if (dst_regs.empty()) return irb.getTrue();
     CHECK(dst_regs.size() == 1) << "TODO(lukas): Implement more general case.";
 
     auto dst_reg = dst_regs[0];
@@ -560,7 +563,6 @@ void Circuit0::constraint_unused() {
       LOG(FATAL) << "Could not locate register: " << name;
     };
 
-    llvm::IRBuilder<> irb(this->head);
     auto [cond, select] = shadowinst::make_intrinsics_decoder(*s_reg, irb, locate_out_reg);
     auto [_, full] = shadowinst::make_intrinsics_decoder(*s_reg, irb, locate_in_reg);
     auto updated = shadowinst::store_fragment(
@@ -573,6 +575,7 @@ void Circuit0::constraint_unused() {
   {
     llvm::IRBuilder<> ir(this->head);
 
+    // Returns `false || a0 || ... || an`.
     auto combine = [&](auto vals) {
       llvm::Value *init = ir.getFalse();
       for (auto val : vals) {
@@ -581,17 +584,20 @@ void Circuit0::constraint_unused() {
       return init;
     };
 
+    // Return `rhs || lhs`. If either value is `nullptr` use `false` instead.
     auto update = [&](llvm::Value *rhs, llvm::Value *lhs) {
       if (!rhs) rhs = ir.getFalse();
       if (!lhs) lhs = ir.getFalse();
       return ir.CreateOr(lhs, rhs);
     };
 
+    // Mapping of register to conditions when it is written into.
     std::map< std::string, llvm::Value * > conditions;
     std::unordered_set< std::string > dirty;
 
     auto current_value = [&](const auto &reg, auto reg_in) {
-      return (dirty.count(reg->name) || !conditions.count(reg->name)) ? state.load(ir, reg) : reg_in;
+      return (dirty.count(reg->name) || !conditions.count(reg->name)) ? state.load(ir, reg)
+                                                                      : reg_in;
     };
 
     auto guard = [&](const auto &name, auto cmp) -> llvm::Value * {
@@ -727,14 +733,9 @@ void Circuit0::constraint_unused() {
     std::vector< llvm::Value * > args;
     for (const auto &[_, rc] : default_rcs)
       args.push_back(rc);
-    llvm::IRBuilder<> irb(this->entry);
+    llvm::IRBuilder<> irb(this->head);
     auto all_def_rcs = irops::make< irops::And >(irb, args);
-    // In case `current_ebit` is a constant, which probably can happen when a special
-    // set of instructions is lifted (i.e. error can never occur).
-    if (auto inst = llvm::dyn_cast< llvm::Instruction >(current_ebit))
-      irb.SetInsertPoint(inst);
-    auto negated = irb.CreateNot(current_ebit);
-    return irb.CreateOr(negated, all_def_rcs);
+    return irb.CreateOr(current_ebit, all_def_rcs);
   }
 
   auto circuit_builder::handle_errors(llvm::Value *begin, llvm::Value *end)
