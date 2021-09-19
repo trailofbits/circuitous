@@ -184,7 +184,7 @@ namespace circ {
 
     void inject_isel(const InstructionSelection &isel) {
       for (auto i = 0u; i < isel.instructions.size(); ++i) {
-        inject_semantic(ISEL_view(isel, i));
+        inject_semantic_modular(ISEL_view(isel, i));
         this->move_head();
       }
     }
