@@ -127,10 +127,15 @@ namespace circ::run {
       if (!ValidChildren(op)) {
         return self().SetNodeVal(op, Undef());
       }
-      self().SetNodeVal(op, f(op));
+      return self().SetNodeVal(op, f(op));
     }
 
-    value_type GetNodeVal(Operation *op) const ;
+    template<typename Op, typename F>
+    auto account(Op *op, F &&f) {
+      return self().SetNodeVal(op, f(op));
+    }
+
+    value_type GetNodeVal(Operation *op) const;
     value_type get(Operation *op) const  {
       return GetNodeVal(op);
     }
@@ -226,7 +231,7 @@ namespace circ::run {
       auto sel = [&](auto op) {
         return (self().get(op, 0)->getBoolValue()) ? self().get(op, 1) : self().get(op, 2);
       };
-      safe(op_, sel);
+      this->account(op_, sel);
     }
 
     void Visit(Add *op) { safe(op, [&](auto o){ return lhs(o) + rhs(o); } ); }
