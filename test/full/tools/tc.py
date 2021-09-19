@@ -495,6 +495,7 @@ class Test:
     case = TestCase()
     case.run_mode = self._mode if self._mode is not None else case.run_mode
     self._names += 1
+    assert name_ not in [x.name for x in self.cases]
     case.name = name_
     case.name = kwargs.get('name',
                            case.name if case.name is not None else str(self._names))
