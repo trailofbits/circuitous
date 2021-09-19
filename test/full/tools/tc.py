@@ -20,9 +20,9 @@ _all_regs = _regs + _aflags + _e_regs + _b_regs + _a_regs
 class MemHint:
   READ = 0
   WRITE = 1
-  __slots__ = ('used','addr', 'value', 'type', 'size')
+  __slots__ = ('used','addr', 'value', 'type', 'size', 'ts')
 
-  def __init__(self, addr_, val_, type_, size_):
+  def __init__(self, addr_, val_, type_, size_, ts_=0):
     assert isinstance(addr_, int)
     assert isinstance(val_, int)
     assert isinstance(type_, int)
@@ -36,6 +36,7 @@ class MemHint:
     self.type = type_
 
     self.size = size_
+    self.ts = ts_
 
   def read(addr_, val_, size_):
     return MemHint(addr_, val_, MemHint.READ, size_)
@@ -54,7 +55,7 @@ class MemHint:
     out  = self.ts << (64 + 64 + 8)
     out += self.value << (64 + 8)
     out += self.addr << 8
-    out += (self.size << 4) + (self.mode << 1) + 1
+    out += (self.size << 4) + (self.type << 1) + 1
     return str(out)
 
   def __eq__(self, other):
@@ -268,7 +269,6 @@ class State(StateBase):
     self.registers = None
     self._ebit = None
     self.timestamp = None
-    self.mem_hints = None
 
   def __bool__(self):
     return self.registers is not None \
@@ -312,7 +312,7 @@ class State(StateBase):
     for reg, val in self.registers.items():
       if val is not None:
         out["regs"][reg] = str(val)
-    #for id, hint in self.mem_hints.items():
+    #for id, hint in enumerate(self.mem_hints):
     #  out["mem_hints"][id] = hint.get()
     if self.memory is not None:
       out["memory"] = self.memory.get()
