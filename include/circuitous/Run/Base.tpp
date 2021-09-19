@@ -161,12 +161,15 @@ void Base_<S>::set_input_state(const trace::Entry &in) {
     }
   }
 
-
+  self()._dbg << "Loading memory hints:\n";
   for (auto hint : circuit->Attr<Memory>()) {
     if (auto val = in.get_mem_hint(std::to_string(hint->mem_idx))) {
+      self()._dbg << "Setting memory: " << hint->mem_idx << std::endl;
       self().SetNodeVal(hint, *val);
     }
   }
+  self()._dbg << "\tDone.\n";
+
 }
 
 template<typename S>

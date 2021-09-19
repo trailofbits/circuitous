@@ -190,6 +190,8 @@ namespace circ::run {
     State state;
     std::optional<bool> result;
 
+    std::stringstream _dbg;
+
     Spawn(Circuit *circuit_, VerifyInstruction *current_,
           CtxCollector *collector_)
         : parent_t(circuit_), current(current_),
@@ -266,6 +268,79 @@ namespace circ::run {
       parent_t::init();
       init_notify<Advice, OutputRegister, OutputErrorFlag, OutputTimestamp, Memory>();
     }
+
+    template< typename S >
+    struct DBGPrint {
+      S *parent;
+
+      std::unordered_set< Operation * > seen;
+      std::stringstream ss;
+
+      DBGPrint(S *parent_) : parent(parent_) { ss << parent->_dbg.str(); }
+
+      void dispatch(Operation *op, bool skip_unset) {
+        if (seen.count(op)) return;
+        seen.insert(op);
+
+        auto next = [&]() {
+          for (auto o : op->operands)
+            this->dispatch(o, skip_unset);
+        };
+
+        ss << " [" << op->id() << "] " << op->Name() << " ";
+        if (!parent->node_values.count(op)) {
+          ss << "(no value set)";
+          if (skip_unset) {
+            ss << std::endl;
+            return;
+          }
+        } else {
+          auto val = parent->GetNodeVal(op);
+          ss << (val ? val->toString(16, false) : "(undef)");
+        }
+
+        if (op->operands.size() == 0) {
+          ss << std::endl;
+          return;
+        }
+
+        ss << " ->\n";
+
+        auto fmt_node_value = [&](auto o) {
+          ss << o->id() << " ";
+          if (!parent->node_values.count(op))
+            ss << " (no value set)";
+          else {
+            auto val = parent->GetNodeVal(o);
+            ss << (val ? val->toString(16, false) : "(undef)");
+          }
+        };
+
+        if (op->op_code == VerifyInstruction::kind) {
+          for (auto o : op->operands) {
+            if (o->op_code == DecodeCondition::kind) {
+              ss << " ~~~> decode: ";
+              fmt_node_value(o);
+              ss << std::endl;
+            }
+          }
+        }
+
+        for (auto o : op->operands) {
+          ss << "\t - ";
+          fmt_node_value(o);
+          ss << std::endl;
+        }
+        next();
+      }
+
+      DBGPrint &gather(bool skip_unset = true) {
+        dispatch(parent->current, skip_unset);
+        return *this;
+      }
+
+      std::string get() { return ss.str(); }
+    };
 
     std::string dbg_context_dump() {
       std::stringstream ss;
