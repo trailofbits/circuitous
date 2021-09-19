@@ -25,6 +25,7 @@ class VerifyTest(Test):
           print("Microx fail in: " + self.name + " case " + case.name)
           print("Bytes: " + case.input.bytes)
           raise e
+      case.input.mem_hints = case.expected.mem_hints
       case.expected = case.expected.mutate(self.e_mutators[idx])
       case.expected.result = result
       case.run_mode = '--verify'
