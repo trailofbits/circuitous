@@ -146,6 +146,12 @@ namespace circ::run {
       if (successes.size() > 1) {
         LOG(FATAL) << "Multiple contexts satisfied." << successes.size();
       }
+      std::stringstream ss;
+      runners_do([ & ](auto &runner){
+          using dbg_printer = typename Spawn::template DBGPrint< Spawn >;
+          ss << dbg_printer{&runner}.gather(false).get();
+      });
+
       return successes.size() == 1;
     }
   };
