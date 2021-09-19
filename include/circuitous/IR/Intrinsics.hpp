@@ -216,6 +216,21 @@ namespace circ::irops {
   };
 
   template<>
+  struct Instance< AdviceConstraint > : Instance_< AdviceConstraint > {
+    llvm::CallInst *call;
+
+    Instance(llvm::CallInst *call_) : Instance_(call_), call(call_) {}
+
+    llvm::Value *advice() { CHECK(*this); return call->getArgOperand(1); }
+    llvm::Value *dynamic() { CHECK(*this); return call->getArgOperand(0); }
+
+    void set_dynamic(llvm::Value *v) {
+      CHECK(*this);
+      call->setArgOperand(1, v);
+    }
+  };
+
+  template<>
   struct Instance< Select > : Instance_< Select > {
     llvm::CallInst *call;
 
