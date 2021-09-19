@@ -3,6 +3,7 @@
  */
 
 #include <circuitous/IR/Circuit.hpp>
+#include <circuitous/IR/Memory.hpp>
 #include <circuitous/IR/Lifter.hpp>
 #include <circuitous/IR/Verify.hpp>
 
@@ -358,7 +359,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
     if (irops::Memory::is(fn)) {
       auto [_, id] = irops::Memory::parse_args< uint32_t >(fn);
-      return VisitGenericIntrinsic< Memory >(call, fn, id);
+      return VisitGenericIntrinsic< Memory >(call, fn,
+                                             irops::memory::size(impl->ptr_size), id);
     }
     if (irops::And::is(fn)) {
       return VisitGenericIntrinsic< And >(call, fn);
