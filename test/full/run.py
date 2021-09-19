@@ -258,11 +258,22 @@ class Comparator(SimulateCWDMixin):
     return out
 
   def compare_verify(self, input, after, expected):
+    accept = True
+    message = ""
+    if expected.result and not TC.compare_hints(after.mem_hints, expected.mem_hints):
+      accept = False
+      message += "mem_hints do not match\n---\n"
+      message += "".join(str(x) for x in after.mem_hints) + "\n"
+      message += "---\n"
+      message += "".join(str(x) for x in expected.mem_hints) + "\n"
+      message += "---\n"
     if expected.result == after.result:
-      return True, ""
+      if not accept:
+        return accept, message + "But result seems fine.\n"
+      return accept, ""
     if expected.result:
-      return False, "Should accept, but did not."
-    return False, "Should not accept, but did."
+      return False, message + "Should accept, but did not.\n"
+    return False, message + "Should not accept, but did.\n"
 
   def compare_case(self, input, after, expected):
     accept = True
