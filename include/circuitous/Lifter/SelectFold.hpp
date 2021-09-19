@@ -172,7 +172,7 @@ namespace circ {
         auto ctx = llvm::dyn_cast<llvm::CallInst>(ctx_);
         CHECK(ctx) << remill::LLVMThingToString(ctx_);
 
-        std::vector<llvm::Value *> ctx_args{ctx->arg_begin(), ctx->arg_end()};
+        std::vector<llvm::Value *> ctx_args;
         std::unordered_map<blueprint_t, std::size_t> idxs;
 
         for (std::size_t i = 0; i < selects.size(); ++i) {
