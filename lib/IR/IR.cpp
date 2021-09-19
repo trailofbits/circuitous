@@ -3,6 +3,8 @@
  */
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/IR/Memory.hpp>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
@@ -100,6 +102,10 @@ bool Extract::Equals(const Operation *that_) const {
 
 bool InputImmediate::Equals(const Operation *other) const {
   return this->Operation::Equals(other);
+}
+
+uint32_t Memory::expected_size(uint32_t ptr_size) {
+  return irops::memory::size(ptr_size);
 }
 
 }  // namespace circ
