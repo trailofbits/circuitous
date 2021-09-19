@@ -116,13 +116,20 @@ namespace circ::run {
       return x;
     }
 
+    auto push_todo(Operation *op)
+    {
+      if (is_one_of< InputInstructionBits, Extract, Concat, DecodeCondition >(op))
+        return todo.push_back(op);
+      return todo.push_back(op);
+    }
+
     void Push(Operation *op) {
       if (!is_one_of<ReadConstraint, WriteConstraint>(op)) {
-        return todo.push_back(op);
+        return push_todo(op);
       }
       auto mem_idx = mem_order.mem_idx(op);
       if (*mem_idx == mem_order.allowed) {
-        return todo.push_back(op);
+        return push_todo(op);
       }
       waiting[*mem_idx].push_back(op);
     }
@@ -358,11 +365,29 @@ namespace circ::run {
       return ss.str();
     }
 
+    std::optional< bool > short_circuit(Operation *op) {
+      // This can happen if `op` is not in `current` context.
+      if (!this->has_value(op))
+        return {};
+      switch (op->op_code) {
+        case DecodeCondition::kind: {
+            if (this->GetNodeVal(op) == this->FalseVal())
+              return std::make_optional(false);
+            return {};
+        }
+        default: return {};
+      }
+    }
+
     bool Run() {
       init();
       while (!state.todo.empty()) {
         auto x = state.Pop();
         Dispatch(x);
+        if (auto r = short_circuit(x)) {
+          result = *r;
+          return *result;
+        }
       }
       result = [&](){
         if (auto res = this->GetNodeVal(current)) {
