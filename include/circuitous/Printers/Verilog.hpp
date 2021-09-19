@@ -5,7 +5,9 @@
 #pragma pragma once
 
 #include <circuitous/IR/Circuit.hpp>
+#include <circuitous/IR/Memory.hpp>
 
+#include <cmath>
 #include <deque>
 #include <sstream>
 #include <string>
@@ -27,6 +29,13 @@ namespace circ::print {
       return self().op_names[op];
     }
 
+    template< typename I > requires std::is_integral_v< I >
+    std::string wire_size(I size) {
+      std::stringstream ss;
+      ss << "[" << size - 1 << ": 0]";
+      return ss.str();
+    }
+
     std::string wire_name(Operation *op) {
       std::stringstream ss;
       ss << std::hex << "v" << op->id();
@@ -37,10 +46,13 @@ namespace circ::print {
       return "wire " + name + " = " + lhs + ";\n";
     }
 
-    std::string make_wire(Operation *op, std::string lhs) {
-      auto name = wire_name(op);
+    std::string make_wire(const std::string name, std::string lhs) {
       self().os << wire_decl(name, std::move(lhs));
       return name;
+    }
+
+    std::string make_wire(Operation *op, std::string lhs) {
+      return make_wire(wire_name(op), std::move(lhs));
     }
 
     std::string concat(const std::vector< std::string > &ops) {
@@ -60,13 +72,12 @@ namespace circ::print {
       ss << get(ops[0]);
       for (std::size_t i = 1; i < ops.size(); ++i)
         ss << " " << f << " " << get(ops[i]);
-      LOG(INFO) << ss.str();
       return ss.str();
     }
 
     std::string ternary_stmt(Operation *cond, Operation *true_v, Operation *false_v) {
       std::stringstream ss;
-      ss << cond << " ? " << true_v << " " << false_v;
+      ss << get(cond) << " ? " << get(true_v) << " " << get(false_v);
       return ss.str();
     }
 
@@ -174,8 +185,6 @@ namespace circ::print {
         case And::kind:
           return "&";
         case CXor::kind: return "^";
-        case OnlyOneCondition::kind:
-          return "TODO";
         case Concat::kind:
           return ",";
         default:
@@ -183,15 +192,60 @@ namespace circ::print {
       }
     }
 
+    std::string cast(auto size, auto value) {
+      std::stringstream ss;
+      ss << size << "'d" << value;
+      return ss.str();
+    }
+
     std::string bin_zero(auto size) {
       return std::to_string(size) + "'b" + std::string(size, '0');
     }
 
+    std::string true_val() { return "1'b1"; }
+    std::string false_val() { return "1'b0"; }
+
     std::string Visit(Operation *op) {
-      LOG(FATAL) << "Cannot print in verilog: " << pretty_print(op);
+      LOG(FATAL) << "Cannot print in verilog: " << pretty_print< true >(op)
+                 << "\n" << self().dbg.str();
     }
 
-    std::string Visit(OnlyOneCondition *op)  { return make(zip(), op); }
+    // Each extra operand V(n + 1) introduces
+    // R(n) - result of computation - true if at least one `1` is present
+    // O(n) - result of overflow flag - true if at least two `1` were present
+    // check_overflow(O, R, V) : O || (R && V)
+    //   overflow is saturared and it is raised if both current value and previous
+    //   are set to `1` (i.e. there are at least two `1`s in inputs)
+    // R(n + 1) := R(n) || V(n + 1)
+    // O(n + 1) := check_overflow(O(n), R(n), V(n + 1))
+    // Final value is then computed as
+    // !O(m) && R(m)
+    //   i.e. overflow did not happen, and at least one `1` was found.
+    std::string Visit(OnlyOneCondition *op)  {
+      // TOOD(lukas): At this point probably a submodule is a better fit.
+      //              Unique identifier used to produced unique names.
+      ++only_one_cond;
+
+      auto base = [&](std::string s) { return s + "nx" + std::to_string(only_one_cond); };
+      auto rn = [&](auto i) { return base("r") + "x" + std::to_string(i); };
+      auto on = [&](auto i) { return base("o") + "x" + std::to_string(i); };
+
+      // `( rn, on )`.
+      using step_t = std::tuple< std::string, std::string >;
+      std::vector< step_t > steps = { { false_val(), false_val() } };
+
+      for (std::size_t i = 0; i < op->operands.size(); ++i) {
+        const auto &[prev_rn, prev_on] = steps.back();
+        auto rn_next = prev_rn + " || " + get(op->operands[i]);
+        auto on_next = prev_on + " || ( " + prev_rn + " && " + get(op->operands[i]) + ")";
+        steps.emplace_back(make_wire(rn(i), rn_next), make_wire(on(i), on_next));
+      }
+
+      const auto &[last_rn, last_on] = steps.back();
+      std::stringstream ss;
+      ss << "(!" << last_on << ") && " << last_rn;
+      return make_wire(op, ss.str());
+    }
     std::string Visit(VerifyInstruction *op) { return make(zip(), op); }
 
     /* Constraints */
@@ -201,8 +255,50 @@ namespace circ::print {
     std::string Visit(PreservedConstraint *op) { return make(zip(), op); }
     std::string Visit(CopyConstraint *op)      { return make(zip(), op); }
 
-    std::string Visit(ReadConstraint *)  { LOG(FATAL) << "memop"; }
-    std::string Visit(WriteConstraint *) { LOG(FATAL) << "memop"; }
+    std::string make_extract(const std::string &from, uint64_t high_inc, uint64_t low_inc)
+    {
+      std::stringstream ss;
+      ss << from << "[" << high_inc << ": " << low_inc << "]";
+      return ss.str();
+    }
+
+    using parsed_mem_t = irops::memory::Parsed< std::string >;
+    parsed_mem_t parse_mem(Operation *op) {
+      auto extract = [&](auto from, auto current, auto size) {
+        return make_extract(from, current + size - 1, current);
+      };
+      return irops::memory::parse(get(op), extract, self().circuit->ptr_size);
+    }
+
+    std::string make_memory_constraint(MemoryConstraint *op, bool is_write)
+    {
+      auto hint = parse_mem(op->hint_arg());
+
+      std::stringstream ss;
+      auto apply = [&](const std::string &lhs, const std::string &rhs, std::string prefix="") {
+        ss << prefix << " " << lhs << " == " << rhs;
+      };
+
+      auto add = [&](auto &&... args) { return apply(args ..., " &&"); };
+
+      // TODO(lukas): It would be maybe better to instead concat the right side
+      //              and compare with whole hint?
+      std::string mode = (is_write) ? "1" : "0";
+
+      apply(get(op->size_arg())    , hint.size());
+      add(  get(op->addr_arg())    , hint.addr());
+      add(  get(op->ts_arg())      , hint.timestamp());
+      // In reads `val_arg()` is not present
+      if (is_write)
+        add(  get(op->val_arg())     , hint.value());
+      add(  cast(4, op->mem_idx()) , hint.id());
+      add(  "1'b1"                 , hint.used());
+      add(  bin_zero(6u)           , hint.reserved());
+      add(  "1'b" + mode           , hint.mode());
+      return make_wire(op, ss.str());
+    }
+    std::string Visit(ReadConstraint *op) { return make_memory_constraint(op, false); }
+    std::string Visit(WriteConstraint *op) { return make_memory_constraint(op, true); }
 
     /* Decode condition */
     std::string Visit(DecodeCondition *op) { return make(zip(), op); }
@@ -217,9 +313,7 @@ namespace circ::print {
 
     std::string Visit(Extract *op) {
       auto from = get(op->operands[0]);
-      std::stringstream ss;
-      ss << from << "[" << op->high_bit_exc - 1 << ": " << op->low_bit_inc << "]";
-      return make_wire(op, ss.str());
+      return make_wire(op, make_extract(from, op->high_bit_exc - 1, op->low_bit_inc));
     }
 
     /* Helpers */
@@ -245,7 +339,7 @@ namespace circ::print {
     std::string Visit(Trunc *op) { return make(unary(), op, std::string("todo.trunc")); }
     std::string Visit(ZExt *op)  {
       auto prefix = bin_zero(op->size - op->operands[0]->size);
-      return make_wire(op, concat({prefix, get(op)}));
+      return make_wire(op, concat({prefix, get(op->operands[0])}));
     }
 
     std::string Visit(SExt *op)  { return make(unary(), op, std::string("todo.sext")); }
@@ -278,7 +372,23 @@ namespace circ::print {
 
     /* High level */
     std::string Visit(PopulationCount *op) {
-      return make(unary(), op, std::string("todo.pc"));
+      uint32_t operand_size = op->operands[0]->size;
+      uint32_t rsize = static_cast< uint32_t >(std::ceil(std::log2(operand_size)));
+      uint32_t pad_size = operand_size - rsize;
+
+      std::stringstream ss;
+      auto from = get(op->operands[0]);
+      for (std::size_t i = 0; i < operand_size; ++i) {
+        ss << from << "[" << i << "]";
+        if (i != operand_size - 1)
+          ss << " + ";
+      }
+      auto name = wire_name(op);
+      auto aux = name + ".aux";
+
+      self().os << "wire " << aux << " " << wire_size(rsize) << " = " << ss.str() << ";\n";
+      self().os << "wire " << name << " = " << concat({bin_zero(pad_size), aux}) << ";\n";
+      return name;
     }
 
     std::string Visit(CountLeadingZeroes *op) {
@@ -290,6 +400,8 @@ namespace circ::print {
     }
 
     std::string Visit(Circuit *op) { return get(op->operands[0]); }
+
+    uint32_t only_one_cond = 0u;
   };
 
   struct dbg_verbose {
@@ -320,12 +432,6 @@ namespace circ::print {
       os << "\n);\n";
     }
 
-    template< typename I > requires std::is_integral_v< I >
-    std::string wire_size(I size) {
-      std::stringstream ss;
-      ss << "[" << size - 1 << ": 0]";
-      return ss.str();
-    }
 
     std::string &give_name(Operation *op, std::string name) {
       dbg << "Naming: " << pretty_print< false >(op) << " -> " << name << std::endl;
