@@ -212,6 +212,17 @@ namespace collect {
     }
   };
 
+  struct AllowsUndef {
+    std::optional< bool > allows;
+
+    void Root(Operation *op) {}
+
+    void Update(Operation *node, Operation *user) {
+      if (node->op_code == Undefined::kind)
+        allows = true;
+    }
+  };
+
 
   template< typename ...Ts >
   struct UpTree {
@@ -258,6 +269,29 @@ struct Collector : Collectors ... {
 };
 
 using CtxCollector = Collector<collect::Ctxs>;
+
+static inline bool allows_undef_(Operation *op, std::unordered_set< Operation * > &seen)
+{
+  if (seen.count(op)) return false;
+  seen.insert(op);
+
+  if (op->op_code == Undefined::kind)
+    return true;
+
+  for (auto x : op->operands)
+    if (allows_undef_(x, seen))
+      return true;
+  return false;
+}
+static inline bool allows_undef(Operation *op) {
+  if (op->op_code != RegConstraint::kind ||
+      op->operands[1]->op_code != OutputRegister::kind)
+  {
+    return false;
+  }
+  std::unordered_set< Operation * > seen;
+  return allows_undef_(op, seen);
+}
 
 static inline Operation *GetContext(Operation *op) {
   collect::UpTree<VerifyInstruction> collector;
