@@ -25,14 +25,19 @@ void Ctx_<S>::verify_cond(Operation *op) {
   CHECK(op->operands.size() == 2);
   // TODO(lukas): Until better system of undef handling is implemented
   //              if some value is undefined == no change happened.
-  if (op->operands[0]->op_code == Undefined::kind &&
-      op->operands[1]->op_code == OutputRegister::kind) {
+  if (allows_undef(op) && (!this->get(op, 0) || !this->get(op, 1))) {
+    // If undef bubbles up here, and test specified that reg is undef,
+    // compare values.
+    if (!this->get(op, 0) && !this->get(op, 1)) {
+      self().SetNodeVal(op, this->BoolVal(true));
+      return;
+    }
+
     auto name = op->operands[1]->Name();
     auto as_ref = llvm::StringRef(name);
     auto has_prefix = as_ref.consume_front("Out.register.");
     CHECK(has_prefix);
     auto in = this->circuit->template fetch_reg< InputRegister, false >(as_ref.str());
-    LOG(INFO) << in;
     self().SetNodeVal(op, this->BoolVal(this->get(in) == this->get(op, 1)));
     return;
   }

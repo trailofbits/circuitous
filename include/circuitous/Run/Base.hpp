@@ -6,6 +6,7 @@
 
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Verify.hpp>
+#include <circuitous/IR/Shapes.hpp>
 
 #include <circuitous/Run/Trace.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
@@ -414,7 +415,7 @@ namespace circ::run {
         parent_t::init();
         std::unordered_set<Operation *> preserved;
         for (auto op : this->derived) {
-          if (op->op_code == Advice::kind) {
+          if (op->op_code == Advice::kind || op->op_code == Memory::kind) {
             preserved.insert(op);
             continue;
           }
