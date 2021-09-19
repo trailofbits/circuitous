@@ -2,6 +2,8 @@
  * Copyright (c) 2020-2021 Trail of Bits, Inc.
  */
 
+#pragma once
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
@@ -95,5 +97,25 @@ namespace circ {
       return get();
     }
   };
+
+  struct CtxGatherer {
+    using op_ctxs_t = std::unordered_map< llvm::Value *, std::unordered_set< llvm::Value * > >;
+    op_ctxs_t op_ctxs;
+
+    void color(llvm::Value *ctx, llvm::Instruction *current) {
+      op_ctxs[current].insert(ctx);
+
+      for (auto u : current->operand_values())
+        if (auto inst = llvm::dyn_cast< llvm::Instruction >(u))
+          color(ctx, inst);
+    }
+
+    op_ctxs_t run(llvm::Function *fn) {
+      auto exec = [&](auto ctx) { this->color(ctx, ctx); };
+      irops::VerifyInst::for_all_in(fn, exec);
+      return std::move(op_ctxs);
+    }
+  };
+
 
 }  // namespace circ
