@@ -6,6 +6,8 @@
 
 #include <circuitous/IR/IR.h>
 #include <circuitous/IR/Intrinsics.hpp>
+#include <circuitous/Lifter/DependencyVisitor.hpp>
+
 
 #include <remill/BC/Util.h>
 
@@ -205,4 +207,37 @@ namespace circ {
       use_blueprints();
     }
   };
-} // namespace cirucituous
+
+
+  struct ACUnfolder {
+    using op_ctxs_t = CtxGatherer::op_ctxs_t;
+
+    llvm::Function *fn = nullptr;
+    op_ctxs_t op_ctxs;
+
+    ACUnfolder(llvm::Function *fn_) : fn(fn_), op_ctxs(CtxGatherer().run(fn_)) {}
+
+    void run(llvm::CallInst *call) {
+      auto ac = irops::Instance< irops::AdviceConstraint >(call);
+
+      auto have_compatible_ctxs = [&](auto &use) {
+        auto user = use.getUser();
+        if (auto call = llvm::dyn_cast< llvm::CallInst >(user))
+          return false;
+        return op_ctxs[user] == op_ctxs[call];
+      };
+
+      ac.dynamic()->replaceUsesWithIf(ac.advice(), have_compatible_ctxs);
+    }
+
+    void run() {
+      auto exec = [&](auto ac) { this->run(ac); };
+      irops::AdviceConstraint::for_all_in(fn, exec);
+    }
+  };
+
+
+  static inline void unfold_advice_constraints(llvm::Function *fn) {
+    ACUnfolder(fn).run();
+  }
+} // namespace circuitous
