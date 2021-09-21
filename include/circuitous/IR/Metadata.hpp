@@ -62,12 +62,14 @@ namespace circ {
   struct circir_llvm_meta {
     static inline const std::string lifted_bytes = "__circir.lifted_bytes";
     static inline const std::string llvm_inst = "__circir.llvm_inst";
+    static inline const std::string llvm_source_dump = "__circir.llvm_source_dump";
 
     // TODO(lukas): Replace with std::vector if there is only a small
     //              number of entries.
     static inline const std::unordered_set< std::string > all = {
       lifted_bytes,
       llvm_inst,
+      llvm_source_dump,
     };
   };
 
