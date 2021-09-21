@@ -113,4 +113,4 @@ namespace circ::irops::memory {
       out.vals.push_back(extract(out.defs[i]));
     return out;
   }
-} // namespace circ::mem
+} // namespace circ::irops::memory
