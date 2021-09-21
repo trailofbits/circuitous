@@ -123,6 +123,8 @@ namespace circ::eqsat {
 
     OpTemplate Visit(Or *op)  { return opcode(op); }
     OpTemplate Visit(And *op) { return opcode(op); }
+
+    OpTemplate Visit(Circuit *) { LOG(FATAL) << "Unexpected case encountered in Visit."; }
   };
 
   struct EGraphBuilder
