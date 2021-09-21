@@ -136,6 +136,8 @@ using Constraint = type_fragment< 0x6 >;
 using Uncat = type_fragment< 0x7 >;
 using BoolOp = type_fragment< 0x9 >;
 
+using Root = type_fragment< 0xf >;
+
 /* Leaves */
 
 template< template< typename > class T >
@@ -567,68 +569,8 @@ tl::TL<
   Or
 >;
 
-using node_list_t = tl::merge< generic_list_t, llvm_ops_t, leaf_values_ts >;
-
-  // TODO(lukas): Generalise comparator and move to `tl::`.
-  template< typename F, typename H, typename ... Tail >
-  auto runtime_find_(uint32_t id, F &&f) {
-    if (H::kind == id) {
-      return f(static_cast<H *>(nullptr));
-    }
-    if constexpr (sizeof...(Tail) != 0) {
-      return runtime_find_< F, Tail ... >(id, f);
-    } else {
-      LOG(FATAL) << "runtime find on: " << id << " failed";
-    }
-  }
-
-  // These may be quite expensive to re-compute, if they are called
-  // often, consider refactor or at least caching.
-  template< typename F, typename ... Ts >
-  auto runtime_find( tl::TL< Ts ... >, uint32_t idx, F &&f) {
-    return runtime_find_< F, Ts... >(idx, std::forward< F >(f));
-  }
+using subnode_list_t = tl::merge< generic_list_t, llvm_ops_t, leaf_values_ts >;
 
 
-// TODO(lukas): This is just a hotfix, ideally we want the type list
-//              will all the nodes to carry names.
-static inline std::string fragment_as_str(uint32_t kind) {
-  std::stringstream ss;
-  ss << std::hex << "[ ";
-  ss << (kind & (0xffu << 24)) << " "
-     << (kind & (0xffffu << 8)) << " "
-     << (kind & 0xffu);
-  ss << " ]: ";
-
-
-  auto get_name = [](auto x) {
-    using raw_t = std::remove_pointer_t< std::decay_t< decltype( x ) > >;
-    return raw_t::op_code_str();
-  };
-
-  static std::unordered_map< uint32_t, std::string > cache = { { 1, "Circuit" } };
-  if (!cache.count(kind)) {
-    cache[kind] = runtime_find(node_list_t{}, kind, get_name);
-  }
-
-  ss << cache[kind];
-  return ss.str();
-}
-
-template<typename Kind>
-static inline std::string to_string(Kind kind) {
-  return fragment_as_str(kind);
-}
-
-template< bool with_meta = true >
-static inline std::string pretty_print(Operation *op) {
-  std::stringstream ss;
-  ss << op->id() << ": " << to_string(op->op_code);
-  if constexpr (with_meta) {
-    if (op->meta_size())
-      ss << std::endl << op->dump_meta();
-  }
-  return ss.str();
-}
 
 }  // namespace circ
