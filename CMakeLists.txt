@@ -88,12 +88,21 @@ add_library(circuitous_printers STATIC
 
 target_link_libraries(circuitous_printers PUBLIC circuitous_settings)
 
+add_library(circuitous_eqsat STATIC
+  lib/Transforms/EqSat/Graph.cpp
+)
+
+target_link_libraries(circuitous_eqsat PUBLIC circuitous_settings)
+
 add_library(circuitous_transforms STATIC
   lib/Transforms/MergeAdvices.cpp
   lib/Transforms/EqualitySaturation.cpp
 )
 
-target_link_libraries(circuitous_transforms PUBLIC circuitous_settings)
+target_link_libraries(circuitous_transforms PUBLIC
+  circuitous_eqsat
+  circuitous_settings
+)
 
 #
 # executable targets
