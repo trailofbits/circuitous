@@ -3,10 +3,11 @@
 from tools.tc import State, Test, S, MS, random_state, MemHint
 from tools.byte_generator import intel
 from tools.model_test import ModelTest
+from tools.verify_test import VerifyTest
 import tools.tgen as tgen
 
 mov = {
-  ModelTest("gen all mov") \
+  VerifyTest("gen all mov") \
   .bytes(intel(tgen.mov()))
   .tags({"mov", "generated"})
   .DI(S(0x1).RAX(0x0).aflags(0))
@@ -15,21 +16,21 @@ mov = {
 }
 
 add = {
-  ModelTest("gen all add") \
+  VerifyTest("gen all add") \
   .bytes(intel(tgen.IDef("add").iadd().get()))
   .tags({"add", "generated", "gen_add"})
   .DI(S(0x41124))
   .all_defined(),
 
-  ModelTest("gen all add") \
+  VerifyTest("gen all add") \
   .bytes(["674401848012121212"])
-  .tags({"add", "generated", "tmp"})
+  .tags({"add", "generated"})
   .DI(S(0x41124))
   .all_defined(),
 }
 
 leave = {
-  ModelTest("leave") \
+  VerifyTest("leave") \
   .bytes(intel(["leave"]))
   # NOTE(lukas): Not part of tiny86
   .tags({"leave", "todo"})
@@ -39,7 +40,7 @@ leave = {
 }
 
 ret = {
-  ModelTest("ret") \
+  VerifyTest("ret") \
   .bytes(intel(["ret"]))
   .tags({"ret"})
   .case(run_bytes = 0, I = random_state(42), R=True)
@@ -48,7 +49,7 @@ ret = {
 }
 
 nop = {
-  ModelTest("nop") \
+  VerifyTest("nop") \
   .bytes(intel(["nop"]))
   .tags({"nop"})
   .case(run_bytes = 0, I = random_state(42).ts(24), R=True)
@@ -57,7 +58,7 @@ nop = {
 }
 
 neg = {
-  ModelTest("neg") \
+  VerifyTest("neg") \
   .bytes(intel(["neg rax"]))
   .tags({"neg"})
   .case(run_bytes = 0, I = random_state(42).ts(24), R=True)
@@ -66,7 +67,7 @@ neg = {
 }
 
 big = {
-  ModelTest("gen all add") \
+  VerifyTest("gen all add") \
   .bytes(tgen.compile(intel, [tgen.IDef("add").iadd(), tgen.IDef("mov").all()]))
   .tags({"generated", "gen_big"})
   .DI(S(0x41124))
@@ -74,7 +75,7 @@ big = {
 }
 
 lahf = {
-  ModelTest("lahf") \
+  VerifyTest("lahf") \
   .bytes(intel(["lahf"]))
   .tags({"lahf"})
   .case(run_bytes = 0, I = random_state(42).ts(24), R=True)
@@ -83,7 +84,7 @@ lahf = {
 }
 
 test = {
-  ModelTest("gen all test") \
+  VerifyTest("gen all test") \
   .bytes(tgen.compile(intel, [tgen.IDef("test").iadd()]))
   .tags({"test", "generated"})
   .DI(S(0x1).RAX(0x0).aflags(0))
@@ -91,7 +92,7 @@ test = {
 }
 
 bsr = {
-  ModelTest("bsr") \
+  VerifyTest("bsr") \
   .bytes(tgen.compile(intel, [tgen.bsr()]))
   .tags({"bsr", "generated"})
   .DI(S(0x1).RAX(0x0).aflags(0))
@@ -99,7 +100,7 @@ bsr = {
 }
 
 bt = {
-  ModelTest("bt") \
+  VerifyTest("bt") \
   .bytes(tgen.compile(intel, [tgen.bsr()]))
   .tags({"bt", "generated"})
   .DI(random_state(42))
@@ -113,30 +114,34 @@ flag_ops = {
   .case(run_bytes = 0, DE = MS().DF(1), DI = MS().aflags(1), R=True)
   .case(run_bytes = 0, DE = MS().DF(1), DI = MS().aflags(0), R=True),
 
-  ModelTest("stc").bytes(intel(["stc"])).tags({"stc", "min"})
+  VerifyTest("stc").bytes(intel(["stc"])).tags({"stc", "min"})
   .DI(random_state(42))
   .case(run_bytes = 0, DI = MS().aflags(1), R=True)
   .case(run_bytes = 0, DI = MS().aflags(0), R=True),
 
-  Test("cld").bytes(intel(["cld"])).tags({"cld", "min"})
+  Test("cld").bytes(intel(["cld"]))
+  .tags({"cld", "min"})
+  .mode("--verify")
   .DI(random_state(42).RIP(0x98120))
-  .case(run_bytes = 0, DI = MS().aflags(1), DE = MS().aflags(1).DF(0x0).RIP(0x98121).ts(1), R=True)
-  .case(run_bytes = 0, DI = MS().aflags(0), DE = MS().aflags(0).DF(0x0).RIP(0x98121).ts(1), R=True),
+  .case(run_bytes = 0, DI = MS().aflags(1),
+        DE = MS().aflags(1).DF(0x0).RIP(0x98121).ts(1), R=True)
+  .case(run_bytes = 0, DI = MS().aflags(0),
+        DE = MS().aflags(0).DF(0x0).RIP(0x98121).ts(1), R=True),
 
-  ModelTest("clc").bytes(intel(["clc"])).tags({"clc", "min"})
+  VerifyTest("clc").bytes(intel(["clc"])).tags({"clc", "min"})
   .DI(random_state(42))
   .case(run_bytes = 0, DI = MS().aflags(1), R=True)
   .case(run_bytes = 0, DI = MS().aflags(0), R=True),
 
-  ModelTest("pushf").bytes(intel(["pushf"])).tags({"pushf", "min", "todo"}).seed(4212)
+  VerifyTest("pushf").bytes(intel(["pushf"])).tags({"pushf", "min", "todo"}).seed(4212)
   .case(run_bytes = 0, I = S(0x2000).aflags(1), R=True)
   .random(5, run_bytes = 0, R = True),
 
-  ModelTest("popf").bytes(intel(["popf"])).tags({"popf", "min", "todo"}).seed(4212)
+  VerifyTest("popf").bytes(intel(["popf"])).tags({"popf", "min", "todo"}).seed(4212)
   .random(5, run_bytes = 0, R = True),
 
   # This is painful because microx
-  ModelTest("aflags").bytes(intel(["popf", "pushf", "clc", "cld", "stc"]))
+  VerifyTest("aflags").bytes(intel(["popf", "pushf", "clc", "cld", "stc"]))
   .tags({"aflags", "todo"})
   .all_defined(I = random_state(42))
   .all_defined(I = random_state(43).aflags(0))
@@ -144,24 +149,24 @@ flag_ops = {
 }
 
 movxzsx = {
-  ModelTest("movsx") \
+  VerifyTest("movsx") \
   .bytes(tgen.compile(intel, [tgen.movsx()]))
   .tags({"movsx", "generated", "huge-movsx"}).seed(4123)
   .all_defined(random = True),
 
-  ModelTest("movsx") \
+  VerifyTest("movsx") \
   .bytes(intel(["movsx rax, word ptr [rax + 2 * rcx + 0x2122]"]))
   .tags({"movsx", "generated", "small-movsx"}).seed(4123)
   .DI(S(0x4212).RCX(0x400).RIP(0xdcae6e9fb39cfd4d))
   .case(run_bytes = 0, R=True),
 
-  ModelTest("movzx") \
+  VerifyTest("movzx") \
   .bytes(tgen.compile(intel, [tgen.movsx()]))
   .tags({"movzx", "generated", "huge-movzx"}).seed(4123)
   .DI(S(0x1).RAX(0x0).aflags(0))
   .all_defined(random=True),
 
-  ModelTest("movzx") \
+  VerifyTest("movzx") \
   .bytes(intel(["movzx rax, word ptr [rax + 2 * rcx + 0x2122]"]))
   .tags({"movzx", "generated", "small-movzx"}).seed(4123)
   .DI(S(0x1).RAX(0x0).aflags(0))
@@ -169,73 +174,78 @@ movxzsx = {
 }
 
 cmc = {
-  ModelTest("cmc").bytes(intel(["cmc"])).tags({"cmc", "min"})
+  VerifyTest("cmc").bytes(intel(["cmc"])).tags({"cmc", "min"})
   .DI(random_state(42))
   .case(run_bytes = 0, DI = MS().aflags(1), R=True)
   .case(run_bytes = 0, DI = MS().aflags(0), R=True),
 }
 
 _ahf = {
-  ModelTest("sahf").bytes(intel(["sahf"])).tags({"sahf", "min"})
+  VerifyTest("sahf").bytes(intel(["sahf"])).tags({"sahf", "min"})
   .DI(random_state(42))
   .case(run_bytes = 0, DI = MS().aflags(1), R=True)
   .case(run_bytes = 0, DI = MS().aflags(0), R=True),
 
-  ModelTest("lahf").bytes(intel(["lahf"])).tags({"lahf", "min"})
+  VerifyTest("lahf").bytes(intel(["lahf"])).tags({"lahf", "min"})
   .DI(random_state(42))
   .case(run_bytes = 0, DI = MS().aflags(1), R=True)
   .case(run_bytes = 0, DI = MS().aflags(0), R=True),
 }
 
 bs = {
-  ModelTest("bsr") \
+  VerifyTest("bsr") \
   .bytes(tgen.compile(intel, [tgen.bsr()]))
   .tags({"generated", "huge-bsr"}).seed(4123)
   .all_defined(random=True),
 
-  ModelTest("bsf") \
+  VerifyTest("bsf") \
   .bytes(tgen.compile(intel, [tgen.bsf()]))
   .tags({"generated", "huge-bsf"}).seed(4123)
   .all_defined(random=True),
 }
 
 ret = {
-  ModelTest("ret").bytes(intel(["ret"])).tags({"ret", "min"})
+  VerifyTest("ret").bytes(intel(["ret"])).tags({"ret", "min"})
   .seed(4124)
   .random(5, run_bytes = 0, R = True),
 
-  ModelTest("ret imm").bytes(intel(["ret 0x12"])).tags({"ret", "min"})
+  VerifyTest("ret imm").bytes(intel(["ret 0x12"])).tags({"ret", "min"})
   .DI(random_state(4124))
   .scases(intel, ["ret 0x14", "ret 0xff", "ret 0x0"], R = True),
 }
 
 #TODO(lukas): Test some modulos
 bt_src = {
-  ModelTest("bts") \
+  VerifyTest("bts") \
   .bytes(tgen.compile(intel, [tgen.bts()]))
   .tags({"generated", "huge-bts"}).seed(4123)
   .all_defined(random=True),
 
-  ModelTest("btr") \
+  VerifyTest("btr") \
   .bytes(tgen.compile(intel, [tgen.btr()]))
   .tags({"generated", "huge-btr"}).seed(4123)
   .all_defined(random=True),
 
-  ModelTest("btc") \
+  VerifyTest("btc") \
   .bytes(tgen.compile(intel, [tgen.btc()]))
   .tags({"generated", "huge-btc"}).seed(4123)
-  .all_defined(random=True),
+  .all_defined(random=True, DE=MS().uOF().uSF().uZF().uAF().uPF()),
 
-  ModelTest("bts-s_z_ext_lifter") \
+  VerifyTest("btc-small").tags({"btc", "64b", "min"})
+  .bytes(["67660fbb848012121212"]).seed(4123)
+  .all_defined(random=True, DE=MS().uOF().uSF().uZF().uAF().uPF()),
+
+  VerifyTest("bts-s_z_ext_lifter") \
   .bytes(intel(["bts QWORD PTR [rax + 2 *rsi + 0xff], 0xf2"]))
-  .tags({"bts", "min", "something"}).seed(4123)
+  .tags({"bts", "min"}).seed(4123)
   .DI(random_state(4123))
   .case(run_bytes = 0, DE=MS().uOF().uSF().uAF().uPF(), R=True),
 
   # NOTE(lukas): Microx has bug when immediate is grater than size
   Test("bts_corner_big_imm") \
   .bytes(intel(["bts WORD PTR [r8d + 2 * eax + 0x50], 0x20"]))
-  .tags({"bts", "min", })
+  .tags({"bts", "min"})
+  .mode("--verify")
   .DI(S(0x3040).RIP(0x8012).R8(0x2100).RAX(0x380).aflags(0).ts(0)
                .rwmem(0x2800, "11" * 0x100)
                .rwmem(0x3800, "00" * 0x100))
@@ -255,6 +265,7 @@ bt_src = {
   Test("bts_corner_big_imm") \
   .bytes(intel(["bts WORD PTR [r8d + 2 * eax + 0x50], 0x20"]))
   .tags({"bts", "min"})
+  .mode("--verify")
   .DI(S(0x3040).RIP(0x8012).R8(0x2100).RAX(0x380).aflags(0)
                .rwmem(0x2800, "11" * 0x100).ts(0))
   .case(run_bytes = 0,
@@ -264,8 +275,26 @@ bt_src = {
         R=True),
 }
 
+# To verify that cirucit fails is memory hints are incorrect
+memhint_fails = {
+  Test("mov_incorrent_memhint") \
+  .bytes(intel(["mov QWORD PTR [rax], 0x20"]))
+  .tags({"mov", "min", "fail"})
+  .mode("--verify")
+  .DI(S(0x3040).RIP(0x8012).R8(0x2100).RAX(0x30080).aflags(0)
+               .rwmem(0x300500, "11" * 0x100).ts(0))
+  .case(run_bytes = 0,
+        DE = MS().RIP(0x8012 + 7)
+                 .mem_hint(MemHint.write(0x2854, 0x20, 8)),
+        R=False)
+  .case(run_bytes = 0,
+        DE = MS().RIP(0x8012 + 7)
+                 .mem_hint(MemHint.write(0x300080, 0x21, 8)),
+        R=False),
+}
+
 tiny86 = {
-  ModelTest("tiny86")
+  VerifyTest("tiny86")
   .tags({"giant", "tiny86", "todo"})
   .bytes(tgen.compile(intel, [tgen.btc(), tgen.btr(), tgen.bts(),
                               tgen.IDef("add").iadd(), tgen.IDef("mov").all(),
@@ -276,7 +305,7 @@ tiny86 = {
 }
 
 test_rip_split = {
-  ModelTest("test_rip_split").tags({"min", "selftest"})
+  VerifyTest("test_rip_split").tags({"min", "selftest"})
   .bytes(intel(["mov [rax + 2 * r8 + 0xff], rdx"]))
   .DI(random_state(431).RIP(0x9ffe))
   .all_defined()
