@@ -536,6 +536,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       CHECK_EQ(num_bits, bits_str.size());
       bits_op = impl->Create<Constant>(std::move(bits_str),
                                       static_cast<unsigned>(num_bits));
+      annote_with_llvm_inst(bits_op, val);
     }
     val_to_op[val] = bits_op;
   }
@@ -576,10 +577,17 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     return val_to_op[val];
   }
 
+  void annote_with_llvm_inst(Operation *op, llvm::Value *val) {
+    std::stringstream ss;
+    ss << "[ " << op->id() << " ]: " << dbg_dump(val);
+    op->set_meta(circir_llvm_meta::llvm_source_dump, ss.str());
+  }
+
   template<typename T, typename ...Args>
   Operation* Emplace(llvm::Value *key, Args &&... args) {
     auto [it, _] = val_to_op.emplace(key, impl->Create<T>(std::forward<Args>(args)...));
     populate_meta(key, it->second);
+    annote_with_llvm_inst(it->second, key);
     return it->second;
   }
 
