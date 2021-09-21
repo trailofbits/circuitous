@@ -354,6 +354,8 @@ struct ReadConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 5
   ReadConstraint() : MemoryConstraint(this->bool_size, kind) {}
   static std::string op_code_str() { return "read_constraint"; }
   std::string Name() const override { return "read_constraint"; }
+
+  Operation *val_arg() const { LOG(FATAL) << "There is no `val_arg` in read_constraint."; }
 };
 
 struct UnusedConstraint : Operation, make_kind< Constraint, tag_fragment< 6 > > {
