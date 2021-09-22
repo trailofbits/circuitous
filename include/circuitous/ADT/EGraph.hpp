@@ -267,6 +267,7 @@ namespace circ::eqsat {
         for (auto *parent : parents(node)) {
           if (parent == bonded)
             continue;
+          parents(id).push_back(parent);
           update_children(*parent, [id = id, node] (Id child) {
             return child == node ? id : child;
           });
