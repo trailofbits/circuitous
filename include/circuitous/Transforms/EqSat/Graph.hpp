@@ -69,6 +69,8 @@ namespace circ::eqsat {
 
   using OpTemplate = std::variant< OpCode, SizedOp, AdviceOp, RegOp, ConstOp, MemOp, ExtractOp, SelectOp >;
 
+  std::string node_name(const OpTemplate &op);
+
   std::string to_string(const OpTemplate &op);
 
   template< typename stream >

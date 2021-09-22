@@ -374,7 +374,7 @@ namespace circ::eqsat {
     return to_vector_parser(constraint_parser() > skip(isspace));
   }
 
-  atom root(const auto& e)
+  static inline atom root(const expr& e)
   {
     return std::visit( overloaded {
       [] (const atom &a) -> atom { return a; },
@@ -385,7 +385,7 @@ namespace circ::eqsat {
     }, e.get());
   }
 
-  expr_list children(const auto& e)
+  static inline expr_list children(const expr& e)
   {
     return std::visit( overloaded {
       [] (const atom &a) -> expr_list { return {}; },
