@@ -137,11 +137,11 @@ namespace circ::eqsat {
       auto additions = egraph.eclass(a);
       CHECK(additions.size() == 2);
 
-      CHECK(additions.nodes[0]->children[0] == x);
-      CHECK(additions.nodes[0]->children[1] == y);
+      CHECK(additions.nodes[0]->child(0) == x);
+      CHECK(additions.nodes[0]->child(1) == y);
 
-      CHECK(additions.nodes[1]->children[0] == y);
-      CHECK(additions.nodes[1]->children[1] == x);
+      CHECK(additions.nodes[1]->child(0) == y);
+      CHECK(additions.nodes[1]->child(1) == x);
     }
 
     TEST_CASE("Operation")
@@ -161,13 +161,13 @@ namespace circ::eqsat {
       auto ops = egraph.eclass(a);
 
       CHECK(ops.size() == 2);
-      CHECK(ops.nodes[0]->term == "add");
-      CHECK(ops.nodes[0]->children[0] == x);
-      CHECK(ops.nodes[0]->children[1] == x);
+      CHECK(ops.nodes[0]->data() == "add");
+      CHECK(ops.nodes[0]->child(0) == x);
+      CHECK(ops.nodes[0]->child(1) == x);
 
-      CHECK(ops.nodes[1]->term == "mul");
-      CHECK(ops.nodes[1]->children[0] == x);
-      CHECK(ops.nodes[1]->children[1] != x);
+      CHECK(ops.nodes[1]->data() == "mul");
+      CHECK(ops.nodes[1]->child(0) == x);
+      CHECK(ops.nodes[1]->child(1) != x);
     }
 
     TEST_CASE("Simplification")
@@ -188,11 +188,11 @@ namespace circ::eqsat {
       auto ops = egraph.eclass(root);
 
       CHECK(ops.size() == 2);
-      CHECK(ops.nodes[0]->term == "x");
+      CHECK(ops.nodes[0]->data() == "x");
 
-      CHECK(ops.nodes[1]->term == "mul");
-      CHECK(ops.nodes[1]->children[0] == x);
-      CHECK(ops.nodes[1]->children[1] == y);
+      CHECK(ops.nodes[1]->data() == "mul");
+      CHECK(ops.nodes[1]->child(0) == x);
+      CHECK(ops.nodes[1]->child(1) == y);
     }
 
     TEST_CASE("Chained Rules")
@@ -218,13 +218,13 @@ namespace circ::eqsat {
       auto ops = egraph.eclass(root);
 
       CHECK(ops.size() == 2);
-      CHECK(ops.nodes[0]->term == "add");
-      CHECK(ops.nodes[0]->children[0] == x);
-      CHECK(ops.nodes[0]->children[0] == x);
+      CHECK(ops.nodes[0]->data() == "add");
+      CHECK(ops.nodes[0]->child(0) == x);
+      CHECK(ops.nodes[0]->child(1) == x);
 
-      CHECK(ops.nodes[1]->term == "mul");
-      CHECK(ops.nodes[1]->children[0] == x);
-      CHECK(ops.nodes[1]->children[1] != x);
+      CHECK(ops.nodes[1]->data() == "mul");
+      CHECK(ops.nodes[1]->child(0) == x);
+      CHECK(ops.nodes[1]->child(1) != x);
     }
 
     TEST_CASE("Named Subexpressions")
@@ -244,11 +244,11 @@ namespace circ::eqsat {
       auto additions = egraph.eclass(a);
       CHECK(additions.size() == 2);
 
-      CHECK(additions.nodes[0]->children[0] == x);
-      CHECK(additions.nodes[0]->children[1] == y);
+      CHECK(additions.nodes[0]->child(0) == x);
+      CHECK(additions.nodes[0]->child(1) == y);
 
-      CHECK(additions.nodes[1]->children[0] == y);
-      CHECK(additions.nodes[1]->children[1] == x);
+      CHECK(additions.nodes[1]->child(0) == y);
+      CHECK(additions.nodes[1]->child(1) == x);
     }
 
     TEST_CASE("Multi-match Union")
@@ -297,11 +297,11 @@ namespace circ::eqsat {
       auto additions = egraph.eclass(a);
       CHECK(additions.size() == 2);
 
-      CHECK(additions.nodes[0]->children[0] == x);
-      CHECK(additions.nodes[0]->children[1] == y);
+      CHECK(additions.nodes[0]->child(0) == x);
+      CHECK(additions.nodes[0]->child(1) == y);
 
-      CHECK(additions.nodes[1]->children[0] == y);
-      CHECK(additions.nodes[1]->children[1] == x);
+      CHECK(additions.nodes[1]->child(0) == y);
+      CHECK(additions.nodes[1]->child(1) == x);
     }
 
     TEST_CASE("Constrained Contexts Rewrite")

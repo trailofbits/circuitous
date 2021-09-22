@@ -30,7 +30,7 @@
 
 namespace circ::eqsat {
 
-  template< typename Graph, typename ENode = typename Graph::ENode >
+  template< typename Graph, typename ENode = typename Graph::Node >
   static inline std::unordered_set< ENode* > contexts(const Graph &egraph, Id id)
   {
     std::unordered_set< ENode* > res;
@@ -148,7 +148,7 @@ namespace circ::eqsat {
     const Pattern &pattern;
     const Places &places;
 
-    using ENode  = typename Graph::ENode;
+    using ENode  = typename Graph::Node;
     using EClass = typename Graph::EClass;
 
     // Filters out matches that does not satisfy pattern constraints (context
@@ -203,7 +203,7 @@ namespace circ::eqsat {
       return std::move(matches);
     }
 
-    using context_node = typename Graph::ENode*;
+    using context_node = typename Graph::Node*;
     using context_t = std::unordered_set< context_node >;
     using named_contexts = std::unordered_map<context_name, context_t>;
 
@@ -238,9 +238,9 @@ namespace circ::eqsat {
     // its == relation and all children classes are sem. equivalent
     bool semantically_equivalent_nodes(const ENode * lhs, const ENode * rhs) const
     {
-        if (lhs->term != rhs->term)
+        if (lhs->get() != rhs->get())
           return false;
-        for (const auto &[lch, rch] : llvm::zip(lhs->children, rhs->children)) {
+        for (const auto &[lch, rch] : llvm::zip(lhs->children(), rhs->children())) {
           auto lclass = egraph.eclass(lch);
           auto rclass = egraph.eclass(rch);
           if (!semantically_equivalent_classes(lclass, rclass))
@@ -379,12 +379,12 @@ namespace circ::eqsat {
         if (tail(e).empty())
           return head;
 
-        if (tail(e).size() != enode->children.size())
+        if (tail(e).size() != enode->children().size())
           return {};
 
         // gather substitutions for all children
         std::vector< Substitutions > subs;
-        auto child = enode->children.begin();
+        auto child = enode->children().begin();
         for (const auto &node : tail(e)) {
           auto child_class = egraph.eclass(*child);
           auto sub = match_eclass(child_class, node);

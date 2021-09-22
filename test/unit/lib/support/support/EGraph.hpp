@@ -22,12 +22,12 @@ namespace circ::eqsat {
 
   static inline bool is_context_node(const StringNode *node)
   {
-    return std::string_view(node->term).starts_with("CTX");
+    return std::string_view(node->data()).starts_with("CTX");
   }
 
   static inline std::string name(const StringNode *node)
   {
-    return node->term;
+    return node->data();
   }
 
   static inline std::optional<std::int64_t> extract_constant(const StringNode *node)
@@ -37,8 +37,8 @@ namespace circ::eqsat {
       return !s.empty() && std::all_of(s.begin(), s.end(), isdigit);
     };
 
-    if (is_number(node->term))
-      return std::stoll(node->term);
+    if (is_number(node->data()))
+      return std::stoll(node->data());
 
     return std::nullopt;
   }
@@ -65,21 +65,20 @@ namespace circ::eqsat {
     auto make_node(std::string_view atom, std::vector<Id> children)
     {
       ENode node((std::string(atom)));
-      node.children = std::move(children);
+      node.children() = std::move(children);
       auto [id, _] = add(std::move(node));
       return id;
     }
 
     void dump(const std::string &file) {
       std::ofstream out(file);
-      to_dot(*this, out, [] (auto *node) { return node->term; });
+      to_dot(*this, out);
     }
 
     std::map<std::int64_t, StringNode*> constants;
   };
 
-  using TestENode = TestGraph::ENode;
-  using Id = TestGraph::Id;
+  using TestENode = TestGraph::Node;
 
   struct TestGraphBuilder
   {

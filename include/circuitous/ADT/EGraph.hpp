@@ -9,29 +9,31 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <string>
+#include <utility>
+#include <variant>
 #include <vector>
 #include <ostream>
 #include <unordered_map>
 #include <unordered_set>
 
 #include <circuitous/ADT/UnionFind.hpp>
+#include <circuitous/Util/Overloads.hpp>
 
 namespace circ::eqsat {
 
-  template< typename Term_ >
-  struct ENode
+  using Id = UnionFind::Id;
+
+  using Children = std::vector< Id >;
+
+  template< typename T, template < typename... > typename Template >
+  struct is_specialization : std::false_type {};
+
+  template< template < typename... > typename Template, typename... Args >
+  struct is_specialization< Template<Args...>, Template > : std::true_type {};
+
+  struct NodeBase
   {
-    using Id = UnionFind::Id;
-    using Term = Term_;
-    using Children = std::vector< Id >;
-
-    template< typename ...Args >
-    explicit ENode(Args && ...args)
-      : term( std::forward< Args >(args)... )
-    {}
-
-    explicit ENode(const Term &t) : term(t) {}
-
     template< typename Fn >
     void update_children(Fn &&fn)
     {
@@ -39,21 +41,109 @@ namespace circ::eqsat {
         child = fn(child);
     }
 
-    friend bool operator==(const ENode &a, const ENode &b)
+    auto operator==(const NodeBase &other) const
     {
-      return std::tie(a.term, a.children) == std::tie(b.term, b.children);
+      return children == other.children;
     }
-    friend bool operator<(const ENode &a, const ENode &b) { return a.term < b.term; }
 
-    Term term;
     Children children;
   };
 
+
+  template< typename Storage >
+  struct StorageNode : NodeBase
+  {
+    using Base = NodeBase;
+
+    template< typename ...Args >
+    explicit StorageNode(Args && ...args)
+      : storage( std::forward< Args >(args)... )
+    {}
+
+    explicit StorageNode(const Storage &s) : storage(s) {}
+
+    Storage& get() { return storage; }
+    const Storage& get() const { return storage; }
+
+    using Base::children;
+
+    std::string name() const { return node_name(storage); }
+
+  private:
+    Storage storage;
+  };
+
+
+  template< typename Storage >
+  using ENodeBase = std::variant< StorageNode< Storage > >;
+
+  template< typename Storage >
+  struct ENode : ENodeBase< Storage >
+  {
+    using Base = ENodeBase< Storage >;
+    using StorageNode = StorageNode< Storage >;
+
+    using Base::Base;
+
+    ENode(const Storage &storage) : Base(StorageNode(storage)) {}
+    ENode(Storage &&storage) : Base(StorageNode(std::move(storage))) {}
+
+    template< typename Fn >
+    decltype(auto) visit(Fn &&fn)
+    {
+      return std::visit(std::forward<Fn>(fn), get());
+    }
+
+    template< typename Fn >
+    decltype(auto) visit(Fn &&fn) const
+    {
+      return std::visit(std::forward<Fn>(fn), get());
+    }
+
+    const Children& children() const
+    {
+      return visit([] (const auto &n) -> const Children& { return n.children; });
+    }
+
+    Children &children()
+    {
+      return visit([] (auto &n) -> Children& { return n.children; });
+    }
+
+    Id child(std::size_t idx) const { return children()[idx]; }
+
+    const Storage &data() const { return std::get< StorageNode >(*this).get(); }
+    Storage &data() { return std::get< StorageNode >(*this).get(); }
+
+    const Base& get() const { return *this; }
+    Base& get() { return *this; }
+  };
+
+  namespace detail
+  {
+    static inline auto name = [] (const auto &n) { return n.name(); };
+  }
+
+  template< typename Storage >
+  std::string node_name(const ENode< Storage > &node)
+  {
+    return node.visit(detail::name);
+  }
+
+  template< /* typename Storage, */ typename Fn >
+  void update_children(auto /* ENode< Storage > */ &node, Fn &&fn)
+  {
+    node.visit([fn = std::forward< Fn >(fn)] (auto &n) {
+      return n.update_children(fn);
+    });
+  }
+
   // Equivalence class of term nodes
   template< typename ENode >
-  struct EClass {
-
-    using Id = UnionFind::Id;
+  struct EClass
+  {
+    using Nodes   = std::vector< ENode* >;
+    using Parents = Nodes;
 
     bool empty() const { return nodes.empty(); }
     auto size() const { return nodes.size(); }
@@ -71,25 +161,22 @@ namespace circ::eqsat {
       return std::tie(a.nodes, a.parents) == std::tie(b.nodes, b.parents);
     }
 
-    std::vector< ENode* > nodes;
-    std::vector< ENode* > parents;
+    Nodes nodes;
+    Parents parents;
   };
 
 
-  template< typename ENode_ >
+  template< typename ENode >
   struct EGraph
   {
-    using Id = UnionFind::Id;
-    using ENode = ENode_;
-    using Term = typename ENode::Term;
-    using Children = typename ENode::Children;
-    using TermKey = std::pair< Term, Children >;
-    using EClass = EClass< ENode >;
+    using Node = ENode;
+    using EClass  = EClass< ENode >;
+    using Parents = typename EClass::Parents;
 
     Id create_singleton_eclass(ENode *enode)
     {
       auto id = _unions.make_set();
-      _nodes.emplace(enode, id);
+      _ids.emplace(enode, id);
 
       EClass eclass;
       eclass.add(enode);
@@ -98,30 +185,34 @@ namespace circ::eqsat {
       return id;
     }
 
-    void canonicalize(ENode *node)
+    void canonicalize(ENode &node)
     {
-      node->update_children([&](auto child) { return _unions.find_compress(child); });
+      update_children(node, [&](auto child) { return _unions.find_compress(child); });
     }
+
+    Parents& parents(Id id) { return _classes.at(id).parents; }
+    const Parents& parents(Id id) const { return _classes.at(id).parents; }
 
     std::pair< Id, ENode* > add(ENode &&node)
     {
-      canonicalize(&node);
+      canonicalize(node);
       // allocate new egraph node
-      _terms.push_back(std::make_unique< ENode >(std::move(node)));
-      auto &enode = _terms.back();
+      _nodes.push_back(std::make_unique< ENode >(std::move(node)));
+      auto &enode = _nodes.back();
+      auto node_ptr = enode.get();
 
-      auto id = create_singleton_eclass(enode.get());
+      auto id = create_singleton_eclass(node_ptr);
 
       // add children - parent links
-      for (auto child : enode->children) {
-        _classes[child].parents.push_back(enode.get());
+      for (auto child : enode->children()) {
+        parents(child).push_back(node_ptr);
       }
 
-      return {id, enode.get()};
+      return {id, node_ptr};
     }
 
     Id find(Id id) const { return _unions.find(id); }
-    Id find(const ENode *enode) const { return _unions.find( _nodes.at(enode) ); }
+    Id find(const ENode *enode) const { return _unions.find( _ids.at(enode) ); }
 
     Id merge(Id a, Id b)
     {
@@ -132,7 +223,7 @@ namespace circ::eqsat {
         return a;
 
       // make sure that second eclass has fewer parents
-      if ( _classes[a].parents.size() < _classes[b].parents.size() ) {
+      if ( parents(a).size() < parents(b).size() ) {
         std::swap(a, b);
       }
 
@@ -149,8 +240,8 @@ namespace circ::eqsat {
       return new_id;
     }
 
-    EClass& eclass(const ENode *enode) { return _classes.at( _nodes.at(enode) ); }
-    const EClass& eclass(const ENode *enode) const { return _classes.at( _nodes.at(enode) ); }
+    EClass& eclass(const ENode *enode) { return _classes.at( _ids.at(enode) ); }
+    const EClass& eclass(const ENode *enode) const { return _classes.at( _ids.at(enode) ); }
 
     EClass& eclass(Id id) { return _classes[ _unions.find(id) ]; }
     const EClass& eclass(Id id) const { return _classes.at( _unions.find(id) ); }
@@ -162,7 +253,7 @@ namespace circ::eqsat {
       // to save calls to repair
       for (auto id : _pending)
         for (auto *node : _classes[id].nodes)
-          canonicalize(node);
+          canonicalize(*node);
 
       std::unordered_set< Id > changed_classes;
       for (auto id : _pending)
@@ -176,18 +267,18 @@ namespace circ::eqsat {
 
     void repair(EClass &eclass)
     {
-      // update the '_nodes' so it always points
+      // update the '_ids' so it always points
       // canonical enodes to canonical eclasses
       for (auto *node : eclass.nodes) {
-        canonicalize(node);
-        _nodes[node] = _unions.find_compress(_nodes[node]);
+        canonicalize(*node);
+        _ids[node] = _unions.find_compress(_ids[node]);
       }
 
       // deduplicate the parents, noting that equal
       // parents get merged and put on the worklist
       std::unordered_map< Id, ENode* > new_parents;
       for (auto *node : eclass.parents) {
-        auto id = _unions.find_compress( _nodes[node] );
+        auto id = _unions.find_compress( _ids[node] );
         new_parents.try_emplace(id, node);
       }
 
@@ -203,11 +294,11 @@ namespace circ::eqsat {
     }
 
     const auto& classes() const { return _classes; }
-    const auto& nodes() const { return _nodes; }
+    const auto& nodes() const { return _ids; }
 
   private:
     // stores heap allocated nodes of egraph
-    std::vector< std::unique_ptr< ENode > > _terms;
+    std::vector< std::unique_ptr< ENode > > _nodes;
 
     // stores equivalence relation between equaltity classes
     UnionFind _unions;
@@ -216,14 +307,14 @@ namespace circ::eqsat {
     std::unordered_map< Id, EClass > _classes;
 
     // stores equality ids of enodes
-    std::unordered_map< const ENode*, Id > _nodes;
+    std::unordered_map< const ENode*, Id > _ids;
 
     // modified eclasses that needs to be rebuild
     std::vector< Id > _pending;
   };
 
-  template< typename Graph, typename Format >
-  void to_dot(const Graph &egraph, std::ostream &out, Format fmt)
+  template< typename Graph >
+  void to_dot(const Graph &egraph, std::ostream &out)
   {
     auto enumerate = [] (const auto &container, auto &&fn) {
       std::size_t i = 0;
@@ -242,7 +333,7 @@ namespace circ::eqsat {
 
       auto id = id_; // to allow lambda capture
       enumerate(eclass.nodes, [&] (auto node_idx, const auto &enode) {
-        out << "    " << id << '.' << node_idx << " [label = \"" << fmt(enode) << "\" ]\n";
+        out << "    " << id << '.' << node_idx << " [label = \"" << name(enode) << "\" ]\n";
       });
 
       out << "  }\n";
@@ -251,7 +342,7 @@ namespace circ::eqsat {
     for (const auto &[id_, eclass] : egraph.classes()) {
       auto id = id_; // to allow lambda capture
       enumerate(eclass.nodes, [&] (auto node_idx, const auto &enode) {
-        enumerate(enode->children, [&] (auto child_idx, const auto &child) {
+        enumerate(enode->children(), [&] (auto child_idx, const auto &child) {
           auto child_class = egraph.find(child);
           out << id << '.' << node_idx << " -> ";
           if (id == child_class) {
