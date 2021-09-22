@@ -16,6 +16,7 @@
 #include <tuple>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 #include <string>
 #include <string_view>
@@ -173,6 +174,9 @@ namespace circ::eqsat {
         [&] (const match_expr &e) -> Matches { return match(e); },
         [&] (const expr_list  &e) -> Matches { return match(e); },
         [&] (const atom &a)       -> Matches { return match(a); },
+        [&] (const bond_expr & ) -> Matches {
+          throw std::runtime_error("bond clause is forbidden in the matching pattern");
+        },
         [&] (const union_expr & ) -> Matches {
           throw std::runtime_error("union clause is forbidden in the matching pattern");
         }
@@ -448,6 +452,9 @@ namespace circ::eqsat {
         },
         [&] (const union_expr &) -> Substitutions {
           throw std::runtime_error("union clause is forbidden in the nested expression");
+        },
+        [&] (const bond_expr &) -> Substitutions {
+          throw std::runtime_error("bond clause is forbidden in the nested expression");
         }
       }, e.get());
     }
@@ -581,10 +588,21 @@ namespace circ::eqsat {
         },
         [&] (const expr_list  &e) { apply(e, matches); },
         [&] (const union_expr &e) { apply(e, matches); },
+        [&] (const bond_expr &e) { apply(e, matches); },
         [&] (const match_expr & ) {
           throw std::runtime_error("match clause is forbidden in the rewrite pattern");
         }
       }, e.get());
+    }
+
+    void apply(const bond_expr &e, const Matches &matches) const
+    {
+      for (const auto &match : matches) {
+        std::vector<Id> nodes;
+        for (const auto &lab : e.labels)
+          nodes.push_back(match.labels.at(lab));
+        egraph.bond(std::move(nodes));
+      }
     }
 
     void apply(const union_expr &e, const Matches &matches) const

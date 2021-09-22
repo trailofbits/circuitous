@@ -20,14 +20,18 @@ namespace circ::eqsat {
 
   using StringNode = ENode< std::string >;
 
-  static inline bool is_context_node(const StringNode *node)
-  {
-    return std::string_view(node->data()).starts_with("CTX");
-  }
-
   static inline std::string name(const StringNode *node)
   {
-    return node->data();
+    return std::visit( overloaded {
+      [] (const BondNode &n) { return n.name(); },
+      [] (const StorageNode< std::string > &n) { return n.get(); }
+    }, node->get());
+  }
+
+  static inline bool is_context_node(const StringNode *node)
+  {
+    auto n = name(node);
+    return std::string_view(n).starts_with("CTX");
   }
 
   static inline std::optional<std::int64_t> extract_constant(const StringNode *node)
