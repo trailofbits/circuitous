@@ -85,14 +85,37 @@ namespace circ::eqsat {
       return std::tie(a._mapping, a._matched) < std::tie(b._mapping, b._matched);
     }
 
+    const std::vector<Id>& mapping() const { return _mapping; }
+    const std::vector<bool>& matched() const { return _matched; }
+
   private:
     std::vector< Id > _mapping;
     std::vector< bool > _matched;
   };
 
+  template< typename stream >
+  auto operator<<(stream &os, const Substitution &sub) -> decltype(os << "")
+  {
+    size_t idx = 0;
+    for (const auto &[id, matched] : llvm::zip(sub.mapping(), sub.matched())) {
+      auto matchedid = matched ? std::to_string(id.ref()) : "unmatched";
+      os << "\t" << idx++ << " -> " << matchedid << "\n";
+    }
+    return os;
+  }
+
   using Substitutions = std::set< Substitution >;
 
   using MatchLabel = std::variant< std::monostate, label >;
+
+  template< typename stream >
+  auto operator<<(stream &os, const MatchLabel &lab) -> decltype(os << "")
+  {
+    return std::visit( overloaded {
+      [&] (const std::monostate &) -> stream& { return os << "none"; },
+      [&] (const label &l)         -> stream& { return os << l; }
+    }, lab);
+  }
 
   static inline constexpr MatchLabel anonymous_label = std::monostate{};
 
@@ -111,6 +134,22 @@ namespace circ::eqsat {
 
     bool is_anonymous() const { return labels.count(anonymous_label); }
   };
+
+  template< typename stream >
+  auto operator<<(stream &os, const LabeledMatch &match) -> decltype(os << "")
+  {
+    os << "labels {\n";
+    for (const auto &[label, id] : match.labels) {
+      os << "\t" << label << " -> " << id << "\n";
+    }
+    os << "}\n";
+    os << "substitutions {\n";
+    for (const auto &sub : match.substitutions) {
+      os << sub;
+    }
+    os << "}\n";
+    return os;
+  }
 
   // All possible matches for a given pattern
   using Matches = std::vector< LabeledMatch >;
