@@ -13,7 +13,8 @@
 #include <utility>
 #include <variant>
 #include <vector>
-#include <ostream>
+#include <iostream>
+#include <set>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -26,14 +27,12 @@ namespace circ::eqsat {
 
   using Children = std::vector< Id >;
 
-  template< typename T, template < typename... > typename Template >
-  struct is_specialization : std::false_type {};
-
-  template< template < typename... > typename Template, typename... Args >
-  struct is_specialization< Template<Args...>, Template > : std::true_type {};
-
   struct NodeBase
   {
+    NodeBase() = default;
+    NodeBase(const Children &children) : children(children) {}
+    NodeBase(Children &&children) : children(std::move(children)) {}
+
     template< typename Fn >
     void update_children(Fn &&fn)
     {
@@ -73,9 +72,19 @@ namespace circ::eqsat {
     Storage storage;
   };
 
+  struct BondNode : NodeBase
+  {
+    using Base = NodeBase;
+    using Base::Base;
+
+    using Base::children;
+
+    std::string name() const { return "bond"; }
+  };
+
 
   template< typename Storage >
-  using ENodeBase = std::variant< StorageNode< Storage > >;
+  using ENodeBase = std::variant< StorageNode< Storage >, BondNode >;
 
   template< typename Storage >
   struct ENode : ENodeBase< Storage >
@@ -117,6 +126,13 @@ namespace circ::eqsat {
 
     const Base& get() const { return *this; }
     Base& get() { return *this; }
+
+    static ENode make_bond_node(std::vector<Id> &&nodes)
+    {
+      return { BondNode(std::move(nodes)) };
+    }
+
+    bool is_bond_node() const { return std::holds_alternative< BondNode >( get() ); }
   };
 
   namespace detail
@@ -130,8 +146,8 @@ namespace circ::eqsat {
     return node.visit(detail::name);
   }
 
-  template< /* typename Storage, */ typename Fn >
-  void update_children(auto /* ENode< Storage > */ &node, Fn &&fn)
+  template< typename Fn >
+  void update_children(auto &node, Fn &&fn)
   {
     node.visit([fn = std::forward< Fn >(fn)] (auto &n) {
       return n.update_children(fn);
@@ -238,6 +254,47 @@ namespace circ::eqsat {
       _classes[a].merge(std::move(class_b));
 
       return new_id;
+    }
+
+    Id bond(std::vector<Id> nodes)
+    {
+      if (auto id = bonded(nodes))
+        return id.value();
+
+      auto [id, bonded] = add( Node::make_bond_node(std::move(nodes)) );
+
+      for (auto node : bonded->children()) {
+        for (auto *parent : parents(node)) {
+          if (parent == bonded)
+            continue;
+          update_children(*parent, [id = id, node] (Id child) {
+            return child == node ? id : child;
+          });
+        }
+      }
+
+      return id;
+    }
+
+    // Returns id of bond node if nodes are already bonded
+    std::optional<Id> bonded(std::vector<Id> nodes)
+    {
+      std::vector< Node * > bonds;
+      std::sort(nodes.begin(), nodes.end());
+
+      for (auto node : nodes)
+        for (auto *parent : parents(node))
+          if (parent->is_bond_node())
+            bonds.push_back(parent);
+
+      for (const auto *bond : bonds) {
+        auto children = bond->children();
+        std::sort(children.begin(), children.end());
+        if (children == nodes)
+          return find(bond);
+      }
+
+      return std::nullopt;
     }
 
     EClass& eclass(const ENode *enode) { return _classes.at( _ids.at(enode) ); }
