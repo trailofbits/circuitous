@@ -96,6 +96,10 @@ namespace circ::eqsat {
   // serves to specify semantically equivalend places
   struct equiv_expr { std::vector<place> places; };
 
+  // expression of form: (equiv [places])
+  // serves to specify semantically equivalend places
+  struct bond_expr { std::vector<label> labels; };
+
   using context_constraint = disjoint_expr;
   using place_constraint = equiv_expr;
 
@@ -104,7 +108,7 @@ namespace circ::eqsat {
 
   using context_name = std::string_view;
 
-  struct expr : std::variant< atom, std::vector< expr >, match_expr, union_expr >
+  struct expr : std::variant< atom, std::vector< expr >, match_expr, union_expr, bond_expr >
   {
     using variant::variant;
 
@@ -363,6 +367,13 @@ namespace circ::eqsat {
     return match_label_list<union_expr>("union");
   }
 
+  // TODO(Heno): constexpr
+  // match expression has form: (union [labels])
+  static inline parser<bond_expr> auto bond_expr_parser()
+  {
+    return match_label_list<bond_expr>("bond");
+  }
+
   static inline parser<std::vector<context>> auto contexts_parser()
   {
     return to_vector_parser(context_parser());
@@ -452,7 +463,9 @@ namespace circ::eqsat {
       // that allows to specify multi-pattern rules
       from_tuple< Pattern >( parenthesized( combine(subexpr_parser, cons, match_expr_parser()) ) ) |
       // or union expression that allows to specify unification of matched rules
-      construct< Pattern >( union_expr_parser() );
+      construct< Pattern >( union_expr_parser() ) |
+      // or bond expression that allows to bond matched nodes
+      construct< Pattern >( bond_expr_parser() );
   }
 
   // TODO(Heno): constexpr
@@ -485,6 +498,7 @@ namespace circ::eqsat {
       [&] (const expr_list &list) -> places_t { return foreach_places(list); },
       [&] (const match_expr &e)   -> places_t { return foreach_places(labels(e)); },
       [&] (const union_expr &e)   -> places_t { return foreach_places(e.labels); },
+      [&] (const bond_expr  &e)   -> places_t { return foreach_places(e.labels); },
       [] (const auto&) -> places_t { throw "unsupported expression type"; }
     }, e.get());
   }
