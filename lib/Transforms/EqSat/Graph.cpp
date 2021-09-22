@@ -6,7 +6,12 @@
 #include <llvm/ADT/APSInt.h>
 #include <llvm/ADT/Twine.h>
 
-namespace circ::eqsat {
+namespace circ::eqsat
+{
+  std::string node_name(const OpTemplate &op)
+  {
+    return std::visit( [] (const auto &o) { return o.op_code_name; }, op );
+  }
 
   std::string to_string(const OpTemplate &op)
   {
@@ -26,10 +31,7 @@ namespace circ::eqsat {
     }, op );
   }
 
-  std::string name(const CircuitENode *node)
-  {
-    return std::visit( [] (const auto &value) { return value.op_code_name; }, node->term );
-  }
+  std::string name(const CircuitENode *node) { return node_name( *node ); }
 
   bool is_context_node(const CircuitENode *node)
   {

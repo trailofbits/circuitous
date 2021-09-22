@@ -125,10 +125,8 @@ namespace circ::eqsat {
 
   struct EGraphBuilder
   {
-    using ENode = CircuitEGraph::ENode;
-    using Id = CircuitEGraph::Id;
-
-    using Nodes = std::map< Operation *, ENode * >;
+    using ENode = CircuitEGraph::Node;
+    using Nodes = std::map< Operation*, ENode* >;
 
     Id add_node_recurse(auto *op, CircuitEGraph &egraph)
     {
@@ -136,7 +134,7 @@ namespace circ::eqsat {
         return egraph.find(nodes[op]);
       ENode node(make_template(op));
       for (const auto &child : op->operands)
-        node.children.push_back(add_node_recurse(child, egraph));
+        node.children().push_back( add_node_recurse(child, egraph) );
       auto [id, enode] = egraph.add(std::move(node));
       nodes[op] = enode;
       return id;
@@ -166,8 +164,7 @@ namespace circ::eqsat {
   template< typename Graph >
   struct PatternCircuitBuilder
   {
-    using ENode = typename Graph::ENode;
-    using Id    = typename Graph::Id;
+    using ENode = typename Graph::Node;
 
     PatternCircuitBuilder(Graph &graph) : graph(graph) {}
 
@@ -287,7 +284,7 @@ namespace circ::eqsat {
         [&] (const operation &op) -> Id {
           ENode node(make_operation_template(op));
           for (const auto &child : children(e))
-            node.children.push_back( synth(child) );
+            node.children().push_back( synth(child) );
           return graph.add(std::move(node)).first;
         },
         [&] (const auto&)         -> Id { LOG(FATAL) << "unsupported node"; },
@@ -309,7 +306,7 @@ namespace circ::eqsat {
     using PatternCircuitBuilder = PatternCircuitBuilder< Graph >;
 
     using EGraph = Graph;
-    using ENode  = typename Graph::ENode;
+    using ENode  = typename Graph::Node;
     using Nodes  = std::map< Operation *, ENode * >;
 
     static EqSatRunner make_runner(const CircuitPtr &circuit)
@@ -398,7 +395,7 @@ namespace circ::eqsat {
   template< typename Graph, typename CostFunction >
   struct CostGraph
   {
-    using ENode = typename Graph::ENode;
+    using ENode = typename Graph::Node;
     using EClass = typename Graph::EClass;
     using CostMap = std::map< const ENode*, std::uint64_t >;
 
@@ -435,7 +432,7 @@ namespace circ::eqsat {
       std::vector< ENodePtr > children(ENodePtr enode) const
       {
         std::vector< ENodePtr > res;
-        for (const auto &child : enode->children)
+        for (const auto &child : enode->children())
           res.push_back( optimal.at( &graph.eclass(child) ) );
         return res;
       }
@@ -471,8 +468,8 @@ namespace circ::eqsat {
         return cost + costs[minimal(&eclass)];
       };
 
-      const auto &children = node->children;
-      return std::accumulate(children.begin(), children.end(), eval(node), fold);
+      const auto &ch = node->children();
+      return std::accumulate(ch.begin(), ch.end(), eval(node), fold);
     }
 
     const Graph &graph;
@@ -629,7 +626,7 @@ namespace circ::eqsat {
 
     Operation *make_operation(ENodePtr enode, Circuit *circuit) const
     {
-      return detail::make_operation(enode->term, circuit);
+      return detail::make_operation(enode->data(), circuit);
     }
 
     Operation *extract(ENodePtr enode, Circuit *circuit)
@@ -671,25 +668,19 @@ namespace circ::eqsat {
     );
 
     std::ofstream outb("egraph-before.dot");
-    to_dot(runner.egraph(), outb, [] (auto *node) {
-      return to_string(node->term);
-    });
-
+    to_dot(runner.egraph(), outb);
     runner.run(rules);
 
     LOG(INFO) << "Equality saturation stopped";
 
     std::ofstream outa("egraph-after.dot");
-    to_dot(runner.egraph(), outa, [] (auto *node) {
-      return to_string(node->term);
-    });
+    to_dot(runner.egraph(), outa);
 
     auto eval = [] (const auto &node) -> std::uint64_t {
       // TODO(Heno) implement cost function
-      auto name = to_string(node->term);
-      if (name == "Mul")
+      if (name(node) == "Mul")
         return 100;
-      if (name == "Add")
+      if (name(node) == "Add")
         return 10;
       return 1;
     };
