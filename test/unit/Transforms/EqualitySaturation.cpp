@@ -368,7 +368,6 @@ namespace circ::eqsat {
       egraph.make_node("mul", {a, b});
 
       auto rule = TestRule(
-        "mul-add-equality",
         "((let A (op_mul ?a ?b)) (let B (op_mul ?c ?d)) (match $A $B))",
         "(union $A $B)"
       );
@@ -400,13 +399,45 @@ namespace circ::eqsat {
       );
 
       auto matches = rule.match(egraph);
-      std::cerr << matches.size();
       CHECK(matches.size() == 1);
+      CHECK(egraph.eclass(m1) == egraph.eclass(m2));
+    }
+
+    TEST_CASE("Bond nodes")
+    {
+      TestGraph egraph;
+      TestGraphBuilder builder(&egraph);
+
+      auto a = egraph.make_leaf("a");
+      auto b = egraph.make_leaf("b");
+      auto c = egraph.make_leaf("c");
+      auto d = egraph.make_leaf("d");
+
+      auto mul1 = egraph.make_node("mul", {a, b});
+      auto mul2 = egraph.make_node("mul", {c, d});
+
+      egraph.make_node("CTX1", {mul1});
+      egraph.make_node("CTX2", {mul2});
+
+      auto rule = TestRule(
+        "bond-multiplications",
+        "((let A (op_mul ?a ?b):C1) (let B (op_mul ?c ?d):C2) (disjoint C1 C2) (match $A $B))",
+        "(bond $A $B)"
+      );
+
+      auto matches = rule.match(egraph);
+      CHECK(matches.size() == 2);
 
       rule.apply(egraph, builder);
       egraph.rebuild();
 
-      CHECK(egraph.eclass(m1) == egraph.eclass(m2));
+      CHECK(egraph.bonded({mul1, mul2}));
+
+      auto bond = egraph.bonded({mul1, mul2}).value();
+
+      auto bondctx = contexts(egraph, bond);
+      CHECK(bondctx == contexts(egraph, mul1));
+      CHECK(bondctx == contexts(egraph, mul2));
     }
   }
 
