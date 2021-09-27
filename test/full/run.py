@@ -22,6 +22,7 @@ circuitous_lift=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-lift
 top_level_dir=None
 
 dbg_verbose = False
+interpreter_death = False
 
 class Colors:
   GREEN = '\033[92m'
@@ -173,6 +174,8 @@ class Interpret(SimulateCWDMixin):
       args += ["--dot_out", self.locate(case.name + ".result.dot")]
       args += ["--logtostderr"]
       parent.metafiles[case.name + ".result.dot"] = self.locate(case.name + ".result.dot")
+    if interpreter_death:
+        args += ["--die"]
     log_info("Running: " + '.' * 16 + " " + parent.name + " -> " + case.name)
     pipes = subprocess.Popen(args,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -492,15 +495,31 @@ def main():
                           help="If pipeline fails, kill & report",
                           action='store_true',
                           default=False)
+  arg_parser.add_argument("--die",
+                           help="DBG: Pass --die to interpreter invocation.",
+                           action='store_true',
+                           default=False)
 
   args, command_args = arg_parser.parse_known_args()
 
   global dbg_verbose
   dbg_verbose = args.dbg
 
+  global interpreter_death
+  interpreter_death = args.die
+
   if args.tags is None:
     args.tags = ['all']
   args.jobs = int(args.jobs)
+
+
+  if interpreter_death:
+    log_info("Overriding --jobs, --dbg and --fragile as result of --die.")
+    args.jobs = 1
+    args.fragile = True
+    args.dbg = True
+    dbg_verbose = True
+
 
   tests = filter_by_tag(fetch_test(args.sets), args.tags)
   if not tests:
