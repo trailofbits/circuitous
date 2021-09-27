@@ -89,7 +89,7 @@ namespace circ::print {
 
     std::string ternary_stmt(Operation *cond, Operation *true_v, Operation *false_v) {
       std::stringstream ss;
-      ss << get(cond) << " ? " << get(true_v) << " " << get(false_v);
+      ss << get(cond) << " ? " << get(true_v) << " : " << get(false_v);
       return ss.str();
     }
 
