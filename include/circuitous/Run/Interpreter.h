@@ -120,7 +120,7 @@ namespace circ::run {
       return acceptors == 1;
     }
 
-    auto dump_spawn(VerifyInstruction *v, Spawn &runner) {
+    std::string dump_spawn(VerifyInstruction *v, Spawn &runner) {
       std::stringstream ss;
       ss << runner.GetNodeVal(v)->toString(16, false) << std::endl;;
       ss << pretty_print(v) << std::endl;
@@ -128,6 +128,16 @@ namespace circ::run {
         ss << "\t" << to_string(op->op_code) << " " << op->id() << " "
            << runner.GetNodeVal(op)->toString(16, false) << std::endl;
       }
+      return ss.str();
+    }
+
+    // TODO(lukas): If runners do is `const` this can be as well.
+    std::string dump_runners() {
+      std::stringstream ss;
+      runners_do([ & ](auto &runner){
+          using dbg_printer = typename Spawn::template DBGPrint< Spawn >;
+          ss << dbg_printer{&runner}.gather(false).get();
+      });
       return ss.str();
     }
 
@@ -146,12 +156,6 @@ namespace circ::run {
       if (successes.size() > 1) {
         LOG(FATAL) << "Multiple contexts satisfied." << successes.size();
       }
-      std::stringstream ss;
-      runners_do([ & ](auto &runner){
-          using dbg_printer = typename Spawn::template DBGPrint< Spawn >;
-          ss << dbg_printer{&runner}.gather(false).get();
-      });
-
       return successes.size() == 1;
     }
   };
