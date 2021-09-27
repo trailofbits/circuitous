@@ -11,10 +11,8 @@ import queue
 from tools.tc import State, Test
 import tools.tc as TC
 
-import simple
-import basic
-import ebit_test
-import generated
+import defs.fetch_defs
+
 import tools.model_test as mp
 
 circuitous_prefix = os.environ.get("CIRCUITOUS_BUILD_DIR", "../../build")
@@ -440,16 +438,7 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
 
 # TODO(lukas): Mocking this one for now
 def fetch_test(sets):
-  result = set()
-  for x in simple.circuitous_tests:
-    result.update(x)
-  for x in basic.circuitous_tests:
-    result.update(x)
-  for x in ebit_test.circuitous_tests:
-    result.update(x)
-  for x in generated.circuitous_tests:
-    result.update(x)
-  return result
+  return defs.fetch_defs.fetch(sets)
 
 
 def filter_by_tag(sets, tags):
