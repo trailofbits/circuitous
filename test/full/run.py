@@ -258,9 +258,13 @@ class Comparator(SimulateCWDMixin):
         out[case.name].msg = msg
     return out
 
+  # MemHints are still compared because we cannot guess their order - microx and remill
+  # can do independent reads/writes in different orders.
   def compare_verify(self, input, after, expected):
     accept = True
     message = ""
+    # `expected.result` because if circuit did not accept, then it did not
+    # derive memhints.
     if expected.result and not TC.compare_hints(after.mem_hints, expected.mem_hints):
       accept = False
       message += "mem_hints do not match\n---\n"
@@ -269,9 +273,13 @@ class Comparator(SimulateCWDMixin):
       message += "".join(str(x) for x in expected.mem_hints) + "\n"
       message += "---\n"
     if expected.result == after.result:
+      # Above ^ was asserted that circuit did or did not accept correctly,
+      # therefore it should never check memhints in the first place.
       if not accept:
+        assert expected.result
         return accept, message + "But result seems fine.\n"
-      return accept, ""
+      return accept, message
+
     if expected.result:
       return False, message + "Should accept, but did not.\n"
     return False, message + "Should not accept, but did.\n"
