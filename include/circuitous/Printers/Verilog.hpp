@@ -36,6 +36,18 @@ namespace circ::print {
       return ss.str();
     }
 
+    template< typename I > requires std::is_integral_v< I >
+    std::string get_bit(const std::string &op, I idx) {
+      std::stringstream ss;
+      ss << op << "[" << idx << ":" << idx << "]";
+      return ss.str();
+    }
+
+    template< typename I > requires std::is_integral_v< I >
+    std::string get_bit(Operation * op, I idx) {
+      return get_bit(get(op), idx);
+    }
+
     std::string wire_name(Operation *op) {
       std::stringstream ss;
       ss << std::hex << "v" << op->id();
@@ -202,6 +214,10 @@ namespace circ::print {
       return std::to_string(size) + "'b" + std::string(size, '0');
     }
 
+    std::string bin_one(auto size) {
+      return std::to_string(size) + "'b" + std::string(size, '1');
+    }
+
     std::string true_val() { return "1'b1"; }
     std::string false_val() { return "1'b0"; }
 
@@ -336,13 +352,30 @@ namespace circ::print {
     std::string Visit(LShr *op) { return make(zip(), op); }
     std::string Visit(AShr *op) { return make(zip(), op); }
 
-    std::string Visit(Trunc *op) { return make(unary(), op, std::string("todo.trunc")); }
+    std::string Visit(Trunc *op) {
+      auto trg_size = op->size - 1;
+      std::stringstream ss;
+      ss << get(op->operands[0]) << "[" << trg_size << ":0]";
+      return make_wire(op, ss.str());
+    }
     std::string Visit(ZExt *op)  {
       auto prefix = bin_zero(op->size - op->operands[0]->size);
       return make_wire(op, concat({prefix, get(op->operands[0])}));
     }
 
-    std::string Visit(SExt *op)  { return make(unary(), op, std::string("todo.sext")); }
+    std::string Visit(SExt *op) {
+      auto pos_prefix = bin_zero(op->size - op->operands[0]->size);
+      auto neg_prefix = bin_one(op->size - op->operands[0]->size);
+
+      std::stringstream selector_ss;
+      auto operand = op->operands[0];
+      auto last = operand->size - 1;
+      selector_ss << "(" << get(operand) << "[" << last << ":" << last << "] == "
+                  << bin_one(1u)
+                  << ") ?" << neg_prefix << " : " << pos_prefix;
+      auto padding = make_wire("pad." + std::to_string(op->id()), selector_ss.str());
+      return make_wire(op, concat({padding, get(op->operands[0])}));
+    }
 
     std::string Visit(Icmp_ult *op) { return make(zip(), op); }
     std::string Visit(Icmp_slt *op) { return make(zip(), op); }
@@ -392,11 +425,38 @@ namespace circ::print {
     }
 
     std::string Visit(CountLeadingZeroes *op) {
-      return make(unary(), op, std::string("todo.clz"));
+      auto get_bit_ = [&](auto op, auto i) {
+        return this->get_bit(op, op->size - i);
+      };
+      return count_zeroes(op, get_bit_);
+    }
+    std::string Visit(CountTrailingZeroes *op) {
+      return count_zeroes(op, [&](auto op, auto i){ return this->get_bit(op, i); });
     }
 
-    std::string Visit(CountTrailingZeroes *op) {
-      return make(unary(), op, std::string("todo.ctz"));
+    std::string count_zeroes(Operation *op, auto next_bit) {
+      auto base = [&](std::string s) { return s + "nx" + std::to_string(op->id()); };
+      auto fn = [&](auto i) { return base("f") + "x" + std::to_string(i); };
+      auto tn = [&](auto i) { return base("t") + "x" + std::to_string(i); };
+
+      uint32_t operand_size = op->operands[0]->size;
+      auto operand = op->operands[0];
+      uint32_t rsize = static_cast< uint32_t >(std::ceil(std::log2(operand_size)));
+      auto padding = bin_zero(operand_size - rsize);
+
+      // `( fn, tn )`.
+      using step_t = std::tuple< std::string, std::string >;
+      std::vector< step_t > steps = { { false_val(), bin_zero(rsize) } };
+
+      for (std::size_t i = 0; i < operand->size; ++i) {
+        const auto &[prev_fn, prev_tn] = steps.back();
+        auto fn_next = prev_fn + " || (!" + next_bit(operand, i) + ")";
+        auto tn_next = prev_tn + " + { " + bin_zero(rsize - 1) + ", " + fn_next + "}";
+        steps.emplace_back(make_wire(fn(i), fn_next), make_wire(tn(i), tn_next));
+      }
+
+      const auto &[_, last_tn] = steps.back();
+      return make_wire(op, concat({padding, last_tn}));
     }
 
     std::string Visit(Circuit *op) { return get(op->operands[0]); }
@@ -431,7 +491,6 @@ namespace circ::print {
       write_output();
       os << "\n);\n";
     }
-
 
     std::string &give_name(Operation *op, std::string name) {
       dbg << "Naming: " << pretty_print< false >(op) << " -> " << name << std::endl;
