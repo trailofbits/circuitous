@@ -282,7 +282,8 @@ class State(StateBase):
       mutated.set_reg(reg, val)
 
     for reg in other.undefined:
-      mutated.registers.pop(reg)
+      if reg in mutated.registers:
+        mutated.registers.pop(reg)
       mutated.undefined.add(reg)
 
     if other._ebit is not None:
