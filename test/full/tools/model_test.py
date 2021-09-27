@@ -115,6 +115,11 @@ class MicroxGen:
     # TODO(lukas): We need to handle RSP once we support memory ops.
     # assert "RSP" not in input.registers
 
+    if input._ebit:
+      out = copy.deepcopy(input)
+      out.timestamp += 1
+      return out
+
     rip = input.registers.get("RIP", 0x87000)
     rsp = input.registers.get("RSP")
 
