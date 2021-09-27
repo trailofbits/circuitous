@@ -43,6 +43,8 @@ DEFINE_string(inspect, "", "Inspect failing test case");
 
 DEFINE_bool(sim, false, "Interactive");
 
+DEFINE_bool(die, false, "DBG: Artificially kill program and dump state of all runners.");
+
 auto load_circ(const std::string &path) {
   // Read input circuit file
   std::ifstream ir(FLAGS_ir_in, std::ios::binary);
@@ -154,6 +156,8 @@ void run() {
   }
 
   run.Run();
+  if (FLAGS_die)
+    LOG(FATAL) << run.dump_runners();
 
   if (!FLAGS_export_derived.empty()) {
     export_derived(circ::run::Inspector<Runner>(&run));
