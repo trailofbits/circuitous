@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <llvm/Support/ErrorHandling.h>
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -72,12 +73,16 @@ namespace circ::eqsat {
     Storage storage;
   };
 
+
   struct BondNode : NodeBase
   {
     using Base = NodeBase;
     using Base::Base;
 
     using Base::children;
+
+    // keeps number of parents for each child
+    std::vector< std::size_t > children_parents;
 
     std::string name() const { return "bond"; }
   };
@@ -126,11 +131,6 @@ namespace circ::eqsat {
 
     const Base& get() const { return *this; }
     Base& get() { return *this; }
-
-    static ENode make_bond_node(std::vector<Id> &&nodes)
-    {
-      return { BondNode(std::move(nodes)) };
-    }
 
     bool is_bond_node() const { return std::holds_alternative< BondNode >( get() ); }
   };
@@ -261,7 +261,14 @@ namespace circ::eqsat {
       if (auto id = bonded(nodes))
         return id.value();
 
-      auto [id, bonded] = add( Node::make_bond_node(std::move(nodes)) );
+      BondNode bond_node(std::move(nodes));
+      unsigned parents_count = 0;
+      for (const auto &child : bond_node.children) {
+        parents_count += parents(child).size();
+        bond_node.children_parents.push_back(parents_count);
+      }
+
+      auto [id, bonded] = add(std::move(bond_node));
 
       for (auto node : bonded->children()) {
         for (auto *parent : parents(node)) {
@@ -275,6 +282,16 @@ namespace circ::eqsat {
       }
 
       return id;
+    }
+
+    Id bond_child_class(const BondNode& node, unsigned parent) const
+    {
+      for (unsigned i = 0; i < node.children_parents.size(); i++) {
+        if (parent < node.children_parents[i])
+          return node.children[i];
+      }
+
+      llvm_unreachable("invalid bond parent-child map");
     }
 
     // Returns id of bond node if nodes are already bonded
