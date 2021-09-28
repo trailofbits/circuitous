@@ -422,35 +422,49 @@ namespace circ::eqsat {
       OptimalGraphView(const CostGraph &costgraph)
         : graph(costgraph.graph)
       {
-        for (const auto &[id, eclass] : graph.classes())
-          optimal.emplace( &eclass, costgraph.minimal(&eclass) );
+        for (const auto &[id, eclass] : graph.classes()) {
+          optimal.emplace( id, costgraph.minimal(eclass) );
+        }
       }
 
       // Returns an optimal substitution for a given enode.
       ENodePtr node(ENodePtr enode) const
       {
-        return optimal.at( &graph.eclass(enode) );
+        return optimal.at( graph.find(enode) );
       }
 
       // Returns an optimal set of children for a given enode.
       std::vector< ENodePtr > children(ENodePtr enode) const
       {
         std::vector< ENodePtr > res;
-        for (const auto &child : enode->children())
-          res.push_back( optimal.at( &graph.eclass(child) ) );
+        for (const auto &child : enode->children()) {
+          auto child_class = graph.find(child);
+          auto optimal_child = optimal.at( child_class );
+          if (optimal_child->is_bond_node()) {
+            const auto &parents = graph.parents(child_class);
+            auto parent = std::find(parents.begin(), parents.end(), enode);
+            auto idx = unsigned(std::distance(parents.begin(), parent));
+            // remaps bond edge from parent to bonded child
+            const auto &bond_node = std::get< BondNode >( optimal_child->get() );
+            auto bond_child_class = graph.bond_child_class( bond_node, idx );
+            res.push_back( optimal.at( graph.find( bond_child_class ) ) );
+          } else {
+            res.push_back( optimal_child );
+          }
+        }
         return res;
       }
 
     private:
       const Graph &graph;
-      std::map< EClassPtr, ENodePtr > optimal;
+      std::map< Id, ENodePtr > optimal;
     };
 
     OptimalGraphView optimal() const { return {*this}; }
 
-    const ENode* minimal(const EClass *eclass) const
+    const ENode* minimal(const EClass &eclass) const
     {
-      const auto &nodes = eclass->nodes;
+      const auto &nodes = eclass.nodes;
       auto cmp = [&] (const auto &a, const auto &b) {
         return costs.at(a) < costs.at(b);
       };
@@ -469,7 +483,7 @@ namespace circ::eqsat {
         for (const auto *node : eclass.nodes)
           costs.try_emplace(node, eval_cost(node));
 
-        return cost + costs[minimal(&eclass)];
+        return cost + costs[minimal(eclass)];
       };
 
       const auto &ch = node->children();
@@ -635,6 +649,8 @@ namespace circ::eqsat {
 
     Operation *extract(ENodePtr enode, Circuit *circuit)
     {
+      assert(!enode->is_bond_node());
+
       if (cached.count(enode))
         return cached.at(enode);
 
