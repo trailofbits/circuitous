@@ -179,7 +179,7 @@ int main(int argc, char *argv[]) {
         LOG(FATAL) << "Error while re-checking.";
       }
       auto x = circ::Circuit::Deserialize(is);
-      VerifyCircuit("Verifyinh loaded.", x.get(), "Reload test successful.");
+      VerifyCircuit("Verifying loaded.", x.get(), "Reload test successful.");
       CHECK(x->ptr_size == circuit->ptr_size);
     }
   }
