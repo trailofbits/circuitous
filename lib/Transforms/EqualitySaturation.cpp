@@ -433,24 +433,29 @@ namespace circ::eqsat {
         return optimal.at( graph.find(enode) );
       }
 
+      ENodePtr splice_bond_edge(ENodePtr child, ENodePtr parent_node) const
+      {
+        if (!child->is_bond_node())
+          return child;
+
+        auto child_class = graph.find(child);
+        const auto &parents = graph.parents(child_class);
+        auto parent = std::find(parents.begin(), parents.end(), parent_node);
+        auto idx = unsigned(std::distance(parents.begin(), parent));
+
+        const auto &bond_node = std::get< BondNode >( child->get() );
+        auto bond_child_class = graph.bond_child_class( bond_node, idx );
+        return splice_bond_edge( optimal.at( graph.find( bond_child_class ) ), child );
+      }
+
       // Returns an optimal set of children for a given enode.
       std::vector< ENodePtr > children(ENodePtr enode) const
       {
         std::vector< ENodePtr > res;
         for (const auto &child : enode->children()) {
           auto child_class = graph.find(child);
-          auto optimal_child = optimal.at( child_class );
-          if (optimal_child->is_bond_node()) {
-            const auto &parents = graph.parents(child_class);
-            auto parent = std::find(parents.begin(), parents.end(), enode);
-            auto idx = unsigned(std::distance(parents.begin(), parent));
-            // remaps bond edge from parent to bonded child
-            const auto &bond_node = std::get< BondNode >( optimal_child->get() );
-            auto bond_child_class = graph.bond_child_class( bond_node, idx );
-            res.push_back( optimal.at( graph.find( bond_child_class ) ) );
-          } else {
-            res.push_back( optimal_child );
-          }
+          auto optimal_child = splice_bond_edge( optimal.at( child_class ), enode );
+          res.push_back( optimal_child );
         }
         return res;
       }
