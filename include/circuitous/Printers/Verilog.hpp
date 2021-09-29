@@ -32,7 +32,7 @@ namespace circ::print {
     template< typename I > requires std::is_integral_v< I >
     std::string wire_size(I size) {
       std::stringstream ss;
-      ss << "[" << size - 1 << ": 0]";
+      ss << "[" << size - 1 << ":0]";
       return ss.str();
     }
 
@@ -238,11 +238,7 @@ namespace circ::print {
     // !O(m) && R(m)
     //   i.e. overflow did not happen, and at least one `1` was found.
     std::string Visit(OnlyOneCondition *op)  {
-      // TOOD(lukas): At this point probably a submodule is a better fit.
-      //              Unique identifier used to produced unique names.
-      ++only_one_cond;
-
-      auto base = [&](std::string s) { return s + "nx" + std::to_string(only_one_cond); };
+      auto base = [&](std::string s) { return s + "nx" + std::to_string(op->id()); };
       auto rn = [&](auto i) { return base("r") + "x" + std::to_string(i); };
       auto on = [&](auto i) { return base("o") + "x" + std::to_string(i); };
 
@@ -373,7 +369,7 @@ namespace circ::print {
       selector_ss << "(" << get(operand) << "[" << last << ":" << last << "] == "
                   << bin_one(1u)
                   << ") ?" << neg_prefix << " : " << pos_prefix;
-      auto padding = make_wire("pad." + std::to_string(op->id()), selector_ss.str());
+      auto padding = make_wire("pad_" + std::to_string(op->id()), selector_ss.str());
       return make_wire(op, concat({padding, get(op->operands[0])}));
     }
 
@@ -417,7 +413,7 @@ namespace circ::print {
           ss << " + ";
       }
       auto name = wire_name(op);
-      auto aux = name + ".aux";
+      auto aux = name + "_aux";
 
       self().os << "wire " << aux << " " << wire_size(rsize) << " = " << ss.str() << ";\n";
       self().os << "wire " << name << " = " << concat({bin_zero(pad_size), aux}) << ";\n";
@@ -460,8 +456,6 @@ namespace circ::print {
     }
 
     std::string Visit(Circuit *op) { return get(op->operands[0]); }
-
-    uint32_t only_one_cond = 0u;
   };
 
   struct dbg_verbose {
