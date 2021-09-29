@@ -318,6 +318,21 @@ namespace circ::eqsat {
       });
     }
 
+    static inline Matches filter_nonunique_matches(Matches &&matches)
+    {
+      using MatchedIds = std::set< Id >;
+
+      auto nonunique = [] (const auto &match) {
+        MatchedIds matched;
+        for (const auto &[label, id] : match.labels)
+          matched.insert(id);
+        return matched.size() != match.labels.size();
+      };
+
+      matches.erase( std::remove_if(matches.begin(), matches.end(), nonunique), matches.end() );
+      return std::move(matches);
+    }
+
     static inline std::optional< LabeledMatch > merge(const LabeledMatch &lhs, const LabeledMatch &rhs)
     {
       auto product = product_of_substitutions(lhs.substitutions, rhs.substitutions);
@@ -364,11 +379,15 @@ namespace circ::eqsat {
     Matches match(const match_expr &e) const
     {
       std::vector< Matches > matches;
-      for (const auto &label : e.labels) {
+      for (const auto &label : labels(e)) {
         matches.push_back(match(pattern.subexprs.at(label), label));
       }
 
-      return combine_matches(matches);
+      auto result = combine_matches(matches);
+
+      result = filter_nonunique_matches(std::move(result));
+
+      return result;
     }
 
     // match single unlabled expression
