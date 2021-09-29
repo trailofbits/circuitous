@@ -51,18 +51,29 @@ namespace circ::eqsat {
 
   struct label_tag;
   // subexpression label has to be named with prefix '$'
-  using label = strong_type< std::string_view, label_tag >;
+  using single_label = strong_type< std::string_view, label_tag >;
+
+  struct variadic_label_tag;
+  // subexpression label has to be named with prefix '$' and suffixed with '...'
+  using variadic_label = strong_type< std::string_view, variadic_label_tag >;
+
+  using label = std::variant< single_label, variadic_label >;
 
   struct context_tag;
   using context = strong_type< std::string_view, context_tag >;
 
-  using atom = std::variant< constant, operation, place, label >;
+  using atom = std::variant< constant, operation, place, label, variadic_label >;
 
   template< typename stream >
   stream& operator<<(stream& os, const atom& a)
   {
     std::visit( [&os] (const auto &v) { os << v; }, a);
     return os;
+  }
+
+  static inline std::string_view label_name(const label &lab)
+  {
+    return std::visit([](const auto &v) { return v.ref(); }, lab);
   }
 
   // expression of form: (match [labels])
@@ -129,10 +140,8 @@ namespace circ::eqsat {
 
   struct named_expr : expr
   {
-    using name_type = std::string_view;
-
-    named_expr(name_type n, const expr &e) : expr(e), name(n) {}
-    named_expr(name_type n, expr &&e) : expr(std::move(e)), name(n) {}
+    named_expr(label n, const expr &e) : expr(e), name(n) {}
+    named_expr(label n, expr &&e) : expr(std::move(e)), name(n) {}
 
     label name;
   };
@@ -223,6 +232,22 @@ namespace circ::eqsat {
     };
   }
 
+  constexpr parser<single_label> auto single_label_name_parser()
+  {
+    return construct< single_label >(name_parser());
+  }
+
+  constexpr parser<variadic_label> auto variadic_label_name_parser()
+  {
+    return construct< variadic_label >(name_parser() > string_parser("..."));
+  }
+
+  constexpr parser<label> auto label_name_parser()
+  {
+    auto single   = construct< label >(single_label_name_parser());
+    auto variadic = construct< label >(variadic_label_name_parser());
+    return single | variadic;
+  }
 
   constexpr parser<operation> auto operation_parser()
   {
@@ -234,9 +259,19 @@ namespace circ::eqsat {
     return construct< place >(char_parser('?') < name_parser());
   }
 
+  constexpr parser<single_label> auto single_label_parser()
+  {
+    return construct< single_label >(char_parser('$') < name_parser());
+  }
+
+  constexpr parser<variadic_label> auto variadic_label_parser()
+  {
+    return construct< variadic_label >( name_parser() > string_parser("..."));
+  }
+
   constexpr parser<label> auto label_parser()
   {
-    return construct< label >(char_parser('$') < name_parser());
+    return char_parser('$') < label_name_parser();
   }
 
   constexpr parser<context> auto context_parser()
@@ -311,7 +346,7 @@ namespace circ::eqsat {
   // named expression has form: (let <name> <expr>)
   static inline parser<named_expr> auto named_expr_parser()
   {
-    auto name_p = (string_parser("let") & skip(isspace)) < name_parser();
+    auto name_p = (string_parser("let") & skip(isspace)) < label_name_parser();
     auto expr_p = (skip(isspace) < expr_with_context_parser());
 
     return from_tuple< named_expr >( parenthesized( name_p & expr_p ) );
