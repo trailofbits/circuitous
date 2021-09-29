@@ -595,8 +595,9 @@ void Circuit0::constraint_unused() {
     std::unordered_set< std::string > dirty;
 
     auto current_value = [&](const auto &reg, auto reg_in) {
-      return (dirty.count(reg->name) || !conditions.count(reg->name)) ? state.load(ir, reg)
-                                                                      : reg_in;
+      // TODO(lukas): May require different behaviour for dirty regs.
+      CHECK(!dirty.count(reg->name));
+      return state.load(ir, reg);
     };
 
     auto guard = [&](const auto &name, auto cmp) -> llvm::Value * {
