@@ -478,9 +478,10 @@ void Circuit0::constraint_unused() {
     auto dst_regs_checks = handle_dst_regs_(dst_regs, isel, state);
     ir.SetInsertPoint(this->head);
     auto computational_transition = ir.CreateAnd(dst_regs_checks, preserved);
+    auto computational_res = ir.CreateOr(c_ebit, computational_transition);
     auto error_transition = emit_error_transitions(c_ebit);
     ir.SetInsertPoint(this->head);
-    ctxs.back()._add(ir.CreateOr(computational_transition, error_transition));
+    ctxs.back()._add(ir.CreateAnd(computational_res, error_transition));
 
     add_isel_metadata(ctxs.back().current, isel);
   }
@@ -733,7 +734,7 @@ void Circuit0::constraint_unused() {
       args.push_back(rc);
     llvm::IRBuilder<> irb(this->head);
     auto all_def_rcs = irops::make< irops::And >(irb, args);
-    return irb.CreateOr(current_ebit, all_def_rcs);
+    return irb.CreateOr(irb.CreateNot(current_ebit), all_def_rcs);
   }
 
   auto circuit_builder::handle_errors(llvm::Value *begin, llvm::Value *end)
