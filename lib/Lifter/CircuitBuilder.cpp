@@ -16,8 +16,6 @@
 
 #include <remill/BC/Compat/CallSite.h>
 
-#include <circuitous/Util/Logging.hpp>
-
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>
@@ -27,6 +25,8 @@ CIRCUITOUS_RELAX_WARNINGS
 CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <sstream>
+
+DEFINE_bool(liftv2, true, "Produce circuit that allows only verify mode, but is smaller");
 
 namespace circ {
 namespace {

@@ -11,6 +11,7 @@
 #include <circuitous/Lifter/Component.hpp>
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/IR/Lifter.hpp>
+#include <circuitous/Util/Logging.hpp>
 
 #include <remill/Arch/Arch.h>
 #include <remill/BC/IntrinsicTable.h>
@@ -21,6 +22,8 @@
 #include <iomanip>
 #include <unordered_map>
 #include <vector>
+
+DECLARE_bool(liftv2);
 
 namespace circ {
 
@@ -184,7 +187,10 @@ namespace circ {
 
     void inject_isel(const InstructionSelection &isel) {
       for (auto i = 0u; i < isel.instructions.size(); ++i) {
-        inject_semantic(ISEL_view(isel, i));
+        if (FLAGS_liftv2)
+          inject_semantic_modular(ISEL_view(isel, i));
+        else
+          inject_semantic(ISEL_view(isel, i));
         this->move_head();
       }
     }
