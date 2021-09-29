@@ -354,11 +354,59 @@ namespace circ::eqsat {
       rule.apply(egraph, builder);
       egraph.rebuild();
 
-      egraph.dump("egraph.dot");
-
-
       CHECK(egraph.eclass(add).size() == 2);
       CHECK(egraph.eclass(add) == egraph.eclass(mul2));
+    }
+
+    TEST_CASE("Disjoint Match")
+    {
+      TestGraph egraph;
+      TestGraphBuilder builder(&egraph);
+
+      auto a = egraph.make_leaf("a");
+      auto b = egraph.make_leaf("b");
+      egraph.make_node("mul", {a, b});
+
+      auto rule = TestRule(
+        "mul-add-equality",
+        "((let A (op_mul ?a ?b)) (let B (op_mul ?c ?d)) (match $A $B))",
+        "(union $A $B)"
+      );
+
+      auto matches = rule.match(egraph);
+      CHECK(matches.size() == 0);
+
+      rule.apply(egraph, builder);
+      egraph.rebuild();
+    }
+
+    TEST_CASE("Commutative Match")
+    {
+      TestGraph egraph;
+      TestGraphBuilder builder(&egraph);
+
+      auto a = egraph.make_leaf("a");
+      auto b = egraph.make_leaf("b");
+      auto m1 = egraph.make_node("mul", {a, b});
+
+      auto c = egraph.make_leaf("c");
+      auto d = egraph.make_leaf("d");
+      auto m2 = egraph.make_node("mul", {c, d});
+
+      auto rule = TestRule(
+        "mul-add-equality",
+        "((let A (op_mul ?a ?b)) (let B (op_mul ?c ?d)) (commutative-match $A $B))",
+        "(union $A $B)"
+      );
+
+      auto matches = rule.match(egraph);
+      std::cerr << matches.size();
+      CHECK(matches.size() == 1);
+
+      rule.apply(egraph, builder);
+      egraph.rebuild();
+
+      CHECK(egraph.eclass(m1) == egraph.eclass(m2));
     }
   }
 
