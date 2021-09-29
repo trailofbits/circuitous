@@ -107,6 +107,7 @@ namespace circ::eqsat {
   using Substitutions = std::set< Substitution >;
 
   using MatchLabel = std::variant< std::monostate, label >;
+  using LabelsMap = std::unordered_map< MatchLabel, Id >;
 
   template< typename stream >
   auto operator<<(stream &os, const MatchLabel &lab) -> decltype(os << "")
@@ -125,10 +126,9 @@ namespace circ::eqsat {
   // A special case is anonymous match for unlabeled pattern.
   struct LabeledMatch
   {
-    using labels_map = std::unordered_map< MatchLabel, Id >;
-
     // matching of labels to equality nodes
-    labels_map labels;
+    LabelsMap labels;
+
     // corresponding substitutions for the matching
     Substitutions substitutions;
 
@@ -333,6 +333,30 @@ namespace circ::eqsat {
       return std::move(matches);
     }
 
+    static inline Matches filter_commutative_matches(Matches &&matches)
+    {
+      using MatchedIds = std::set< Id >;
+      std::vector< MatchedIds > seen;
+
+      auto matched_ids = [] (const LabelsMap &labels) -> MatchedIds {
+        MatchedIds matched;
+        for (const auto &[label, id] : labels)
+          matched.insert(id);
+        return matched;
+      };
+
+      auto commutes = [&] (const auto &match) {
+        auto ids = matched_ids(match.labels);
+        if (std::find(seen.begin(), seen.end(), ids) != seen.end())
+          return true;
+        seen.push_back(ids);
+        return false;
+      };
+
+      matches.erase( std::remove_if(matches.begin(), matches.end(), commutes), matches.end() );
+      return std::move(matches);
+    }
+
     static inline std::optional< LabeledMatch > merge(const LabeledMatch &lhs, const LabeledMatch &rhs)
     {
       auto product = product_of_substitutions(lhs.substitutions, rhs.substitutions);
@@ -387,6 +411,8 @@ namespace circ::eqsat {
 
       result = filter_nonunique_matches(std::move(result));
 
+      if (std::holds_alternative< commutative_match_expr >(e))
+        return filter_commutative_matches(std::move(result));
       return result;
     }
 
