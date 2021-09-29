@@ -480,11 +480,13 @@ namespace circ::print {
     void declare_module(const std::string &name)
     {
       os << "module " << name << "(" << std::endl;
-      write_inputs();
+      declare_in_args();
       os << std::endl;
-      write_output();
+      declare_out_arg();
       os << "\n);\n";
     }
+
+    void end_module() { os << "endmodule" << std::endl; }
 
     std::string &give_name(Operation *op, std::string name) {
       dbg << "Naming: " << pretty_print< false >(op) << " -> " << name << std::endl;
@@ -494,7 +496,7 @@ namespace circ::print {
     }
 
     template< typename O, typename ... Ts, typename Fmt >
-    void write_input(Fmt &&fmt) {
+    void declare_in_args(Fmt &&fmt) {
       auto get_name = [&](auto op) -> std::string {
         // fmt may be stateful, so extra invocation is not desired.
         CHECK(!op_names.count(op)) << std::endl << dbg.str();
@@ -508,33 +510,45 @@ namespace circ::print {
       }
 
       if constexpr (sizeof...(Ts) != 0)
-        return write_input< Ts ... >(std::forward< Fmt >(fmt));
+        return declare_in_args< Ts ... >(std::forward< Fmt >(fmt));
       else
         return;
     }
 
-    void write_inputs() {
-      auto fmt_io = [](auto op) { return op->Name(); };
+    void declare_in_args() {
+      auto fmt_io = [](auto op) {
+        // `.` is not a valid character in token name in verilog
+        std::string out = "";
+        for (auto c : op->Name())
+          out += (c == '.') ? '_' : c;
+        return out;
+      };
 
-      write_input< OutputRegister, InputRegister,
-                   InputErrorFlag, OutputErrorFlag,
-                   InputTimestamp, OutputTimestamp,
-                   Memory,
-                   InputInstructionBits,
-                   Advice >( fmt_io );
+      declare_in_args< OutputRegister, InputRegister,
+                        InputErrorFlag, OutputErrorFlag,
+                        InputTimestamp, OutputTimestamp,
+                        Memory,
+                        InputInstructionBits,
+                        Advice >( fmt_io );
     }
 
-    void write_output() {
+    void declare_out_arg() {
       os << "output [0:0] result" << std::endl;
       result = "result";
     }
 
-    void write_body() { this->Visit(circuit); }
+    void assign_out_arg(const std::string &name, const std::string &what) {
+      os << "assign " << name << " = " << what << ";\n";
+    }
+
+    std::string write_body() { return this->Visit(circuit); }
 
     static void print(std::ostream &os, Circuit *c) {
       Verilog vprinter(os, c);
       vprinter.declare_module("circuit");
-      vprinter.write_body();
+      std::string result = vprinter.write_body();
+      vprinter.assign_out_arg("result", result);
+      vprinter.end_module();
     }
   };
 
