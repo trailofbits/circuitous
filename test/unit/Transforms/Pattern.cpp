@@ -64,7 +64,7 @@ namespace circ::eqsat {
 
     {
       auto p = parser("(let place (?x))");
-      CHECK(p && result(p).name == "place" && root(result(p)) == atom(place("x")));
+      CHECK(p && label_name(result(p).name) == "place" && root(result(p)) == atom(place("x")));
     }
   }
 
@@ -76,7 +76,7 @@ namespace circ::eqsat {
 
     {
       auto p = parser("((let place (?x)) ($place))");
-      CHECK(p && result(p).subexprs.size() == 1 && root(result(p)) == atom(label("place")));
+      CHECK(p && result(p).subexprs.size() == 1 && root(result(p)) == atom(single_label("place")));
     }
 
     {
@@ -86,8 +86,8 @@ namespace circ::eqsat {
       CHECK(root(res) == atom(operation("add")));
 
       auto ch = children(res);
-      CHECK(std::get<atom>(ch[0]) == atom(label("X")));
-      CHECK(std::get<atom>(ch[1]) == atom(label("Y")));
+      CHECK(std::get<atom>(ch[0]) == atom(single_label("X")));
+      CHECK(std::get<atom>(ch[1]) == atom(single_label("Y")));
     }
   }
 
