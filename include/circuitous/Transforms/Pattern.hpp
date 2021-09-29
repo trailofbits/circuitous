@@ -67,7 +67,22 @@ namespace circ::eqsat {
 
   // expression of form: (match [labels])
   // serves to match multiple labeled expressions
-  struct match_expr { std::vector<label> labels; };
+  struct basic_match_expr
+  {
+    std::vector<label> labels;
+  };
+
+  struct commutative_match_expr
+  {
+    std::vector<label> labels;
+  };
+
+  using match_expr = std::variant< basic_match_expr, commutative_match_expr >;
+
+  static inline auto labels(const match_expr &e)
+  {
+    return std::visit([](const auto &m) { return m.labels; }, e);
+  }
 
   // expression of form: (union [labels])
   // serves to unify matched labels on the right hand side of the rule
@@ -324,9 +339,21 @@ namespace circ::eqsat {
 
   // TODO(Heno): constexpr
   // match expression has form: (match [labels])
+  static inline parser<basic_match_expr> auto basic_match_expr_parser()
+  {
+    return match_label_list< basic_match_expr >("match");
+  }
+
+  static inline parser<commutative_match_expr> auto commutative_match_expr_parser()
+  {
+    return match_label_list< commutative_match_expr >("commutative-match");
+  }
+
   static inline parser<match_expr> auto match_expr_parser()
   {
-    return match_label_list<match_expr>("match");
+    auto basic = construct< match_expr >( basic_match_expr_parser() );
+    auto commutative = construct< match_expr >( commutative_match_expr_parser() );
+    return basic | commutative;
   }
 
   // TODO(Heno): constexpr
@@ -456,7 +483,7 @@ namespace circ::eqsat {
         }, a);
       },
       [&] (const expr_list &list) -> places_t { return foreach_places(list); },
-      [&] (const match_expr &e)   -> places_t { return foreach_places(e.labels); },
+      [&] (const match_expr &e)   -> places_t { return foreach_places(labels(e)); },
       [&] (const union_expr &e)   -> places_t { return foreach_places(e.labels); },
       [] (const auto&) -> places_t { throw "unsupported expression type"; }
     }, e.get());
