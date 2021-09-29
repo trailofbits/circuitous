@@ -223,7 +223,7 @@ struct Memory : Operation, make_kind< LeafValue, tag_fragment< 8 > > {
   static uint32_t  expected_size(uint32_t ptr_size);
 
   static std::string op_code_str() { return "memory"; }
-  std::string Name() const override { return "memory"; }
+  std::string Name() const override { return "memory." + std::to_string(mem_idx); }
 
   uint32_t mem_idx = 0;
 };
