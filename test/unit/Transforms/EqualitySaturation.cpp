@@ -368,6 +368,7 @@ namespace circ::eqsat {
       egraph.make_node("mul", {a, b});
 
       auto rule = TestRule(
+        "unify-multiplication",
         "((let A (op_mul ?a ?b)) (let B (op_mul ?c ?d)) (match $A $B))",
         "(union $A $B)"
       );
@@ -400,6 +401,10 @@ namespace circ::eqsat {
 
       auto matches = rule.match(egraph);
       CHECK(matches.size() == 1);
+
+      rule.apply(egraph, builder);
+      egraph.rebuild();
+
       CHECK(egraph.eclass(m1) == egraph.eclass(m2));
     }
 
@@ -421,12 +426,12 @@ namespace circ::eqsat {
 
       auto rule = TestRule(
         "bond-multiplications",
-        "((let A (op_mul ?a ?b):C1) (let B (op_mul ?c ?d):C2) (disjoint C1 C2) (match $A $B))",
+        "((let A (op_mul ?a ?b):C1) (let B (op_mul ?c ?d):C2) (disjoint C1 C2) (commutative-match $A $B))",
         "(bond $A $B)"
       );
 
       auto matches = rule.match(egraph);
-      CHECK(matches.size() == 2);
+      CHECK(matches.size() == 1);
 
       rule.apply(egraph, builder);
       egraph.rebuild();
