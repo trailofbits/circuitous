@@ -11,12 +11,14 @@
 
 #include <remill/BC/Util.h>
 
-#include <unordered_map>
+#include <set>
 #include <vector>
+#include <unordered_map>
 
 namespace circ {
 
   struct SelectFolder {
+
     using blueprint_t = llvm::CallInst *;
     using ctx_to_selects_t = std::map<llvm::Value *, std::vector<llvm::CallInst *>>;
 
@@ -42,7 +44,7 @@ namespace circ {
     void gather_blueprints() {
       for (auto &[_, selects] : ctx_to_selects) {
         for (auto select : selects) {
-          // If call is not complete we leave it for later when we called
+          // If call is not complete we leave it for later when we collected
           // all complete blueprints.
           if (!irops::Instance< irops::Select >(select).is_complete()) {
             continue;
@@ -69,7 +71,7 @@ namespace circ {
     std::unordered_map<blueprint_t, uint64_t> assign_blueprints() {
       auto assign = [&](auto select) -> llvm::CallInst * {
         for (auto blueprint : blueprints) {
-          if (irops::Instance< irops::Select >::are_compatible(select, blueprint)) {
+          if (irops::Instance< irops::Select >::is_compatible_with(select, blueprint)) {
             return blueprint;
           }
         }
@@ -167,7 +169,11 @@ namespace circ {
         if (obits == 3 && nbits == 4) {
           return irops::make< irops::Concat >(ir, {ir.getInt1(0), selector});
         }
-        LOG(FATAL) << "Cannot coerce selector";
+        LOG(FATAL) << "Cannot coerce selector:\n" << dbg_dump(selector)
+                   << "\nof select:\n"
+                   << dbg_dump(original)
+                   << "\nWhere blueprint is:\n"
+                   << dbg_dump(node);
       };
 
       for (auto &[ctx_, selects] : ctx_to_selects) {
