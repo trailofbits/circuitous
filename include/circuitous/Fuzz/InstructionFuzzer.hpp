@@ -364,7 +364,14 @@ namespace circ {
       // NOTE(lukas): On amd64 this always signals that the translation map will
       //              not be formed properly.
       if (!chosen) {
-        LOG(FATAL) << "Reg enlargement heuristic did not choose any candidate!";
+        if (arch->address_size == 64)
+          LOG(FATAL) << "Reg enlargement heuristic did not choose any candidate!\n"
+                     << rinst.Serialize();
+        else {
+          LOG(WARNING) << "Reg enlargement heuristic did not choose any candidate!\n"
+                       << rinst.Serialize();
+          return true;
+        }
       }
       ifuzz::apply_vessel(s_inst, *chosen, idxs);
       return true;
