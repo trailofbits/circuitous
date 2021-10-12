@@ -175,6 +175,19 @@ namespace circ {
     return runtime_find_< F, Ts... >(rkind, std::forward< F >(f));
   }
 
+  static inline std::string op_code_str(uint32_t rkind) {
+   auto get_name = [](auto x) {
+      using raw_t = std::remove_pointer_t< std::decay_t< decltype( x ) > >;
+      return raw_t::op_code_str();
+    };
+
+    static std::unordered_map< uint32_t, std::string > cache;
+    if (!cache.count(rkind)) {
+      cache[rkind] = runtime_find(all_nodes_list_t{}, rkind, get_name);
+    }
+
+    return cache[rkind];
+  }
 
 
   // TODO(lukas): This is just a hotfix, ideally we want the type list
@@ -182,18 +195,7 @@ namespace circ {
   static inline std::string fragment_as_str(uint32_t kind) {
     std::stringstream ss;
     ss << shatter_fragment_as_str(kind);
-
-    auto get_name = [](auto x) {
-      using raw_t = std::remove_pointer_t< std::decay_t< decltype( x ) > >;
-      return raw_t::op_code_str();
-    };
-
-    static std::unordered_map< uint32_t, std::string > cache;
-    if (!cache.count(kind)) {
-      cache[kind] = runtime_find(all_nodes_list_t{}, kind, get_name);
-    }
-
-    ss << cache[kind];
+    ss << op_code_str(kind);
     return ss.str();
   }
 
