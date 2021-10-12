@@ -122,8 +122,10 @@ namespace circ::shadowinst {
                         std::forward< Args >(args) ...);
   }
 
-  llvm::Value *store_fragment(auto what, auto full, auto &irb,
-                              const Reg &s_reg, const auto &arch)
+  auto store_fragment(auto what, auto full, auto &irb,
+                      const Reg &s_reg, const auto &arch)
+  // [condition to be upheld by context, selector of value]
+  -> std::tuple< llvm::Value *, llvm::Value * >
   {
     std::map< uint64_t, llvm::Value * > shifts;
     for (auto &[shift_val, conds] : shift_coerce_info(s_reg, arch)) {
@@ -147,9 +149,18 @@ namespace circ::shadowinst {
       cond_to_glued[cond] = irops::make< irops::Concat >(irb, chunks);
     }
     // TODO(lukas): Generalize.
-    CHECK(cond_to_glued.size() <= 2);
+    CHECK(cond_to_glued.size() <= 2 && cond_to_glued.size() >= 1);
 
-    return shadowinst::SelectMaker(irb).chain(cond_to_glued);
+    auto &front = *cond_to_glued.begin();
+    llvm::Value *init_cond = std::get< 0 >(front);
+    llvm::Value *init_val = std::get< 1 >(front);
+    cond_to_glued.erase(init_cond);
+
+    for (auto &[c, v] : cond_to_glued) {
+      init_cond = irb.CreateOr(c, init_cond);
+      init_val = irb.CreateSelect(c, v, init_val);
+    }
+    return std::make_tuple(init_cond, init_val);
   }
 
 } // namespace cir::shadowinst
