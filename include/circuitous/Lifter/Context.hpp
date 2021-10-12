@@ -107,7 +107,9 @@ namespace circ {
         "AF", "CF", "PF", "DF", "OF", "SF", "ZF",
         "EAX", "EBX", "ECX", "EDX", "ESI", "EDI", "EBP", "ESP",
         "R8D", "R9D", "R10D", "R11D", "R12D", "R13D", "R14D", "R15D",
-        "EIP"
+        "EIP",
+        // Used in string ops
+        "ESBASE", "DSBASE", "SSBASE", "GSBASE", "FSBASE"
       };
       switch (ptr_size) {
         case 64: return allowed64.count(name) != 0;
@@ -121,11 +123,14 @@ namespace circ {
           _module(remill::LoadArchSemantics(arch())),
           ptr_size(_arch->address_size)
     {
+      std::stringstream dbg;
       _arch->ForEachRegister([&](reg_ptr_t reg_) {
         if (auto reg = reg_->EnclosingRegister(); reg == reg_ && is_allowed(reg->name)) {
           _regs.push_back(reg);
+          dbg << " " << reg->name;
         }
       });
+      LOG(INFO) << "Initialized regs as: [" << dbg.str() << " ]" << std::endl;
     }
   };
   using CtxRef = Ctx &;
