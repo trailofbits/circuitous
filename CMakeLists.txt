@@ -108,6 +108,12 @@ target_link_libraries(circuitous_transforms PUBLIC
 # executable targets
 #
 
+add_executable(circuitous-seed
+  bin/seed/Seed.cpp
+)
+
+target_link_libraries(circuitous-seed PUBLIC circuitous_settings)
+
 add_executable(circuitous-lift
   bin/lift/Lift.cpp
 )
