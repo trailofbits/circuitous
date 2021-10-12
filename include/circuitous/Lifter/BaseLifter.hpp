@@ -163,6 +163,7 @@ namespace circ {
         remill::IntrinsicTable intrinsics(ctx.module());
         flatten_cfg(func, intrinsics);
       }
+      check_unsupported_intrinscis(inst_funcs);
       // TOOD(lukas): Inline into the loop once the `OptimizeSilently` does
       //              only function verification (now does module).
       OptimizeSilently(ctx.arch(), ctx.module(), reopt_funcs);
@@ -179,6 +180,77 @@ namespace circ {
         ss << std::hex << static_cast<uint32_t>(bytes[i]);
       }
       return ss.str();
+    }
+
+    void check_unsupported_intrinscis(const std::vector< llvm::Function * > &fns)
+    {
+      bool found = false;
+      // For reporting errors
+      std::stringstream out;
+
+      auto fn_name = [](llvm::Function *fn) -> std::string {
+        if (!fn || !fn->hasName())
+          return "(nullptr)";
+        return fn->getName().str();
+      };
+
+      auto is_allowed = [&](llvm::Function *fn) {
+        // Indirect call is not an intrinsics and all functions should have names
+        // at this point.
+        if (!fn || !fn->hasName())
+          return false;
+
+        static const std::unordered_set< std::string > allowed = {
+          "__remill_atomic_begin",
+          "__remill_atomic_end",
+        };
+
+        auto fn_name = fn->getName();
+        // TODO(lukas): Pull this from whatever class is responsible for lowering.
+        //              May be tricky since it may be a user of this class.
+        if (allowed.count(fn_name.str()))
+          return true;
+        // Cannot handle atomics right now
+        if (fn_name.contains("atomic"))
+          return false;
+        // Cannot handle any form of floats
+        if (fn_name.contains("float"))
+          return false;
+        if (fn_name.contains("__remill_sync_hyper_call"))
+          return false;
+        // If something was missed, lifter will most likely crash and intrinsic can
+        // be retroactively added here.
+        return true;
+      };
+
+      auto check = [&](llvm::Function *fn) {
+        out << fn->getName().str() << std::endl;
+        for (auto &bb : *fn)
+          for (auto &inst : bb)
+            if (auto call = llvm::dyn_cast< llvm::CallInst >(&inst))
+              if (!is_allowed(call->getCalledFunction())) {
+                found = true;
+                out << "\t" << fn_name(call->getCalledFunction()) << std::endl;
+              }
+      };
+
+      for (auto fn : fns)
+        check(fn);
+      CHECK(!found) << out.str();
+    }
+
+    bool was_lifted_correctly(auto status, const remill::Instruction &inst) {
+      if (status == remill::LiftStatus::kLiftedInstruction)
+        return true;
+
+      if (status == remill::LiftStatus::kLiftedUnsupportedInstruction)
+        LOG(ERROR) << "Missing semantics for instruction: " << inst.Serialize();
+      else if (status == remill::LiftStatus::kLiftedInvalidInstruction)
+        LOG(ERROR) << "Invalid instruction: " << inst.Serialize();
+      else
+        LOG(FATAL) << "Instruction lifter ended with unexpected error: " << inst.Serialize();
+
+      return false;
     }
 
     void lift(std::vector<InstructionSelection> &isels) {
@@ -198,21 +270,16 @@ namespace circ {
           lifter.SupplyShadow(&group.shadows[i]);
           auto status = lifter.LiftIntoBlock(inst, block, false);
 
-          if (status == remill::LiftStatus::kLiftedInstruction) {
-              llvm::ReturnInst::Create(*ctx.llvm_ctx(), remill::LoadMemoryPointer(block), block);
-              inst_funcs.push_back(func);
-              continue;
+          if (!was_lifted_correctly(status, inst)) {
+            func->eraseFromParent();
+            continue;
           }
 
-          if (status == remill::LiftStatus::kLiftedUnsupportedInstruction) {
-            LOG(ERROR) << "Missing semantics for instruction: " << inst.Serialize();
-          }
-          if (status == remill::LiftStatus::kLiftedInvalidInstruction) {
-              LOG(ERROR) << "Invalid instruction: " << inst.Serialize();
-          }
-          func->eraseFromParent();
+          llvm::ReturnInst::Create(*ctx.llvm_ctx(), remill::LoadMemoryPointer(block), block);
+          inst_funcs.push_back(func);
         }
       }
+      check_unsupported_intrinscis(inst_funcs);
       after_lift_opts(inst_funcs);
     }
   };
