@@ -145,6 +145,7 @@ namespace circ::mem {
       auto s = ir.getIntN(4u, size / 8);
       checks.push_back(irops::make< irops::WriteConstraint >(
             ir, {hint, s, addr, ts, coerced_value}));
+      call->replaceAllUsesWith(call->getArgOperand(0));
       call->eraseFromParent();
     }
 
