@@ -77,23 +77,28 @@ namespace circ {
         return std::make_tuple( std::nullopt, buff );
 
       remill::Instruction inst;
+      DLOG(INFO) << "Trying to decode";
       if (!ctx.arch()->DecodeInstruction(0, buff, inst) || !inst.IsValid()) {
         // Failed, move one byte.
+        DLOG(INFO) << "  failed, moving by one";
         return decode(buff.substr(1));
       }
+      DLOG(INFO) << "  success: " << inst.function;
       // Success, return inst with shorter buffer.
-      return std::make_tuple( std::make_optional(std::move(inst)), buff.substr(inst.bytes.size()) );
+      return std::make_tuple( std::make_optional(std::move(inst)),
+                              buff.substr(inst.bytes.size()) );
     }
 
     // Recursively try to decode everything present, call `process` for each decoded inst.
     auto decode_all_(std::string_view buff) {
-      if (buff.empty())
-        return;
+      while (!buff.empty())
+      {
 
-      auto [inst, rest] = decode(buff);
-      if (inst)
-        process(std::move(*inst));
-      return decode_all_(rest);
+        auto [inst, rest] = decode(buff);
+        if (inst)
+          process(std::move(*inst));
+        buff = rest;
+      }
     }
 
     self_ref decode_all(llvm::StringRef buff) {
@@ -127,7 +132,8 @@ namespace circ {
           return grouped_insts.emplace_back();
         }();
 
-        iclass.PartialAdd(std::move(inst), InstructionSelection::RemillBytesToEncoding(inst.bytes));
+        iclass.PartialAdd(std::move(inst),
+                          InstructionSelection::RemillBytesToEncoding(inst.bytes));
       }
     }
 
@@ -221,8 +227,11 @@ namespace circ {
 
     InstSelections Run(llvm::StringRef buff) {
       auto isels = decode(buff);
+      DLOG(INFO) << "Decoding done.";
       fuzz(isels);
+      DLOG(INFO) << "Fuzzing done.";
       lift(isels);
+      DLOG(INFO) << "Lifting done.";
       return isels;
     }
 
