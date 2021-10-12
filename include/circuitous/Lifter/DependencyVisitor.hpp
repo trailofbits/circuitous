@@ -117,5 +117,43 @@ namespace circ {
     }
   };
 
+  struct UndefReachability {
+    std::unordered_set< llvm::CallInst * > rcs;
+    // TODO(lukas): Possible `seen` is not needed due to structure.
+    std::unordered_set< llvm::Value * > seen;
+
+    bool visit( llvm::Instruction * val) {
+      if (seen.count(val))
+        return true;
+      seen.insert(val);
+
+      if (irops::Instance< irops::OutputCheck >(val)) {
+        rcs.insert(llvm::dyn_cast< llvm::CallInst >(val));
+        return true;
+      }
+
+      // Derived value from this is used directly in verified inst
+      // without going via reg constraint.
+      if (irops::is< irops::VerifyInst >(val))
+        return false;
+
+      // NOTE(lukas): Defensively prevent going through calls
+      if (llvm::isa< llvm::CallInst >(val))
+        return false;
+
+      for (auto op : val->users())
+        if (auto as_inst = llvm::dyn_cast< llvm::Instruction >(op))
+          if (!visit(as_inst))
+            return false;
+      return true;
+    }
+
+    std::optional< std::unordered_set< llvm::CallInst * > > run(llvm::Instruction *val) {
+      if (visit(val)) {
+        return { std::move( rcs ) };
+      }
+      return {};
+    }
+  };
 
 }  // namespace circ
