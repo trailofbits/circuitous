@@ -65,7 +65,7 @@ namespace circ {
         switch(op->type) {
           case OPT::kTypeImmediate: return std::to_string(op->imm.val);
           case OPT::kTypeRegister:
-              if (auto big_reg = try_enclosing_reg(fuzzer.arch.get(), op->reg.name))
+              if (auto big_reg = try_enclosing_reg(fuzzer.arch, op->reg.name))
                 return (*big_reg)->name;
               return op->reg.name;
           case OPT::kTypeAddress:
@@ -119,7 +119,7 @@ namespace circ {
 
         //using CMP = ifuzz::permutate::HuskComparator;
         using CMP = Resolver;
-        husk_bits[i] = CMP(fuzzer.arch.get()).compare(
+        husk_bits[i] = CMP(fuzzer.arch).compare(
             fuzzer.rinst, *fuzzer.permutations[i], group);
       }
       if (fuzzer.are_empty(husk_bits))

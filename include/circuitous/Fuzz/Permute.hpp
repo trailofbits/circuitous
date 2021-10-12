@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <circuitous/Util/LLVMUtil.hpp>
+
 #include <remill/Arch/Arch.h>
 #include <remill/Arch/Instruction.h>
 
@@ -24,7 +26,7 @@ namespace circ::ifuzz::permutate {
   // it is expected some part of the code down the line implements heuristic
   // that can deal with these misses.
   static inline permutations_t flip(
-      const remill::Instruction &rinst, const remill::Arch::ArchPtr &arch)
+      const remill::Instruction &rinst, const remill::Arch *arch)
   {
     permutations_t out;
     out.resize(rinst.bytes.size() * 8);
@@ -39,7 +41,6 @@ namespace circ::ifuzz::permutate {
 
         remill::Instruction tmp;
         if (arch->DecodeInstruction(0, flipped, tmp)) {
-          LOG(INFO) << tmp.Serialize();
           out[index] = std::move(tmp);
         }
       }
