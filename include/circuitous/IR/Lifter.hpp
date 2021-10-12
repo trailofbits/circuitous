@@ -2,7 +2,7 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
- #pragma once
+#pragma once
 
 #include <circuitous/Util/LLVMUtil.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
@@ -109,7 +109,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     llvm::CallInst *out = nullptr;
     for (auto &inst : *block) {
       if (auto call = llvm::dyn_cast<llvm::CallInst>(&inst); call && possible_isel(call)) {
-        CHECK(!out);
+        CHECK(!out) << dbg_dump(block->getParent());
         out = call;
       }
     }
@@ -210,28 +210,28 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
 
   auto LiftIntoBlock(remill::Instruction &inst, llvm::BasicBlock *block,
                      bool is_delayed) {
-      auto lift_status = this->parent::LiftIntoBlock(inst, block, is_delayed);
+    auto lift_status = this->parent::LiftIntoBlock(inst, block, is_delayed);
 
-      // If the instruction was not lifted correctly we do not wanna do anything
-      // in the block.
-      if (lift_status != remill::kLiftedInstruction) {
-        return lift_status;
-      }
-      auto state_ptr = remill::NthArgument(block->getParent(), remill::kStatePointerArgNum);
-
-      auto call = fetch_sem_call(block);
-      CHECK(call);
-      consolidate_isel(call->getCalledFunction());
-
-      // We need to actually store the new value of instruction pointer
-      // into the corresponding register.
-      // NOTE(lukas): This should technically be responsiblity of remill::InstructionLifter
-      //              but it is not happening for some reason.
-      llvm::IRBuilder ir(block);
-      auto pc_ref = LoadRegAddress(block, state_ptr, remill::kPCVariableName);
-      auto next_pc_ref = LoadRegAddress(block, state_ptr, remill::kNextPCVariableName);
-      ir.CreateStore(ir.CreateLoad(next_pc_ref), pc_ref);
+    // If the instruction was not lifted correctly we do not wanna do anything
+    // in the block.
+    if (lift_status != remill::kLiftedInstruction) {
       return lift_status;
+    }
+    auto state_ptr = remill::NthArgument(block->getParent(), remill::kStatePointerArgNum);
+
+    auto call = fetch_sem_call(block);
+    CHECK(call);
+    consolidate_isel(call->getCalledFunction());
+
+    // We need to actually store the new value of instruction pointer
+    // into the corresponding register.
+    // NOTE(lukas): This should technically be responsiblity of remill::InstructionLifter
+    //              but it is not happening for some reason.
+    llvm::IRBuilder ir(block);
+    auto pc_ref = LoadRegAddress(block, state_ptr, remill::kPCVariableName);
+    auto next_pc_ref = LoadRegAddress(block, state_ptr, remill::kNextPCVariableName);
+    ir.CreateStore(ir.CreateLoad(next_pc_ref), pc_ref);
+    return lift_status;
   }
 
   llvm::Function *ChooseImm(uint64_t arch_op_size, const functions_t &funcs) {
