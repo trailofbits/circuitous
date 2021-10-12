@@ -312,6 +312,12 @@ namespace circ::irops {
   }
 
   template< typename T >
+  bool is(llvm::CallInst *call) { return call && static_cast< bool >(Instance< T >(call)); }
+
+  template< typename T >
+  bool is(llvm::Value *v) { return is< T >(llvm::dyn_cast_or_null< llvm::CallInst >(v)); }
+
+  template< typename T >
   requires std::is_same_v< typename std::remove_cvref_t< T >::value_type, std::string >
   auto is_one_of(llvm::IRBuilder<> &irb, llvm::Value *fst, T &&vals)
   {
