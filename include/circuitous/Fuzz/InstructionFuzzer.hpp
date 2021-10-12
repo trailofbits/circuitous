@@ -58,16 +58,16 @@ namespace circ {
     using Operand = remill::Operand;
     using Kind = remill::Operand::Address::Kind;
     using OpType = remill::Operand::Type;
-    using Arch_ref = remill::Arch::ArchPtr;
+    using Arch_ptr = const remill::Arch *;
 
     using bits_t = std::vector< bool >;
 
-    const remill::Arch::ArchPtr &arch;
+    Arch_ptr arch;
     const remill::Instruction &rinst;
 
     ifuzz::permutate::permutations_t permutations;
 
-    InstructionFuzzer(const Arch_ref &arch_, const remill::Instruction &rinst_)
+    InstructionFuzzer(Arch_ptr arch_, const remill::Instruction &rinst_)
       : arch(arch_), rinst(rinst_), permutations(ifuzz::permutate::flip(rinst, arch))
     {}
 
@@ -138,7 +138,7 @@ namespace circ {
             continue;
           }
           using C = ifuzz::permutate::Comparator;
-          op_bits[op_i][i] = C(arch.get()).compare(rinst, *permutations[i], op_i);
+          op_bits[op_i][i] = C(arch).compare(rinst, *permutations[i], op_i);
         }
       }
       return op_bits;
@@ -185,7 +185,6 @@ namespace circ {
       if (generate_all) {
         PopulateTranslationTables(shadow_inst);
       }
-
       return shadow_inst;
     }
 
@@ -319,7 +318,7 @@ namespace circ {
           items.emplace(idx, &inst.operands[idx]);
         }
 
-        return ifuzz::permutate::HuskEnlargerComparator(arch.get()).verbose_compare(rinst, inst, items);
+        return ifuzz::permutate::HuskEnlargerComparator(arch).compare(rinst, inst, items);
       };
 
       auto for_valid = [](auto fn, auto &group) {
