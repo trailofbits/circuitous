@@ -245,7 +245,11 @@ namespace circ::irops {
 
     // TODO(lukas): I think we should make this more general by introducing some
     //              way to configure the stride if arguments counts are different.
-    static bool are_compatible(llvm::CallInst *lhs, llvm::CallInst *rhs) {
+    // Returns `true` is `lhs` is compatible (i.e. is the same or can be extended
+    // with padding and undefs) to match `rhs`.
+    static bool is_compatible_with(llvm::CallInst *lhs, llvm::CallInst *rhs) {
+      if (lhs->getNumArgOperands() > rhs->getNumArgOperands())
+        return false;
       auto size = std::min(lhs->getNumArgOperands(), rhs->getNumArgOperands());
       auto op = [&](auto from, auto i) {
         auto total = from->getNumArgOperands();
@@ -261,6 +265,11 @@ namespace circ::irops {
         }
       }
       return true;
+    }
+
+    // Returns `true` if `lhs` is compatible with `rhs` or vice versa.
+    static bool are_compatible(llvm::CallInst *lhs, llvm::CallInst *rhs) {
+      return is_compatible_with(lhs, rhs) || is_compatible_with(rhs, lhs);
     }
   };
 
