@@ -256,11 +256,14 @@ namespace circ {
     void lift(std::vector<InstructionSelection> &isels) {
       std::vector<llvm::Function *> inst_funcs;
 
+      auto unique_id = 0;
       for (auto &group : isels) {
         for (auto i = 0ull; i < group.instructions.size(); ++i) {
           auto &inst = group.instructions[i];
+          auto name = lifted_name(inst.bytes) + std::to_string(++unique_id);
+          CHECK(!ctx.module()->getFunction(name));
 
-          auto func = remill::DeclareLiftedFunction(ctx.module(), lifted_name(inst.bytes));
+          auto func = remill::DeclareLiftedFunction(ctx.module(), name);
           group.lifted_fns[i] = func;
 
           remill::CloneBlockFunctionInto(func);
@@ -268,6 +271,7 @@ namespace circ {
 
           Impl lifter(ctx.arch(), ctx.module());
           lifter.SupplyShadow(&group.shadows[i]);
+          CHECK(func->size() == 1);
           auto status = lifter.LiftIntoBlock(inst, block, false);
 
           if (!was_lifted_correctly(status, inst)) {
