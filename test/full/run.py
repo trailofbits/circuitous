@@ -403,6 +403,7 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
 
   for x in tests:
     x.generate(lift=strip(extra_args))
+    x.resolve_undefs()
     todo.put(x)
 
   def parallel_exec():
