@@ -34,6 +34,7 @@ DEFINE_string(bitblast_smt_out, "", "Path to the output smt2 file.");
 DEFINE_bool(bitblast_stats, false, "Print smt bitblast statistics.");
 
 DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
+DEFINE_string(seed_dbg_in, "", "Load input from circuitous-seed --dbg produced file");
 
 DEFINE_bool(dbg, false, "Enable various debug dumps");
 
@@ -65,6 +66,31 @@ struct DefaultLog {
     }
   }
 };
+
+std::vector< std::string > load_seed_dbg(const std::string &fname) {
+  std::vector< std::string > out;
+
+  auto process = [](std::string line) {
+    auto [bytes, _] = llvm::StringRef(line).split(' ');
+    return bytes.str();
+  };
+
+  std::ifstream in(fname);
+  for (std::string line; std::getline(in, line);)
+    out.push_back(process(std::move(line)));
+  return out;
+}
+
+void add_to_buffer(std::vector< uint8_t > &buf, const std::string &str)
+{
+  CHECK(str.size() % 2 == 0);
+  for (std::size_t i = 0; i < str.size(); i += 2) {
+    std::string aux = {str[i], str[i + 1]};
+    auto casted = static_cast< uint8_t >(std::strtoul(aux.data(), nullptr, 16));
+    buf.push_back(casted);
+  }
+}
+
 
 std::unique_ptr<circ::Circuit> LoadCircuit() {
   auto make_circuit = [&](auto buf) {
@@ -103,7 +129,16 @@ std::unique_ptr<circ::Circuit> LoadCircuit() {
     return circ::smt::deserialize(FLAGS_smt_in);
   }
 
-  LOG(WARNING) << "Expected one of `--binary_in` or `--ir_in` or `--smt_in` or `--bytes_int`" << std::endl;
+
+  if (!FLAGS_seed_dbg_in.empty()) {
+    std::vector< uint8_t > buf;
+    for (const auto &bytes : load_seed_dbg(FLAGS_seed_dbg_in))
+      add_to_buffer(buf, bytes);
+    return make_circuit(std::string_view( reinterpret_cast< char * >(buf.data()), buf.size()));
+  }
+
+  LOG(WARNING) << "Expected one of `--binary_in` or `--ir_in` or `--smt_in` or `--bytes_int`"
+               << std::endl;
   return {};
 }
 
