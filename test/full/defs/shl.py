@@ -6,7 +6,7 @@ from tools.verify_test import VerifyTest
 from tools.tc import State, S, MS
 
 test_shl = {
-    VerifyTest("shl").tags({"min", "shl"})
+    VerifyTest("shl-a").tags({"min", "shl"})
     .bytes(intel(["shl rdx, 0x20"]))
     .case(I = S(0x100).RDX(0x7fffffffffffffff).CF(0x0), DE = MS().uOF().uAF(), R = True)
     .case(I = S(0x100).RDX(0xff).CF(0x0), DE = MS().uOF().uAF(), R = True)
@@ -20,12 +20,13 @@ test_shl = {
           DE = MS().uAF(),
           R = False),
 
-    VerifyTest("shl").tags({"min", "shl"})
+    VerifyTest("shl-b").tags({"min", "shl"})
     .bytes(intel(["shl rdx, 0x20", "shl rax, 0x1"]))
     .case(run_bytes = 1,
           I = S(0x100).RDX(0x7fffffffffffffff).CF(0x0),
-          DE = MS().uOF().uAF(),
-          R = False)
+          # TODO(lukas): We ideally want to check that setting uOF() would reject
+          DE = MS().uAF(),
+          R = True)
     .case(run_bytes = 0, I = S(0x100).RDX(0xff).CF(0x0), DE = MS().uOF().uAF(), R = True)
     .case(I = S(0x100).RDX(0x7fffffffffffffff).CF(0x0),
           run_bytes = intel(["shl rdx, 0x4"]),
