@@ -113,6 +113,8 @@ namespace circ::shadowinst {
 
     has_regions(const bits_t &bits) : has_regions(ordered_bits_t(bits)) {}
 
+    bool operator==(const has_regions &) const = default;
+
     std::size_t region_bitsize() const {
       std::size_t acc = 0;
       for (auto &[from, size] : regions) {
@@ -271,6 +273,8 @@ namespace circ::shadowinst {
 
     Address() = default;
 
+    bool operator==(const Address &) const = default;
+
     bool empty() const {
       return has_regions::is_empty(base_reg) &&
              has_regions::is_empty(index_reg) &&
@@ -346,6 +350,8 @@ namespace circ::shadowinst {
     std::optional<Address> address;
     std::optional<Shift> shift;
 
+    bool operator==(const Operand &) const = default;
+
     template<typename T, typename ... Args>
     static auto As(Args && ... args) {
       static_assert(std::is_same_v<T, Immediate>
@@ -419,9 +425,38 @@ namespace circ::shadowinst {
     using operand_ctx_t = std::tuple< std::size_t, Operand * >;
     std::vector< std::vector< operand_ctx_t > > deps;
 
+    Instruction() = default;
+    Instruction(const Instruction &other) : operands(other.operands) {
+      for (const auto &o_cluster : other.deps) {
+        std::vector< operand_ctx_t > cluster;
+        for (const auto &[idx, _] : o_cluster)
+          cluster.emplace_back(idx, &operands[idx]);
+        deps.push_back(std::move(cluster));
+      }
+
+    }
+    Instruction(Instruction &&) = default;
+
+    Instruction &operator=(const Instruction&) = delete;
+    Instruction &operator=(Instruction &&) = default;
+
     auto size() const { return operands.size(); }
     const auto &operator[](std::size_t idx) const { return operands[idx]; }
     auto &operator[](std::size_t idx) { return operands[idx]; }
+
+    bool operator==(const Instruction &o) const {
+      if (o.operands != operands)
+        return false;
+
+      auto cmp_op_ctx = [](const operand_ctx_t &ctx, const operand_ctx_t &octx) {
+        return std::get< 0 >(ctx) == std::get< 0 >(octx);
+      };
+
+      auto cmp_deps = [&](const auto &cluster, const auto &ocluster) {
+        return std::equal(cluster.begin(), cluster.end(), ocluster.begin(), cmp_op_ctx);
+      };
+      return std::equal(deps.begin(), deps.end(), o.deps.begin(), cmp_deps);
+    }
 
     bool present(std::size_t idx) {
       for (auto &op : operands) {
