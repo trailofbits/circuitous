@@ -336,6 +336,70 @@ void Circuit0::constraint_unused() {
       handle_undef("__remill_undefined_" + std::to_string(s));
   }
 
+  void circuit_builder::propagate_undefs() {
+    auto whose_rc = [&](llvm::CallInst *rc) {
+      CHECK(rc->getNumArgOperands() == 2);
+      return rc->getArgOperand(1);
+    };
+
+    auto get_in_twin = [&](llvm::Value *outreg) {
+      for (const auto &[_, in, out] : arg_map) {
+        if (out == outreg)
+         return in;
+      }
+      LOG(FATAL) << "Cannot match input register to output reg: " << dbg_dump(outreg);
+    };
+
+    auto replace = [&](llvm::Instruction *inst, llvm::Value *patch) {
+      for (auto i = 0u; i < inst->getNumOperands(); ++i)
+        if (llvm::isa< llvm::UndefValue >(inst->getOperand(i))) {
+          llvm::IRBuilder<> irb(inst);
+          // Truncating is probably not correct.
+          auto coerced = irb.CreateSExt(patch, inst->getOperand(i)->getType());
+          inst->setOperand(i,coerced);
+          return;
+        }
+      LOG(FATAL) << "Was not able to patch undef value";
+    };
+
+    std::vector< llvm::Instruction * > undefs;
+    for (auto &bb : *circuit_fn)
+      for (auto &inst : bb)
+        for (auto user : inst.operand_values())
+          if (auto undef = llvm::dyn_cast< llvm::UndefValue >(user))
+          {
+            undefs.push_back(&inst);
+            break;
+          }
+
+    // Function will be modified
+    for (auto undef : undefs) {
+      // Holes in selects cannot be patched.
+      if (irops::is< irops::Select >(undef))
+        continue;
+
+      if (auto rcs = UndefReachability().run(undef))
+      {
+        if (rcs->size() != 1) {
+          LOG(INFO) << rcs->size();
+          if (rcs->size() != 1) {
+            LOG(INFO) << dbg_dump(undef);
+            for (auto c : *rcs)
+              LOG(INFO) << dbg_dump(c);
+          }
+        }
+        CHECK(rcs->size() != 0);
+        auto patch = get_in_twin(whose_rc(*rcs->begin()));
+        for (auto rc : *rcs)
+          CHECK(patch == get_in_twin(whose_rc(rc)));
+        // It is enough to replace only one as the `undef` source is exactly one.
+        replace(undef, patch);
+      } else {
+        LOG(FATAL) << "verify depends on undef";
+      }
+    }
+  }
+
   llvm::Function *circuit_builder::finish() {
     tie_head();
     tie_entry();
@@ -370,6 +434,7 @@ void Circuit0::constraint_unused() {
 
     OptimizeSilently(ctx.arch(), ctx.module(), {circuit_fn});
     unfold_advice_constraints(circuit_fn);
+    propagate_undefs();
     OptimizeSilently(ctx.arch(), ctx.module(), {circuit_fn});
     remill::VerifyModule(ctx.module());
 

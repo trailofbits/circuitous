@@ -62,6 +62,7 @@ namespace circ {
     llvm::BasicBlock *exit = nullptr;
 
     using cr_reg = const remill::Register *;
+    // [remill reg, in, out]
     using arg_map_t = std::vector< std::tuple< cr_reg, llvm::Argument *, llvm::Argument * > >;
 
     arg_map_t arg_map;
@@ -214,6 +215,8 @@ namespace circ {
                                   ISEL_view isel, State &state);
 
     llvm::Value *emit_preserved_checks(instructions_t &dst_regs, ISEL_view &isel, State &state);
+
+    void propagate_undefs();
 
     void add_isel_metadata(llvm::Instruction *call, ISEL_view isel) {
       std::stringstream ss;
