@@ -211,8 +211,10 @@ namespace circ {
 
     values_t handle_dst_regs(llvm::Value *c_ebit, instructions_t &dst_regs,
                              ISEL_view isel, State &state);
-    llvm::Value *handle_dst_regs_(std::vector< llvm::Instruction * > &dst_regs,
-                                  ISEL_view isel, State &state);
+
+    using cond_val_tuple = std::tuple< llvm::Value *, llvm::Value * >;
+    cond_val_tuple handle_dst_regs_(std::vector< llvm::Instruction * > &dst_regs,
+                                    ISEL_view isel, State &state);
 
     llvm::Value *emit_preserved_checks(instructions_t &dst_regs, ISEL_view &isel, State &state);
 
