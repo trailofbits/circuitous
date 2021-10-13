@@ -254,7 +254,7 @@ int main(int argc, char *argv[]) {
   if (!FLAGS_verilog_out.empty()) {
     LOG(INFO) << "Printing smt";
     std::ofstream os(FLAGS_verilog_out);
-    circ::print::Verilog::print(os, circuit.get());
+    circ::print::verilog::print(os, circuit.get());
     LOG(INFO) << "Done.";
   }
 
