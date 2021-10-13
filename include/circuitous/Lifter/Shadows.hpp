@@ -284,11 +284,17 @@ namespace circ::shadowinst {
 
     template<typename CB>
     void ForEach(CB &cb) {
-      auto invoke = [&](auto &on_what) {
-        if (on_what) {
-          cb(*on_what);
-        }
-      };
+      auto invoke = [&](auto &on_what) { if (on_what) cb(*on_what); };
+
+      invoke(base_reg);
+      invoke(index_reg);
+      invoke(scale);
+      invoke(displacement);
+    }
+
+    template<typename CB>
+    void ForEach(CB &cb) const {
+      auto invoke = [&](const auto &on_what) { if (on_what) cb(*on_what); };
 
       invoke(base_reg);
       invoke(index_reg);
@@ -370,12 +376,17 @@ namespace circ::shadowinst {
     }
 
     template<typename CB>
-    void ForEach(CB &cb) {
-      auto invoke = [&](auto &on_what) {
-        if (on_what) {
-          cb(*on_what);
-        }
-      };
+    void for_each_existing(CB &cb) {
+      auto invoke = [&](auto &on_what) { if (on_what) cb(*on_what); };
+
+      invoke(immediate);
+      invoke(reg);
+      invoke(address);
+      invoke(shift);
+    }
+    template<typename CB>
+    void for_each_existing(CB &cb) const {
+      auto invoke = [&](const auto &on_what) { if (on_what) cb(*on_what); };
 
       invoke(immediate);
       invoke(reg);
@@ -388,7 +399,7 @@ namespace circ::shadowinst {
       auto collect = [&](auto &op) {
         out |= op.present(idx);
       };
-      return ForEach(collect), out;
+      return for_each_existing(collect), out;
     }
 
     bool IsHusk() const {
