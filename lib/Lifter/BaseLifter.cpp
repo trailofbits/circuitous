@@ -41,7 +41,8 @@ namespace circ {
             }
             auto id = cs.getCalledFunction()->getIntrinsicID();
             if (id == llvm::Intrinsic::usub_sat ||
-                id == llvm::Intrinsic::fshr) {
+                id == llvm::Intrinsic::fshr ||
+                id == llvm::Intrinsic::fshl) {
               out[id].push_back(llvm::dyn_cast<llvm::CallInst>(cs.getInstruction()));
             }
           }
@@ -64,14 +65,26 @@ namespace circ {
     void Lower(const functions_t &fns) {
       auto calls = Fetch(fns);
       HandleUsubSat(calls[llvm::Intrinsic::usub_sat]);
-      HandleFSHR(calls[llvm::Intrinsic::fshr]);
+      HandleFSH_(calls[llvm::Intrinsic::fshr], [](auto &ir, auto a, auto b) {
+        return ir.CreateLShr(a, b);
+      }, [](auto &ir, auto from, auto size) {
+        // Least significant bytes
+        return irops::make< irops::ExtractRaw >(ir, from, 0, size);
+      });
+      HandleFSH_(calls[llvm::Intrinsic::fshl], [](auto &ir, auto a, auto b) {
+        return ir.CreateShl(a, b);
+      }, [](auto &ir, auto from, auto size){
+        // Most significant bytes
+        return irops::make< irops::ExtractRaw >(ir, from, size, size);
+      });
     }
 
-    llvm::Value *LowerFSHR(llvm::CallInst *call) {
+    llvm::Value *LowerFSH_(llvm::CallInst *call, auto make_shift, auto make_extract) {
       llvm::IRBuilder<> ir(call);
       auto &dl = call->getModule()->getDataLayout();
 
       std::vector<llvm::Value *> args { call->getArgOperand(1u), call->getArgOperand(0u) };
+
       // iN out = fshr(iN x, iN y, iZ z)
       // i(N * 2) x'y' = concat(x, y)
       auto full = irops::make< irops::Concat >(ir, args);
@@ -82,15 +95,17 @@ namespace circ {
           dl.getTypeSizeInBits(call->getArgOperand(2u)->getType()));
       // z' = z % N
       auto shift_c = ir.CreateURem(call->getArgOperand(2u), ir.getIntN(shift_size, size));
-      // shifted' = x'y' << z'
-      auto shifted = ir.CreateLShr(full, ir.CreateZExt(shift_c, full->getType()));
-      // out' = extract.0.N(shifted')
-      return irops::make< irops::ExtractRaw >(ir, shifted, 0ul, size);
+      // shifted' = x'y' >> z'
+      auto shifted = make_shift(ir, full, ir.CreateZExt(shift_c, full->getType()));
+      // out' = extract.N.N*2(shifted')
+      return make_extract(ir, shifted, size);
     }
 
-    void HandleFSHR(const std::vector<llvm::CallInst *> &calls) {
+    void HandleFSH_(const std::vector<llvm::CallInst *> &calls,
+                    auto make_shift, auto make_extract)
+    {
       for (auto call : calls) {
-        auto nc = LowerFSHR(call);
+        auto nc = LowerFSH_(call, make_shift, make_extract);
         call->replaceAllUsesWith(nc);
         call->eraseFromParent();
       }
