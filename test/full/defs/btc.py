@@ -15,7 +15,8 @@ btc = {
     .tags({"generated", "btc", "todo"}).seed(4123)
     .all_defined(random=True, DE=aflag_mut(MS())),
 
-    VerifyTest("btc-b").tags({"btc", "min"})
+    # TODO(lukas): Needs patched microx.
+    VerifyTest("btc-b").tags({"btc"})
     .bytes(["67660fbb848012121212"]).seed(4123)
     .all_defined(random=True, DE=aflag_mut(MS())),
 

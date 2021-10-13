@@ -60,19 +60,26 @@ test_add = {
     .case(run_bytes = intel(["add rcx, r13"]), R=True)
 }
 
-add_gen = {
-  VerifyTest("add-h_gen") \
-  .bytes(intel(tgen.IDef("add").iadd().get()))
-  .tags({"add", "generated", "gen_add"})
-  .DI(S(0x41124))
-  .all_defined(),
+add_overflows = {
+    VerifyTest("add-g_rax_rax").bytes(intel(["add rax, rbx"])).tags({"add", "min"})
+    .DI(S(0x100).aflags(0).R13(0x2).RBX(0x7feeeeeeeeeeeeee).RAX(0x7feeeeeeeeeeeeee))
+    .case(run_bytes = 0, R=True)
+    .case(run_bytes = 0, DE=MS().OF(0), R=False)
+}
 
-  VerifyTest("add-i_special_gen") \
-  .bytes(["674401848012121212"])
-  .tags({"add", "min"})
-  .DI(S(0x41124))
-  .all_defined(),
+add_gen = {
+    VerifyTest("add-h_gen") \
+    .bytes(intel(tgen.IDef("add").iadd().get()))
+    .tags({"add", "generated", "gen_add"})
+    .DI(S(0x41124))
+    .all_defined(),
+
+    VerifyTest("add-i_special_gen") \
+    .bytes(["674401848012121212"])
+    .tags({"add", "min"})
+    .DI(S(0x41124))
+    .all_defined(),
 }
 
 
-circuitous_tests = [test_add, add_gen]
+circuitous_tests = [test_add, add_gen, add_overflows]
