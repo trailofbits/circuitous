@@ -404,8 +404,37 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     CHECK(op && val_to_op[val] == op);
   }
 
+  // TODO(lukas): Hack since there is no `urem` node. Adding it is a desirable
+  //              fix.
+  // Simulate urem as
+  // `a % b = a - (udiv(a, b) * b)`
+  Operation *handle_urem(llvm::Instruction *inst) {
+    auto a = Fetch(inst->getParent()->getParent(), inst->getOperand(0u));
+    auto b = Fetch(inst->getParent()->getParent(), inst->getOperand(1u));
+    auto size = value_size(inst);
 
-  Operation *HandleLLVMOP(llvm::Instruction *inst) {
+    // div = a / b
+    auto div = impl->Create< UDiv >(size);
+    div->AddUse(a);
+    div->AddUse(b);
+
+    // mul = div * b
+    auto mul = impl->Create< Mul >(size);
+    mul->AddUse(div);
+    mul->AddUse(b);
+
+    // sub = a - mul
+    auto sub = impl->Create< Sub >(size);
+    sub->AddUse(a);
+    sub->AddUse(mul);
+
+    auto [it, _] = val_to_op.emplace(inst, sub);
+    populate_meta(inst, it->second);
+    annote_with_llvm_inst(it->second, inst);
+    return it->second;
+  }
+
+  Operation *HandleLLVMOP(llvm::Function *func, llvm::Instruction *inst) {
     auto size = value_size(inst);
 
     auto handle_predicate = [&](llvm::Instruction *inst_) -> Operation * {
@@ -428,32 +457,47 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     };
 
     auto op_code = inst->getOpcode();
-    switch (op_code) {
-      case llvm::Instruction::OtherOps::Select: return Emplace<BSelect>(inst, size);
-      case llvm::BinaryOperator::Add: return Emplace<Add>(inst, size);
-      case llvm::BinaryOperator::Sub: return Emplace<Sub>(inst, size);
-      case llvm::BinaryOperator::Mul: return Emplace<Mul>(inst, size);
 
-      case llvm::BinaryOperator::UDiv: return Emplace<UDiv>(inst, size);
-      case llvm::BinaryOperator::SDiv: return Emplace<SDiv>(inst, size);
+    auto handle_op = [&]() {
+      switch (op_code) {
+        case llvm::Instruction::OtherOps::Select: return Emplace<BSelect>(inst, size);
+        case llvm::BinaryOperator::Add: return Emplace<Add>(inst, size);
+        case llvm::BinaryOperator::Sub: return Emplace<Sub>(inst, size);
+        case llvm::BinaryOperator::Mul: return Emplace<Mul>(inst, size);
 
-      case llvm::BinaryOperator::And: return Emplace<CAnd>(inst, size);
-      case llvm::BinaryOperator::Or: return Emplace<COr>(inst, size);
-      case llvm::BinaryOperator::Xor: return Emplace<CXor>(inst, size);
+        case llvm::BinaryOperator::UDiv: return Emplace<UDiv>(inst, size);
+        case llvm::BinaryOperator::SDiv: return Emplace<SDiv>(inst, size);
 
-      case llvm::BinaryOperator::Shl: return Emplace<Shl>(inst, size);
-      case llvm::BinaryOperator::LShr: return Emplace<LShr>(inst, size);
-      case llvm::BinaryOperator::AShr: return Emplace<AShr>(inst, size);
+        case llvm::BinaryOperator::And: return Emplace<CAnd>(inst, size);
+        case llvm::BinaryOperator::Or: return Emplace<COr>(inst, size);
+        case llvm::BinaryOperator::Xor: return Emplace<CXor>(inst, size);
 
-      case llvm::BinaryOperator::Trunc: return Emplace<Trunc>(inst, size);
-      case llvm::BinaryOperator::ZExt: return Emplace<ZExt>(inst, size);
-      case llvm::BinaryOperator::SExt: return Emplace<SExt>(inst, size);
-      case llvm::BinaryOperator::ICmp: return handle_predicate(inst);
+        case llvm::BinaryOperator::Shl: return Emplace<Shl>(inst, size);
+        case llvm::BinaryOperator::LShr: return Emplace<LShr>(inst, size);
+        case llvm::BinaryOperator::AShr: return Emplace<AShr>(inst, size);
 
-      default :
-        LOG(FATAL) << "Cannot lower llvm inst: "
-                   << llvm::Instruction::getOpcodeName(op_code);
+        case llvm::BinaryOperator::Trunc: return Emplace<Trunc>(inst, size);
+        case llvm::BinaryOperator::ZExt: return Emplace<ZExt>(inst, size);
+        case llvm::BinaryOperator::SExt: return Emplace<SExt>(inst, size);
+        case llvm::BinaryOperator::ICmp: return handle_predicate(inst);
+        case llvm::BinaryOperator::URem: return handle_urem(inst);
+
+        default :
+          LOG(FATAL) << "Cannot lower llvm inst: "
+                     << llvm::Instruction::getOpcodeName(op_code);
+      }
+    };
+
+    auto op = handle_op();
+    // `urem` is already fully constructed as it is lowered via more ops.
+    if (op_code == llvm::BinaryOperator::URem)
+      return op;
+
+    for (const auto &op_ : inst->operand_values()) {
+      op->AddUse(Fetch(func, op_));
     }
+    return op;
+
   }
 
   void VisitSelect(llvm::Function *func, llvm::Instruction *val) {
@@ -472,14 +516,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     CHECK(true_val->op_code != Undefined::kind || false_val->op_code != Undefined::kind);
 
-    auto define = [&](auto what) -> Operation * {
-      return what;
-    };
-
-    auto op = HandleLLVMOP(val);
-    for (const auto &op_ : val->operand_values()) {
-      op->AddUse(define(Fetch(func, op_)));
-    }
+    HandleLLVMOP(func, val);
   }
 
   bool has_undefined_ops(llvm::Function *func, llvm::Instruction *inst) {
@@ -501,10 +538,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       return;
     }
 
-    auto op = HandleLLVMOP(val);
-    for (const auto &op_ : val->operand_values()) {
-      op->AddUse(Fetch(func, op_));
-    }
+    HandleLLVMOP(func, val);
   }
 
   void VisitBinaryOperator(llvm::Function *func, llvm::Instruction *val) {
