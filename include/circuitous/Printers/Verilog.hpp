@@ -14,21 +14,9 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace circ::print {
+namespace circ::print::verilog {
 
-  template< typename Self >
-  struct VerilogFmt : Visitor< Self > {
-
-    using parent_t = Visitor< Self >;
-    using parent_t::Dispatch;
-
-    auto &self() { return static_cast< Self & >(*this); }
-    std::string get(Operation *op) {
-      if (!self().op_names.count(op))
-        self().op_names[op] = this->Dispatch(op);
-      return self().op_names[op];
-    }
-
+  namespace impl {
     template< typename I > requires std::is_integral_v< I >
     std::string wire_size(I size) {
       std::stringstream ss;
@@ -43,10 +31,22 @@ namespace circ::print {
       return ss.str();
     }
 
-    template< typename I > requires std::is_integral_v< I >
-    std::string get_bit(Operation * op, I idx) {
-      return get_bit(get(op), idx);
+    std::string to_verilog(auto size, auto value) {
+      std::stringstream ss;
+      ss << size << "'d" << value;
+      return ss.str();
     }
+
+    std::string bin_zero(auto size) {
+      return std::to_string(size) + "'b" + std::string(size, '0');
+    }
+
+    std::string bin_one(auto size) {
+      return std::to_string(size) + "'b" + std::string(size, '1');
+    }
+
+    std::string true_val() { return "1'b1"; }
+    std::string false_val() { return "1'b0"; }
 
     std::string wire_name(Operation *op) {
       std::stringstream ss;
@@ -54,17 +54,78 @@ namespace circ::print {
       return ss.str();
     }
 
-    std::string wire_decl(const std::string &name, std::string lhs) {
-      return "wire " + name + " = " + lhs + ";\n";
+    std::string wire_decl(const std::string &name, std::string lhs, auto size) {
+      std::stringstream ss;
+      ss << "wire ";
+      if (size != 1)
+        ss << impl::wire_size(size) << " ";
+      ss << name + " = " + lhs + ";\n";
+      return ss.str();
     }
 
-    std::string make_wire(const std::string name, std::string lhs) {
-      self().os << wire_decl(name, std::move(lhs));
+    std::string to_signed(const std::string &what) {
+      return "$signed(" + what + ")";
+    }
+
+  } // namespace impl
+
+  struct dbg_verbose {
+    std::stringstream _dbg;
+  };
+
+  struct ToStream : dbg_verbose {
+    std::ostream &_os;
+    Circuit *circuit;
+    std::unordered_map< Operation *, std::string > op_names;
+
+    ToStream(std::ostream &os_, Circuit *circuit_) : _os(os_), circuit(circuit_) {}
+
+    auto &os() { return _os; }
+    auto &dbg() { return _dbg; }
+
+    std::string &give_name(Operation *op, std::string name) {
+      auto [it, flag] = op_names.emplace(op, std::move(name));
+      CHECK(flag) << std::endl << dbg().str();
+      return it->second;
+    }
+
+    bool has_name(Operation *op) { return op_names.count(op); }
+
+    std::optional< std::string > get_name(Operation *op) {
+      auto it = op_names.find(op);
+      if (it != op_names.end())
+        return { it->second };
+      return {};
+    }
+
+  };
+
+  template< typename Ctx >
+  struct OpFmt : Visitor< OpFmt< Ctx > >
+  {
+    Ctx &ctx;
+
+    OpFmt(Ctx &ctx_) : ctx(ctx_) {}
+
+    std::string get(Operation *op) {
+      if (auto name = ctx.get_name(op))
+        return *name;
+      // `op` does not have a name -> create it and name it
+      return ctx.give_name(op, this->Dispatch(op));
+    }
+
+    template< typename I > requires std::is_integral_v< I >
+    std::string get_bit(Operation * op, I idx) {
+      return impl::get_bit(get(op), idx);
+    }
+
+    std::string make_wire(const std::string name, std::string lhs, auto size) {
+      ctx.os() << impl::wire_decl(name, std::move(lhs), size);
       return name;
     }
 
     std::string make_wire(Operation *op, std::string lhs) {
-      return make_wire(wire_name(op), std::move(lhs));
+      return make_wire(impl::wire_name(op), std::move(lhs), op->size);
     }
 
     std::string concat(const std::vector< std::string > &ops) {
@@ -76,14 +137,22 @@ namespace circ::print {
       return ss.str();
     }
 
-    std::string bin_apply(std::string f, const std::vector< Operation * > &ops)
+    std::string bin_apply(std::string f, const std::vector< Operation * > &ops,
+                          bool signed_op=false)
     {
+      auto get_ = [&](auto op) {
+        auto out = get(op);
+        if (signed_op)
+          return impl::to_signed(out);
+        return out;
+      };
+
       CHECK(ops.size() != 0);
 
       std::stringstream ss;
-      ss << get(ops[0]);
+      ss << get_(ops[0]);
       for (std::size_t i = 1; i < ops.size(); ++i)
-        ss << " " << f << " " << get(ops[i]);
+        ss << " " << f << " " << get_(ops[i]);
       return ss.str();
     }
 
@@ -100,7 +169,7 @@ namespace circ::print {
 
     std::string mux(Select *op) {
       auto selector = get(op->selector());
-      auto name = wire_name(op);
+      auto name = impl::wire_name(op);
 
       std::stringstream ss;
       // `next` is a recursion call - unfortunately in c++ lambda itself
@@ -130,6 +199,12 @@ namespace circ::print {
       };
     }
 
+    auto szip() {
+      return [=](auto &&... args) -> std::string {
+        return this->bin_apply(std::forward<decltype(args)>(args)..., true);
+      };
+    }
+
     // TODO(lukas): For dbg purposes.
     auto unary() {
       return [=](std::string str, const std::vector< Operation * > &ops) -> std::string {
@@ -148,6 +223,14 @@ namespace circ::print {
         ss << end;
         return ss.str();
       };
+    }
+
+    std::string rmake(auto F, Operation *op) {
+      std::vector< Operation * > ops;
+      std::reverse_copy(op->operands.begin(), op->operands.end(),
+                        std::back_inserter(ops));
+
+      return make_wire(op, F(get_symbol(op), ops));
     }
 
     std::string make(auto F, Operation *op) {
@@ -204,26 +287,9 @@ namespace circ::print {
       }
     }
 
-    std::string cast(auto size, auto value) {
-      std::stringstream ss;
-      ss << size << "'d" << value;
-      return ss.str();
-    }
-
-    std::string bin_zero(auto size) {
-      return std::to_string(size) + "'b" + std::string(size, '0');
-    }
-
-    std::string bin_one(auto size) {
-      return std::to_string(size) + "'b" + std::string(size, '1');
-    }
-
-    std::string true_val() { return "1'b1"; }
-    std::string false_val() { return "1'b0"; }
-
     std::string Visit(Operation *op) {
       LOG(FATAL) << "Cannot print in verilog: " << pretty_print< true >(op)
-                 << "\n" << self().dbg.str();
+                 << "\n" << ctx.dbg().str();
     }
 
     // Each extra operand V(n + 1) introduces
@@ -244,13 +310,13 @@ namespace circ::print {
 
       // `( rn, on )`.
       using step_t = std::tuple< std::string, std::string >;
-      std::vector< step_t > steps = { { false_val(), false_val() } };
+      std::vector< step_t > steps = { { impl::false_val(), impl::false_val() } };
 
       for (std::size_t i = 0; i < op->operands.size(); ++i) {
         const auto &[prev_rn, prev_on] = steps.back();
         auto rn_next = prev_rn + " || " + get(op->operands[i]);
         auto on_next = prev_on + " || ( " + prev_rn + " && " + get(op->operands[i]) + ")";
-        steps.emplace_back(make_wire(rn(i), rn_next), make_wire(on(i), on_next));
+        steps.emplace_back(make_wire(rn(i), rn_next, 1), make_wire(on(i), on_next, 1));
       }
 
       const auto &[last_rn, last_on] = steps.back();
@@ -279,7 +345,7 @@ namespace circ::print {
       auto extract = [&](auto from, auto current, auto size) {
         return make_extract(from, current + size - 1, current);
       };
-      return irops::memory::parse(get(op), extract, self().circuit->ptr_size);
+      return irops::memory::parse(get(op), extract, ctx.circuit->ptr_size);
     }
 
     std::string make_memory_constraint(MemoryConstraint *op, bool is_write)
@@ -302,10 +368,10 @@ namespace circ::print {
       add(  get(op->ts_arg())      , hint.timestamp());
       // In reads `val_arg()` is not present
       if (is_write)
-        add(  get(op->val_arg())     , hint.value());
-      add(  cast(4, op->mem_idx()) , hint.id());
+        add(  get(op->val_arg())   , hint.value());
+      add(  impl::to_verilog(4, op->mem_idx()) , hint.id());
       add(  "1'b1"                 , hint.used());
-      add(  bin_zero(6u)           , hint.reserved());
+      add(  impl::bin_zero(6u)     , hint.reserved());
       add(  "1'b" + mode           , hint.mode());
       return make_wire(op, ss.str());
     }
@@ -320,7 +386,7 @@ namespace circ::print {
 
     /* BitManip */
     std::string Visit(Concat *op) {
-      return make(wrap_zip("{ ", " }"), op);
+      return rmake(wrap_zip("{ ", " }"), op);
     }
 
     std::string Visit(Extract *op) {
@@ -342,7 +408,7 @@ namespace circ::print {
     std::string Visit(Mul *op) { return make(zip(), op); }
 
     std::string Visit(UDiv *op) { return make(zip(), op); }
-    std::string Visit(SDiv *op) { return make(zip(), op); }
+    std::string Visit(SDiv *op) { return make(szip(), op); }
 
     std::string Visit(Shl *op)  { return make(zip(), op); }
     std::string Visit(LShr *op) { return make(zip(), op); }
@@ -355,34 +421,34 @@ namespace circ::print {
       return make_wire(op, ss.str());
     }
     std::string Visit(ZExt *op)  {
-      auto prefix = bin_zero(op->size - op->operands[0]->size);
+      auto prefix = impl::bin_zero(op->size - op->operands[0]->size);
       return make_wire(op, concat({prefix, get(op->operands[0])}));
     }
 
     std::string Visit(SExt *op) {
-      auto pos_prefix = bin_zero(op->size - op->operands[0]->size);
-      auto neg_prefix = bin_one(op->size - op->operands[0]->size);
+      auto pos_prefix = impl::bin_zero(op->size - op->operands[0]->size);
+      auto neg_prefix = impl::bin_one(op->size - op->operands[0]->size);
 
       std::stringstream selector_ss;
       auto operand = op->operands[0];
       auto last = operand->size - 1;
       selector_ss << "(" << get(operand) << "[" << last << ":" << last << "] == "
-                  << bin_one(1u)
+                  << impl::bin_one(1u)
                   << ") ?" << neg_prefix << " : " << pos_prefix;
-      auto padding = make_wire("pad_" + std::to_string(op->id()), selector_ss.str());
+      auto padding = make_wire("pad_" + std::to_string(op->id()), selector_ss.str(), last + 1);
       return make_wire(op, concat({padding, get(op->operands[0])}));
     }
 
     std::string Visit(Icmp_ult *op) { return make(zip(), op); }
-    std::string Visit(Icmp_slt *op) { return make(zip(), op); }
+    std::string Visit(Icmp_slt *op) { return make(szip(), op); }
     std::string Visit(Icmp_ugt *op) { return make(zip(), op); }
     std::string Visit(Icmp_eq  *op) { return make(zip(), op); }
     std::string Visit(Icmp_ne  *op) { return make(zip(), op); }
     std::string Visit(Icmp_uge *op) { return make(zip(), op); }
     std::string Visit(Icmp_ule *op) { return make(zip(), op); }
-    std::string Visit(Icmp_sgt *op) { return make(zip(), op); }
-    std::string Visit(Icmp_sge *op) { return make(zip(), op); }
-    std::string Visit(Icmp_sle *op) { return make(zip(), op); }
+    std::string Visit(Icmp_sgt *op) { return make(szip(), op); }
+    std::string Visit(Icmp_sge *op) { return make(szip(), op); }
+    std::string Visit(Icmp_sle *op) { return make(szip(), op); }
 
     std::string Visit(BSelect *op) { return ternary(op); }
 
@@ -396,7 +462,7 @@ namespace circ::print {
     }
 
     std::string Visit(Undefined *op) {
-      return make_wire(op, "xxxx");
+      return make_wire(op, impl::bin_zero(op->size));
     }
 
     /* High level */
@@ -412,17 +478,18 @@ namespace circ::print {
         if (i != operand_size - 1)
           ss << " + ";
       }
-      auto name = wire_name(op);
+      auto name = impl::wire_name(op);
       auto aux = name + "_aux";
 
-      self().os << "wire " << aux << " " << wire_size(rsize) << " = " << ss.str() << ";\n";
-      self().os << "wire " << name << " = " << concat({bin_zero(pad_size), aux}) << ";\n";
+      ctx.os() << "wire " << impl::wire_size(rsize) << " " << aux << " = "
+                << ss.str() << ";\n";
+      ctx.os() << "wire " << name << " = " << concat({impl::bin_zero(pad_size), aux}) << ";\n";
       return name;
     }
 
     std::string Visit(CountLeadingZeroes *op) {
       auto get_bit_ = [&](auto op, auto i) {
-        return this->get_bit(op, op->size - i);
+        return this->get_bit(op, op->size - i - 1);
       };
       return count_zeroes(op, get_bit_);
     }
@@ -438,17 +505,17 @@ namespace circ::print {
       uint32_t operand_size = op->operands[0]->size;
       auto operand = op->operands[0];
       uint32_t rsize = static_cast< uint32_t >(std::ceil(std::log2(operand_size)));
-      auto padding = bin_zero(operand_size - rsize);
+      auto padding = impl::bin_zero(operand_size - rsize);
 
       // `( fn, tn )`.
       using step_t = std::tuple< std::string, std::string >;
-      std::vector< step_t > steps = { { false_val(), bin_zero(rsize) } };
+      std::vector< step_t > steps = { { impl::true_val(), impl::bin_zero(rsize) } };
 
       for (std::size_t i = 0; i < operand->size; ++i) {
         const auto &[prev_fn, prev_tn] = steps.back();
-        auto fn_next = prev_fn + " || (!" + next_bit(operand, i) + ")";
-        auto tn_next = prev_tn + " + { " + bin_zero(rsize - 1) + ", " + fn_next + "}";
-        steps.emplace_back(make_wire(fn(i), fn_next), make_wire(tn(i), tn_next));
+        auto fn_next = prev_fn + " && (!" + next_bit(operand, i) + ")";
+        auto tn_next = prev_tn + " + { " + impl::bin_zero(rsize - 1) + ", " + fn_next + "}";
+        steps.emplace_back(make_wire(fn(i), fn_next, 1), make_wire(tn(i), tn_next, rsize));
       }
 
       const auto &[_, last_tn] = steps.back();
@@ -456,58 +523,78 @@ namespace circ::print {
     }
 
     std::string Visit(Circuit *op) { return get(op->operands[0]); }
+
+    std::string write(Operation *op) { return get(op); }
   };
 
-  struct dbg_verbose {
-    std::stringstream dbg;
-  };
+  namespace iarg_fmt {
+    struct UseName {
+      std::string operator()(Operation *op) {
+        // `.` is not a valid character in token name in verilog
+        std::string out = "";
+        for (auto c : op->Name())
+          out += (c == '.') ? '_' : c;
+        return out;
+      }
+    };
 
-  struct Verilog : dbg_verbose, VerilogFmt< Verilog > {
-    std::ostream &os;
-    Circuit *circuit;
+    struct Simple {
+      uint32_t idx = 0;
 
-    std::unordered_map< Operation *, std::string > op_names;
-    std::string result;
+      static inline std::vector< std::string > avail =
+      {
+        "A", "B", "C", "D", "E", "F", "G", "H"
+      };
 
-    Verilog(std::ostream &os_, Circuit *circuit_) : os(os_), circuit(circuit_) {}
+      std::string operator()(Operation *) {
+        CHECK(idx < avail.size());
+        return avail[idx++];
+      }
+    };
+  } // iarg_fmt
 
-    Verilog(const Verilog &) = delete;
-    Verilog(Verilog &&) = delete;
+  template< typename IArgFmt, typename Ctx >
+  struct ModuleDecl
+  {
 
-    Verilog &operator=(const Verilog &) = delete;
-    Verilog &operator=(Verilog &&) = delete;
+    Ctx &ctx;
 
-    void declare_module(const std::string &name)
+    std::string result_arg;
+    std::unordered_map< Operation *, std::string > args;
+    IArgFmt iarg_fmt;
+
+    ModuleDecl(Ctx &ctx_) : ctx(ctx_) {}
+
+    void declare_module(const std::string &name, Operation *op)
     {
-      os << "module " << name << "(" << std::endl;
-      declare_in_args();
-      os << std::endl;
-      declare_out_arg();
-      os << "\n);\n";
+      ctx.os() << "module " << name << "(" << std::endl;
+      this->declare_in_args(op);
+      ctx.os() << std::endl;
+      this->declare_out_arg();
+      ctx.os() << ");\n";
     }
 
-    void end_module() { os << "endmodule" << std::endl; }
+    void end_module() { ctx.os() << "endmodule" << std::endl; }
 
-    std::string &give_name(Operation *op, std::string name) {
-      dbg << "Naming: " << pretty_print< false >(op) << " -> " << name << std::endl;
-      auto [it, flag] = op_names.emplace(op, std::move(name));
-      CHECK(flag) << std::endl << dbg.str();
-      return it->second;
+    template< typename Fmt >
+    void declare_in_arg(Operation *op, Fmt &&fmt)
+    {
+      auto get_name = [&](auto op) -> std::string {
+        if (auto name = ctx.get_name(op))
+          return *name;
+        // fmt may be stateful, so extra invocation is not desired.
+        return ctx.give_name(op, fmt(op));
+      };
+      // Appending `,` since this cannot be last one - output argument is expected
+      // to be last
+      ctx.os() << "input " << impl::wire_size(op->size) << " "
+               << get_name(op) << "," << std::endl;
     }
 
     template< typename O, typename ... Ts, typename Fmt >
     void declare_in_args(Fmt &&fmt) {
-      auto get_name = [&](auto op) -> std::string {
-        // fmt may be stateful, so extra invocation is not desired.
-        CHECK(!op_names.count(op)) << std::endl << dbg.str();
-        return give_name(op, fmt(op));
-      };
-
-      for (auto op : circuit->Attr< O >()) {
-        // Appending `,` since this cannot be last one - output argument is expected
-        // to be last
-        os << "input " << wire_size(op->size) << " " << get_name(op) << ","<< std::endl;
-      }
+      for (auto op : ctx.circuit->template Attr< O >())
+        declare_in_arg(op, fmt);
 
       if constexpr (sizeof...(Ts) != 0)
         return declare_in_args< Ts ... >(std::forward< Fmt >(fmt));
@@ -515,42 +602,69 @@ namespace circ::print {
         return;
     }
 
-    void declare_in_args() {
-      auto fmt_io = [](auto op) {
-        // `.` is not a valid character in token name in verilog
-        std::string out = "";
-        for (auto c : op->Name())
-          out += (c == '.') ? '_' : c;
-        return out;
-      };
 
-      declare_in_args< OutputRegister, InputRegister,
-                        InputErrorFlag, OutputErrorFlag,
-                        InputTimestamp, OutputTimestamp,
-                        Memory,
-                        InputInstructionBits,
-                        Advice >( fmt_io );
+    void declare_in_args(Operation *op) {
+      if (is_of< Circuit >(op))
+      {
+        declare_in_args< OutputRegister, InputRegister,
+                          InputErrorFlag, OutputErrorFlag,
+                          InputTimestamp, OutputTimestamp,
+                          Memory,
+                          InputInstructionBits,
+                          Advice >( iarg_fmt );
+      } else {
+        for (auto operand : op->operands)
+          declare_in_arg(operand, iarg_fmt );
+
+      }
     }
 
     void declare_out_arg() {
-      os << "output [0:0] result" << std::endl;
-      result = "result";
+      ctx.os() << "output [0:0] result" << std::endl;
+      result_arg = "result";
     }
 
     void assign_out_arg(const std::string &name, const std::string &what) {
-      os << "assign " << name << " = " << what << ";\n";
+      ctx.os() << "assign " << name << " = " << what << ";\n";
     }
 
-    std::string write_body() { return this->Visit(circuit); }
-
-    static void print(std::ostream &os, Circuit *c) {
-      Verilog vprinter(os, c);
-      vprinter.declare_module("circuit");
-      std::string result = vprinter.write_body();
-      vprinter.assign_out_arg("result", result);
-      vprinter.end_module();
+    template< typename Fmt >
+    std::string write_body(Operation *op) {
+      return Fmt(ctx).write(op);
     }
+
+    void define_module(const std::string &name, Operation *op) {
+      declare_module(name, op);
+      assign_out_arg("result", write_body< OpFmt< Ctx > >(op));
+      end_module();
+    }
+
   };
 
+  std::string get_module_name(Operation *op) {
+    CHECK(!is_of< LeafValue >(op));
+    switch (op->op_code) {
+      case Circuit::kind: return "full_circuit";
+      default : return op_code_str(op->op_code) + "_" + std::to_string(op->size);
+    }
+  }
 
-} // namespace circ::print
+  static void print[[maybe_unused]](
+      std::ostream &os, const std::string &module_name, Circuit *c)
+  {
+    ToStream ctx{os, c};
+    ModuleDecl< iarg_fmt::UseName, ToStream >(ctx).define_module(module_name, c);
+  }
+
+  static void print_solo[[maybe_unused]](
+      std::ostream &os, const std::string &module_name, Circuit *c, Operation *op)
+  {
+    ToStream ctx{os, c};
+    ModuleDecl< iarg_fmt::Simple, ToStream >(ctx).define_module(module_name, op);
+  }
+
+  static void print_solo[[maybe_unused]](std::ostream &os, Circuit *c, Operation *op)
+  {
+    return print_solo(os, get_module_name(op), c, op);
+  }
+} // namespace circ::print::verilog
