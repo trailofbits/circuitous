@@ -243,4 +243,7 @@ namespace circ {
     return remill::LLVMThingToString(val);
   }
 
+  static inline std::string dbg_dump(llvm::Type *ty) {
+    return remill::LLVMThingToString(ty);
+  }
 } // namespace circ
