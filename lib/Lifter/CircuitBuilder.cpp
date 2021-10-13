@@ -540,13 +540,14 @@ void Circuit0::constraint_unused() {
                       saturation_prop, timestamp_prop, params,
                       mem_checks, err_checks, extra_params
                       );
-    auto dst_regs_checks = handle_dst_regs_(dst_regs, isel, state);
+    auto [dst_cond, dst_regs_checks] = handle_dst_regs_(dst_regs, isel, state);
     ir.SetInsertPoint(this->head);
     auto computational_transition = ir.CreateAnd(dst_regs_checks, preserved);
     auto computational_res = ir.CreateOr(c_ebit, computational_transition);
     auto error_transition = emit_error_transitions(c_ebit);
     ir.SetInsertPoint(this->head);
     ctxs.back()._add(ir.CreateAnd(computational_res, error_transition));
+    ctxs.back()._add(dst_cond);
 
     add_isel_metadata(ctxs.back().current, isel);
   }
@@ -600,11 +601,13 @@ void Circuit0::constraint_unused() {
     return last->getOperand(0);
   }
 
-  llvm::Value *circuit_builder::handle_dst_regs_(
-      std::vector< llvm::Instruction * > &dst_regs, ISEL_view isel, State &state)
+  auto circuit_builder::handle_dst_regs_(std::vector< llvm::Instruction * > &dst_regs,
+                                          ISEL_view isel, State &state)
+  -> cond_val_tuple
   {
     llvm::IRBuilder<> irb(this->head);
-    if (dst_regs.empty()) return irb.getTrue();
+    if (dst_regs.empty())
+      return { irb.getTrue(), irb.getTrue() };
     CHECK(dst_regs.size() == 1) << "TODO(lukas): Implement more general case.";
 
     auto dst_reg = dst_regs[0];
@@ -629,9 +632,9 @@ void Circuit0::constraint_unused() {
 
     auto [cond, select] = shadowinst::make_intrinsics_decoder(*s_reg, irb, locate_out_reg);
     auto [_, full] = shadowinst::make_intrinsics_decoder(*s_reg, irb, locate_in_reg);
-    auto updated = shadowinst::store_fragment(
+    auto [dcond, updated] = shadowinst::store_fragment(
         current_val(dst_reg), full, irb, *s_reg, *ctx.arch());
-    return irops::make< irops::OutputCheck >(irb, {updated, select});
+    return { dcond, irops::make< irops::OutputCheck >(irb, {updated, select}) };
   }
 
   llvm::Value *circuit_builder::emit_preserved_checks(

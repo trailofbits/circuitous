@@ -160,7 +160,7 @@ namespace circ {
       for (auto i = 0U; i < inst.instructions.size(); ++i) {
         LOG(INFO) << "Searching for immediate operands regions in:";
         LOG(INFO) << inst.instructions[i].Serialize();
-        inst.shadows[i] = InstructionFuzzer{arch, inst.instructions[i]}.FuzzOps();
+        inst.shadows[i] = InstructionFuzzer{arch.get(), inst.instructions[i]}.FuzzOps();
       }
     }
   }
