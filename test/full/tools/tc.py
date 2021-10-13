@@ -569,10 +569,16 @@ class Test:
 
     print("[ > ] Generating test case", self.name)
     self._bytes = check_bytes(self._bytes)
-    for case in self.cases:
+    for idx, case in enumerate(self.cases):
       case.bytes = check_bytes(case.bytes)
       case.input.bytes = check_bytes(case.input.bytes)
       if case._result_generator is not None:
         should, val = case._result_generator.generate(self, **kwargs)
         if should:
           case.expected.result = val
+
+  def resolve_undefs(self):
+    for case in self.cases:
+      for reg in case.expected.undefined:
+        assert reg in case.input.registers
+        case.expected.registers[reg] = case.input.registers[reg]
