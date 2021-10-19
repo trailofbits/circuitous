@@ -108,14 +108,16 @@ namespace circ::eqsat {
 
   using match_expr = std::variant< basic_match_expr, commutative_match_expr >;
 
-  static inline auto labels(const match_expr &e)
+  static inline const auto& labels(const match_expr &e)
   {
-    return std::visit([](const auto &m) { return m.labels; }, e);
+    return std::visit([] (const auto &m) -> const auto& { return m.labels; }, e);
   }
 
   // expression of form: (union [labels])
   // serves to unify matched labels on the right hand side of the rule
   struct union_expr { std::vector<label> labels; };
+
+  static inline const auto& labels(const union_expr &e) { return e.labels; }
 
   // expression of form: (disjoint [context])
   // serves to specify disjoint contexts
@@ -128,6 +130,8 @@ namespace circ::eqsat {
   // expression of form: (equiv [places])
   // serves to specify semantically equivalend places
   struct bond_expr { std::vector<label> labels; };
+
+  static inline const auto& labels(const bond_expr &e) { return e.labels; }
 
   using context_constraint = disjoint_expr;
   using place_constraint = equiv_expr;
@@ -156,6 +160,25 @@ namespace circ::eqsat {
     std::optional<context_name> context = std::nullopt;
   };
 
+  using expr_list = std::vector< expr >;
+
+  template< typename stream >
+  stream& operator<<(stream& os, const expr_list& e)
+  {
+    os << "( ";
+    for (const auto &v : e)
+      os << v << ' ';
+    os << ')';
+    return os;
+  }
+
+  template< typename stream >
+  stream& operator<<(stream& os, const expr& e)
+  {
+    std::visit( overloaded { [&] (const auto &a) { os << a; }, }, e);
+    return os;
+  }
+
   struct named_expr : expr
   {
     named_expr(label n, const expr &e) : expr(e), name(n) {}
@@ -163,6 +186,63 @@ namespace circ::eqsat {
 
     label name;
   };
+
+  static void validate_no_variadic_variables(const label &lab, const auto &subexprs)
+  {
+    if (!std::holds_alternative< variadic_label >(lab))
+      return;
+
+    auto plcs = places( subexprs.at(label_name(lab)), subexprs );
+    if ( !plcs.empty() ) {
+      throw std::runtime_error("syntax error: pattern contains variables in the variadic expression");
+    }
+  }
+
+  static void validate_no_variadic_variables(const auto &expr, const auto &subexprs)
+  {
+    // check that there is no variadic expr with variables
+    for (const auto &lab : labels(expr)) {
+      validate_no_variadic_variables(lab, subexprs);
+    }
+  }
+
+  static void validate(const match_expr &e, const auto &subexprs)
+  {
+    validate_no_variadic_variables(e, subexprs);
+  }
+
+  static void validate(const expr_list &e, const auto &subexprs)
+  {
+    for (const auto &ch : e)
+      validate(ch, subexprs);
+  }
+
+  static void validate(const atom &e, const auto &subexprs)
+  {
+    if (std::holds_alternative<label>(e)) {
+      validate_no_variadic_variables(std::get<label>(e), subexprs);
+    }
+  }
+
+  static void validate(const bond_expr &e, const auto &subexprs)
+  {
+    validate_no_variadic_variables(e, subexprs);
+  }
+
+  static void validate(const union_expr &e, const auto &subexprs)
+  {
+    validate_no_variadic_variables(e, subexprs);
+  }
+
+  static void validate(const expr &e, const auto &subexprs)
+  {
+    std::visit([&] (const auto &a) { validate(a, subexprs); }, e);
+  }
+
+  void validate(const auto &pat)
+  {
+    std::visit([&] (const auto &p) { validate(p, pat.subexprs); }, pat);
+  }
 
   struct Pattern : expr
   {
@@ -173,11 +253,11 @@ namespace circ::eqsat {
 
     Pattern(const named_exprs &subs, const constraints &c, const expr &e)
       : expr(e), subexprs(subs)
-    { filter_constraints(c); }
+    { filter_constraints(c); validate(*this); }
 
     Pattern(named_exprs &&subs, constraints &&c, expr &&e)
       : expr(std::move(e)), subexprs(std::move(subs))
-    { filter_constraints(c); }
+    { filter_constraints(c); validate(*this); }
 
     void filter_constraints(const constraints &cons)
     {
@@ -200,25 +280,6 @@ namespace circ::eqsat {
 
     named_exprs subexprs;
   };
-
-  using expr_list = std::vector< expr >;
-
-  template< typename stream >
-  stream& operator<<(stream& os, const expr_list& e)
-  {
-    os << "( ";
-    for (const auto &v : e)
-      os << v << ' ';
-    os << ')';
-    return os;
-  }
-
-  template< typename stream >
-  stream& operator<<(stream& os, const expr& e)
-  {
-    std::visit( overloaded { [&] (const auto &a) { os << a; }, }, e);
-    return os;
-  }
 
   // TODO(Heno): constexpr
   static expr wrap(expr e) {
