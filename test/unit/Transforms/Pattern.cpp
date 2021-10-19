@@ -135,4 +135,17 @@ namespace circ::eqsat {
     CHECK(parser("(union $A $B $C $D)"));
   }
 
+  TEST_CASE("Variadic") {
+    CHECK( match_expr_parser()("(match $M...)") );
+
+    auto parser = pattern_parser();
+    CHECK(parser("((let M (op_mul ?a ?b)) (op_bond $M...))"));
+    CHECK(parser("((let M (op_mul ?a ?b)) (match $M...))"));
+    CHECK(parser("((let M (op_mul ?a ?b)) (commutative-match $M...))"));
+    CHECK(parser("((let M (op_mul ?a ?b)) (let A (op_add ?c ?d)) (match $M... $A...))"));
+
+    CHECK(parser("(union $M...)"));
+    CHECK(parser("(bond $M...)"));
+  }
+
 } // namespace circ::eqsat
