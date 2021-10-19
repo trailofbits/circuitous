@@ -559,9 +559,21 @@ namespace circ::eqsat {
     }
 
     // match labeled subexpression
-    Substitutions match_atom(const auto &enode, const label &lab) const
+    Substitutions match_atom(const auto &enode, const single_label &lab) const
     {
       return match_enode(enode, pattern.subexprs.at(lab));
+    }
+
+    // match variadic labeled subexpression
+    Substitutions match_atom(const auto &enode, const variadic_label &lab) const
+    {
+      llvm_unreachable("match variadic");
+    }
+
+    // match labeled subexpression
+    Substitutions match_atom(const auto &enode, const label &lab) const
+    {
+      return std::visit([&] (const auto &l) { return match_atom(enode, l); }, lab);
     }
 
   }; // Matcher
