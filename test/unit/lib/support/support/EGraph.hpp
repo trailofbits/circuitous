@@ -110,7 +110,7 @@ namespace circ::eqsat {
         [&] (const constant &con) -> Id { return _graph->make_leaf( std::to_string(con.ref()) ); },
         [&] (const place &plc)    -> Id { return subs.id(places.at(plc)); },
         [&] (const operation &op) -> Id { return _graph->make_node(op.ref(), args); },
-        [&] (const label &lab)    -> Id { return synth(subexprs.at(lab)); },
+        [&] (const label &lab)    -> Id { return synth(subexprs.at(label_name(lab))); },
         [&] (const auto&)         -> Id { LOG(FATAL) << "unsupported node"; },
       }, root(e));
 

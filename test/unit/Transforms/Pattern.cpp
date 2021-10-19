@@ -144,10 +144,10 @@ namespace circ::eqsat {
     CHECK(parser("((let M (op_mul)) (commutative-match $M...))"));
     CHECK(parser("((let M (op_mul)) (let A (op_add)) (match $M... $A...))"));
 
-    CHECK_THROWS_AS(parser("((let M (op_mul ?a ?b)) (op_bond $M...))"), std::runtime_error);
-    CHECK_THROWS_AS(parser("((let M (op_mul ?a ?b)) (match $M...))"), std::runtime_error);
-    CHECK_THROWS_AS(parser("((let M (op_mul ?a ?b)) (commutative-match $M...))"), std::runtime_error);
-    CHECK_THROWS_AS(parser("((let M (op_mul ?a ?b)) (let A (op_add)) (match $M... $A...))"), std::runtime_error);
+    CHECK_THROWS(parser("((let M (op_mul ?a ?b)) (op_bond $M...))"));
+    CHECK_THROWS(parser("((let M (op_mul ?a ?b)) (match $M...))"));
+    CHECK_THROWS(parser("((let M (op_mul ?a ?b)) (commutative-match $M...))"));
+    CHECK_THROWS(parser("((let M (op_mul ?a ?b)) (let A (op_add)) (match $M... $A...))"));
 
     CHECK(parser("(union $M...)"));
     CHECK(parser("(bond $M...)"));
