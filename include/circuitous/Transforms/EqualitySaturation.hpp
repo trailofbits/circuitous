@@ -242,7 +242,9 @@ namespace circ::eqsat {
       named_contexts res;
       for (const auto &[lab, id] : labels) {
         if (!std::holds_alternative<anonymous_label>(lab)) {
+          if (auto sub = pattern.subexpr(lab); sub.context) {
             res[*sub.context] = contexts(egraph, id);
+          }
         }
       }
       return res;
@@ -394,8 +396,8 @@ namespace circ::eqsat {
     Matches match(const match_expr &e) const
     {
       std::vector< Matches > matches;
-      for (const auto &label : labels(e)) {
-        matches.push_back(match(pattern.subexprs.at(label), label));
+      for (const auto &lab : labels(e)) {
+        matches.push_back(match(pattern.subexpr(lab), lab));
       }
 
       auto result = combine_matches(matches);
@@ -548,7 +550,7 @@ namespace circ::eqsat {
     // match labeled subexpression
     Substitutions match_atom(const auto &enode, const unary_label &lab) const
     {
-      return match_enode(enode, pattern.subexprs.at(lab));
+      return match_enode(enode, pattern.subexpr(lab));
     }
 
     // match variadic labeled subexpression

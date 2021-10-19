@@ -284,7 +284,7 @@ namespace circ::eqsat {
       return std::visit( overloaded {
         [&] (const constant &con) -> Id { return make_constant(con); },
         [&] (const place &plc)    -> Id { return subs.id(places.at(plc)); },
-        [&] (const label &lab)    -> Id { return synth(subexprs.at(lab)); },
+        [&] (const label &lab)    -> Id { return synth(subexprs.at(label_name(lab))); },
         [&] (const operation &op) -> Id {
           ENode node(make_operation_template(op));
           for (const auto &child : children(e))

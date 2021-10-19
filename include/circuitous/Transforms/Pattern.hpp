@@ -166,7 +166,7 @@ namespace circ::eqsat {
 
   struct Pattern : expr
   {
-    using named_exprs = std::unordered_map< label, expr >;
+    using named_exprs = std::unordered_map< std::string_view, expr >;
 
     explicit Pattern(const expr &e) : expr(e) {}
     explicit Pattern(expr &&e) : expr(std::move(e)) {}
@@ -187,6 +187,12 @@ namespace circ::eqsat {
           [&] (const place_constraint &e)   { place_constraints.push_back(e); }
         }, con);
       }
+    }
+
+    const expr &subexpr(const label &lab) const
+    {
+      assert(!std::holds_alternative<anonymous_label>(lab));
+      return subexprs.at(label_name(lab));
     }
 
     std::vector< place_constraint > place_constraints;
@@ -496,7 +502,7 @@ namespace circ::eqsat {
 
     // TODO(Heno): do not copy exprs
     auto insert_named_expr = [] (auto &&exprs, auto &&e) {
-      exprs[e.name] = e;
+      exprs[label_name(e.name)] = e;
       return exprs;
     };
 
@@ -541,19 +547,22 @@ namespace circ::eqsat {
     };
 
     return std::visit( overloaded {
-      [&] (const atom &a) -> places_t {
-        return std::visit( overloaded {
-          [&] (const label &lab) -> places_t { return places(subexprs.at(lab), subexprs); },
-          [&] (const place &val) -> places_t { return {val}; },
-          [&] (const auto &)     -> places_t { return {}; }
-        }, a);
-      },
+      [&] (const atom &a)         -> places_t { return atom_places(a, subexprs); },
       [&] (const expr_list &list) -> places_t { return foreach_places(list); },
       [&] (const match_expr &e)   -> places_t { return foreach_places(labels(e)); },
       [&] (const union_expr &e)   -> places_t { return foreach_places(e.labels); },
       [&] (const bond_expr  &e)   -> places_t { return foreach_places(e.labels); },
       [] (const auto&) -> places_t { throw "unsupported expression type"; }
     }, e.get());
+  }
+
+  inline places_t atom_places(const atom &a, const auto &subexprs)
+  {
+    return std::visit( overloaded {
+      [&] (const label &lab) -> places_t { return places(subexprs.at(label_name(lab)), subexprs); },
+      [&] (const place &val) -> places_t { return {val}; },
+      [&] (const auto &)     -> places_t { return {}; }
+    }, a);
   }
 
   inline places_t places(const Pattern &pat)
