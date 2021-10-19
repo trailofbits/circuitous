@@ -76,7 +76,7 @@ namespace circ::eqsat {
 
     {
       auto p = parser("((let place (?x)) ($place))");
-      CHECK(p && result(p).subexprs.size() == 1 && root(result(p)) == atom(single_label("place")));
+      CHECK(p && result(p).subexprs.size() == 1 && root(result(p)) == atom(unary_label("place")));
     }
 
     {
@@ -86,8 +86,8 @@ namespace circ::eqsat {
       CHECK(root(res) == atom(operation("add")));
 
       auto ch = children(res);
-      CHECK(std::get<atom>(ch[0]) == atom(single_label("X")));
-      CHECK(std::get<atom>(ch[1]) == atom(single_label("Y")));
+      CHECK(std::get<atom>(ch[0]) == atom(unary_label("X")));
+      CHECK(std::get<atom>(ch[1]) == atom(unary_label("Y")));
     }
   }
 
@@ -139,10 +139,15 @@ namespace circ::eqsat {
     CHECK( match_expr_parser()("(match $M...)") );
 
     auto parser = pattern_parser();
-    CHECK(parser("((let M (op_mul ?a ?b)) (op_bond $M...))"));
-    CHECK(parser("((let M (op_mul ?a ?b)) (match $M...))"));
-    CHECK(parser("((let M (op_mul ?a ?b)) (commutative-match $M...))"));
-    CHECK(parser("((let M (op_mul ?a ?b)) (let A (op_add ?c ?d)) (match $M... $A...))"));
+    CHECK(parser("((let M (op_mul)) (op_bond $M...))"));
+    CHECK(parser("((let M (op_mul)) (match $M...))"));
+    CHECK(parser("((let M (op_mul)) (commutative-match $M...))"));
+    CHECK(parser("((let M (op_mul)) (let A (op_add)) (match $M... $A...))"));
+
+    CHECK_THROWS_AS(parser("((let M (op_mul ?a ?b)) (op_bond $M...))"), std::runtime_error);
+    CHECK_THROWS_AS(parser("((let M (op_mul ?a ?b)) (match $M...))"), std::runtime_error);
+    CHECK_THROWS_AS(parser("((let M (op_mul ?a ?b)) (commutative-match $M...))"), std::runtime_error);
+    CHECK_THROWS_AS(parser("((let M (op_mul ?a ?b)) (let A (op_add)) (match $M... $A...))"), std::runtime_error);
 
     CHECK(parser("(union $M...)"));
     CHECK(parser("(bond $M...)"));
