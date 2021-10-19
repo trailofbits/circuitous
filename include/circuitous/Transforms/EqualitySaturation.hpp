@@ -106,20 +106,7 @@ namespace circ::eqsat {
   }
 
   using Substitutions = std::set< Substitution >;
-
-  using MatchLabel = std::variant< std::monostate, label >;
-  using LabelsMap = std::unordered_map< MatchLabel, Id >;
-
-  template< typename stream >
-  auto operator<<(stream &os, const MatchLabel &lab) -> decltype(os << "")
-  {
-    return std::visit( overloaded {
-      [&] (const std::monostate &) -> stream& { return os << "none"; },
-      [&] (const label &l)         -> stream& { return os << l; }
-    }, lab);
-  }
-
-  static inline constexpr MatchLabel anonymous_label = std::monostate{};
+  using LabelsMap = std::unordered_map< label, Id >;
 
   // Single match of labeled expressions, maps to each matching label
   // a single equality class.
@@ -133,7 +120,7 @@ namespace circ::eqsat {
     // corresponding substitutions for the matching
     Substitutions substitutions;
 
-    bool is_anonymous() const { return labels.count(anonymous_label); }
+    bool is_anonymous() const { return labels.count(anonymous_label()); }
   };
 
   template< typename stream >
@@ -254,9 +241,9 @@ namespace circ::eqsat {
     {
       named_contexts res;
       for (const auto &[lab, id] : labels) {
-        if (std::holds_alternative<label>(lab))
-          if (auto sub = pattern.subexprs.at(std::get<label>(lab)); sub.context)
+        if (!std::holds_alternative<anonymous_label>(lab)) {
             res[*sub.context] = contexts(egraph, id);
+        }
       }
       return res;
     }
@@ -421,7 +408,7 @@ namespace circ::eqsat {
     }
 
     // match single unlabled expression
-    Matches match(const auto &e, MatchLabel lab = anonymous_label) const
+    Matches match(const auto &e, label lab = anonymous_label()) const
     {
       Matches matched;
       // TODO(Heno): add operation caching to egraph
@@ -559,7 +546,7 @@ namespace circ::eqsat {
     }
 
     // match labeled subexpression
-    Substitutions match_atom(const auto &enode, const single_label &lab) const
+    Substitutions match_atom(const auto &enode, const unary_label &lab) const
     {
       return match_enode(enode, pattern.subexprs.at(lab));
     }
@@ -639,7 +626,7 @@ namespace circ::eqsat {
     void apply_patch(const expr &e, const Matches &matches) const
     {
       for (const auto &match : matches) {
-        auto id = match.labels.at(anonymous_label);
+        auto id = match.labels.at(anonymous_label());
         // TODO(Heno): perform once for all substitutions
         for (const auto &sub : match.substitutions) {
           auto patch = builder.synthesize(e, sub, places, pattern.subexprs);

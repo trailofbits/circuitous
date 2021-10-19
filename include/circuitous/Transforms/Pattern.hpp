@@ -51,29 +51,47 @@ namespace circ::eqsat {
 
   struct label_tag;
   // subexpression label has to be named with prefix '$'
-  using single_label = strong_type< std::string_view, label_tag >;
+  using unary_label = strong_type< std::string_view, label_tag >;
 
   struct variadic_label_tag;
   // variadic label has to be named with prefix '$' and suffixed with '...'
   using variadic_label = strong_type< std::string_view, variadic_label_tag >;
 
-  using label = std::variant< single_label, variadic_label >;
+  using anonymous_label = std::monostate;
+
+  using label = std::variant< unary_label, variadic_label, anonymous_label >;
+
+  static inline std::string_view label_name(const label &lab)
+  {
+    return std::visit( overloaded {
+      [] (const unary_label &l)     -> std::string_view { return l.ref(); },
+      [] (const variadic_label &l)  -> std::string_view { return l.ref(); },
+      [] (const anonymous_label &l) -> std::string_view { return "none"; }
+    }, lab);
+  }
+
+  template< typename stream >
+  stream& operator<<(stream& os, const label& lab)
+  {
+    std::visit( [&os] (const auto &l) { os << label_name(l); }, lab );
+    return os;
+  }
+
+  inline bool operator==(const label &a, const label &b)
+  {
+    return label_name(a) == label_name(b);
+  }
 
   struct context_tag;
   using context = strong_type< std::string_view, context_tag >;
 
-  using atom = std::variant< constant, operation, place, label, variadic_label >;
+  using atom = std::variant< constant, operation, place, label >;
 
   template< typename stream >
   stream& operator<<(stream& os, const atom& a)
   {
     std::visit( [&os] (const auto &v) { os << v; }, a);
     return os;
-  }
-
-  static inline std::string_view label_name(const label &lab)
-  {
-    return std::visit([](const auto &v) { return v.ref(); }, lab);
   }
 
   // expression of form: (match [labels])
@@ -232,9 +250,9 @@ namespace circ::eqsat {
     };
   }
 
-  constexpr parser<single_label> auto single_label_name_parser()
+  constexpr parser<unary_label> auto unary_label_name_parser()
   {
-    return construct< single_label >(name_parser());
+    return construct< unary_label >(name_parser());
   }
 
   constexpr parser<variadic_label> auto variadic_label_name_parser()
@@ -244,7 +262,7 @@ namespace circ::eqsat {
 
   constexpr parser<label> auto label_name_parser()
   {
-    auto single   = construct< label >(single_label_name_parser());
+    auto single   = construct< label >(unary_label_name_parser());
     auto variadic = construct< label >(variadic_label_name_parser());
     return variadic | single;
   }
@@ -259,9 +277,9 @@ namespace circ::eqsat {
     return construct< place >(char_parser('?') < name_parser());
   }
 
-  constexpr parser<single_label> auto single_label_parser()
+  constexpr parser<unary_label> auto unary_label_parser()
   {
-    return construct< single_label >(char_parser('$') < name_parser());
+    return construct< unary_label >(char_parser('$') < name_parser());
   }
 
   constexpr parser<variadic_label> auto variadic_label_parser()
