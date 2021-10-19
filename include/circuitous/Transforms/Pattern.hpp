@@ -54,7 +54,7 @@ namespace circ::eqsat {
   using single_label = strong_type< std::string_view, label_tag >;
 
   struct variadic_label_tag;
-  // subexpression label has to be named with prefix '$' and suffixed with '...'
+  // variadic label has to be named with prefix '$' and suffixed with '...'
   using variadic_label = strong_type< std::string_view, variadic_label_tag >;
 
   using label = std::variant< single_label, variadic_label >;
@@ -246,7 +246,7 @@ namespace circ::eqsat {
   {
     auto single   = construct< label >(single_label_name_parser());
     auto variadic = construct< label >(variadic_label_name_parser());
-    return single | variadic;
+    return variadic | single;
   }
 
   constexpr parser<operation> auto operation_parser()
