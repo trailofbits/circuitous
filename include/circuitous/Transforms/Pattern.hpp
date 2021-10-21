@@ -12,6 +12,7 @@
 #include <circuitous/Util/FixedString.hpp>
 #include <circuitous/Util/StrongType.hpp>
 
+#include <cassert>
 #include <algorithm>
 #include <cctype>
 #include <cstring>
