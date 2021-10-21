@@ -239,7 +239,7 @@ namespace circ::eqsat {
     std::visit([&] (const auto &a) { validate(a, subexprs); }, e);
   }
 
-  void validate(const auto &pat)
+  static void validate(const auto &pat)
   {
     std::visit([&] (const auto &p) { validate(p, pat.subexprs); }, pat);
   }
@@ -253,11 +253,11 @@ namespace circ::eqsat {
 
     Pattern(const named_exprs &subs, const constraints &c, const expr &e)
       : expr(e), subexprs(subs)
-    { filter_constraints(c); validate(*this); }
+    { filter_constraints(c); validate(*this, subexprs); }
 
     Pattern(named_exprs &&subs, constraints &&c, expr &&e)
       : expr(std::move(e)), subexprs(std::move(subs))
-    { filter_constraints(c); validate(*this); }
+    { filter_constraints(c); validate(*this, subexprs); }
 
     void filter_constraints(const constraints &cons)
     {
