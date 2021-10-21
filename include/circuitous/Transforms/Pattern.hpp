@@ -239,11 +239,6 @@ namespace circ::eqsat {
     std::visit([&] (const auto &a) { validate(a, subexprs); }, e);
   }
 
-  static void validate(const auto &pat)
-  {
-    std::visit([&] (const auto &p) { validate(p, pat.subexprs); }, pat);
-  }
-
   struct Pattern : expr
   {
     using named_exprs = std::unordered_map< std::string_view, expr >;
