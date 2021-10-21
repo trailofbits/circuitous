@@ -20,6 +20,7 @@
 #include <vector>
 #include <string>
 #include <string_view>
+#include <experimental/iterator>
 
 #include <circuitous/IR/IR.h>
 #include <circuitous/ADT/EGraph.hpp>
@@ -106,29 +107,103 @@ namespace circ::eqsat {
   }
 
   using Substitutions = std::set< Substitution >;
-  using LabelsMap = std::unordered_map< label, Id >;
 
-  // Single match of labeled expressions, maps to each matching label
-  // a single equality class.
-  // Maintains possible substitutions of pattern plces for current match.
-  // A special case is anonymous match for unlabeled pattern.
-  struct LabeledMatch
+  struct anonymous_match { Id id; };
+
+  struct unary_match
   {
-    // matching of labels to equality nodes
-    LabelsMap labels;
-
-    // corresponding substitutions for the matching
-    Substitutions substitutions;
-
-    bool is_anonymous() const { return labels.count(anonymous_label()); }
+    unary_label label;
+    Id id;
   };
 
+  struct variadic_match
+  {
+    variadic_label label;
+    std::set< Id > ids;
+  };
+
+  using label_match = std::variant< anonymous_match, unary_match, variadic_match >;
+
+  inline std::string_view name(const anonymous_match &) { return "anonymous"; }
+  inline std::string_view name(const unary_match &m)    { return label_name(m.label); }
+  inline std::string_view name(const variadic_match &m) { return label_name(m.label); }
+  inline std::string_view name(const label_match &match)
+  {
+    return std::visit([&] (const auto &m) { return name(m); }, match);
+  }
+
   template< typename stream >
-  auto operator<<(stream &os, const LabeledMatch &match) -> decltype(os << "")
+  auto operator<<(stream &os, const anonymous_match &m) -> decltype(os << "")
+  {
+    return os << name(m) << " → " << m.id << "\n";
+  }
+
+  template< typename stream >
+  auto operator<<(stream &os, const unary_match &m) -> decltype(os << "")
+  {
+    return os << name(m) << " → " << m.id << "\n";
+  }
+
+  template< typename stream >
+  auto operator<<(stream &os, const variadic_match &m) -> decltype(os << "")
+  {
+    os << name(m) << " → { ";
+    std::copy(std::begin(m.ids), std::end(m.ids), std::experimental::make_ostream_joiner(std::cout, ", "));
+    os << "}";
+    return os;
+  }
+
+  template< typename stream >
+  auto operator<<(stream &os, const label_match &match) -> decltype(os << "")
+  {
+    return std::visit([&] (const auto &m) -> stream& { return os << m; }, match);
+  }
+
+  struct matched_labels
+  {
+    std::vector< label_match > labels;
+    Substitutions substitutions;
+  };
+
+  inline std::optional< label_match > get_label_match(const matched_labels &match, std::string_view label_name)
+  {
+    auto same_label = [&] (const auto& other) { return name(other) == label_name; };
+    const auto &labs = match.labels;
+    if (auto it = std::find_if(labs.begin(), labs.end(), same_label); it != labs.end())
+      return *it;
+    return std::nullopt;
+  }
+
+  inline std::optional< label_match > get_label_match(const matched_labels &match, const label_match &lab)
+  {
+    return get_label_match(match, name(lab));
+  }
+
+  inline std::set< Id > matched_ids(const label_match &match)
+  {
+    return std::visit( overloaded {
+      [&] (const anonymous_match &m) -> std::set< Id > { return {m.id}; },
+      [&] (const unary_match &m)     -> std::set< Id > { return {m.id}; },
+      [&] (const variadic_match &m)  -> std::set< Id > { return m.ids; }
+    }, match);
+  }
+
+  inline std::set< Id > matched_ids(const matched_labels &match)
+  {
+    std::set< Id > ids;
+
+    for (const auto &lab : match.labels)
+      ids.merge(matched_ids(lab));
+
+    return ids;
+  }
+
+  template< typename stream >
+  auto operator<<(stream &os, const matched_labels &match) -> decltype(os << "")
   {
     os << "labels {\n";
-    for (const auto &[label, id] : match.labels) {
-      os << "\t" << label << " -> " << id << "\n";
+    for (const auto &m : match.labels) {
+      os << "\t" << m << "\n";
     }
     os << "}\n";
     os << "substitutions {\n";
@@ -140,7 +215,7 @@ namespace circ::eqsat {
   }
 
   // All possible matches for a given pattern
-  using Matches = std::vector< LabeledMatch >;
+  using Matches = std::vector< matched_labels >;
 
   static inline auto tail(const auto &vec)
   {
@@ -161,7 +236,7 @@ namespace circ::eqsat {
         [&] (const match_expr &e) -> Matches { return match(e); },
         [&] (const expr_list  &e) -> Matches { return match(e); },
         [&] (const atom &a)       -> Matches { return match(a); },
-        [&] (const bond_expr & ) -> Matches {
+        [&] (const bond_expr & )  -> Matches {
           throw std::runtime_error("bond clause is forbidden in the matching pattern");
         },
         [&] (const union_expr & ) -> Matches {
@@ -235,30 +310,60 @@ namespace circ::eqsat {
 
     using context_node = typename Graph::Node*;
     using context_t = std::unordered_set< context_node >;
-    using named_contexts = std::unordered_map<context_name, context_t>;
+    using named_contexts = std::unordered_map<context_name, std::vector< context_t > >;
 
-    named_contexts get_named_contexts(const auto &labels) const
+    named_contexts get_named_contexts(const anonymous_match &match) const { return {}; /* none */ }
+
+    named_contexts get_named_contexts(const unary_match &match) const
     {
-      named_contexts res;
-      for (const auto &[lab, id] : labels) {
-        if (!std::holds_alternative<anonymous_label>(lab)) {
-          if (auto sub = pattern.subexpr(lab); sub.context) {
-            res[*sub.context] = contexts(egraph, id);
-          }
+      named_contexts ctxs;
+      if (auto sub = pattern.subexpr(match.label); sub.context) {
+        auto name = sub.context.value();
+        ctxs[name].push_back( contexts(egraph, match.id) );
+      }
+      return ctxs;
+    }
+
+    named_contexts get_named_contexts(const variadic_match &match) const
+    {
+      named_contexts ctxs;
+      if (auto sub = pattern.subexpr(match.label); sub.context) {
+        auto name = sub.context.value();
+        for (auto id : match.ids) {
+          ctxs[name].push_back( contexts(egraph, id) );
         }
       }
+      return ctxs;
+    }
+
+    named_contexts get_named_contexts(const label_match &match) const
+    {
+      return std::visit([&] (const auto &m) { return get_named_contexts(m); }, match);
+    }
+
+    named_contexts get_named_contexts(const std::vector< label_match > &labels) const
+    {
+      named_contexts res;
+      for (const auto &lab : labels)
+        res.merge(get_named_contexts(lab));
       return res;
     }
 
+    // TODO(Heno): deal with varidadic contexts
     // Returns true if 'match' has non overlapping context sets
-    bool has_disjoint_contexts(const LabeledMatch &match, const auto &contexts) const
+    bool has_disjoint_contexts(const matched_labels &match, const auto &contexts) const
     {
+      // TODO simplify with set
       auto named = get_named_contexts(match.labels);
 
       std::unordered_map< context_node, int > counts;
-      for (const auto &name : contexts)
-        for (const auto &node : named.at(name.ref()))
-          counts[node]++;
+      for (const auto &name : contexts) {
+        for (const auto &nodes : named.at(name.ref())) {
+          for (const auto &node : nodes) {
+            counts[node]++;
+          }
+        }
+      }
 
       return std::any_of(counts.begin(), counts.end(), [] (const auto &elem) {
         const auto &[_, count] = elem;
@@ -313,13 +418,20 @@ namespace circ::eqsat {
 
     static inline Matches filter_nonunique_matches(Matches &&matches)
     {
-      using MatchedIds = std::set< Id >;
-
       auto nonunique = [] (const auto &match) {
-        MatchedIds matched;
-        for (const auto &[label, id] : match.labels)
-          matched.insert(id);
-        return matched.size() != match.labels.size();
+        std::set< Id > seen;
+
+        auto not_seen = [&] (Id id) -> bool { return seen.insert(id).second; };
+
+        auto unique = [&] (const label_match &lab) {
+          return std::visit( overloaded {
+            [&] (const anonymous_match &m) { return not_seen(m.id); },
+            [&] (const unary_match &m)     { return not_seen(m.id); },
+            [&] (const variadic_match &m)  { return std::all_of(m.ids.begin(), m.ids.end(), not_seen); }
+          }, lab);
+        };
+
+        return !std::all_of( match.labels.begin(), match.labels.end(), unique );
       };
 
       matches.erase( std::remove_if(matches.begin(), matches.end(), nonunique), matches.end() );
@@ -331,15 +443,8 @@ namespace circ::eqsat {
       using MatchedIds = std::set< Id >;
       std::vector< MatchedIds > seen;
 
-      auto matched_ids = [] (const LabelsMap &labels) -> MatchedIds {
-        MatchedIds matched;
-        for (const auto &[label, id] : labels)
-          matched.insert(id);
-        return matched;
-      };
-
       auto commutes = [&] (const auto &match) {
-        auto ids = matched_ids(match.labels);
+        auto ids = matched_ids(match);
         if (std::find(seen.begin(), seen.end(), ids) != seen.end())
           return true;
         seen.push_back(ids);
@@ -350,17 +455,17 @@ namespace circ::eqsat {
       return std::move(matches);
     }
 
-    static inline std::optional< LabeledMatch > merge(const LabeledMatch &lhs, const LabeledMatch &rhs)
+    static inline std::optional< matched_labels > merge(const matched_labels &lhs, const matched_labels &rhs)
     {
       auto product = product_of_substitutions(lhs.substitutions, rhs.substitutions);
       if (product.empty())
         return std::nullopt;
 
-      LabeledMatch match{lhs.labels, std::move(product)};
+      matched_labels match{lhs.labels, std::move(product)};
 
-      for (const auto &[label, id] : rhs.labels) {
-        CHECK(!match.labels.count(label));
-        match.labels[label] = id;
+      for (const auto &lab : rhs.labels) {
+        CHECK(!get_label_match(match, lab).has_value());
+        match.labels.push_back(lab);
       }
 
       return match;
@@ -396,8 +501,8 @@ namespace circ::eqsat {
     Matches match(const match_expr &e) const
     {
       std::vector< Matches > matches;
-      for (const auto &lab : labels(e)) {
-        matches.push_back(match(pattern.subexpr(lab), lab));
+      for (const auto &l : labels(e)) {
+        matches.push_back(match(pattern.subexpr(l), l));
       }
 
       auto result = combine_matches(matches);
@@ -409,17 +514,46 @@ namespace circ::eqsat {
       return result;
     }
 
-    // match single unlabled expression
     Matches match(const auto &e, label lab = anonymous_label()) const
     {
-      Matches matched;
-      // TODO(Heno): add operation caching to egraph
-      for (const auto &[id, eclass] : egraph.classes())
-        // pattern matches with a root in the eclass
-        if (auto subs = match_eclass(eclass, e); !subs.empty())
-          matched.push_back( LabeledMatch{{{lab, id}}, std::move(subs)} );
-      return matched;
+      return std::visit( [&] (const auto &l) { return match(e, l); }, lab );
     }
+
+    Matches match(const auto &e, variadic_label l) const
+    {
+      matched_labels matches;
+      variadic_match match{l, {}};
+      for (const auto &[id, eclass] : egraph.classes()) {
+        if (auto subs = match_eclass(eclass, e); !subs.empty()) {
+          match.ids.insert(id);
+          matches.substitutions.merge(std::move(subs));
+        }
+      }
+      matches.labels.push_back(match);
+      return {matches};
+    }
+
+    unary_match named_match(const unary_label &l, Id id) const { return {l, id}; }
+    anonymous_match named_match(const anonymous_label &, Id id) const { return {id}; }
+
+    Matches match_single(const auto &e, const auto &l) const
+    {
+      Matches matches;
+      // TODO(Heno): add operation caching to egraph
+      for (const auto &[id, eclass] : egraph.classes()) {
+        // pattern matches with a root in the eclass
+        if (auto subs = match_eclass(eclass, e); !subs.empty()) {
+          matched_labels single;
+          single.labels.push_back(named_match(l, id));
+          single.substitutions.merge(std::move(subs));
+          matches.push_back(single);
+        }
+      }
+      return matches;
+    }
+
+    Matches match(const auto &e, unary_label l)     const { return match_single(e, l); }
+    Matches match(const auto &e, anonymous_label l) const { return match_single(e, l); }
 
     // match pattern with some of the eclass nodes (produces all possible matches)
     Substitutions match_eclass(const auto &eclass, const auto &e) const
@@ -596,23 +730,31 @@ namespace circ::eqsat {
       }, e.get());
     }
 
+    std::set< Id > matched_ids_for_labels(const matched_labels &match,
+                                          const std::vector< label > &labels) const
+    {
+        std::set< Id > ids;
+        for (const auto & l : labels) {
+          auto m = get_label_match(match, label_name(l)).value();
+          ids.merge(matched_ids(m));
+        }
+
+        return ids;
+    }
+
     void apply(const bond_expr &e, const Matches &matches) const
     {
       for (const auto &match : matches) {
-        std::vector<Id> nodes;
-        for (const auto &lab : e.labels)
-          nodes.push_back(match.labels.at(lab));
-        egraph.bond(std::move(nodes));
+        auto ids = matched_ids_for_labels(match, e.labels);
+        egraph.bond({ids.begin(), ids.end()});
       }
     }
 
     void apply(const union_expr &e, const Matches &matches) const
     {
       for (const auto &match : matches) {
-        auto head = match.labels.at(e.labels.front());
-        for (const auto &next : tail(e.labels)) {
-          egraph.merge(head, match.labels.at(next));
-        }
+        auto ids = matched_ids_for_labels(match, e.labels);
+        egraph.merge({ids.begin(), ids.end()});
       }
     }
 
@@ -625,14 +767,20 @@ namespace circ::eqsat {
         apply(e, matches);
     }
 
+    Id anonymous_match_id(const matched_labels &matches) const
+    {
+      auto match = get_label_match(matches, anonymous_match()).value();
+      return std::get<anonymous_match>(match).id;
+    }
+
     void apply_patch(const expr &e, const Matches &matches) const
     {
       for (const auto &match : matches) {
-        auto id = match.labels.at(anonymous_label());
+        auto id = anonymous_match_id(match);
         // TODO(Heno): perform once for all substitutions
         for (const auto &sub : match.substitutions) {
           auto patch = builder.synthesize(e, sub, places, pattern.subexprs);
-          egraph.merge(id, patch);
+          id = egraph.merge(id, patch);
         }
       }
     }

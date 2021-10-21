@@ -256,6 +256,15 @@ namespace circ::eqsat {
       return new_id;
     }
 
+    Id merge(std::vector<Id> nodes)
+    {
+      auto first = nodes.front();
+      for (auto id : nodes) {
+        first = merge(first, id);
+      }
+      return first;
+    }
+
     Id bond(std::vector<Id> nodes)
     {
       if (auto id = bonded(nodes))
