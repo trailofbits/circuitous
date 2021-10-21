@@ -236,7 +236,7 @@ namespace circ::eqsat {
 
   static void validate(const expr &e, const auto &subexprs)
   {
-    std::visit([&] (const auto &a) { validate(a, subexprs); }, e);
+    std::visit([&] (const auto &a) { validate(a, subexprs); }, e.get());
   }
 
   struct Pattern : expr
