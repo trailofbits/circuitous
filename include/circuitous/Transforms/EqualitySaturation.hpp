@@ -147,7 +147,7 @@ namespace circ::eqsat {
   template< typename stream >
   auto operator<<(stream &os, const variadic_match &m) -> decltype(os << "")
   {
-    os << name(m) << " → { ";
+    os << name(m) << " → {";
     std::copy(std::begin(m.ids), std::end(m.ids), std::experimental::make_ostream_joiner(std::cout, ", "));
     os << "}";
     return os;
