@@ -249,6 +249,7 @@ struct Acceptor
   iclass_cache_t shadows;
   std::unordered_set< std::string > allowed;
   seen_t seen;
+  prune::Exec< prune::X86Prefixes > spec;
 
   Acceptor() = default;
   Acceptor(std::unordered_set< std::string > allowed_)
@@ -299,6 +300,9 @@ struct Acceptor
     if (seen.count(rinst.bytes))
       return false;
     seen.insert(rinst.bytes);
+    if (!spec.is_valid(dbg_dump_bytes(rinst.bytes)))
+      return false;
+
     if (!allowed_iform(rinst.function))
       return false;
 
@@ -442,6 +446,9 @@ int main(int argc, char *argv[]) {
   auto owning_module_pre = remill::LoadArchSemantics(owning_arch_ptr.get());
 
   Acceptor acceptor(load_config< std::unordered_set< std::string > >(FLAGS_filter));
+  if (!FLAGS_prune_spec.empty())
+    acceptor.spec = prune::Exec< prune::X86Prefixes >(prune::Spec::load(FLAGS_prune_spec));
+
   Parser< Parsed > parser{ *owning_arch_ptr, acceptor };
 
   uint32_t idx = 0;
