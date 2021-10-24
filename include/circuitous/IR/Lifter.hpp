@@ -332,9 +332,10 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     if (auto base = arch->RegisterByName(name)) {
       return base->EnclosingRegister()->name;
     }
-    if (name == "NEXT_PC") {
+    if (name == "NEXT_PC" || name.starts_with("__remill_zero")) {
       return std::string(name);
     }
+
     LOG(FATAL) << "Cannot locate input " << name;
   }
 
@@ -421,6 +422,10 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     if (cond) {
       auto wrapped = irops::make< irops::Transport >(ir, cond);
       AddMetadata(llvm::dyn_cast<llvm::Instruction>(wrapped), "circuitous.verify_fn_args", 0);
+    }
+
+    if (s_reg.is_saturated_by_zeroes()) {
+      return llvm::ConstantInt::get(select->getType(), 0, false);
     }
     return shadowinst::mask_shift_coerce(select, ir, s_reg, *arch);
   }
