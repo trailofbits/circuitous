@@ -274,12 +274,16 @@ struct Acceptor
   bool already_parsed(const circ::shadowinst::Instruction &nshadow,
                       const remill::Instruction &rinst)
   {
+    auto remove_shade = [&](const auto &s_inst) {
+      return circ::shadowinst::remove_shadowed(s_inst, rinst.bytes);
+    };
+
     auto iclass = get_iclass(rinst.function);
     auto size = rinst.bytes.size();
     for (const auto &[shadow, iform] : shadows[iclass][size])
-      if (nshadow == shadow)
-        return false;
-    return true;
+      if (nshadow == shadow && remove_shade(nshadow) == remove_shade(shadow))
+        return true;
+    return false;
   }
 
   void add_to_cache(circ::shadowinst::Instruction nshadow,
@@ -299,7 +303,7 @@ struct Acceptor
       return false;
 
     auto nshadow = circ::InstructionFuzzer{ rinst.arch, rinst }.FuzzOps();
-    if (!already_parsed(nshadow, rinst))
+    if (already_parsed(nshadow, rinst))
       return false;
 
     add_to_cache(std::move(nshadow), rinst);
