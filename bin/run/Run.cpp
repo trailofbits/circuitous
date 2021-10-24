@@ -156,8 +156,11 @@ void run() {
   }
 
   run.Run();
-  if (FLAGS_die)
-    LOG(FATAL) << run.dump_runners();
+  if (FLAGS_die) {
+    // NOTE(lukas): `LOG` has problems with huge buffers. Possibly confugrable.
+    std::cerr << run.dump_runners();
+    LOG(FATAL) << "FLAGS_die induced death.";
+  }
 
   if (!FLAGS_export_derived.empty()) {
     export_derived(circ::run::Inspector<Runner>(&run));
