@@ -298,6 +298,16 @@ namespace circ::shadowinst {
       }
       return out;
     }
+
+    bool is_saturated_by_zeroes() const {
+      if (translation_map.size() != 1)
+        return false;
+      const auto &[key, encodings] = *translation_map.begin();
+      if (!std::string_view(key).starts_with("__remill_zero_i"))
+        return false;
+
+      return encodings.size() == std::pow(2, this->region_bitsize());
+    }
   };
 
   struct Immediate : has_regions {
@@ -337,11 +347,21 @@ namespace circ::shadowinst {
 
       invoke(base_reg);
       invoke(index_reg);
+      invoke(segment);
       invoke(scale);
       invoke(displacement);
     }
 
-    bool present(std::size_t idx) {
+    has_regions flatten_significant_regs() const {
+      has_regions out;
+      auto exec = [&](const auto &other) { out.add(other); };
+      auto invoke = [&](const auto &on_what) { if (on_what) exec(*on_what); };
+      invoke(base_reg);
+      invoke(index_reg);
+      return out;
+    }
+
+    bool present(std::size_t idx) const {
       bool out = false;
       auto collect = [&](auto &op) {
         out |= op.present(idx);
@@ -353,32 +373,21 @@ namespace circ::shadowinst {
       auto make_indent = [&](auto count) { return std::string(count * 2, ' '); };
 
       std::stringstream ss;
-      if (base_reg) {
-        ss << make_indent(indent) << "Base: " << std::endl;
-        ss << base_reg->to_string(indent + 1);
-      } else {
-        ss << "( no base reg )\n";
-      }
-      if (index_reg) {
-        ss << make_indent(indent) << "Index: " << std::endl;
-        ss << index_reg->to_string(indent + 1);
-      } else {
-        ss << "( no index reg )\n";
-      }
+      auto format = [&](const auto &what, const std::string &prefix) {
+        ss << make_indent(indent) << prefix << ": " << std::endl;
+        if (what) {
+          ss << what->to_string(indent + 1);
+        } else {
+          ss << make_indent(indent + 1u) << "( not set )\n";
+        }
+      };
 
-      if (scale) {
-        ss << make_indent(indent) << "Scale: " << std::endl;
-        ss << scale->to_string(indent + 1);
-      } else {
-        ss << "( no scale )\n";
-      }
+      format(base_reg, "Base");
+      format(index_reg, "Index");
+      format(segment, "Segment");
+      format(scale, "Scale");
+      format(displacement, "Displacement");
 
-      if (displacement) {
-        ss << make_indent(indent) << "Displacement: " << std::endl;
-        ss << displacement->to_string(indent + 1);
-      } else {
-        ss << "( no displacement )\n";
-      }
       return ss.str();
     }
   };
@@ -434,7 +443,7 @@ namespace circ::shadowinst {
       invoke(shift);
     }
 
-    bool present(std::size_t idx) {
+    bool present(std::size_t idx) const {
       bool out = false;
       auto collect = [&](auto &op) {
         out |= op.present(idx);
@@ -509,7 +518,7 @@ namespace circ::shadowinst {
       return std::equal(deps.begin(), deps.end(), o.deps.begin(), cmp_deps);
     }
 
-    bool present(std::size_t idx) {
+    bool present(std::size_t idx) const {
       for (auto &op : operands) {
         if (op.present(idx)) {
           return true;
@@ -643,9 +652,32 @@ namespace circ::shadowinst {
           ss << op.address->to_string(2);
         }
       }
+      ss << "  (done)" << std::endl;
       return ss.str();
     }
-
   };
 
+  static inline std::string as_str(uint64_t from, uint64_t size) {
+    std::stringstream ss;
+    ss << "[ " << from << ", " << size << " ]";
+    return ss.str();
+  }
+
+  static inline std::string as_str(const std::tuple< uint64_t, uint64_t > &interval) {
+    std::stringstream ss;
+    auto [from, size] = interval;
+    ss << "[ " << from << ", " << size << " ]";
+    return ss.str();
+  }
+
+  static inline std::string remove_shadowed(const Instruction &s_inst,
+                                            const std::string &bytes) {
+    std::string out;
+    for (std::size_t i = 0; i < bytes.size(); ++i)
+    {
+      if (s_inst.present(i))
+        out += bytes[bytes.size() - 1 - i];
+    }
+    return out;
+  }
 } // namespace circ::shadowinst
