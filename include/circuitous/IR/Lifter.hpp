@@ -476,26 +476,24 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
   }
 
 
+  template< uint32_t I >
   llvm::Value *LiftSReg(
       llvm::BasicBlock *block, llvm::Value *state_ptr,
-      remill::Operand &r_op,
-      std::tuple<uint32_t, uint32_t> idxs)
+      remill::Operand &r_op)
   {
     llvm::Value *zero = HideValue(llvm::ConstantInt::get(word_type, 0, false), block, word_size);
 
-    auto maybe_s_reg = ifuzz::fetch_reg(CurrentShade(), idxs);
-    auto r_reg = ifuzz::fetch_reg(r_op, idxs);
-    CHECK(r_reg);
+    auto &r_reg = ifuzz::get_reg< I >(r_op);
+    if (!ifuzz::has_reg< I >(CurrentShade()))
+      return LoadWordRegValOrZero_(block, state_ptr, r_reg.name, zero);
 
-    if (!maybe_s_reg) {
-      return LoadWordRegValOrZero_(block, state_ptr, (*r_reg)->name, zero);
-    }
-    auto &s_reg = *maybe_s_reg;
+    auto &s_reg = ifuzz::get_reg< I >(CurrentShade());
+
     if (s_reg->empty()) {
       if (s_reg->translation_map.size() == 0) {
-        return LoadWordRegValOrZero_(block, state_ptr, (*r_reg)->name, zero);
+        return LoadWordRegValOrZero_(block, state_ptr, r_reg.name, zero);
       }
-      CHECK(s_reg->translation_map.size() == 1);
+      CHECK_EQ(s_reg->translation_map.size(), 1);
       auto &entry = *s_reg->translation_map.begin();
       CHECK_EQ(entry.second.size(), 1);
       CHECK(entry.second.begin()->empty());
@@ -547,20 +545,32 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     if (!CurrentShade().address) {
       return concrete;
     }
-    auto base_reg = LiftSReg(block, state_ptr, r_op, ifuzz::addr_base_reg());
-    auto index_reg = LiftSReg(block, state_ptr, r_op, ifuzz::addr_index_reg());
+    auto base_reg = LiftSReg< ifuzz::sel::base >(block, state_ptr, r_op);
+    auto index_reg = LiftSReg< ifuzz::sel::index >(block, state_ptr, r_op);
 
-    auto scale = LiftSImmediate(
-        block,
-        CurrentShade().address->scale,
-        static_cast<uint64_t>(r_op.addr.scale));
+    // NOTE(lukas): In x86 16bit addresing mode it can happen, that
+    //              we fuzz together [SI] and [BP + SI]. Neither will have shadow
+    //              scale, but the second will have set remill scale to one (artifact
+    //              of xed).
+    auto concrete_scale = [&]() -> uint64_t {
+      if (CurrentShade().address->scale->empty() &&
+          !CurrentShade().address->index_reg->empty())
+      {
+        CHECK(CurrentShade().address->index_reg->regions ==
+              CurrentShade().address->base_reg->regions);
+        if (r_op.addr.scale != 1)
+          LOG(WARNING) << "Overriding scale to 1 based on shadow info.";
+        return 1ul;
+      }
+      return static_cast< uint64_t >(r_op.addr.scale);
+    }();
+
+    auto scale = LiftSImmediate(block, CurrentShade().address->scale, concrete_scale);
     CHECK(scale);
     auto displacement = LiftSImmediate(block, CurrentShade().address->displacement,
                                        r_op.addr.displacement);
 
-    auto zero = llvm::ConstantInt::get(word_type, 0, false);
-    auto segment_reg = this->parent::LoadWordRegValOrZero(
-        block, state_ptr, r_op.addr.segment_base_reg.name, zero);
+    auto segment_reg = LiftSReg< ifuzz::sel::segment >(block, state_ptr, r_op);
 
     llvm::IRBuilder<> ir(block);
 
