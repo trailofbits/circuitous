@@ -22,15 +22,42 @@ namespace circ {
 struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
   using parent = UniqueVisitor<RawNodesCounter_>;
 
+  using arg_details_t = std::vector< uint32_t >;
+  struct hash {
+    auto operator()(const arg_details_t &args) const {
+      std::stringstream ss;
+      for (auto x : args) ss << x;
+      return std::hash< std::string >{}(ss.str());
+    }
+  };
+
+  using args_occurences_t = std::unordered_map< const arg_details_t, uint64_t, hash >;
   // Maps kind -> number of times it was seen
-  using operation_occurences_t = std::map< uint32_t, uint64_t >;
+  using operation_occurences_t = std::map< uint32_t, args_occurences_t >;
   operation_occurences_t nodes;
-  // TODO(lukas): Clean up after LLVMOperation removal.
-  std::map<uint32_t, uint64_t> llvm_ops;
+
+  arg_details_t get_arg_detail(Operation *op) {
+    arg_details_t out{ op->size };
+    for (auto o : op->operands)
+      out.push_back(o->size);
+    return out;
+  }
+
+  uint64_t total_count(const args_occurences_t &occurencies) const {
+    uint64_t out = 0;
+    for (const auto &[_, count] : occurencies)
+      out += count;
+    return out;
+  }
+
+  uint64_t total_count(uint32_t rkind) {
+    return total_count(nodes[rkind]);
+  }
 
   void Process(Operation *op) {
-    const auto &[it, _] = nodes.try_emplace(op->op_code, 0);
-    ++it->second;
+    auto &it = nodes[op->op_code];
+    auto [entry, _2] = it.try_emplace(get_arg_detail(op), 0);
+    ++entry->second;
   }
 
   void Visit(Operation *op) {
@@ -46,33 +73,32 @@ struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
 
   template<typename CB>
   void Diff(const RawNodesCounter_ &o, CB cb) const {
-    auto diff = [&cb](auto self_, auto other_) {
+    auto diff = [&](auto self_, auto other_) {
       auto self = self_.begin();
       auto other = other_.begin();
       while (self != self_.end() && other != other_.end()) {
         if (self->first == other->first){
-          cb(self->first, self->second, other->second);
+          cb(self->first, this->total_count(self->second), o.total_count(other->second));
           ++self; ++other;
         } else if (self->first < other->first) {
-          cb(self->first, self->second, 0ull);
+          cb(self->first, this->total_count(self->second), 0ull);
           ++self;
         } else {
-          cb(other->first, 0ull, other->second);
+          cb(other->first, 0ull, o.total_count(other->second));
           ++other;
         }
       }
       while (self != self_.end()) {
-        cb(self->first, self->second, 0ull);
+        cb(self->first, this->total_count(self->second), 0ull);
         ++self;
       }
       while (other != other_.end()) {
-        cb(other->first, 0ull, other->second);
+        cb(other->first, 0ull, o.total_count(other->second));
         ++other;
       }
     };
 
     diff(nodes, o.nodes);
-    diff(llvm_ops, o.llvm_ops);
   }
 };
 
@@ -80,22 +106,31 @@ using RawNodesCounter = RawNodesCounter_;
 
 template<typename Collector>
 struct Printer {
+  using args_occurences_t = typename Collector::args_occurences_t;
 
   template<typename OS>
-  static void Print(OS &ss, const Collector &self) {
-    ss << "Node counts:" << std::endl;
-    for (auto &[op_code, count] : self.nodes) {
-      ss << " " << to_string(op_code) << " " << count << std::endl;
+  static void Print(OS &os, const Collector &self) {
+    os << "Node counts:" << std::endl;
+    for (auto &[op_code, occurencies] : self.nodes) {
+      os << " " << to_string(op_code) << " " << self.total_count(occurencies) << std::endl;
+      print_occurences(os, occurencies, "\t");
     }
-    ss << std::endl;
+    os << std::endl;
   }
 
-  static auto _to_string(uint64_t what) {
-    return to_string(what);
-  }
-
-  static auto _to_string(uint32_t what) {
-    return llvm::Instruction::getOpcodeName(what);
+  template<typename OS>
+  static void print_occurences(
+      OS &os, const args_occurences_t &self, const std::string &prefix)
+  {
+    for (const auto &[occ, count] : self)
+    {
+      os << prefix << count << ": ";
+      for (std::size_t i = 1; i < occ.size(); ++i)
+        os << occ[i] << " ";
+      if (occ.size() == 1)
+        os << "() ";
+      os << "-> " << occ.front() << std::endl;
+    }
   }
 
   template<typename OS>
@@ -108,17 +143,16 @@ struct Printer {
     };
 
     auto log = [&](auto what, auto orig, auto updated) {
-      if (orig == updated) {
+      if (orig == updated)
         return;
-      }
-      int64_t changed_by = static_cast<int64_t>(updated) - static_cast<int64_t>(orig);
-      os << " " << _to_string(what) << "( ";
-      if (changed_by > 0) {
-        os << red(changed_by);
-      } else if (changed_by < 0) {
-        os << green(changed_by);
-      }
+
+      int64_t changed_by = static_cast< int64_t >(updated) - static_cast< int64_t >(orig);
+
+      os << " " << to_string(what) << "( ";
+      if (changed_by > 0) os << red(changed_by);
+      if (changed_by < 0) os << green(changed_by);
       os << " )" << std::endl;
+
     };
     self.Diff(other, log);
   }
