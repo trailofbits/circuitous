@@ -66,8 +66,8 @@ namespace circ::shadowinst {
         out[key].push_back(s_reg.make_bitstring(bstr));
     }
 
-    CHECK(defaulted.size() <= 1);
-    CHECK(!out.empty());
+    CHECK(defaulted.size() <= 1) << s_reg.to_string();
+    CHECK(!out.empty()) << s_reg.to_string();
     // Check with extra dbg message
     if (out.size() != 1) {
       // Build dbg message
