@@ -601,40 +601,43 @@ void Circuit0::constraint_unused() {
     return last->getOperand(0);
   }
 
+  auto circuit_builder::handle_dst_reg(llvm::Instruction *dst_reg,
+                                       const shadowinst::Reg &s_reg, State &state)
+  -> cond_val_tuple
+  {
+    llvm::IRBuilder<> irb(this->head);
+
+    auto locate_out_reg = [&](auto &ir, auto &name) { return this->locate_out_reg(name); };
+    auto locate_in_reg = [&](auto &ir, auto &name) { return this->locate_in_reg(name); };
+
+    auto [cond, select] = shadowinst::make_intrinsics_decoder(s_reg, irb, locate_out_reg);
+    auto [_, full] = shadowinst::make_intrinsics_decoder(s_reg, irb, locate_in_reg);
+    auto [dcond, updated] = shadowinst::store_fragment(
+        current_val(dst_reg), full, irb, s_reg, *ctx.arch());
+    return { dcond, irops::make< irops::OutputCheck >(irb, {updated, select}) };
+  }
+
   auto circuit_builder::handle_dst_regs_(std::vector< llvm::Instruction * > &dst_regs,
                                           ISEL_view isel, State &state)
   -> cond_val_tuple
   {
+    CHECK(dst_regs.size() < 3) << "TODO(lukas): Implement more general case.";
+
+    std::vector< cond_val_tuple > partials;
+    for (std::size_t i = 0; i < dst_regs.size(); ++i) {
+      auto s_reg = get_written(i, isel);
+      CHECK(s_reg);
+      partials.push_back(handle_dst_reg(dst_regs[i], *s_reg, state));
+    }
+
     llvm::IRBuilder<> irb(this->head);
-    if (dst_regs.empty())
-      return { irb.getTrue(), irb.getTrue() };
-    CHECK(dst_regs.size() == 1) << "TODO(lukas): Implement more general case.";
-
-    auto dst_reg = dst_regs[0];
-    auto s_reg = get_written(0, isel);
-    CHECK(s_reg);
-
-    auto locate_out_reg = [&](auto &ir, auto &name) {
-      // We know this is going to be a reasonably small number of iterations
-      for (const auto &[reg, _, out] : arg_map)
-        if (enclosing_reg(ctx.arch(), name) == reg)
-          return out;
-      LOG(FATAL) << "Could not locate register: " << name;
-    };
-
-    auto locate_in_reg = [&](auto &ir, auto &name) {
-      // We know this is going to be a reasonably small number of iterations
-      for (const auto &[reg, in, _] : arg_map)
-        if (enclosing_reg(ctx.arch(), name) == reg)
-          return in;
-      LOG(FATAL) << "Could not locate register: " << name;
-    };
-
-    auto [cond, select] = shadowinst::make_intrinsics_decoder(*s_reg, irb, locate_out_reg);
-    auto [_, full] = shadowinst::make_intrinsics_decoder(*s_reg, irb, locate_in_reg);
-    auto [dcond, updated] = shadowinst::store_fragment(
-        current_val(dst_reg), full, irb, *s_reg, *ctx.arch());
-    return { dcond, irops::make< irops::OutputCheck >(irb, {updated, select}) };
+    llvm::Value *dcond   = irb.getTrue();
+    llvm::Value *updated = irb.getTrue();
+    for (const auto &[p_cond, p_updated] : partials) {
+      dcond =   irb.CreateAnd(dcond, p_cond);
+      updated = irb.CreateAnd(updated, p_updated);
+    }
+    return std::make_tuple( dcond, updated );
   }
 
   llvm::Value *circuit_builder::emit_preserved_checks(
