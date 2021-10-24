@@ -109,7 +109,7 @@ namespace circ {
         "R8D", "R9D", "R10D", "R11D", "R12D", "R13D", "R14D", "R15D",
         "EIP",
         // Used in string ops
-        "ESBASE", "DSBASE", "SSBASE", "GSBASE", "FSBASE"
+        "ESBASE", "DSBASE", "SSBASE", "GSBASE", "FSBASE", "CSBASE"
       };
       switch (ptr_size) {
         case 64: return allowed64.count(name) != 0;
