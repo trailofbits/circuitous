@@ -113,6 +113,20 @@ namespace circ {
     using maybe_str = std::optional< std::string >;
     static maybe_str is_output_reg(llvm::Argument *arg);
     static maybe_str is_input_reg(llvm::Argument *arg);
+
+    template< uint64_t Idx >
+    llvm::Value *_locate_reg(const std::string &name) {
+      for (const auto &arg_entry : arg_map) {
+        auto reg = std::get< 0 >(arg_entry);
+        auto of_interest = std::get< Idx >(arg_entry);
+        if (enclosing_reg(ctx.arch(), name) == reg)
+          return of_interest;
+      }
+      LOG(FATAL) << "Did not locate at Idx: " << Idx << " reg named: " << name;
+    }
+
+    llvm::Value *locate_out_reg(const std::string &name) { return _locate_reg< 2 >(name); }
+    llvm::Value *locate_in_reg(const std::string &name) { return _locate_reg< 1 >(name); }
   };
 
   struct decoder : has_ctx_ref {
@@ -213,6 +227,9 @@ namespace circ {
                              ISEL_view isel, State &state);
 
     using cond_val_tuple = std::tuple< llvm::Value *, llvm::Value * >;
+    cond_val_tuple handle_dst_reg(llvm::Instruction *dst_reg,
+                                  const shadowinst::Reg &s_reg, State &state);
+
     cond_val_tuple handle_dst_regs_(std::vector< llvm::Instruction * > &dst_regs,
                                     ISEL_view isel, State &state);
 
