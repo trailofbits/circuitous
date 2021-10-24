@@ -7,6 +7,7 @@
 #include <deque>
 #include <map>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -112,6 +113,13 @@ namespace circ::shadowinst {
     }
 
     has_regions(const bits_t &bits) : has_regions(ordered_bits_t(bits)) {}
+    has_regions(has_regions &&) = default;
+    has_regions(const has_regions &) = default;
+
+    has_regions &operator=(has_regions &&) = default;
+    has_regions &operator=(const has_regions &) = default;
+
+    has_regions(region_t o) : regions(std::move(o)) {}
 
     bool operator==(const has_regions &) const = default;
 
@@ -200,6 +208,8 @@ namespace circ::shadowinst {
     // NOTE(lukas): We want them ordererd.
     std::map<reg_t, materializations_t> translation_map;
     std::unordered_set< reg_t > dirty;
+
+    Reg(region_t o) : has_regions(std::move(o)) {}
 
     std::string to_string(uint8_t indent=0) const {
       std::stringstream ss;
@@ -349,6 +359,7 @@ namespace circ::shadowinst {
   };
 
   struct Operand {
+
     using op_type = remill::Operand::Type;
 
     std::optional<Immediate> immediate;
