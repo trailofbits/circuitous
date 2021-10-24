@@ -78,7 +78,7 @@ namespace circ {
                         std::size_t idx,
                         shadowinst::Address &s_addr)
     {
-      std::vector<bits_t> distributed_bits( 4, bits_t(rinst.bytes.size() * 8, false) );
+      std::vector<bits_t> distributed_bits( 5, bits_t(rinst.bytes.size() * 8, false) );
 
       for (std::size_t i = 0; i < bits.size(); ++i) {
         if (!bits[i]
@@ -111,6 +111,7 @@ namespace circ {
       auto make = [](auto &where, const auto& bits_) {
         using raw_t = std::decay_t< std::remove_reference_t< decltype(where) > >;
         using T = typename raw_t::value_type;
+        // These are inner operands and therefore do not have a position.
         where = std::make_optional< T >(shadowinst::ordered_bits_t(bits_));
       };
 
@@ -131,22 +132,32 @@ namespace circ {
 
     auto generate_bits() {
       std::vector< bits_t > op_bits( rinst.operands.size(), empty_bits() );
+      std::vector< std::set< uint32_t > > dirts( rinst.operands.size() );
 
       for (std::size_t i = 0; i < permutations.size(); ++i) {
-        for (std::size_t op_i = 0; op_i < rinst.operands.size(); ++op_i) {
-          if (!permutations[i]) {
-            continue;
-          }
-          using C = ifuzz::permutate::Comparator;
-          op_bits[op_i][i] = C(arch).compare(rinst, *permutations[i], op_i);
+        if (!permutations[i]) {
+          continue;
         }
+        DLOG(INFO) << permutations.size() - 1 - i
+                  << ": checking structure of:\n" << permutations[i]->Serialize();
+        for (std::size_t op_i = 0; op_i < rinst.operands.size(); ++op_i) {
+          DLOG(INFO) << "Operand: " << op_i;
+
+          using namespace ifuzz::permutate;
+          auto item = to_item(rinst, op_i);
+          auto res = Comparator(arch).compare(rinst, *permutations[i], item);
+          op_bits[op_i][i] = DiffResult().get_result(res, item);
+          if (DiffResult().are_dirty(res,item))
+            dirts[op_i].insert(static_cast< uint32_t >(permutations.size() - 1 - i));
+        }
+        DLOG(INFO) << "Done.";
       }
-      return op_bits;
+      return std::make_tuple(op_bits, dirts);
     }
 
     auto FuzzOps(bool generate_all=true) {
       shadowinst::Instruction shadow_inst;
-      auto op_bits = generate_bits();
+      auto [op_bits, dirts] = generate_bits();
 
       for (std::size_t i = 0; i < rinst.operands.size(); ++i) {
         switch(rinst.operands[i].type) {
@@ -174,6 +185,7 @@ namespace circ {
       for (std::size_t i = 0; i < shadow_inst.operands.size(); ++i) {
         if (!shadow_inst[i].IsHusk()) {
           shadow_inst.deps.push_back( {{i, &shadow_inst[i]}} );
+          shadow_inst.dirt.push_back( dirts[i] );
         }
       }
 
@@ -188,296 +200,573 @@ namespace circ {
       return shadow_inst;
     }
 
-
     void PopulateTranslationTables(shadowinst::Instruction &s_inst) {
+      CHECK(s_inst.deps.size() == s_inst.dirt.size());
 
-      // First we define navigation helpers.
-      auto collect_navigations = [](auto &group, auto suffix) {
-        std::vector<ifuzz::reg_navigation_t> out;
-        for (auto &[idx, op] : group) {
-          out.push_back(std::tuple_cat(std::make_tuple(idx), suffix));
-        }
-        return out;
-      };
-
-      auto has_reg = [](auto &g) {
-        return std::all_of(g.begin(), g.end(), [](auto x) { return std::get<1>(x)->reg; } );
-      };
-      auto has_base_reg = [](auto &g) {
-        return std::all_of(g.begin(), g.end(), [](auto x) {
-            return std::get<1>(x)->address->base_reg;
-        });
-      };
-      auto has_index_reg = [](auto &g) {
-        return std::all_of(g.begin(), g.end(), [](auto x) {
-            return std::get<1>(x)->address->index_reg;
-        });
-      };
-
-      auto getter = [](remill::Instruction &, ifuzz::reg_navigation_t) { return true; };
-
-
+      //for (std::size_t i = 0; i < s_inst.deps.size(); ++i)
+      //{
+      std::size_t i = 0;
       for (auto &group : s_inst.deps) {
-        CHECK(group.size() > 0);
-        auto &[idx_, fst_] = *group.begin();
-        auto fst = rinst.operands[idx_];
+        std::vector< std::size_t > todo;
+        for (const auto &[idx, _] : group)
+          todo.push_back(idx);
+        consolidate_addr(s_inst, todo, s_inst.dirt[i]);
+        reg_enlarge(s_inst, todo);
+        populate(s_inst, todo);
+        ++i;
+      }
+      //}
+    }
 
-        auto handle = [&](auto handler, auto suffix) {
-          if (handler(group)) {
-            auto idxs = collect_navigations(group, suffix);
-            PopulateTranslationTable(s_inst, getter, idxs);
-          }
-        };
+    using idx_vector_t = std::vector< std::size_t >;
+    using maybe_rinst_t = std::optional< remill::Instruction >;
+    using idxs_t = std::vector< uint64_t >;
 
-        if (fst.type == OpType::kTypeRegister) {
-          handle(has_reg, std::make_tuple(0, 0));
+    void derive_segment(shadowinst::Instruction &s_inst, const idx_vector_t &todo)
+    {
+      using namespace ifuzz;
+      for (auto idx : todo)
+        if (!s_inst[idx].address.has_value() || s_inst[idx].address->segment.has_value()
+            || !has_reg< sel::base >(s_inst[idx]))
+          return;
+
+      for (auto idx : todo)
+      {
+        auto &segment = get_reg< sel::segment >(s_inst[idx]);
+        segment = shadowinst::Reg(get_reg< sel::base >(s_inst[idx])->regions);
+      }
+    }
+
+    template< uint32_t I >
+    bool check_entry(const auto &s_op, const auto &r_op, const auto &nrinst)
+    {
+      using namespace ifuzz;
+      auto r_reg = get_reg< I >(r_op);
+      if (!has_reg< I >(s_op)) {
+        return true;
+      }
+
+      const auto &s_reg = *get_reg< I >(s_op);
+      auto it = s_reg.translation_map.find(r_reg.name);
+      if (it == s_reg.translation_map.end())
+        return false;
+      return it->second.count(get_bmap(s_reg, nrinst));
+    }
+
+    bool valid_segment(shadowinst::Instruction &s_inst,
+                       remill::Instruction &nrinst,
+                       const idx_vector_t &todo)
+    {
+      for (std::size_t i = 0; i < s_inst.operands.size(); ++i)
+      {
+        auto s_op = s_inst[i];
+        auto r_op = nrinst.operands[i];
+
+        using namespace ifuzz;
+        if (!check_entry< sel::base >(s_op, r_op, nrinst) ||
+            !check_entry< sel::index >(s_op, r_op, nrinst) ||
+            !check_entry< sel::reg >(s_op, r_op, nrinst))
+        {
+          return false;
         }
-        if (fst.type == OpType::kTypeAddress) {
-          handle(has_base_reg, std::make_tuple(1, 0));
-          handle(has_index_reg, std::make_tuple(1, 1));
+      }
+      return true;
+    }
+
+    template< uint32_t I >
+    void default_reg(shadowinst::Instruction &s_inst, const idx_vector_t &todo)
+    {
+      using namespace ifuzz;
+      CHECK(is_consistent< I >(s_inst, todo));
+      if (!all_have_reg< I >(s_inst, todo))
+        return;
+      for (auto idx : todo)
+      {
+        auto &reg = get_reg< I >(s_inst[idx]);
+        if (!reg->empty() && reg->translation_map.empty())
+        {
+          reg->regions.clear();
         }
       }
     }
 
-    template<typename Getter, typename Idxs>
-    bool RegEnlargementHeuristic(shadowinst::Instruction &s_inst, Getter get_reg, Idxs idxs) {
-      CHECK(idxs.size() > 0);
-      const auto &s_reg = **ifuzz::fetch_reg(s_inst, idxs[0]);
+    void coerce_by_segment_override(shadowinst::Instruction &s_inst, const idx_vector_t &todo)
+    {
+      for (auto idx : todo)
+        CHECK(s_inst[idx].address->segment == s_inst[todo[0]].address->segment);
 
-      auto [from, size_] = s_reg.biggest_chunk();
+      if (!rinst.segment_override || !s_inst[todo[0]].address)
+        return;
+
+      auto &front = s_inst[todo[0]].address->segment;
+      if (!front)
+        return;
+
+      // TODO(lukas): Fix on remill side.
+      auto seg_base = rinst.segment_override->name + "BASE";
+      CHECK(front->translation_map.size() == 1 &&
+            front->translation_map.begin()->first == seg_base)
+        << front->to_string();
+      for (auto idx : todo)
+      {
+        s_inst[idx].address->segment->regions.clear();
+        s_inst[idx].address->segment->translation_map.clear();
+        s_inst[idx].address->segment->translation_map[seg_base] = {{}};
+      }
+
+
+    }
+
+    void populate(shadowinst::Instruction &s_inst, const idx_vector_t &todo)
+    {
+      using namespace ifuzz;
+      try_populate_reg< sel::reg >(s_inst, todo);
+      default_reg< sel::reg >(s_inst, todo);
+      try_populate_addr< sel::base >(s_inst, todo);
+      default_reg< sel::base >(s_inst, todo);
+      try_populate_addr< sel::index >(s_inst, todo);
+      default_reg< sel::index >(s_inst, todo);
+
+      derive_segment(s_inst, todo);
+      try_populate_addr< ifuzz::sel::segment >(s_inst, todo);
+      default_reg< sel::segment >(s_inst, todo);
+      //coerce_by_segment_override(s_inst, todo);
+    }
+
+
+    bool in_todo(std::size_t x, const idx_vector_t &todo)
+    {
+      for (auto y : todo) if (x == y) return true;
+      return false;
+    }
+
+    bool eq(const remill::Instruction &a, const remill::Instruction &b)
+    {
+      return a.Serialize() == b.Serialize();
+    }
+
+    bool eq(const remill::Operand &a, const remill::Operand &b)
+    {
+      if (a.type != b.type) return false;
+
+      if (a.type == remill::Operand::Type::kTypeRegister) {
+        return eq(a.reg, b.reg);
+      }
+
+      if (a.type == remill::Operand::Type::kTypeAddress) {
+        return    eq(a.addr.base_reg, b.addr.base_reg)
+               && eq(a.addr.index_reg, b.addr.index_reg)
+               && eq(a.addr.segment_base_reg, b.addr.segment_base_reg)
+               && a.addr.scale == b.addr.scale
+               && a.addr.displacement == b.addr.displacement
+               && a.addr.address_size == b.addr.address_size
+               && a.addr.kind == b.addr.kind;
+      }
+
+      if (a.type == remill::Operand::Type::kTypeImmediate) {
+        return a.imm.val == b.imm.val && a.imm.is_signed == b.imm.is_signed;
+      }
+
+      LOG(FATAL) << "Unexpected operands to custom eq hook.";
+    }
+
+    bool eq_segment_change(const remill::Operand &a, const remill::Operand &b)
+    {
+      if (a.type == remill::Operand::Type::kTypeAddress) {
+        auto x =  eq(a.addr.index_reg, b.addr.index_reg)
+               && eq(a.addr.segment_base_reg, b.addr.segment_base_reg)
+               && a.addr.scale == b.addr.scale
+               && a.addr.displacement == b.addr.displacement
+               && a.addr.address_size == b.addr.address_size
+               && a.addr.kind == b.addr.kind;
+        return x &&
+        (std::string_view(a.addr.base_reg.name).ends_with("BP") ||
+         std::string_view(a.addr.base_reg.name).ends_with("SP"))
+        ==
+        (std::string_view(a.addr.base_reg.name).ends_with("BP") ||
+         std::string_view(a.addr.base_reg.name).ends_with("SP"));
+      }
+      LOG(ERROR) << "Unexpected operands to custom eq hook: eq_segment_change.";
+      LOG(ERROR) << a.Serialize();
+      LOG(ERROR) << b.Serialize();
+      LOG(FATAL) << "Program end.";
+    }
+
+    bool eq(const remill::Operand::Register &a, const remill::Operand::Register &b)
+    {
+      return a.size == b.size && a.name == b.name;
+    }
+
+    template< uint32_t I >
+    auto get_populate_proccess(auto get_self, auto get_reg, const idx_vector_t &todo) {
+      return [=, &todo](maybe_rinst_t nrinst, const idxs_t idxs, std::string errs)
+      {
+        if (!nrinst) {
+          LOG(WARNING) << errs;
+          return;
+        }
+
+        for (std::size_t i = 0; i < nrinst->operands.size(); ++i)
+        {
+          if (!in_todo(i, todo) && !eq(nrinst->operands[i], rinst.operands[i]))
+            return;
+
+          // Extra explicit copy - we want to check for example that
+          // extra `scale` was not conjured by accident.
+          remill::Operand copy = rinst.operands[i];
+          ifuzz::get_reg< I >(copy) = ifuzz::get_reg< I >(nrinst->operands[i]);
+          if constexpr (I != ifuzz::sel::segment) {
+            if (!eq(copy, nrinst->operands[i]))
+              return;
+          }
+        }
+
+        for (auto idx : todo) {
+          auto reg_name = get_reg(idx, *nrinst);
+          if (reg_name.empty())
+            return;
+          get_self(idx).translation_map[reg_name].insert(get_bmap(idxs, *nrinst));
+        }
+      };
+    }
+
+    template< uint32_t I >
+    bool try_populate_reg_(shadowinst::Instruction &s_inst, const idx_vector_t &todo)
+    {
+
+      auto idxs = collect_idxs(*ifuzz::get_reg< I >(s_inst[todo[0]]));
+
+      auto get_self = [&](uint64_t i) -> shadowinst::Reg & {
+        return *ifuzz::get_reg< I >( s_inst[i] );
+      };
+      auto get_reg = [&](uint64_t i, const remill::Instruction &nrinst) {
+        return ifuzz::get_reg< I >(nrinst.operands[i]).name;
+      };
+      auto process = get_populate_proccess< I >(get_self, get_reg, todo);
+
+      populate_by_permuting(rinst.bytes, idxs, process);
+      return true;
+    }
+
+    template< uint32_t I >
+    bool try_populate_reg(shadowinst::Instruction &s_inst, const idx_vector_t &todo)
+    {
+      for (auto idx : todo)
+        if (!ifuzz::get_reg< I >(s_inst[idx]).has_value())
+          return false;
+      return try_populate_reg_< I >(s_inst, todo);
+    }
+
+    template< uint32_t I >
+    bool try_populate_addr(shadowinst::Instruction &s_inst, const idx_vector_t &todo)
+    {
+      for (auto idx : todo)
+      {
+        auto addr = s_inst[idx].address;
+        if (!addr || !ifuzz::get_reg< I >(s_inst[idx]).has_value()) {
+          return false;
+        }
+      }
+      return try_populate_reg_< I >(s_inst, todo);
+    }
+
+    std::vector< bool > get_bmap(const shadowinst::has_regions &regions,
+                                 const remill::Instruction &nrinst)
+    {
+      return get_bmap(collect_idxs(regions), nrinst);
+    }
+
+    std::vector< bool > get_bmap(const idxs_t idxs, const remill::Instruction &nrinst)
+    {
+      std::vector< bool > out;
+      for (auto idx : idxs) {
+        auto byte = static_cast< uint8_t >(nrinst.bytes[idx / 8]);
+        out.push_back((byte >> (7 - (idx % 8))) & 1u);
+      }
+      return out;
+    }
+
+    std::vector< uint64_t > collect_idxs(const shadowinst::has_regions &regions) {
+      std::vector< uint64_t > idxs;
+      for (const auto &[from, size] : regions) {
+        auto afrom = rinst.bytes.size() * 8 - from - size;
+        for (uint64_t i = 0; i < size; ++i) {
+          idxs.push_back(afrom);
+          ++afrom;
+        }
+      }
+      return idxs;
+    }
+
+    void populate_by_permuting(std::string nbytes, const idxs_t idxs, auto yield)
+    {
+      auto preprocess = [&](const std::string &bytes) {
+        std::stringstream ss;
+
+        remill::Instruction tmp;
+        if (!arch->DecodeInstruction(0, bytes, tmp)) {
+          ss << "Decode failed!\n";
+          return yield({}, idxs, ss.str());
+        }
+
+        if (tmp.function != rinst.function) {
+          ss << "Guaranteed permuation generated different instruction!\n";
+          return yield({}, idxs, ss.str());
+        }
+
+        if (tmp.bytes.size() != rinst.bytes.size()) {
+          ss << "Guaranteed permutation uses less bytes!\n";
+          return yield({}, idxs, ss.str());
+        }
+
+        if (tmp.operands.size() != rinst.operands.size()) {
+          ss << "Guaranteed permuation has different amount of operands!\n";
+          return yield({}, idxs, ss.str());
+        }
+
+        yield( std::make_optional(std::move(tmp)), idxs, ss.str());
+      };
+
+      _Permutate(nbytes, idxs, 0, preprocess);
+    }
+
+    std::vector< shadowinst::has_regions > get_candidates(
+        const shadowinst::has_regions &original)
+    {
+      auto [from, size_] = original.biggest_chunk();
       auto size = size_;
       // 3 bits are okay since we do not always need REX prefix.
       // 4 and more bits are most likely an error in decoding and we definitely
       // do not want to add even more.
-      if (size == 3 || s_reg.region_bitsize() >= 4) {
-        return false;
-      }
+      if (size == 3 || original.region_bitsize() >= 4)
+        return {};
 
-      auto _dd_left = [&](shadowinst::Reg out, uint64_t from) -> shadowinst::Reg {
+      using maybe_region_t = std::optional< shadowinst::has_regions >;
+      auto _dd_left = [&](shadowinst::has_regions out, uint64_t from) -> maybe_region_t {
+        if (!ifuzz::is_reg_octet(from - 1, size + 1))
+          return {};
         out.regions.erase(from);
         out.regions[from - 1] = size + 1;
-        return out;
+        return { std::move(out) };
       };
 
-      auto _dd_right = [&](shadowinst::Reg out, uint64_t from) -> shadowinst::Reg {
+      auto _dd_right = [&](shadowinst::has_regions out, uint64_t from) -> maybe_region_t {
+        if (!ifuzz::is_reg_octet(from, size + 1))
+          return {};
         out.regions[from] = size + 1;
-        return out;
+        return { std::move(out) };
       };
 
-      auto _d_hole = [&](shadowinst::Reg out, auto hole) -> shadowinst::Reg {
+      auto _d_hole = [&](shadowinst::has_regions out, auto hole) -> maybe_region_t {
+        if (!ifuzz::is_reg_octet(hole - 1, 3ul))
+          return {};
         out.regions.erase(hole + 1);
         out.regions[hole - 1] = 3ul;
-        return out;
+        return { std::move(out) };
       };
 
-      auto make_vessel = [&](auto maker, uint64_t fw) {
-        ifuzz::s_reg_vessel out;
-        for (auto &idx : idxs) {
-          out[std::get<0>(idx)] = maker(**ifuzz::fetch_reg(s_inst, idx), fw);
-        }
-        return out;
+      std::vector< shadowinst::has_regions > candidates;
+
+      auto try_emplace = [&](auto fn, auto arg) {
+        if (auto r = fn(original, arg))
+          candidates.push_back(std::move(*r));
       };
 
-      using group_t = std::vector< ifuzz::s_reg_vessel >;
-      group_t candidates;
       if (size == 2) {
         // _DD_ -> DDD_
-        if (from != 0 && !s_reg.regions.count(from - 1)) {
-          candidates.push_back(make_vessel(_dd_left, from));
-        }
+        if (from != 0 && !original.regions.count(from - 1))
+          //candidates.push_back(_dd_left(original, from));
+          try_emplace(_dd_left, from);
         // _DD_ -> _DDD
-        if (from + size < rinst.bytes.size() * 8 && !s_reg.regions.count(from + size)) {
-          candidates.push_back(make_vessel(_dd_right, from));
-        }
+        if (from + size < rinst.bytes.size() * 8 && !original.regions.count(from + size))
+          try_emplace(_dd_right, from);
+         //candidates.push_back(_dd_right(original, from));
       }
+      if (size == 1)
+        if (auto hole = original.get_hole())
+          try_emplace(_d_hole, *hole);
+          //candidates.push_back(_d_hole(original, *hole));
+      return candidates;
+    }
 
-      if (size == 1) {
-        auto hole = s_reg.get_hole();
-        if (!hole) {
-          return false;
+    template< uint32_t I >
+    std::string get_name_or(const remill::Operand &from, const std::string &def) {
+      const auto &reg = ifuzz::get_reg< I >( from );
+      if (reg.name.empty())
+        return def;
+      return reg.name;
+    }
+
+    template< uint32_t I >
+    void add_translation_entry(shadowinst::Instruction &s_inst,
+                               uint64_t idx,
+                               const std::string &name,
+                               auto value)
+    {
+      CHECK(ifuzz::has_reg< I >(s_inst[idx]));
+      auto &self = *ifuzz::get_reg< I >(s_inst[idx]);
+      self.translation_map[name].insert(value);
+    }
+
+    void populate_whole_addr(shadowinst::Instruction &s_inst,
+                             const idx_vector_t &todo,
+                             const shadowinst::has_regions &regions)
+    {
+      auto idxs = collect_idxs(regions);
+
+      auto process = [&](maybe_rinst_t nrinst, const idxs_t idxs, std::string errs)
+      {
+        if (!nrinst) {
+          LOG(WARNING) << errs;
+          return;
         }
-        candidates.push_back(make_vessel(_d_hole, *hole));
-      }
 
-      if (candidates.empty()) {
-        return false;
-      }
+        for (auto idx : todo) {
+          auto size = std::to_string(nrinst->operands[idx].addr.address_size);
+          auto zero = "__remill_zero_i" + size;
 
-      // We also need to check that the newly added combination satisfies the original
-      // selection criterium.
-      // NOTE(lukas): While this works (and overall is a good idea), the implementation
-      //              is a bit spaghetti like and would probably deserve some refactor.
-      auto wget_reg = [&](auto inst, auto idxs_) {
-        if (!get_reg(inst, idxs_)) {
-          return false;
+          auto base = get_name_or< 1 >(nrinst->operands[idx], zero);
+          add_translation_entry< 1 >(s_inst, idx, base, get_bmap(idxs, *nrinst));
+          auto index = get_name_or< 2 >(nrinst->operands[idx], zero);
+          add_translation_entry< 2 >(s_inst, idx, index, get_bmap(idxs, *nrinst));
         }
-
-        std::map<std::size_t, const remill::Operand *> items;
-        for (auto &navigation : idxs) {
-          auto idx = std::get<0>(navigation);
-          items.emplace(idx, &inst.operands[idx]);
-        }
-
-        return ifuzz::permutate::HuskEnlargerComparator(arch).compare(rinst, inst, items);
       };
+      populate_by_permuting(rinst.bytes, idxs, process);
+    }
 
-      auto for_valid = [](auto fn, auto &group) {
-        bool out = true;
-        for (auto &what : group) {
-          if (!what) {
-            continue;
-          }
-          out &= fn(*what);
+    void consolidate_addr(shadowinst::Instruction &s_inst, const idx_vector_t &todo,
+                          std::set< uint32_t > dirt)
+    {
+      if (!s_inst[todo[0]].address)
+        return;
+      auto flattened = s_inst[todo[0]].address->flatten_significant_regs();
+      for (auto from : dirt)
+        flattened.add(from, 1);
+
+      auto raw_candidates = get_candidates(flattened);
+      if (flattened.size() == 1)
+      {
+        auto [from, size] = *flattened.begin();
+        if (ifuzz::is_reg_octet(from, size))
+          raw_candidates.push_back(flattened);
+      }
+      if (raw_candidates.empty())
+      {
+        return;
+      }
+
+      CHECK_EQ(raw_candidates.size(), 1);
+      auto &raw_candidate = raw_candidates[0];
+
+      // Explicit copy!
+      auto n_s_inst = s_inst;
+      for (auto idx : todo)
+      {
+        n_s_inst[idx].address->base_reg = shadowinst::Reg(raw_candidate.regions);
+        n_s_inst[idx].address->index_reg = shadowinst::Reg(raw_candidate.regions);
+      }
+
+      populate_whole_addr(n_s_inst, todo, raw_candidate);
+
+      for (auto idx : todo) {
+        using namespace ifuzz;
+        CHECK(n_s_inst[idx].address == n_s_inst[todo[0]].address);
+      }
+
+      for (auto idx : todo) {
+        auto &index = ifuzz::get_reg< ifuzz::sel::index >(n_s_inst[idx]);
+        if (index->translation_map.size() != 1)
+          break;
+        const auto &[key, _] = *index->translation_map.begin();
+        if (std::string_view(key).starts_with("__remill_zero_"))
+        {
+          index->regions.clear();
+          index->translation_map.clear();
         }
-        return out;
-      };
+      }
 
-      auto exactly_one_entry = [](auto &what) {
-        for (auto &[_, mats] : what.translation_map) {
-          if (mats.size() > 1) {
+      for (auto idx : todo) {
+        if (!n_s_inst[idx].address->base_reg->translation_map.empty())
+          s_inst[idx].address->base_reg = n_s_inst[idx].address->base_reg;
+        if (!n_s_inst[idx].address->index_reg->translation_map.empty())
+          s_inst[idx].address->index_reg = n_s_inst[idx].address->index_reg;
+      }
+
+    }
+
+    template< uint32_t I >
+    std::vector< shadowinst::Reg > get_candidates(const shadowinst::Reg &s_reg) {
+      std::vector< shadowinst::Reg > out;
+      for (auto x : get_candidates(s_reg))
+        out.emplace_back(std::move(x.regions));
+      return out;
+
+    }
+
+    void reg_enlarge(shadowinst::Instruction &s_inst, const idx_vector_t &todo) {
+      DLOG(INFO) << "Going to enlarge regs.";
+      reg_enlarge_< 0 >(s_inst, todo);
+      reg_enlarge_< 1 >(s_inst, todo);
+      reg_enlarge_< 2 >(s_inst, todo);
+    }
+
+    template< uint32_t I >
+    bool reg_enlarge_(shadowinst::Instruction &s_inst, const idx_vector_t &todo)
+    {
+      if (!ifuzz::has_reg< I >(s_inst[todo[0]]))
+        return true;
+
+      auto candidates = get_candidates< I >(*ifuzz::get_reg< I >(s_inst[todo[0]]));
+      if (candidates.empty())
+        return true;
+
+      auto s_reg = ifuzz::get_reg< I >(s_inst[todo[0]]);
+
+      auto has_only_singleton_mappings = [](auto &what) {
+        for (auto &[_, mats] : what.translation_map)
+          if (mats.size() > 1)
             return false;
-          }
-        }
         return true;
       };
-      auto grew_ = [&](auto &what) {
-        return !(what.translation_map.size() <= s_reg.translation_map.size());
+
+      std::optional< shadowinst::Reg > chosen = s_reg;
+      auto grew = [&](auto &fst) {
+        return chosen->translation_map.size() < fst.translation_map.size();
       };
 
-      auto is_valid = [&](auto &group) { return for_valid(exactly_one_entry, group); };
-      auto grew = [&](auto &group) { return for_valid(grew_, group); };
 
-      PopulateTranslationTable_(s_inst, wget_reg, idxs);
-      std::optional<ifuzz::s_reg_vessel> chosen;
-      for (auto &c : candidates) {
-        PopulateTranslationTable_(c, wget_reg, idxs);
+      auto get_repr = [&](auto &from) -> shadowinst::Reg &
+      {
+        return *ifuzz::get_reg< I >(from[todo[0]]);
+      };
 
-        // We want to select more bits only if they led to more decoded reg operands
-        // and their values satisfy our conditions.
-        if (grew(c) && is_valid(c)) {
-          if (chosen) {
-            LOG(FATAL) << "Reg enlargement heuristic has chosen multiple candidates!";
-          }
-          chosen = std::move(c);
-        }
+      for (const auto &c : candidates) {
+        // Make copy, so populate family can be easily called.
+        auto n_s_inst = s_inst;
+        for (auto idx : todo)
+          ifuzz::get_reg< I >(n_s_inst[idx]) = c;
+        populate(n_s_inst, todo);
+        auto &repr = get_repr(n_s_inst);
+        if (has_only_singleton_mappings(repr) && grew(repr))
+          chosen = repr;
       }
-      // NOTE(lukas): On amd64 this always signals that the translation map will
-      //              not be formed properly.
-      if (!chosen) {
-        if (arch->address_size == 64)
+
+      if (chosen == s_reg) {
+         if (arch->address_size == 64)
           LOG(FATAL) << "Reg enlargement heuristic did not choose any candidate!\n"
-                     << rinst.Serialize();
+                     << rinst.Serialize() << "\n"
+                     << s_inst.to_string();
         else {
           LOG(WARNING) << "Reg enlargement heuristic did not choose any candidate!\n"
                        << rinst.Serialize();
           return true;
         }
       }
-      ifuzz::apply_vessel(s_inst, *chosen, idxs);
+
+      for (auto idx : todo) {
+        ifuzz::get_reg< I >(s_inst[idx]) = *chosen;
+      }
       return true;
-    }
-
-    template<typename Getter, typename Idxs>
-    void PopulateTranslationTable(shadowinst::Instruction &s_inst, Getter &&get_reg, Idxs idxs)
-    {
-      if (RegEnlargementHeuristic(s_inst, get_reg, idxs)) {
-        return;
-      }
-      return PopulateTranslationTable_(s_inst, std::forward<Getter>(get_reg), idxs);
-    }
-
-    // `Getter` takes an remill::Operand and returns the register we to compare against.
-    // This is so we can get nested registers as well (for example in `Address`)
-    template<typename S, typename Getter, typename Idxs>
-    void PopulateTranslationTable_(S &s_inst, Getter &&get_reg, Idxs idxs_)
-    {
-      auto collect_idxs = [&](const auto &shadow_reg) {
-        CHECK(shadow_reg);
-        std::vector<uint64_t> idxs;
-        for (auto &[from, size] : (*shadow_reg)->regions) {
-          auto afrom = rinst.bytes.size() * 8 - from - size;
-          for (uint64_t i = 0; i < size; ++i) {
-            idxs.push_back(afrom);
-            ++afrom;
-          }
-        }
-        return idxs;
-      };
-
-      CHECK(idxs_.size() > 0);
-      auto idxs = collect_idxs(ifuzz::fetch_reg(s_inst, idxs_[0]));
-      for (std::size_t i = 1; i < idxs_.size(); ++i) {
-        CHECK(idxs == collect_idxs(ifuzz::fetch_reg(s_inst, idxs_[i])));
-      }
-
-      // The callback that is called on permutation
-      auto yield = [&](auto bytes) {
-        // First decode permutation and check if it is valid
-        remill::Instruction tmp;
-        if (!arch->DecodeInstruction(0, bytes, tmp)) {
-          LOG(WARNING) << "Was not able to decode guaranteed permutation\n"
-                      << shadowinst::to_binary(bytes);
-          return;
-        }
-        if (tmp.function != rinst.function) {
-          LOG(WARNING) << "Guaranteed permutation generated different instruction.";
-          return;
-        }
-        if (tmp.bytes.size() != rinst.bytes.size()) {
-          LOG(WARNING) << "Guarantedd permutation resulted in inst with less used bytes.";
-          return;
-        }
-
-        if (tmp.operands.size() != rinst.operands.size()) {
-          LOG(WARNING) << "Permutation has different number of operands.";
-          LOG(WARNING) << tmp.function;
-          LOG(WARNING) << rinst.function;
-          return;
-        }
-
-        for (auto &navigation : idxs_) {
-          if (!get_reg(tmp, navigation)) {
-            return;
-          }
-        }
-
-        auto generate_bmap = [&]() {
-          std::vector<bool> out;
-          std::stringstream ss;
-
-          // Generate the value
-          for (auto idx : idxs) {
-            auto byte = static_cast<uint8_t>(bytes[idx / 8]);
-            out.push_back((byte >> (7 - (idx % 8))) & 1u);
-            ss << out.back();
-          }
-
-          return out;
-        };
-
-        // `tmp` hosts a valid instruction, therefore we now want to retrieve
-        // the register operand we are fuzzing.
-        // `get_reg` is allowed to perform more logic than simple retrieval, that's
-        // why the return type is wrapped in `std::optional` -> if the value is not
-        // present we do not want to work with this operand.
-        for (auto &navigation : idxs_) {
-          auto maybe_reg = ifuzz::fetch_reg(tmp, navigation);
-          if (!maybe_reg) {
-            continue;
-          }
-          const auto &reg = **maybe_reg;
-
-          // Register name is empty -- therefore it is most likely not a decoded register
-          if (reg.name.empty()) {
-            return;
-          }
-          (*ifuzz::fetch_reg(s_inst, navigation))->
-              translation_map[reg.name].insert(generate_bmap());
-        }
-      };
-
-      std::string copied_bytes = rinst.bytes;
-      _Permutate(copied_bytes, idxs, 0, yield);
     }
 
     template<typename Yield>

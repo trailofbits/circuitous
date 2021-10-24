@@ -107,24 +107,29 @@ namespace circ {
     // operands got resolved on at least one bit - bit mapping
     // is present in returned value;
     template< typename Resolver >
-    std::optional< typename U::bits_t > try_resolve_group(const rops_map_t &group) {
+    auto try_resolve_group(const rops_map_t &group)
+    ->std::optional< std::tuple< typename U::bits_t, std::set< uint32_t > > >
+    {
       // There is no point working with smaller than 2 group
       if (group.size() <= 1)
         return {};
 
       auto husk_bits = fuzzer.empty_bits();
+      std::set< uint32_t > dirt_bits;
       for (std::size_t i = 0; i < fuzzer.permutations.size(); ++i) {
         if (!fuzzer.permutations[i])
           continue;
 
         //using CMP = ifuzz::permutate::HuskComparator;
         using CMP = Resolver;
-        husk_bits[i] = CMP(fuzzer.arch).compare(
-            fuzzer.rinst, *fuzzer.permutations[i], group);
+        auto res =  CMP(fuzzer.arch).compare(fuzzer.rinst, *fuzzer.permutations[i], group);
+        husk_bits[i] = ifuzz::permutate::DiffResult< CMP::exact_mod >().get_result(res, group);
+        if (ifuzz::permutate::DiffResult< CMP::exact_mod >().are_dirty(res, group))
+          dirt_bits.insert(static_cast< uint32_t >(fuzzer.permutations.size() - i));
       }
       if (fuzzer.are_empty(husk_bits))
         return {};
-      return { std::move(husk_bits) };
+      return {{ std::move(husk_bits), std::move(dirt_bits) }};
     }
 
     // Update shadowinst with newly discovered information and add appropriate entry
@@ -169,8 +174,12 @@ namespace circ {
 
       bool out = true;
       for (auto &group : make_group(r_husks)) {
-        if (auto husk_bits = try_resolve_group< Resolver >(group))
-          update(s_inst, group, *husk_bits);
+        if (auto bits = try_resolve_group< Resolver >(group))
+        {
+          auto [husk_bits, dirt_bits] = *bits;
+          update(s_inst, group, std::move(husk_bits));
+          s_inst.dirt.push_back(std::move(dirt_bits));
+        }
         else
           out &= false;
       }
