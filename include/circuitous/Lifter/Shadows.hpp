@@ -317,6 +317,7 @@ namespace circ::shadowinst {
   struct Address {
     std::optional< Reg > base_reg;
     std::optional< Reg > index_reg;
+    std::optional< Reg > segment;
     std::optional< Immediate > scale;
     std::optional< Immediate > displacement;
 
@@ -337,6 +338,7 @@ namespace circ::shadowinst {
 
       invoke(base_reg);
       invoke(index_reg);
+      invoke(segment);
       invoke(scale);
       invoke(displacement);
     }
