@@ -31,16 +31,173 @@ CIRCUITOUS_UNRELAX_WARNINGS
 DECLARE_string(arch);
 DECLARE_string(os);
 
+DEFINE_bool(prune, false, "Prune mode - take existing dbg format and prune,");
+DEFINE_string(prune_spec, "", "Path to spec file to prune by.");
+DEFINE_string(prune_in, "", "Path to dbg format to be prunned.");
+
 DEFINE_string(config, "", "Path to config file");
 DEFINE_string(file, "", "Binary file to load from (separated by ,");
 DEFINE_string(out, "", "File to store plain bytes to.");
-DEFINE_string(dbg, "", "File to store plain bytes to.");
+DEFINE_string(dbg, "", "File to store dbg format to.");
 DEFINE_string(filter, "", "File that contains allowed opcodes.");
 
 // TODO(lukas): Filter by instruction.
 // TODO(lukas): Paralelism
 // TODO(lukas): Allow multiple sources
 // TODO(lukas): Allow also lift?
+
+namespace prune {
+
+  std::set< std::string > parse_spec(llvm::StringRef line)
+  {
+    std::set< std::string > out;
+    auto [_, suffix] = line.split(':');
+    llvm::SmallVector< llvm::StringRef, 16 > entries;
+    suffix.split(entries, ',');
+    for (auto entry : entries)
+    {
+      if (entry[0] == 'x')
+        out.insert("0F" + entry.substr(1, 2).upper());
+      else
+        out.insert(entry.substr(0, 2).upper());
+    }
+    return out;
+  }
+
+  using bytes_and_opcode_t = std::tuple< std::string, std::string >;
+  using dbg_format_t = std::vector< bytes_and_opcode_t >;
+  dbg_format_t parse_dbg(const std::string &file)
+  {
+    dbg_format_t out;
+    std::ifstream input(file);
+    for (std::string line; std::getline(input, line);)
+    {
+      auto [bytes, iform] = llvm::StringRef(line).split(' ');
+      out.emplace_back(bytes.str(), iform.str());
+    }
+    return out;
+  }
+
+  struct Spec {
+    std::set< std::string > allowed;
+
+    void allow(const std::set< std::string > &to_allow) {
+      for (const auto &x : to_allow)
+      {
+        std::cout << "Allowing: " << x << std::endl;
+        allowed.insert(llvm::StringRef(x).upper());
+      }
+    }
+
+    bool is_allowed(const std::string &other)
+    {
+      return allowed.count(llvm::StringRef(other).upper());
+    }
+
+    static Spec load(const std::string &file) {
+      Spec out;
+      std::ifstream input(file);
+      for (std::string line; std::getline(input, line);)
+        out.allow(parse_spec(line));
+      return out;
+    }
+  };
+
+  struct X86Prefixes {
+    static inline std::set< std::string > bytes = {
+      "F0", // LOCK
+      "F2", // REPN(E/Z)
+      "F3", // REP(E/Z)
+      "2E", // CS
+      "36", // SS
+      "3E", // DS
+      "26", // ES
+      "64", // FS
+      "65", // GS
+      "2E", // Branch not taken
+      "3E", // Branch taken
+      "66", // Operand size prefix
+      "67", // Address size prefix
+    };
+
+    static constexpr uint8_t max = 2;
+  };
+
+  template< typename Prefixes >
+  struct Exec {
+    Spec spec;
+    //std::stringstream dbg;
+
+    Exec() = default;
+    Exec(Spec spec_) : spec(std::move(spec_)) {}
+
+    bool is_valid(std::string_view bytes, uint8_t prefixes = 0)
+    {
+      if (spec.allowed.empty())
+        return true;
+      CHECK(bytes.size() != 0);
+      auto front = std::string(bytes.substr(0, 2));
+
+      auto escaped = [&]() -> std::string {
+        if (bytes.size() >= 4)
+          return std::string(bytes.substr(0, 4));
+        return "XX";
+      }();
+      if (Prefixes::bytes.count(front))
+      {
+        ++prefixes;
+        if (prefixes > Prefixes::max)
+        {
+          //dbg << "  Denied: prefix count." << std::endl;
+          return false;
+        }
+        return is_valid(bytes.substr(2), prefixes);
+      }
+      if (spec.is_allowed(front) || (spec.is_allowed(escaped) && front == "0F"))
+      {
+        //dbg << "  Allowed." << std::endl;
+        return true;
+      }
+
+      //dbg << "  Denied: prefix not found in spec." << std::endl;
+      return false;
+    }
+
+    dbg_format_t filter(const dbg_format_t &entries)
+    {
+      //dbg << "Allowed: " << spec.allowed.size() << " opcodes." << std::endl;
+      dbg_format_t out;
+      for (const auto &[data, iform] : entries)
+      {
+        //dbg << "Handling: " << data << " " << iform << std::endl;
+        if (is_valid(data))
+          out.emplace_back(data, iform);
+      }
+      //std::cout << this->dbg.str();
+      return out;
+    }
+  };
+
+  void store(const dbg_format_t &entries, const std::string &file)
+  {
+    std::ofstream out(file);
+    for (const auto &[bytes, iform]: entries)
+      out << bytes << " " << iform << std::endl;
+  }
+
+  int exec() {
+    CHECK(!FLAGS_prune_spec.empty());
+    CHECK(!FLAGS_prune_in.empty());
+    CHECK(!FLAGS_dbg.empty());
+
+    auto entries = parse_dbg(FLAGS_prune_in);
+    auto out = Exec< X86Prefixes >(Spec::load(FLAGS_prune_spec)).filter(entries);
+    store(out, FLAGS_dbg);
+
+    return 0;
+  }
+
+} // namespace prune
 
 void dbg_dump_buffer(const llvm::StringRef &buffer)
 {
@@ -250,6 +407,9 @@ C load_config(const std::string &config)
 int main(int argc, char *argv[]) {
   google::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
+
+  if (FLAGS_prune)
+    return prune::exec();
 
   CHECK(FLAGS_file.empty() != FLAGS_config.empty());
   CHECK(!FLAGS_out.empty());
