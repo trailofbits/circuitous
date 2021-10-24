@@ -169,6 +169,9 @@ namespace circ {
         if (obits == 3 && nbits == 4) {
           return irops::make< irops::Concat >(ir, {ir.getInt1(0), selector});
         }
+        uint32_t dbits_size = static_cast< uint32_t >(nbits - obits);
+        return irops::make< irops::Concat >(ir, {ir.getIntN(dbits_size, 0), selector});
+
         LOG(FATAL) << "Cannot coerce selector:\n" << dbg_dump(selector)
                    << "\nof select:\n"
                    << dbg_dump(original)
