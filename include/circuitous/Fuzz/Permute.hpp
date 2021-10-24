@@ -5,6 +5,7 @@
 #pragma once
 
 #include <circuitous/Util/LLVMUtil.hpp>
+#include <circuitous/Fuzz/DiffResult.hpp>
 
 #include <remill/Arch/Arch.h>
 #include <remill/Arch/Instruction.h>
@@ -47,7 +48,6 @@ namespace circ::ifuzz::permutate {
     }
     return out;
   }
-
   struct Verbose {
     std::stringstream ss;
 
@@ -69,14 +69,15 @@ namespace circ::ifuzz::permutate {
       }
     }
 
-    template<typename ...Args>
-    void dbg(Args &&...args) {
-      return _log(" ", std::forward<Args>(args)...);
+    template<typename Out, typename ...Args>
+    auto dbg_neq(Out &&out, uint8_t indent, Args &&...args) {
+      _log(std::string(indent * 2, ' '), std::forward<Args>(args)...);
+      return std::forward< Out >(out);
     }
 
     template<typename ...Args>
-    void dbg_neq(uint8_t indent, Args &&...args) {
-      return _log(std::string(indent * 2, ' '), std::forward<Args>(args)...);
+    void dbg(uint8_t indent, Args &&...args) {
+      _log(std::string(indent * 2, ' '), std::forward<Args>(args)...);
     }
   };
 
@@ -117,54 +118,76 @@ namespace circ::ifuzz::permutate {
     using Next::Next;
 
     static auto identity_imm() {
-      return [](auto &self, auto &flipped) {
+      return [](auto &self, auto &flipped) -> diff_result {
         // TODO(lukas): Check in remill that is_signed is always properly
         //              (and consistently) set.
         // This may seem counterintuitive, but two immediates are equal
         // even if their values are not equal -- actaully that is the whole
         // point.
-        return flipped.type == remill::Operand::kTypeImmediate
-              && self.size == flipped.size;
+        return ( flipped.type == remill::Operand::kTypeImmediate &&
+                 self.size == flipped.size )
+          ? diff_result::pure
+          : diff_result::unrelated;
       };
     }
 
     auto identity_reg() {
-      return [&](auto &self, auto &flipped) {
-        return flipped.type == OpType::kTypeRegister &&
-               self.reg.size == flipped.reg.size;
+      return [&](auto &self, auto &flipped) -> diff_result {
+        return (flipped.type == OpType::kTypeRegister &&
+                self.reg.size == flipped.reg.size)
+          ? diff_result::pure
+          : diff_result::unrelated;
       };
     }
 
     auto identity_addr() {
-      return [&](auto &self_, auto& flipped_) {
-        if (flipped_.type != OpType::kTypeAddress) {
-          return false;
-        }
+      return [&](auto &self_, auto& flipped_) -> diff_result {
+        if (flipped_.type != OpType::kTypeAddress)
+          return diff_result::unrelated;
+
         auto &self = self_.addr;
         auto &flipped = flipped_.addr;
         uint8_t corrections = 0;
 
-        if (self.segment_base_reg.name != flipped.segment_base_reg.name ||
-            self.segment_base_reg.size != flipped.segment_base_reg.size) {
-          this->dbg_neq(2, "Segment base failure.");
-          return false;
-        }
 
-        if (self.index_reg.size != flipped.index_reg.size ||
-            self.base_reg.size != flipped.base_reg.size) {
-          return false;
+        auto changed_size = [](const auto &lhs, const auto &rhs) {
+          if (lhs.size == 0 || rhs.size == 0)
+            return false;
+          return lhs.size != rhs.size;
+        };
+
+        if (changed_size(self.index_reg, flipped.index_reg) ||
+            changed_size(self.base_reg, flipped.base_reg))
+        {
+          this->dbg(0, "Different reg sizes.");
+          return diff_result::unrelated;
         }
 
         // RSP in base reg requires some bits set elsewhere.
         if ((self.base_reg.name != flipped.base_reg.name) &&
             (flipped.base_reg.name == "NEXT_PC")) {
-          return false;
+          return diff_result::unrelated;
+        }
+
+        if (self.base_reg.name.empty() != flipped.base_reg.name.empty()) {
+          this->dbg(0, "Cannot (un)conjure base_reg."); return diff_result::unrelated;
+        }
+
+        if (self.index_reg.name.empty() != flipped.index_reg.name.empty()) {
+          this->dbg(0, "Cannot (un)conjure index_reg."); return diff_result::unrelated;
         }
 
         // Base
         if (self.base_reg.size != flipped.base_reg.size ||
            (self.base_reg.name != flipped.base_reg.name)) {
           ++corrections;
+          // Since bases are equal, segments should too as they depend on it.
+        } else {
+          if (self.segment_base_reg.name != flipped.segment_base_reg.name ||
+              self.segment_base_reg.size != flipped.segment_base_reg.size) {
+            this->dbg(0, "Same base produced different segment");
+            return diff_result::unrelated;
+          }
         }
 
         // Index * scale (they must be checked together since they can be both missing)
@@ -183,11 +206,13 @@ namespace circ::ifuzz::permutate {
         }
 
         // Displacement
+        if (self.address_size != flipped.address_size)
+          return diff_result::unrelated;
         if (self.displacement != flipped.displacement) {
           ++corrections;
         }
-        this->dbg("Corrections needed:", static_cast<uint32_t>(corrections));
-        return corrections <= 1;
+        this->dbg(0, "Corrections needed:", static_cast<uint32_t>(corrections));
+        return (corrections <= 1) ? diff_result::pure : diff_result::dirty;
       };
     }
   };
@@ -205,7 +230,8 @@ namespace circ::ifuzz::permutate {
       return reg_dependency(a.base_reg, b.base_reg)
              && reg_dependency(a.index_reg, b.index_reg)
              && a.scale == b.scale
-             && a.displacement == b.displacement;
+             && a.displacement == b.displacement
+             && a.address_size == b.address_size;
     }
   };
 
@@ -260,26 +286,24 @@ namespace circ::ifuzz::permutate {
   template< typename N >
   using EqDepAmd64Hack = EqDepFront< EqDepAmd64Hack_< EqDep_< N > > >;
 
+  using Item_t = std::map<std::size_t, const remill::Operand *>;
+
   template<typename Next>
   struct DependencyComparator : Next {
-    using Item_t = std::map<std::size_t, const remill::Operand *>;
     using cri = const remill::Instruction &;
 
     using Next::Next;
 
-    template<typename Fn>
-    std::tuple<bool, bool> CheckStructure(
+    template< typename Fn >
+    struct_check_result_t check_structure(
       cri original, cri permutation, const Item_t &items, Fn &&on_self)
     {
-      this->dbg("Checking structure of:", permutation);
       if (original.bytes.size() != permutation.bytes.size()) {
-        this->dbg_neq(1, "Sizes did not match.");
-        return { false, false };
+        return this->dbg_neq(std::nullopt, 1, "Sizes did not match.");
       }
 
       if (original.function != permutation.function) {
-        this->dbg_neq(1, "Function did not match.");
-        return { false, false };
+        return this->dbg_neq(std::nullopt, 1, "Function did not match.");
       }
 
       // NOTE(lukas): Unfortunately we can have the following:
@@ -289,47 +313,47 @@ namespace circ::ifuzz::permutate {
       // this comparison will not notice it, as the segment override is always present
       // which is really unfortunate.
       if (!Next::full_compare(original.segment_override, permutation.segment_override)) {
-        return { false, false };
+        return this->dbg_neq(std::nullopt, 1, "Full compare failed");
       }
 
       if (original.operands.size() != permutation.operands.size()) {
-        this->dbg_neq(1, "Operands size did not match.");
-        return { false, false };
+        return this->dbg_neq(std::nullopt, 1, "Operands size did not match.");
       }
 
-      bool exact_check = true;
-      bool on_self_check = true;
+      struct_icheck_res_t out(original.operands.size(), diff_result::unknown);
+      for (std::size_t i = 0U; i < permutation.operands.size(); ++i) {
+        // Will be handled later
+        if (items.count(i))
+          continue;
+
+        if (Next::full_compare(original.operands[i], permutation.operands[i])) {
+          out[i] = diff_result::exact;
+        }
+      }
+
+      auto lift_compare_res = [](auto b) {
+        return b ? diff_result::exact : diff_result::unknown;
+      };
+
       for (auto [i, op] : items) {
-        exact_check &= Next::full_compare(*op, permutation.operands[i]);
-        on_self_check &= on_self(*op, permutation.operands[i]);
-      }
-
-      if (!on_self_check) {
-        this->dbg_neq(1, "on self_check failed.");
-        return { false, exact_check };
+        auto exact_check = Next::full_compare(*op, permutation.operands[i]);
+        auto on_self_check = on_self(*op, permutation.operands[i]);
+        out[i] = join(lift_compare_res(exact_check), on_self_check);
+        this->ss << to_string(out[i]) << " = join( "
+                 << to_string(lift_compare_res(exact_check))
+                 << ", " << to_string(on_self_check) << " )\n";
       }
 
       // Check if there is the assumed relationship.
       // Often, it can be the same as the `exact_check`, but not always.
-      std::vector<const remill::Operand *> raw_items;
+      std::vector< const remill::Operand * > raw_items;
       for (auto [_, op] : items) raw_items.push_back(op);
       if (!Next::Depends(raw_items)) {
-        this->dbg_neq(1, "Next::Depends failed.");
-        return { false, exact_check };
+        this->dbg(1, "Next::Depends failed.");
+        return std::nullopt;
       }
+      return std::make_optional(std::move(out));
 
-      for (std::size_t i = 0U; i < permutation.operands.size(); ++i) {
-        // Was already checked
-        if (items.count(i)) {
-          continue;
-        }
-
-        if (!Next::full_compare(original.operands[i], permutation.operands[i])) {
-          this->dbg_neq(1, "full_compare for operand", i, "failed.");
-          return { false, exact_check };
-        }
-      }
-      return { true, exact_check };
     }
   };
 
@@ -337,51 +361,115 @@ namespace circ::ifuzz::permutate {
   // are exactly the same in both instructions.
   // NOTE(lukas): See permutation generation and register enlarging heuristics for examples
   //              of when this was flag is used.
-  template< typename Next, bool exact_mod = false >
+  template< typename Next, bool exact_mod_ = false >
   struct Dispatch : Next {
     using OpType = typename Next::OpType;
-    using Item_t = typename Next::Item_t;
-
     using cri = const remill::Instruction;
+    using result_t = struct_check_result_t;
+
+    static inline constexpr bool exact_mod = exact_mod_;
 
     Dispatch(const remill::Arch *arch_) : Next(arch_) {}
 
-    bool compare(cri &original, cri &permuation, std::size_t idx) {
-      return compare(original, permuation, {{ idx, &original.operands[idx] }});
-    }
-
-    bool compare(cri &original, cri &permutation, const Item_t &items)
+    OpType get_op_type(const Item_t &items)
     {
       CHECK(items.size() >= 1) << "Cannot compare " << items.size() << " items.";
       OpType type = items.begin()->second->type;
       for (auto [_, op] : items) {
         CHECK (op->type == type) << "Cannot compare as group operands of different types!";
       }
-      auto check = [&](auto identity) { return Check(original, permutation, items, identity); };
+      return type;
+    }
+
+    result_t compare(cri &original, cri &permuation, std::size_t idx) {
+      return compare(original, permuation, {{ idx, &original.operands[idx] }});
+    }
+
+    result_t compare(cri &original, cri &permutation, const Item_t &items)
+    {
+      auto type = get_op_type(items);
+      auto exec = [&](auto identity) { return check(original, permutation, items, identity); };
 
       switch(type) {
-        case OpType::kTypeImmediate: return check(Next::identity_imm());
-        case OpType::kTypeRegister : return check(Next::identity_reg());
-        case OpType::kTypeAddress  : return check(Next::identity_addr());
-        default                    : return false;
+        case OpType::kTypeImmediate: return exec(Next::identity_imm());
+        case OpType::kTypeRegister : return exec(Next::identity_reg());
+        case OpType::kTypeAddress  : return exec(Next::identity_addr());
+        default                    : return {};
       }
     }
 
-  template< typename ... Args >
-   bool verbose_compare( Args &&...args ) {
+    template< typename ... Args >
+    result_t verbose_compare( Args &&...args ) {
       auto x = compare(std::forward< Args >(args) ...);
       LOG(INFO) << this->ss.str();
       return x;
     }
 
-    using citem = const Item_t;
-
-    template<typename Fn>
-    bool Check(cri &original, cri &permutation, citem &op, Fn &&on_self) {
-      auto [structural, exact] = Next::CheckStructure(original, permutation, op, on_self);
-      return structural && (exact_mod || !exact);
+    template< typename Fn >
+    result_t check(cri &original, cri &permutation, const Item_t &op, Fn &&on_self) {
+      return Next::check_structure(original, permutation, op, on_self);
     }
   };
+
+  static inline Item_t to_item(const remill::Instruction &from, std::size_t idx) {
+    return {{ idx, &from.operands[idx] }};
+  }
+
+  template< bool exact_mod = false >
+  struct DiffResult {
+    bool are_exact(const struct_check_result_t &res, const Item_t &items)
+    {
+      if (!res) return false;
+
+      for (const auto &[i, _] : items)
+        if ((*res)[i] != diff_result::exact)
+          return false;
+      return true;
+    }
+
+    bool are_preserved(const struct_check_result_t &res, const Item_t &items)
+    {
+      if (!res) return true;
+
+      for (std::size_t i = 0; i < res->size(); ++i)
+        if (!items.count(i) && (*res)[i] != diff_result::exact)
+          return false;
+      return true;
+    }
+
+    bool are_struct(const struct_check_result_t &res, const Item_t &items)
+    {
+      if (!res) return false;
+
+      for (const auto &[i, _] : items)
+      {
+        auto r = (*res)[i];
+        if (r != diff_result::pure && r != diff_result::exact)
+          return false;
+      }
+      return true;
+
+    }
+
+    bool are_dirty(const struct_check_result_t &res, const Item_t &item)
+    {
+      if (!res || !are_preserved(res, item))
+        return false;
+      for (const auto &[i, _] : item) {
+        auto r = (*res)[i];
+        if (r != diff_result::dirty)
+          return false;
+      }
+      return true;
+    }
+
+    bool get_result(const struct_check_result_t &res, const Item_t &items)
+    {
+      return are_preserved(res, items) && are_struct(res, items)
+             && (exact_mod || !are_exact(res, items));
+    }
+  };
+
 
   // Comparator stack handles the identification of relevant bits per Operand.
   // The layers allow customizations of smaller chunks so the bigger parts can
