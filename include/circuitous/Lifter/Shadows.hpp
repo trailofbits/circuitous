@@ -486,6 +486,7 @@ namespace circ::shadowinst {
     // of encoding - we want to keep track of those
     using operand_ctx_t = std::tuple< std::size_t, Operand * >;
     std::vector< std::vector< operand_ctx_t > > deps;
+    std::vector< std::set< uint32_t > > dirt;
 
     Instruction() = default;
     Instruction(const Instruction &other) : operands(other.operands) {
@@ -626,6 +627,13 @@ namespace circ::shadowinst {
         for (const auto &[idx, _] : cluster)
           ss << idx << " ";
         ss << "]" << std::endl;
+      }
+      for (const auto &dirts : dirt)
+      {
+        ss << "dirt( ";
+        for (auto d : dirts)
+          ss << d << " ";
+        ss << ")" << std::endl;
       }
 
       for (const auto &op : operands) {
