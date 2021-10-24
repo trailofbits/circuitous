@@ -195,6 +195,35 @@ namespace circ::shadowinst {
     {
       return !x || x->empty();
     }
+
+    void pre(uint64_t anchor, uint64_t from, uint64_t size) {
+      auto original_end = anchor + regions[anchor];
+      regions.erase(anchor);
+      regions[from] = std::max(original_end - from, size);
+    }
+
+    void post(uint64_t anchor, uint64_t from, uint64_t size) {
+      regions[anchor] = std::max(regions[anchor], from + size - anchor);
+    }
+
+    void add(uint64_t from, uint64_t size) {
+      for (const auto &[x, y] : regions)
+      {
+        if (x <= from && x + y >= from)
+          return post(x, from, size);
+        if (from <= x && from + size >= x)
+          return pre(x, from, size);
+      }
+      regions[from] = size;
+    }
+
+    void add(const has_regions &other) {
+      // It is expected both are rather small
+      for (const auto &[from, size] : other.regions)
+      {
+        add(from, size);
+      }
+    }
   };
 
   struct Reg : has_regions {
