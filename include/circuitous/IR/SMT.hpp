@@ -11,12 +11,12 @@
 #include <string>
 #include <unordered_map>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wconversion"
-#include <glog/logging.h>
+#include <circuitous/Util/Logging.hpp>
+
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/InstrTypes.h>
 #include <z3++.h>
-#pragma clang diagnostic pop
+CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <circuitous/IR/IR.h>
 #include <circuitous/IR/Storage.hpp>
