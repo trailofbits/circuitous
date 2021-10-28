@@ -2,8 +2,11 @@
  * Copyright (c) 2021 Trail of Bits, Inc.
  */
 
-#include <z3++.h>
 #include <circuitous/IR/SMT.hpp>
+
+CIRCUITOUS_RELAX_WARNINGS
+#include <z3++.h>
+CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ
 {
