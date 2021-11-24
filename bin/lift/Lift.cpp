@@ -36,6 +36,8 @@ DEFINE_bool(bitblast_stats, false, "Print smt bitblast statistics.");
 DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 DEFINE_string(seed_dbg_in, "", "Load input from circuitous-seed --dbg produced file");
 
+
+DEFINE_bool(eqsat, false, "Enable equality saturation based optimizations.");
 DEFINE_bool(dbg, false, "Enable various debug dumps");
 
 namespace {
@@ -151,10 +153,12 @@ circ::CircuitPtr Optimize(CircuitPtr &&circuit)
   Optimizer opt;
 
   // Populate by default passes we want to always run
-  // opt.add_pass("eqsat");
-  // opt.add_pass("merge-advices");
-  opt.add_pass("dummy-pass");
+  if (FLAGS_eqsat) {
+    opt.add_pass("eqsat");
+  }
 
+  // opt.add_pass("merge-advices");
+  // opt.add_pass("dummy-pass");
   auto result = opt.run(std::move(circuit));
   LOG(INFO) << "Optimizations done.";
   LOG(INFO) << opt.report();
