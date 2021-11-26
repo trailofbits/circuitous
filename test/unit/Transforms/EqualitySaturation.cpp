@@ -565,6 +565,37 @@ namespace circ::eqsat {
       CHECK(egraph.eclass(mul2) == egraph.eclass(add1));
       CHECK(egraph.eclass(add1) == egraph.eclass(add2));
     }
+
+    TEST_CASE("Advice Lowering")
+    {
+      TestGraph egraph;
+      TestGraphBuilder builder(&egraph);
+
+      auto a = egraph.make_leaf("a");
+      auto b = egraph.make_leaf("b");
+      auto c = egraph.make_leaf("c");
+      auto d = egraph.make_leaf("d");
+
+      auto mul1 = egraph.make_node("mul", {a, b});
+      auto mul2 = egraph.make_node("mul", {c, d});
+
+      egraph.make_node("CTX1", {mul1});
+      egraph.make_node("CTX2", {mul2});
+
+      auto rule = TestRule(
+        "bond-multiplications",
+        "((let M (op_mul)) (commutative-match $M...))",
+        "((let B (bond $M...)) (let A (op_mul op_advice op_advice)) (union $B $A))"
+      );
+
+      auto matches = rule.match(egraph);
+      CHECK(matches.size() == 1);
+
+      rule.apply(egraph, builder);
+      egraph.rebuild();
+
+      CHECK(egraph.bonded({mul1, mul2}));
+    }
   }
 
 } // namespace circ::eqsat
