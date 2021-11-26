@@ -434,28 +434,6 @@ namespace circ::eqsat {
     };
   } // namespace detail
 
-  static inline parser<expr> auto expr_parser()
-  {
-    return detail::expr_parser::parser();
-  }
-
-  // expression can be suffixed with context name as: <expr>:context
-  static inline parser<expr> auto expr_with_context_parser()
-  {
-    auto context_suffix = char_parser(':') < name_parser();
-    auto expression = detail::expr_parser::parser();
-    return from_tuple< expr >(expression & context_suffix) | expression;
-  }
-
-  // TODO(Heno): constexpr
-  // named expression has form: (let <name> <expr>)
-  static inline parser<named_expr> auto named_expr_parser()
-  {
-    auto name_p = (string_parser("let") & skip(isspace)) < label_name_parser();
-    auto expr_p = (skip(isspace) < expr_with_context_parser());
-
-    return from_tuple< named_expr >( parenthesized( name_p & expr_p ) );
-  }
 
   template< typename P >
   static inline parser< std::vector<parse_type<P>> > auto to_vector_parser(P &&p)
@@ -576,6 +554,32 @@ namespace circ::eqsat {
     }, e.get());
   }
 
+  static inline parser<expr> auto expr_parser()
+  {
+    auto simple = detail::expr_parser::parser();
+    auto union_ = construct< expr >( union_expr_parser() );
+    auto bond   = construct< expr >( bond_expr_parser() );
+    return simple | union_ | bond;
+  }
+
+  // expression can be suffixed with context name as: <expr>:context
+  static inline parser<expr> auto expr_with_context_parser()
+  {
+    auto context_suffix = char_parser(':') < name_parser();
+    auto expression = expr_parser();
+    return from_tuple< expr >(expression & context_suffix) | expression;
+  }
+
+  // TODO(Heno): constexpr
+  // named expression has form: (let <name> <expr>)
+  static inline parser<named_expr> auto named_expr_parser()
+  {
+    auto name_p = (string_parser("let") & skip(isspace)) < label_name_parser();
+    auto expr_p = (skip(isspace) < expr_with_context_parser());
+
+    return from_tuple< named_expr >( parenthesized( name_p & expr_p ) );
+  }
+
   // TODO(Heno): constexpr
   static inline parser<Pattern> auto pattern_parser()
   {
@@ -601,11 +605,7 @@ namespace circ::eqsat {
       from_tuple< Pattern >( parenthesized( combine(subexpr_parser, cons, expr_parser()) ) ) |
       // or list of named expressions and final match expression
       // that allows to specify multi-pattern rules
-      from_tuple< Pattern >( parenthesized( combine(subexpr_parser, cons, match_expr_parser()) ) ) |
-      // or union expression that allows to specify unification of matched rules
-      construct< Pattern >( union_expr_parser() ) |
-      // or bond expression that allows to bond matched nodes
-      construct< Pattern >( bond_expr_parser() );
+      from_tuple< Pattern >( parenthesized( combine(subexpr_parser, cons, match_expr_parser()) ) );
   }
 
   // TODO(Heno): constexpr
