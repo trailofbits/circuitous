@@ -729,8 +729,23 @@ namespace circ::eqsat {
         },
         [&] (const expr_list  &e) { apply(e, matches); },
         [&] (const union_expr &e) { apply(e, matches); },
-        [&] (const bond_expr &e) { apply(e, matches); },
+        [&] (const bond_expr &e)  { apply(e, matches); },
         [&] (const match_expr & ) {
+          throw std::runtime_error("match clause is forbidden in the rewrite pattern");
+        }
+      }, e.get());
+    }
+
+    Id apply(const expr &e, const matched_labels &match) const
+    {
+      return std::visit( overloaded {
+        [&] (const atom &a) -> Id {
+          throw std::runtime_error("rewrite rule is applied on the level of expression lists");
+        },
+        [&] (const expr_list  &e) -> Id { return apply(e, match); },
+        [&] (const union_expr &e) -> Id { return apply(e, match); },
+        [&] (const bond_expr &e)  -> Id { return apply(e, match); },
+        [&] (const match_expr & ) -> Id {
           throw std::runtime_error("match clause is forbidden in the rewrite pattern");
         }
       }, e.get());
@@ -739,28 +754,55 @@ namespace circ::eqsat {
     std::set< Id > matched_ids_for_labels(const matched_labels &match,
                                           const std::vector< label > &labels) const
     {
-        std::set< Id > ids;
-        for (const auto & l : labels) {
-          auto m = get_label_match(match, label_name(l)).value();
-          ids.merge(matched_ids(m));
-        }
+      // TODO use coroutines here
+      std::set< Id > ids;
 
-        return ids;
+      for (const auto & l : labels) {
+        auto name = label_name(l);
+        if (auto m = get_label_match(match, name)) {
+          ids.merge(matched_ids(m.value()));
+        } else {
+          assert( pattern.subexpr(l) );
+          auto sub = pattern.subexpr(l);
+          ids.insert( apply(sub, match) );
+        }
+      }
+
+      return ids;
+    }
+
+    Id apply(const bond_expr &e, const matched_labels &match) const
+    {
+      auto ids = matched_ids_for_labels(match, e.labels);
+      return egraph.bond({ids.begin(), ids.end()});
+    }
+
+    Id apply(const union_expr &e, const matched_labels &match) const
+    {
+      auto ids = matched_ids_for_labels(match, e.labels);
+      return egraph.merge({ids.begin(), ids.end()});
+    }
+
+    Id apply(const expr_list &list, const matched_labels &match) const
+    {
+      if( is_nested(list) ) {
+        throw std::runtime_error("nested expression in rewrite pattern");
+      }
+
+      return apply_patch(list, match);
     }
 
     void apply(const bond_expr &e, const Matches &matches) const
     {
       for (const auto &match : matches) {
-        auto ids = matched_ids_for_labels(match, e.labels);
-        egraph.bond({ids.begin(), ids.end()});
+        apply(e, match);
       }
     }
 
     void apply(const union_expr &e, const Matches &matches) const
     {
       for (const auto &match : matches) {
-        auto ids = matched_ids_for_labels(match, e.labels);
-        egraph.merge({ids.begin(), ids.end()});
+        apply(e, match);
       }
     }
 
@@ -773,21 +815,28 @@ namespace circ::eqsat {
         apply(e, matches);
     }
 
-    Id anonymous_match_id(const matched_labels &matches) const
+    std::optional< Id > anonymous_match_id(const matched_labels &matches) const
     {
-      auto match = get_label_match(matches, anonymous_match()).value();
-      return std::get<anonymous_match>(match).id;
+      if (auto match = get_label_match(matches, anonymous_match()))
+        return std::get<anonymous_match>(match.value()).id;
+      return std::nullopt;
+    }
+
+    Id apply_patch(const expr &e, const matched_labels &match) const
+    {
+      auto id = anonymous_match_id(match);
+      // TODO(Heno): perform once for all substitutions
+      for (const auto &sub : match.substitutions) {
+        auto patch = builder.synthesize(e, sub, places, pattern.subexprs);
+        id = id ? egraph.merge(id.value(), patch) : patch;
+      }
+      return id.value();
     }
 
     void apply_patch(const expr &e, const Matches &matches) const
     {
       for (const auto &match : matches) {
-        auto id = anonymous_match_id(match);
-        // TODO(Heno): perform once for all substitutions
-        for (const auto &sub : match.substitutions) {
-          auto patch = builder.synthesize(e, sub, places, pattern.subexprs);
-          id = egraph.merge(id, patch);
-        }
+        apply_patch(e, match);
       }
     }
 
