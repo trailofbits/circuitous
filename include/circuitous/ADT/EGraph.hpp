@@ -417,7 +417,14 @@ namespace circ::eqsat {
 
       auto id = id_; // to allow lambda capture
       enumerate(eclass.nodes, [&] (auto node_idx, const auto &enode) {
-        out << "    " << id << '.' << node_idx << " [label = \"" << name(enode) << "\" ]\n";
+        auto fmt = [&] (const auto &name) {
+          out << "    " << id << '.' << node_idx << " [label = \"" << name << "\" ]\n";
+        };
+        if (auto bw = bitwidth(enode)) {
+          fmt(std::string(name(enode)) + ":" + std::to_string(bw.value()));
+        } else {
+          fmt(name(enode));
+        }
       });
 
       out << "  }\n";
