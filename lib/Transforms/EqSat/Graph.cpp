@@ -1,6 +1,7 @@
 #include <circuitous/Transforms/EqSat/Graph.hpp>
 
 #include <circuitous/Util/Overloads.hpp>
+#include <optional>
 
 #include <llvm/ADT/SmallVector.h>
 #include <llvm/ADT/APSInt.h>
@@ -32,6 +33,24 @@ namespace circ::eqsat
   }
 
   std::string name(const CircuitENode *node) { return node_name( *node ); }
+
+  using maybe_bitwidth = std::optional< uint32_t >;
+
+  maybe_bitwidth bitwidth(const OpTemplate &op)
+  {
+    return std::visit( overloaded {
+      [] (const OpCode    &o) -> maybe_bitwidth { return std::nullopt; },
+      [] (const SizedOp   &o) -> maybe_bitwidth { return o.size; },
+      [] (const AdviceOp  &o) -> maybe_bitwidth { return o.size; },
+      [] (const RegOp     &o) -> maybe_bitwidth { return o.size; },
+      [] (const MemOp     &o) -> maybe_bitwidth { return std::nullopt; },
+      [] (const ExtractOp &o) -> maybe_bitwidth { return o.high_bit_exc - o.low_bit_inc; },
+      [] (const SelectOp  &o) -> maybe_bitwidth { return o.size; },
+      [] (const ConstOp   &o) -> maybe_bitwidth { return o.size; }
+    }, op);
+  }
+
+  maybe_bitwidth bitwidth(const CircuitENode *node) { return bitwidth(node->data()); }
 
   bool is_context_node(const CircuitENode *node)
   {

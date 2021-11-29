@@ -89,6 +89,8 @@ namespace circ::eqsat {
 
   std::string name(const CircuitENode *node);
 
+  std::optional< uint32_t > bitwidth(const CircuitENode *node);
+
   bool is_context_node(const CircuitENode *node);
 
   std::optional<std::int64_t> extract_constant(const CircuitENode *node);
