@@ -137,4 +137,20 @@ namespace circ::eqsat {
     CHECK(egraph.eclass(idp).size() == 1);
     CHECK(egraph.eclass(idm).size() == 1);
   }
+
+  TEST_CASE("EGraph with bitwidths")
+  {
+    TestGraph egraph;
+
+    auto idx = egraph.make_leaf("x:32");
+    auto idy = egraph.make_leaf("y:32");
+    auto add = egraph.make_node("+", {idx, idy});
+
+
+    auto sx = egraph.singleton(idx);
+    auto sy = egraph.singleton(idy);
+    auto sa = egraph.singleton(add);
+    CHECK(bitwidth(&sx) == 32);
+    CHECK(bitwidth(&sy) == 32);
+  }
 } // namespace circ::eqsat

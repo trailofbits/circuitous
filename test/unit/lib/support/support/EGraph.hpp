@@ -20,12 +20,32 @@ namespace circ::eqsat {
 
   using StringNode = ENode< std::string >;
 
-  static inline std::string name(const StringNode *node)
+  static inline std::string full_name(const StringNode *node)
   {
     return std::visit( overloaded {
       [] (const BondNode &n) { return n.name(); },
       [] (const StorageNode< std::string > &n) { return n.get(); }
     }, node->get());
+  }
+
+  static inline std::string name(const StringNode *node)
+  {
+    auto strip_bitwidth = [] (const auto &name) {
+      return name.substr(0, name.find(":"));
+    };
+
+    return strip_bitwidth(full_name(node));
+  }
+
+  static inline std::optional< uint32_t > bitwidth(const StringNode *node)
+  {
+    const auto &name = full_name(node);
+
+    if (auto from = name.find(":"); from != std::string::npos) {
+      return std::stoi(name.substr(from + 1));
+    }
+
+    return std::nullopt;
   }
 
   static inline bool is_context_node(const StringNode *node)
@@ -72,6 +92,13 @@ namespace circ::eqsat {
       node.children() = std::move(children);
       auto [id, _] = add(std::move(node));
       return id;
+    }
+
+    StringNode singleton(Id id)
+    {
+      const auto &eclass = this->eclass(id);
+      CHECK(eclass.size() == 1);
+      return eclass.nodes.at(0)->data();
     }
 
     void dump(const std::string &file) {
