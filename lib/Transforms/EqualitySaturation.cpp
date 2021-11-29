@@ -624,6 +624,38 @@ namespace circ::eqsat {
         LOG(FATAL) << "unhadled opcode " << to_string(op);
       return value;
     }
+
+    template< typename ...Variants >
+    bool holds_alternative(const auto &v)
+    {
+      return (std::holds_alternative< Variants >(v) || ...);
+    }
+
+    using maybe_bitwidth = std::optional< std::uint32_t >;
+
+    maybe_bitwidth bitwidth(const auto &op)
+    {
+      return std::visit( overloaded {
+        [] (const OpCode &op)    -> maybe_bitwidth { return std::nullopt; },
+        [] (const SizedOp &op)   -> maybe_bitwidth {
+          if (op.size)
+            return op.size;
+          return op.size;
+        },
+        [] (const AdviceOp &op)  -> maybe_bitwidth { return op.size; },
+        [] (const RegOp &op)     -> maybe_bitwidth { return op.size; },
+        [] (const ConstOp &op)   -> maybe_bitwidth { return op.size; },
+        [] (const MemOp &op)     -> maybe_bitwidth { return std::nullopt; },
+        [] (const ExtractOp &op) -> maybe_bitwidth { return std::nullopt; },
+        [] (const SelectOp &op)  -> maybe_bitwidth { return op.size; }
+      }, op->data());
+    }
+
+    bool needs_compute_bitwidth(const auto &op)
+    {
+      return holds_alternative< SizedOp, AdviceOp >(op->data()) && !bitwidth(op).has_value();
+    }
+
   } // namespace detail
 
   // Lowers equality graph back to circuit using a optimal view graph.
@@ -653,12 +685,21 @@ namespace circ::eqsat {
       return detail::make_operation(enode->data(), circuit);
     }
 
+    std::uint32_t bitwidth(ENodePtr enode) const
+    {
+      return detail::bitwidth(enode).value();
+    }
+
     Operation *extract(ENodePtr enode, Circuit *circuit)
     {
       assert(!enode->is_bond_node());
 
       if (cached.count(enode))
         return cached.at(enode);
+
+      if (detail::needs_compute_bitwidth(enode)) {
+        LOG(FATAL) << "Not implemented: update bitwidths.";
+      }
 
       auto op = make_operation(enode, circuit);
       cached.emplace(enode, op);
