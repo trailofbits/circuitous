@@ -670,7 +670,13 @@ namespace circ::eqsat {
     // match operation node
     Substitutions match_atom(const auto &enode, const operation &o) const
     {
-      return trivial(name(enode) == o, places.size());
+      auto repr = [&] {
+        if (auto bw = bitwidth(enode)) {
+          return std::string(name(enode)) + ":" + std::to_string(bw.value());
+        }
+        return name(enode);
+      };
+      return trivial(repr() == o, places.size());
     }
 
     // match place (variable) node, returns single substitution with
