@@ -446,7 +446,7 @@ namespace circ::eqsat {
       });
     }
 
-    out << "}\n";
+    out << "}\n" << std::flush;
   }
 
 } // namespace circ::eqsat
