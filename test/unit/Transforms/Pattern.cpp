@@ -135,6 +135,13 @@ namespace circ::eqsat {
     CHECK(parser("(union $A $B $C $D)"));
   }
 
+  TEST_CASE("Bitwidth") {
+    auto parser = operation_parser();
+    CHECK(result(parser("op_add:32")).bitwidth == 32);
+    CHECK(result(parser("op_add:64")).bitwidth == 64);
+    CHECK(!result(parser("op_add")).bitwidth.has_value());
+  }
+
   TEST_CASE("Variadic") {
     CHECK( match_expr_parser()("(match $M...)") );
 
