@@ -50,7 +50,13 @@ namespace circ::eqsat
     }, op);
   }
 
-  maybe_bitwidth bitwidth(const CircuitENode *node) { return bitwidth(node->data()); }
+  maybe_bitwidth bitwidth(const CircuitENode *node)
+  {
+    if (node->is_bond_node()) {
+      return std::nullopt;
+    }
+    return bitwidth(node->data());
+  }
 
   bool is_context_node(const CircuitENode *node)
   {
