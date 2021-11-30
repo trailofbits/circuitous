@@ -637,11 +637,7 @@ namespace circ::eqsat {
     {
       return std::visit( overloaded {
         [] (const OpCode &op)    -> maybe_bitwidth { return std::nullopt; },
-        [] (const SizedOp &op)   -> maybe_bitwidth {
-          if (op.size)
-            return op.size;
-          return op.size;
-        },
+        [] (const SizedOp &op)   -> maybe_bitwidth { return op.size; },
         [] (const AdviceOp &op)  -> maybe_bitwidth { return op.size; },
         [] (const RegOp &op)     -> maybe_bitwidth { return op.size; },
         [] (const ConstOp &op)   -> maybe_bitwidth { return op.size; },

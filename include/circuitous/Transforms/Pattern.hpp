@@ -59,7 +59,7 @@ namespace circ::eqsat {
     bool operator==(const operation&) const = default;
 
     std::string_view name;
-    std::optional< bitwidth_t > bitwidth = std::nullopt;
+    std::optional< bitwidth_t > bitwidth;
   };
 
   template< typename stream >
