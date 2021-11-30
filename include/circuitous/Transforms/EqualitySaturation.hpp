@@ -676,7 +676,7 @@ namespace circ::eqsat {
         }
         return name(enode);
       };
-      return trivial(repr() == o, places.size());
+      return trivial(repr() == o.full_name(), places.size());
     }
 
     // match place (variable) node, returns single substitution with
