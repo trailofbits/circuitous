@@ -180,7 +180,7 @@ namespace circ::eqsat {
 
     OpTemplate make_operation_template(const operation &op) const
     {
-      auto name = op.ref();
+      auto name = op.full_name();
 
       auto sized = [] (auto name) { return SizedOp{std::string(name), {}}; };
       auto opcode = [] (auto name) { return OpCode{std::string(name)}; };

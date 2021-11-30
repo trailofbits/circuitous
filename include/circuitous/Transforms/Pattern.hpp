@@ -42,9 +42,31 @@ namespace circ::eqsat {
   struct constant_tag;
   using constant = strong_type< std::int64_t, constant_tag >;
 
-  struct op_tag;
-  // operation has to be named with prefix 'op_'
-  using operation = strong_type< std::string_view, op_tag >;
+  // operation has to be named with prefix 'op_<name>:bitwidth'
+  // with optional bitwidth
+  struct operation
+  {
+    using bitwidth_t = uint32_t;
+
+    operation(std::string_view name) : name(name) {}
+    operation(std::string_view name, bitwidth_t bw) : name(name), bitwidth(bw) {}
+
+    std::string full_name() const
+    {
+      return bitwidth ? std::string(name) + ":" + std::to_string(*bitwidth) : std::string(name);
+    }
+
+    bool operator==(const operation&) const = default;
+
+    std::string_view name;
+    std::optional< bitwidth_t > bitwidth = std::nullopt;
+  };
+
+  template< typename stream >
+  auto operator<<(stream &out, const operation &op) noexcept -> decltype( out << "" )
+  {
+    return out << op.full_name();
+  }
 
   struct placeholder_tag;
   // place has to be named with prefix '?'
@@ -332,7 +354,9 @@ namespace circ::eqsat {
 
   constexpr parser<operation> auto operation_parser()
   {
-    return construct< operation >(string_parser("op_") < name_parser());
+    auto name = string_parser("op_") < name_parser();
+    auto bw   = string_parser(":") < number_parser< uint32_t >();
+    return from_tuple< operation >( name & bw ) | construct< operation >( name );
   }
 
   constexpr parser<place> auto place_parser()
@@ -645,39 +669,5 @@ namespace circ::eqsat {
       os << ' ' << ch;
     return os << ')';
   }
-
-  namespace {
-    static inline void tests()
-    {
-      using namespace std::literals;
-
-      {
-        constexpr auto p = constant_parser()("17");
-        static_assert( p && result(p).ref() == 17 );
-      }
-
-      {
-        constexpr auto p = operation_parser()("op_add");
-        static_assert( p && result(p).ref() == "add" );
-      }
-
-      static_assert( !operation_parser()("add") );
-
-      {
-        constexpr auto p = atom_parser()("op_mul");
-        static_assert( p && std::holds_alternative<operation>( result(p) ) );
-      }
-
-      {
-        constexpr auto p = atom_parser()("-10");
-        static_assert( p && std::holds_alternative<constant>( result(p) ) );
-      }
-
-      {
-        constexpr auto p = atom_parser()("?x");
-        static_assert( p && std::holds_alternative<place>( result(p) ) );
-      }
-    }
-  } // anonymous namespace
 
 } // namespace circ::eqsat
