@@ -180,10 +180,11 @@ namespace circ::eqsat {
 
     OpTemplate make_operation_template(const operation &op) const
     {
-      auto name = op.full_name();
+      auto name = op.name;
+      auto bw = op.bitwidth;
 
-      auto sized = [] (auto name) { return SizedOp{std::string(name), {}}; };
-      auto opcode = [] (auto name) { return OpCode{std::string(name)}; };
+      auto sized  = [bw] (auto name) { return SizedOp{std::string(name), bw}; };
+      auto opcode = []   (auto name) { return OpCode{std::string(name)}; };
 
       auto value = llvm::StringSwitch< std::optional< OpTemplate > >(name)
         // .Case("circuit")
@@ -204,6 +205,8 @@ namespace circ::eqsat {
         .Case("write_constraint",     opcode(name))
         .Case("read_constraint",      opcode(name))
         .Case("unused_constraint",    opcode(name))
+
+        .Case("Advice", opcode(name))
 
         .Case("Add",   sized(name))
         .Case("+",     sized("Add"))
@@ -343,8 +346,12 @@ namespace circ::eqsat {
       _egraph.rebuild();
 
       Status stopped = std::nullopt;
+
+      unsigned int steps = 0;
+
       while (!stopped.has_value()) {
         stopped = step(rules);
+        steps++;
       }
 
       return stopped.value();
@@ -353,6 +360,9 @@ namespace circ::eqsat {
     // One iteration of the saturation loop
     Status step(const Rules &rules)
     {
+      LOG(INFO) << "[eqsat] step\n";
+      ++steps;
+
       // TODO(Heno): check limits & timeout
 
       using RuleRef = std::reference_wrapper< const Rule >;
@@ -362,7 +372,12 @@ namespace circ::eqsat {
         // TODO(Heno): check limits
       }
 
+      bool saturated = true;
+
       for (const auto &[rule, match] : matches) {
+        LOG(INFO) << "[eqsat] " << rule.get().name << " matched " << match.size() << "\n";
+        if (match.size() > 0)
+          saturated = false;
         _scheduler.apply_rule(_egraph, rule, match);
         // TODO(Heno): check limits
       }
@@ -371,7 +386,11 @@ namespace circ::eqsat {
 
       // TODO(Heno): check graph saturation
 
-      return stop_reason::unknown;
+      if (saturated)
+        return stop_reason::saturated;
+      if (steps >= max_steps)
+        return stop_reason::iteration_limit;
+      return std::nullopt;
     }
 
     const Graph& egraph() const { return _egraph; }
@@ -379,6 +398,9 @@ namespace circ::eqsat {
     ENode* node(Operation *op) { return _nodes[op]; }
 
   private:
+    unsigned int steps = 0;
+    static constexpr unsigned int max_steps = 2;
+
     Graph _egraph;
     Nodes _nodes;
     PatternCircuitBuilder _builder;
@@ -721,14 +743,61 @@ namespace circ::eqsat {
     auto runner = Runner::make_runner(circuit);
 
     RewriteRules rules;
-    rules.emplace_back( "binary-unification",
-      "((let A (?opa ?xa ?ya)) (let B (?opb ?xb ?yb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (equiv ?ya ?yb) (match $A $B))",
-      "(union $A $B)"
+    rules.emplace_back( "extend-mul-i8-to-i128",
+      "((let M (op_Mul:8 ?a ?b)) (commutative-match $M))",
+      "((let Ext (op_Trunc:8 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
     );
-    rules.emplace_back( "unary-unification",
-      "((let A (?opa ?xa)) (let B (?opb ?xb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (match $A $B))",
-      "(union $A $B)"
+    rules.emplace_back( "extend-mul-i16-to-i128",
+      "((let M (op_Mul:16 ?a ?b)) (commutative-match $M))",
+      "((let Ext (op_Trunc:16 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
     );
+    rules.emplace_back( "extend-mul-i32-to-i128",
+      "((let M (op_Mul:32 ?a ?b)) (commutative-match $M))",
+      "((let Ext (op_Trunc:32 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
+    );
+    rules.emplace_back( "extend-mul-i64-to-i128",
+      "((let M (op_Mul:64 ?a ?b)) (commutative-match $M))",
+      "((let Ext (op_Trunc:64 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
+    );
+    rules.emplace_back( "advice-and-bond-mul-i128",
+        "((let Muls (op_Mul:128):C) (disjoint $C...) (commutative-match $Muls...))",
+        "((let Bond (bond $Muls...)) (let Adviced (op_Mul:128 op_Advice op_Advice)) (union $Bond $Adviced))"
+    );
+
+    // rules.emplace_back( "binary-unification",
+    //   "((let A (?opa ?xa ?ya)) (let B (?opb ?xb ?yb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (equiv ?ya ?yb) (match $A $B))",
+    //   "(union $A $B)"
+    // );
+    // rules.emplace_back( "unary-unification",
+    //   "((let A (?opa ?xa)) (let B (?opb ?xb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (match $A $B))",
+    //   "(union $A $B)"
+    // );
+    // rules.emplace_back( "mul-advicing",
+    //     "((let Muls (op_Mul)) (commutative-match $Muls...))",
+    //     "((let Bond (bond $Muls...)) (let Adviced (op_Mul op_Advice op_Advice)) (union $Bond $Adviced))"
+    // );
+    // //   "((let A (?opa ?xa ?ya)) (let B (?opb ?xb ?yb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (equiv ?ya ?yb) (commutative-match $A $B))",
+    // //   "(union $A $B)"
+    // // );
+    // // rules.emplace_back( "unary-unification",
+    // //   "((let A (?opa ?xa)) (let B (?opb ?xb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (commutative-match $A $B))",
+    // //   "(union $A $B)"
+    // // );
+    // rules.emplace_back( "bond-multiplications",
+    //   "((let A (op_Mul:64 ?a ?b):C1) (let B (op_Mul:64 ?c ?d):C2) (disjoint C1 C2) (commutative-match $A $B))",
+    //   "(bond $A $B)"
+    // );
+
+    // rules.emplace_back( "bond-additions",
+    //   "((let A (op_Add:64 ?a ?b):C1) (let B (op_Add:64 ?c ?d):C2) (disjoint C1 C2) (commutative-match $A $B))",
+    //   "(bond $A $B)"
+    // );
+
+
+    // rules.emplace_back( "advice-multiplications",
+    //     "(op_bond (op_Mul ?a ?b) (op_Mul ?c ?d))",
+    //     "(op_Mul (op_advice ?a ?c) (op_advice ?b ?d))"
+    // );
 
     std::ofstream outb("egraph-before.dot");
     to_dot(runner.egraph(), outb);
