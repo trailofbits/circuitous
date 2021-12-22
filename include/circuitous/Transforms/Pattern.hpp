@@ -105,8 +105,16 @@ namespace circ::eqsat {
     return label_name(a) == label_name(b);
   }
 
-  struct context_tag;
-  using context = strong_type< std::string_view, context_tag >;
+  using context_name = std::string_view;
+
+  struct single_context_tag;
+  using single_context = strong_type<context_name, single_context_tag>;
+
+  struct variadic_context_tag;
+  // variadic context has to be suffixed with '...'
+  using variadic_context = strong_type<context_name, variadic_context_tag>;
+
+  using context = std::variant<single_context, variadic_context>;
 
   using atom = std::variant< constant, operation, place, label >;
 
@@ -160,9 +168,7 @@ namespace circ::eqsat {
   using place_constraint = equiv_expr;
 
   using constraint  = std::variant< context_constraint, place_constraint >;
-  using constraints = std::vector< constraint >;
-
-  using context_name = std::string_view;
+  using constraints = std::vector<constraint>;
 
   struct expr : std::variant< atom, std::vector< expr >, match_expr, union_expr, bond_expr >
   {
@@ -379,9 +385,19 @@ namespace circ::eqsat {
     return char_parser('$') < label_name_parser();
   }
 
+  constexpr parser<single_context> auto single_context_parser() {
+    return construct<single_context>(name_parser());
+  }
+
+  constexpr parser<variadic_context> auto variadic_context_parser() {
+    return construct<variadic_context>(name_parser() > string_parser("..."));
+  }
+
   constexpr parser<context> auto context_parser()
   {
-    return construct< context >(name_parser());
+    auto single = construct<context>(single_context_parser());
+    auto variadic = construct<context>(variadic_context_parser());
+    return variadic | single;
   }
 
   constexpr parser<atom> auto atom_parser()
