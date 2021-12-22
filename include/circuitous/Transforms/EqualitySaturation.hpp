@@ -310,7 +310,8 @@ namespace circ::eqsat {
 
     using context_node = typename Graph::Node*;
     using context_t = std::unordered_set< context_node >;
-    using named_contexts = std::unordered_map<context_name, std::vector< context_t > >;
+    using named_contexts =
+        std::unordered_map<std::string, std::vector<context_t>>;
 
     named_contexts get_named_contexts(const anonymous_match &match) const { return {}; /* none */ }
 
@@ -318,7 +319,7 @@ namespace circ::eqsat {
     {
       named_contexts ctxs;
       if (auto sub = pattern.subexpr(match.label); sub.context) {
-        auto name = sub.context.value();
+        auto name = std::string(sub.context.value());
         ctxs[name].push_back( contexts(egraph, match.id) );
       }
       return ctxs;
@@ -328,8 +329,10 @@ namespace circ::eqsat {
     {
       named_contexts ctxs;
       if (auto sub = pattern.subexpr(match.label); sub.context) {
-        auto name = sub.context.value();
+        auto ctx = sub.context.value();
+        int i = 1;
         for (auto id : match.ids) {
+          auto name = std::string("_") + std::string(ctx) + std::to_string(i++);
           ctxs[name].push_back( contexts(egraph, id) );
         }
       }
