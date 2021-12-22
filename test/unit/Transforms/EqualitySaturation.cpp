@@ -7,14 +7,14 @@
  */
 
 #include <doctest/doctest.h>
+
+#include <circuitous/ADT/EGraph.hpp>
+#include <circuitous/Transforms/EqualitySaturation.hpp>
+#include <circuitous/Transforms/Pattern.hpp>
 #include <cstddef>
+#include <fstream>
 #include <numeric>
 #include <support/EGraph.hpp>
-#include <circuitous/Transforms/Pattern.hpp>
-#include <circuitous/Transforms/EqualitySaturation.hpp>
-#include <circuitous/ADT/EGraph.hpp>
-
-#include <fstream>
 
 namespace circ::eqsat {
 
@@ -472,7 +472,7 @@ namespace circ::eqsat {
       );
 
       auto matches = rule.match(egraph);
-      CHECK(matches.size() == 1);
+      CHECK_EQ(matches.size(), 1);
 
       rule.apply(egraph, builder);
       egraph.rebuild();
@@ -486,8 +486,7 @@ namespace circ::eqsat {
       CHECK(bondctx == contexts(egraph, mul3));
     }
 
-    TEST_CASE("Variadic N-ary Match")
-    {
+    TEST_CASE("Variadic Contexts") {
       TestGraph egraph;
       TestGraphBuilder builder(&egraph);
 
@@ -497,32 +496,29 @@ namespace circ::eqsat {
       auto d = egraph.make_leaf("d");
       auto e = egraph.make_leaf("e");
       auto f = egraph.make_leaf("f");
-      auto g = egraph.make_leaf("e");
-      auto h = egraph.make_leaf("f");
+      auto g = egraph.make_leaf("g");
+      auto h = egraph.make_leaf("h");
 
       auto mul1 = egraph.make_node("mul", {a, b});
       auto mul2 = egraph.make_node("mul", {c, d});
-      auto add1 = egraph.make_node("add", {e, f});
-      auto add2 = egraph.make_node("add", {g, h});
+      auto mul3 = egraph.make_node("mul", {e, f});
 
       egraph.make_node("CTX1", {mul1});
       egraph.make_node("CTX2", {mul2});
-      egraph.make_node("CTX3", {add1});
-      egraph.make_node("CTX4", {add2});
+      egraph.make_node("CTX3", {mul3});
 
       auto rule = TestRule(
-        "variadic-bond-operations",
-        "((let M (op_mul)) (let A (op_add)) (commutative-match $M... $A...))",
-        "(bond $M... $A...)"
-      );
+          "variadic-bond-operations",
+          "((let M (op_mul):C) (disjoint C...) (commutative-match $M...))",
+          "(bond $M...)");
+      CHECK_EQ(rule.match(egraph).size(), 1);
 
-      auto matches = rule.match(egraph);
-      CHECK(matches.size() == 1);
-
+      auto mul4 = egraph.make_node("mul", {g, h});
+      egraph.make_node("CTX4", {mul3, mul4});
+      CHECK_EQ(rule.match(egraph).size(), 1);
       rule.apply(egraph, builder);
       egraph.rebuild();
-
-      CHECK(egraph.bonded({mul1, mul2, add1, add2}));
+      egraph.dump("egraph-after.dot");
     }
 
     TEST_CASE("Variadic Unify")
@@ -556,7 +552,7 @@ namespace circ::eqsat {
       );
 
       auto matches = rule.match(egraph);
-      CHECK(matches.size() == 1);
+      CHECK_EQ(matches.size(), 1);
 
       rule.apply(egraph, builder);
       egraph.rebuild();
