@@ -270,11 +270,8 @@ namespace circ::eqsat {
     }
 
     // Filters out matches that does not satisfy disjoint contexts
-    Matches filter_constrained_disjoint_contexts(Matches &&matches, const disjoint_expr &constraint) const
-    {
-      if (constraint.contexts.size() < 2)
-        return std::move(matches);
-
+    Matches filter_constrained_disjoint_contexts(
+        Matches &&matches, const disjoint_expr &constraint) const {
       auto filter = [&] (const auto &match) { return has_disjoint_contexts(match, constraint.contexts); };
       matches.erase( std::remove_if(matches.begin(), matches.end(), filter), matches.end() );
 
@@ -360,12 +357,25 @@ namespace circ::eqsat {
       auto named = get_named_contexts(match.labels);
 
       std::unordered_map< context_node, int > counts;
-      for (const auto &name : contexts) {
-        for (const auto &nodes : named.at(name.ref())) {
-          for (const auto &node : nodes) {
-            counts[node]++;
-          }
-        }
+      for (const auto &context : contexts) {
+        std::visit(overloaded{
+          [&](const single_context &sc) {
+            for (const auto &nodes : named.at(std::string(sc.ref()))) {
+              for (const auto &node : nodes) {
+                counts[node]++;
+              }
+            }
+          },
+          [&](const variadic_context &vc) {
+            for (const auto &[name, set] : named) {
+              if (name.starts_with('_') && name.substr(1).starts_with(vc.ref()))
+                for (const auto &nodes : set) {
+                  for (const auto &node : nodes) {
+                    counts[node]++;
+                  }
+                }
+            }
+          }}, context);
       }
 
       return std::any_of(counts.begin(), counts.end(), [] (const auto &elem) {
