@@ -532,18 +532,44 @@ namespace circ::eqsat {
       return std::visit( [&] (const auto &l) { return match(e, l); }, lab );
     }
 
+    // not optimal but works for greedy solutions
     Matches match(const auto &e, variadic_label l) const
     {
-      matched_labels matches;
-      variadic_match match{l, {}};
+      using single_match = std::pair< Id, Substitutions >;
+      std::vector< single_match > matched;
       for (const auto &[id, eclass] : egraph.classes()) {
         if (auto subs = match_eclass(eclass, e); !subs.empty()) {
-          match.ids.insert(id);
-          matches.substitutions.merge(std::move(subs));
+          matched.emplace_back(id, std::move(subs));
         }
       }
-      matches.labels.push_back(match);
-      return {matches};
+
+      unsigned int maximal = 0;
+      Matches result;
+      // generate powerset of all combinations of matched nodes
+      auto power_set_size = std::pow(2, matched.size());
+      for(unsigned int i = 1; i < power_set_size; i++) {
+        std::set<Id> ids;
+        Substitutions subs;
+        for (unsigned int j = 0; j < matched.size(); j++) {
+          if (i & (1 << j)) {
+            ids.insert(matched[j].first);
+            subs.insert(matched[j].second.begin(), matched[j].second.end());
+          }
+        }
+
+        if (ids.size() > maximal) {
+          variadic_match vmatch{l, ids};
+          Matches matches{ matched_labels{{vmatch}, subs} };
+          for (const auto &con : pattern.context_constraints) {
+            matches = filter_constrained_disjoint_contexts(std::move(matches), con);
+          }
+          if (matches.size() > 0) {
+            result = std::move(matches);
+          }
+        }
+      }
+
+      return result;
     }
 
     unary_match named_match(const unary_label &l, Id id) const { return {l, id}; }
