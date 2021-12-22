@@ -158,6 +158,8 @@ namespace circ::eqsat {
 
     CHECK(parser("(union $M...)"));
     CHECK(parser("(bond $M...)"));
+
+    CHECK(parser("((let M (op_mul):C) (disjoint C...) (match $M...))"));
   }
 
 } // namespace circ::eqsat
