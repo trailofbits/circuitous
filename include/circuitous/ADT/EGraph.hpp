@@ -87,7 +87,6 @@ namespace circ::eqsat {
     std::string name() const { return "bond"; }
   };
 
-
   template< typename Storage >
   using ENodeBase = std::variant< StorageNode< Storage >, BondNode >;
 
@@ -206,7 +205,11 @@ namespace circ::eqsat {
       update_children(node, [&](auto child) { return _unions.find_compress(child); });
     }
 
-    Parents& parents(Id id) { return _classes.at(id).parents; }
+    void add_parent(Id id, ENode *parent)
+    {
+      _classes.at(id).parents.push_back(parent);
+    }
+
     const Parents& parents(Id id) const { return _classes.at(id).parents; }
 
     std::pair< Id, ENode* > add(ENode &&node)
@@ -221,7 +224,7 @@ namespace circ::eqsat {
 
       // add children - parent links
       for (auto child : enode->children()) {
-        parents(child).push_back(node_ptr);
+        add_parent(child, node_ptr);
       }
 
       return {id, node_ptr};
@@ -283,7 +286,7 @@ namespace circ::eqsat {
         for (auto *parent : parents(node)) {
           if (parent == bonded)
             continue;
-          parents(id).push_back(parent);
+          add_parent(id, parent);
           update_children(*parent, [id = id, node] (Id child) {
             return child == node ? id : child;
           });
@@ -360,15 +363,16 @@ namespace circ::eqsat {
 
       // deduplicate the parents, noting that equal
       // parents get merged and put on the worklist
-      std::unordered_map< Id, ENode* > new_parents;
+      std::set< Id > seen;
+      std::vector< ENode* > new_parents;
       for (auto *node : eclass.parents) {
-        auto id = _unions.find_compress( _ids[node] );
-        new_parents.try_emplace(id, node);
+        if (auto id = _unions.find_compress( _ids[node] ); !seen.count(id)) {
+          new_parents.push_back(node);
+          seen.insert(id);
+        }
       }
 
-      eclass.parents.clear();
-      for (auto[id, node] : new_parents)
-        eclass.parents.push_back(node);
+      eclass.parents = std::move(new_parents);
 
       // obliterate empty classes
       for (auto it = _classes.begin(); it != _classes.end(); ) {
