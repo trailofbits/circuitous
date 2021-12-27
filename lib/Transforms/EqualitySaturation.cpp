@@ -760,44 +760,9 @@ namespace circ::eqsat {
       "((let Ext (op_Trunc:64 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
     );
     rules.emplace_back( "advice-and-bond-mul-i128",
-        "((let Muls (op_Mul:128):C) (disjoint $C...) (commutative-match $Muls...))",
-        "((let Bond (bond $Muls...)) (let Adviced (op_Mul:128 op_Advice op_Advice)) (union $Bond $Adviced))"
+      "((let Muls (op_Mul:128):C) (disjoint C...) (commutative-match $Muls...))",
+      "((let Bond (bond $Muls...)) (let Adviced (op_Mul:128 op_Advice op_Advice)) (union $Bond $Adviced))"
     );
-
-    // rules.emplace_back( "binary-unification",
-    //   "((let A (?opa ?xa ?ya)) (let B (?opb ?xb ?yb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (equiv ?ya ?yb) (match $A $B))",
-    //   "(union $A $B)"
-    // );
-    // rules.emplace_back( "unary-unification",
-    //   "((let A (?opa ?xa)) (let B (?opb ?xb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (match $A $B))",
-    //   "(union $A $B)"
-    // );
-    // rules.emplace_back( "mul-advicing",
-    //     "((let Muls (op_Mul)) (commutative-match $Muls...))",
-    //     "((let Bond (bond $Muls...)) (let Adviced (op_Mul op_Advice op_Advice)) (union $Bond $Adviced))"
-    // );
-    // //   "((let A (?opa ?xa ?ya)) (let B (?opb ?xb ?yb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (equiv ?ya ?yb) (commutative-match $A $B))",
-    // //   "(union $A $B)"
-    // // );
-    // // rules.emplace_back( "unary-unification",
-    // //   "((let A (?opa ?xa)) (let B (?opb ?xb)) (equiv ?opa ?opb) (equiv ?xa ?xb) (commutative-match $A $B))",
-    // //   "(union $A $B)"
-    // // );
-    // rules.emplace_back( "bond-multiplications",
-    //   "((let A (op_Mul:64 ?a ?b):C1) (let B (op_Mul:64 ?c ?d):C2) (disjoint C1 C2) (commutative-match $A $B))",
-    //   "(bond $A $B)"
-    // );
-
-    // rules.emplace_back( "bond-additions",
-    //   "((let A (op_Add:64 ?a ?b):C1) (let B (op_Add:64 ?c ?d):C2) (disjoint C1 C2) (commutative-match $A $B))",
-    //   "(bond $A $B)"
-    // );
-
-
-    // rules.emplace_back( "advice-multiplications",
-    //     "(op_bond (op_Mul ?a ?b) (op_Mul ?c ?d))",
-    //     "(op_Mul (op_advice ?a ?c) (op_advice ?b ?d))"
-    // );
 
     std::ofstream outb("egraph-before.dot");
     to_dot(runner.egraph(), outb);
@@ -810,10 +775,12 @@ namespace circ::eqsat {
 
     auto eval = [] (const auto &node) -> std::uint64_t {
       // TODO(Heno) implement cost function
-      if (name(node) == "Mul")
-        return 100;
-      if (name(node) == "Add")
-        return 10;
+      if (name(node) == "Mul") {
+        return 100 * bitwidth(node).value();
+      }
+      if (name(node) == "Add") {
+        return 10 * bitwidth(node).value();
+      }
       return 1;
     };
 
