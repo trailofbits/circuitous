@@ -384,6 +384,38 @@ namespace circ::eqsat {
     const auto& classes() const { return _classes; }
     const auto& nodes() const { return _ids; }
 
+    struct UseEdge
+    {
+      const ENode *parent;
+      const ENode *child;
+      const unsigned index;
+
+      constexpr auto operator<=>(const UseEdge& other) const = default;
+
+      template< typename stream >
+      friend auto operator<<(stream &os, const UseEdge &edge) -> decltype(os << "")
+      {
+        return os << name(edge.parent) <<  "[" << edge.index << "] -> " << name(edge.child);
+      }
+    };
+
+    std::set<UseEdge> parents(const ENode *node)
+    {
+      std::set<UseEdge> result;
+
+      // we need to reconstruct parent nodes from class parents
+      for (auto parent : eclass(node).parents) {
+        unsigned index = 0;
+        for (auto child_id : parent->children()) {
+          for (auto ch : eclass(child_id).nodes)
+            if (ch == node)
+              result.insert({parent, ch, index});
+          index++;
+        }
+      }
+      return result;
+    }
+
   private:
     // stores heap allocated nodes of egraph
     std::vector< std::unique_ptr< ENode > > _nodes;
