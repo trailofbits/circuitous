@@ -69,6 +69,9 @@ namespace circ::eqsat {
 
   struct TestGraph : EGraph< StringNode >
   {
+    using Base  = EGraph< StringNode >;
+    using ENode = Base::Node;
+
     auto make_leaf(std::string_view atom)
     {
       auto candidate = ENode(std::string(atom));
@@ -119,6 +122,11 @@ namespace circ::eqsat {
     using operation = eqsat::operation;
 
     TestGraphBuilder(TestGraph *graph) : _graph(graph) {}
+
+    Id constrain(const Id node, const Id advice) const
+    {
+      return _graph->make_node("constraint", {node, advice});
+    }
 
     Id synthesize(const eqsat::expr &e, const auto &subs,
                   const auto &places, const auto &subexprs) const
