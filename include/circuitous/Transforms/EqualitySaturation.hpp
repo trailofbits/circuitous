@@ -956,4 +956,70 @@ namespace circ::eqsat {
 
   CircuitPtr EqualitySaturation(const CircuitPtr &);
 
+  template< typename Graph, typename Builder >
+  void lower_advices(Graph &egraph, const Builder &builder)
+  {
+    using ENode = typename Graph::ENode;
+    using UseEdge = typename Graph::UseEdge;
+
+    auto enumerate = [] (const auto &container, auto &&fn) {
+      std::size_t i = 0;
+      for (const auto &val : container) {
+          fn(i++, val);
+      }
+    };
+
+    // gather all parent -> advice edges
+    std::set< UseEdge > adviced;
+    for (const auto &[node, id] : egraph.nodes()) {
+      if (name(node) == "Advice")
+        adviced.merge(egraph.parents(node));
+    }
+
+    // yield bond nodes that are in equality calss with
+    // a parent from adviced edge
+    auto adviced_bonds = [&] (auto edge, auto yield) {
+      auto parent_eclass = egraph.eclass(edge.parent);
+      for (auto node : parent_eclass.nodes) {
+        if (node != edge.parent) {
+          CHECK(node->is_bond_node());
+          yield(node);
+        }
+      }
+    };
+
+    // obtains contexts for a child of a bond node
+    auto contexts = [&] (const ENode *bond, std::size_t idx, auto yield) {
+      const auto &node = std::get< BondNode>( *bond );
+
+      auto parents_from = idx ? node.children_parents[idx - 1] : 0;
+      auto parents_to   = node.children_parents[idx];
+      const auto &parents = egraph.parents(egraph.find(bond));
+
+      for (auto i = parents_from; i < parents_to; i++) {
+        // TODO yield contexts
+        // TODO what happens when you have multiple contexts
+        yield(parents[i]);
+      }
+    };
+
+    // traverse all children of bond nodes that are linked to an adviced edge
+    for (const auto &edge : adviced) {
+      adviced_bonds(edge, [&] (const ENode* bond) {
+        enumerate(bond->children(), [&] (auto bonded_idx, auto bonded_eclass) {
+          for (const auto &bonded : egraph.eclass(bonded_eclass).nodes) {
+            // constrain adviced value by child of bonded node
+            auto arg = bonded->children().at(edge.index);
+            auto advice = egraph.find(edge.child);
+            auto constraint  = builder.constrain(arg, advice);
+            // hook constraints to dedicated contexts
+            contexts(bond, bonded_idx, [&] (auto ctx) {
+              ctx->children().push_back(constraint);
+            });
+          }
+        });
+      });
+    }
+  }
+
 } // namespace circ::eqsat
