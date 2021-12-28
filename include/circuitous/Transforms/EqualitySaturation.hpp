@@ -543,7 +543,6 @@ namespace circ::eqsat {
         }
       }
 
-      unsigned int maximal = 0;
       Matches result;
       // generate powerset of all combinations of matched nodes
       auto power_set_size = std::pow(2, matched.size());
@@ -557,7 +556,7 @@ namespace circ::eqsat {
           }
         }
 
-        if (ids.size() > maximal) {
+        if (ids.size() > result.size()) {
           variadic_match vmatch{l, ids};
           Matches matches{ matched_labels{{vmatch}, subs} };
           for (const auto &con : pattern.context_constraints) {
@@ -959,7 +958,7 @@ namespace circ::eqsat {
   template< typename Graph, typename Builder >
   void lower_advices(Graph &egraph, const Builder &builder)
   {
-    using ENode = typename Graph::ENode;
+    using Node = typename Graph::Node;
     using UseEdge = typename Graph::UseEdge;
 
     auto enumerate = [] (const auto &container, auto &&fn) {
@@ -976,21 +975,22 @@ namespace circ::eqsat {
         adviced.merge(egraph.parents(node));
     }
 
-    // yield bond nodes that are in equality calss with
+    // yield bond nodes that are in equality class with
     // a parent from adviced edge
     auto adviced_bonds = [&] (auto edge, auto yield) {
       auto parent_eclass = egraph.eclass(edge.parent);
       for (auto node : parent_eclass.nodes) {
         if (node != edge.parent) {
-          CHECK(node->is_bond_node());
-          yield(node);
+          if (node->is_bond_node()) {
+            yield(node);
+          }
         }
       }
     };
 
     // obtains contexts for a child of a bond node
-    auto hook_to_contexts = [&] (const ENode *bond, std::size_t idx, auto yield) {
-      const auto &node = std::get< BondNode>( *bond );
+    auto hook_to_contexts = [&] (const Node *bond, std::size_t idx, auto yield) {
+      const auto &node = std::get< BondNode >( *bond );
 
       auto parents_from = idx ? node.children_parents[idx - 1] : 0;
       auto parents_to   = node.children_parents[idx];
@@ -1005,7 +1005,7 @@ namespace circ::eqsat {
 
     // traverse all children of bond nodes that are linked to an adviced edge
     for (const auto &edge : adviced) {
-      adviced_bonds(edge, [&] (const ENode* bond) {
+      adviced_bonds(edge, [&] (const Node* bond) {
         enumerate(bond->children(), [&] (auto bonded_idx, auto bonded_eclass) {
           for (const auto &bonded : egraph.eclass(bonded_eclass).nodes) {
             // constrain adviced value by child of bonded node
@@ -1014,7 +1014,10 @@ namespace circ::eqsat {
             auto constraint  = builder.constrain(arg, advice);
             // hook constraints to dedicated contexts
             hook_to_contexts(bond, bonded_idx, [&] (auto ctx) {
-              ctx->children().push_back(constraint);
+              const auto &children = ctx->children();
+              if (auto it = std::find(children.begin(), children.end(), constraint) == children.end()) {
+                ctx->children().push_back(constraint);
+              }
             });
           }
         });
