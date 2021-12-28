@@ -400,7 +400,7 @@ namespace circ::eqsat {
       }
     };
 
-    std::set<UseEdge> parents(const ENode *node)
+    std::set<UseEdge> parents(const ENode *node) const
     {
       std::set<UseEdge> result;
 

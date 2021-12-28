@@ -184,6 +184,7 @@ namespace circ::eqsat {
       auto bw = op.bitwidth;
 
       auto sized  = [bw] (auto name) { return SizedOp{std::string(name), bw}; };
+      auto advice = [bw] (auto name) { return AdviceOp{std::string(name), bw, 0}; };
       auto opcode = []   (auto name) { return OpCode{std::string(name)}; };
 
       auto value = llvm::StringSwitch< std::optional< OpTemplate > >(name)
@@ -196,7 +197,7 @@ namespace circ::eqsat {
         // .Case("out.error_flag")
         .Case("undefined", sized(name))
         // .Case("memory")
-        .Case("advice", sized(name))
+        .Case("Advice", advice(name))
         // .Case("instruction_bits")
         .Case("register_constraint",  opcode(name))
         .Case("advice_constraint",    opcode(name))
@@ -278,6 +279,14 @@ namespace circ::eqsat {
     Id make_constant(const constant &con) const
     {
       return graph.add(ENode(make_constant_template(con))).first;
+    }
+
+    Id constrain(const Id node, const Id advice) const
+    {
+      auto con = ENode(OpCode{"advice_constraint"});
+      con.children().push_back(node);
+      con.children().push_back(advice);
+      return graph.add(std::move(con)).first;
     }
 
     Id synthesize(const expr &e, const auto &subs, const auto &places, const auto &subexprs) const
@@ -394,6 +403,7 @@ namespace circ::eqsat {
     }
 
     const Graph& egraph() const { return _egraph; }
+    const PatternCircuitBuilder& builder() const { return _builder; }
 
     ENode* node(Operation *op) { return _nodes[op]; }
 
@@ -716,7 +726,7 @@ namespace circ::eqsat {
         return cached.at(enode);
 
       if (detail::needs_compute_bitwidth(enode)) {
-        LOG(FATAL) << "Not implemented: update bitwidths.";
+        LOG(FATAL) << "Not implemented: update bitwidths of " << name(enode);
       }
 
       auto op = make_operation(enode, circuit);
@@ -761,13 +771,13 @@ namespace circ::eqsat {
     );
     rules.emplace_back( "advice-and-bond-mul-i128",
       "((let Muls (op_Mul:128):C) (disjoint C...) (commutative-match $Muls...))",
-      "((let Bond (bond $Muls...)) (let Adviced (op_Mul:128 op_Advice op_Advice)) (union $Bond $Adviced))"
+      "((let Bond (bond $Muls...)) (let Adviced (op_Mul:128 op_Advice:128 op_Advice:128)) (union $Bond $Adviced))"
     );
 
     std::ofstream outb("egraph-before.dot");
     to_dot(runner.egraph(), outb);
     runner.run(rules);
-
+    lower_advices(runner.egraph(), runner.builder());
     LOG(INFO) << "Equality saturation stopped";
 
     std::ofstream outa("egraph-after.dot");
