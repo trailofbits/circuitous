@@ -298,6 +298,7 @@ namespace circ::eqsat {
 
     Id bond_child_class(const BondNode& node, unsigned parent) const
     {
+      // TOOD: find first < parent
       for (unsigned i = 0; i < node.children_parents.size(); i++) {
         if (parent < node.children_parents[i])
           return node.children[i];

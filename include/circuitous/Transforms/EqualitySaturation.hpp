@@ -353,7 +353,7 @@ namespace circ::eqsat {
     // Returns true if 'match' has non overlapping context sets
     bool has_disjoint_contexts(const matched_labels &match, const auto &contexts) const
     {
-      // TODO simplify with set
+      // TODO(Heno): simplify with set
       auto named = get_named_contexts(match.labels);
 
       std::unordered_map< context_node, int > counts;
@@ -793,7 +793,7 @@ namespace circ::eqsat {
     std::set< Id > matched_ids_for_labels(const matched_labels &match,
                                           const std::vector< label > &labels) const
     {
-      // TODO use coroutines here
+      // TODO(Heno): use coroutines here
       std::set< Id > ids;
 
       for (const auto & l : labels) {
@@ -989,7 +989,7 @@ namespace circ::eqsat {
     };
 
     // obtains contexts for a child of a bond node
-    auto contexts = [&] (const ENode *bond, std::size_t idx, auto yield) {
+    auto hook_to_contexts = [&] (const ENode *bond, std::size_t idx, auto yield) {
       const auto &node = std::get< BondNode>( *bond );
 
       auto parents_from = idx ? node.children_parents[idx - 1] : 0;
@@ -997,9 +997,9 @@ namespace circ::eqsat {
       const auto &parents = egraph.parents(egraph.find(bond));
 
       for (auto i = parents_from; i < parents_to; i++) {
-        // TODO yield contexts
-        // TODO what happens when you have multiple contexts
-        yield(parents[i]);
+        for (auto ctx : contexts(egraph, egraph.find(parents[i]))) {
+          yield(ctx);
+        }
       }
     };
 
@@ -1013,7 +1013,7 @@ namespace circ::eqsat {
             auto advice = egraph.find(edge.child);
             auto constraint  = builder.constrain(arg, advice);
             // hook constraints to dedicated contexts
-            contexts(bond, bonded_idx, [&] (auto ctx) {
+            hook_to_contexts(bond, bonded_idx, [&] (auto ctx) {
               ctx->children().push_back(constraint);
             });
           }
