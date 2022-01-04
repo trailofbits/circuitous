@@ -183,9 +183,9 @@ namespace circ::eqsat {
       auto name = op.name;
       auto bw = op.bitwidth;
 
-      auto sized  = [bw] (auto name) { return SizedOp{std::string(name), bw}; };
-      auto advice = [bw] (auto name) { return AdviceOp{std::string(name), bw, 0}; };
-      auto opcode = []   (auto name) { return OpCode{std::string(name)}; };
+      auto sized  = [&] (auto name) { return SizedOp{std::string(name), bw}; };
+      auto advice = [&] (auto name) { return AdviceOp{std::string(name), bw, advice_idx++}; };
+      auto opcode = [&] (auto name) { return OpCode{std::string(name)}; };
 
       auto value = llvm::StringSwitch< std::optional< OpTemplate > >(name)
         // .Case("circuit")
@@ -197,7 +197,6 @@ namespace circ::eqsat {
         // .Case("out.error_flag")
         .Case("undefined", sized(name))
         // .Case("memory")
-        .Case("Advice", advice(name))
         // .Case("instruction_bits")
         .Case("register_constraint",  opcode(name))
         .Case("advice_constraint",    opcode(name))
@@ -207,7 +206,7 @@ namespace circ::eqsat {
         .Case("read_constraint",      opcode(name))
         .Case("unused_constraint",    opcode(name))
 
-        .Case("Advice", opcode(name))
+        .Case("Advice", advice(name))
 
         .Case("Add",   sized(name))
         .Case("+",     sized("Add"))
@@ -310,6 +309,7 @@ namespace circ::eqsat {
 
   private:
     Graph &graph;
+    mutable size_t advice_idx = 0;
   };
 
 
@@ -409,7 +409,7 @@ namespace circ::eqsat {
 
   private:
     unsigned int steps = 0;
-    static constexpr unsigned int max_steps = 2;
+    static constexpr unsigned int max_steps = 1;
 
     Graph _egraph;
     Nodes _nodes;
@@ -752,31 +752,59 @@ namespace circ::eqsat {
 
     auto runner = Runner::make_runner(circuit);
 
-    RewriteRules rules;
-    rules.emplace_back( "extend-mul-i8-to-i128",
+    RewriteRules extend_arithmetic;
+    // extend all multiplications to i128
+    extend_arithmetic.emplace_back( "extend-mul-i8-to-i128",
       "((let M (op_Mul:8 ?a ?b)) (commutative-match $M))",
       "((let Ext (op_Trunc:8 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
     );
-    rules.emplace_back( "extend-mul-i16-to-i128",
+    extend_arithmetic.emplace_back( "extend-mul-i16-to-i128",
       "((let M (op_Mul:16 ?a ?b)) (commutative-match $M))",
       "((let Ext (op_Trunc:16 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
     );
-    rules.emplace_back( "extend-mul-i32-to-i128",
+    extend_arithmetic.emplace_back( "extend-mul-i32-to-i128",
       "((let M (op_Mul:32 ?a ?b)) (commutative-match $M))",
       "((let Ext (op_Trunc:32 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
     );
-    rules.emplace_back( "extend-mul-i64-to-i128",
+    extend_arithmetic.emplace_back( "extend-mul-i64-to-i128",
       "((let M (op_Mul:64 ?a ?b)) (commutative-match $M))",
       "((let Ext (op_Trunc:64 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
     );
-    rules.emplace_back( "advice-and-bond-mul-i128",
+
+    // extend all additions to i128
+    extend_arithmetic.emplace_back( "extend-add-i8-to-i128",
+      "((let M (op_Add:8 ?a ?b)) (commutative-match $M))",
+      "((let Ext (op_Trunc:8 (op_Add:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
+    );
+    extend_arithmetic.emplace_back( "extend-add-i16-to-i128",
+      "((let M (op_Add:16 ?a ?b)) (commutative-match $M))",
+      "((let Ext (op_Trunc:16 (op_Add:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
+    );
+    extend_arithmetic.emplace_back( "extend-add-i32-to-i128",
+      "((let M (op_Add:32 ?a ?b)) (commutative-match $M))",
+      "((let Ext (op_Trunc:32 (op_Add:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
+    );
+    extend_arithmetic.emplace_back( "extend-add-i64-to-i128",
+      "((let M (op_Add:64 ?a ?b)) (commutative-match $M))",
+      "((let Ext (op_Trunc:64 (op_Add:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
+    );
+
+
+    runner.run(extend_arithmetic);
+
+    RewriteRules bond_arithmetic;
+    bond_arithmetic.emplace_back( "advice-and-bond-mul-i128",
       "((let Muls (op_Mul:128):C) (disjoint C...) (commutative-match $Muls...))",
       "((let Bond (bond $Muls...)) (let Adviced (op_Mul:128 op_Advice:128 op_Advice:128)) (union $Bond $Adviced))"
     );
 
-    std::ofstream outb("egraph-before.dot");
-    to_dot(runner.egraph(), outb);
-    runner.run(rules);
+    bond_arithmetic.emplace_back( "advice-and-bond-add-i128",
+      "((let Adds (op_Add:128):C) (disjoint C...) (commutative-match $Adds...))",
+      "((let Bond (bond $Adds...)) (let Adviced (op_Add:128 op_Advice:128 op_Advice:128)) (union $Bond $Adviced))"
+    );
+
+    runner.run(bond_arithmetic);
+
     lower_advices(runner.egraph(), runner.builder());
     LOG(INFO) << "Equality saturation stopped";
 
@@ -786,10 +814,10 @@ namespace circ::eqsat {
     auto eval = [] (const auto &node) -> std::uint64_t {
       // TODO(Heno) implement cost function
       if (name(node) == "Mul") {
-        return 100 * bitwidth(node).value();
+        return 1000; // * bitwidth(node).value();
       }
       if (name(node) == "Add") {
-        return 10 * bitwidth(node).value();
+        return 100; // * bitwidth(node).value();
       }
       return 1;
     };
