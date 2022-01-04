@@ -597,8 +597,14 @@ namespace circ::eqsat {
     Substitutions match_eclass(const auto &eclass, const auto &e) const
     {
       Substitutions res;
-      for (const auto &node : eclass.nodes)
+      for (const auto &node : eclass.nodes) {
+        // FIXME: ignore eclasses that contain bond nodes for now
+        // This solves infinite chains of bonds
+        if (node->is_bond_node()) {
+          return {};
+        }
         res.merge(match_enode(node, e));
+      }
       return res;
     }
 
