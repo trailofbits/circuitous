@@ -551,8 +551,9 @@ namespace circ::eqsat {
         Substitutions subs;
         for (unsigned int j = 0; j < matched.size(); j++) {
           if (i & (1 << j)) {
-            ids.insert(matched[j].first);
-            subs.insert(matched[j].second.begin(), matched[j].second.end());
+            const auto &[id, subs] = matched[j];
+            ids.insert(id);
+            subs.insert(subs.begin(), subs.end());
           }
         }
 
@@ -998,8 +999,8 @@ namespace circ::eqsat {
     auto hook_to_contexts = [&] (const Node *bond, std::size_t idx, auto yield) {
       const auto &node = std::get< BondNode >( *bond );
 
-      auto parents_from = idx ? node.children_parents[idx - 1] : 0;
-      auto parents_to   = node.children_parents[idx];
+      auto parents_from   = idx ? node.children_parents[idx - 1] : 0;
+      auto parents_to     = node.children_parents[idx];
       const auto &parents = egraph.parents(egraph.find(bond));
 
       for (auto i = parents_from; i < parents_to; i++) {
