@@ -157,7 +157,7 @@ namespace circ::eqsat {
   template< typename ENode >
   struct EClass
   {
-    using Nodes   = std::vector< ENode* >;
+    using Nodes   = std::vector< ENode * >;
     using Parents = Nodes;
 
     bool empty() const { return nodes.empty(); }
@@ -212,7 +212,7 @@ namespace circ::eqsat {
 
     const Parents& parents(Id id) const { return _classes.at(id).parents; }
 
-    std::pair< Id, ENode* > add(ENode &&node)
+    std::pair< Id, ENode * > add(ENode &&node)
     {
       canonicalize(node);
       // allocate new egraph node
@@ -365,7 +365,7 @@ namespace circ::eqsat {
       // deduplicate the parents, noting that equal
       // parents get merged and put on the worklist
       std::set< Id > seen;
-      std::vector< ENode* > new_parents;
+      std::vector< ENode * > new_parents;
       for (auto *node : eclass.parents) {
         if (auto id = _unions.find_compress( _ids[node] ); !seen.count(id)) {
           new_parents.push_back(node);
@@ -428,7 +428,7 @@ namespace circ::eqsat {
     std::unordered_map< Id, EClass > _classes;
 
     // stores equality ids of enodes
-    std::unordered_map< const ENode*, Id > _ids;
+    std::unordered_map< const ENode *, Id > _ids;
 
     // modified eclasses that needs to be rebuild
     std::vector< Id > _pending;
