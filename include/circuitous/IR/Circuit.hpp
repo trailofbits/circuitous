@@ -22,11 +22,12 @@ namespace circ {
     static circuit_ptr_t make_circuit(std::string_view arch_name,
                                       std::string_view os_name,
                                       std::string_view bytes);
-    void Serialize(std::ostream &os);
 
-    void Serialize(std::function<std::ostream &(const std::string &)> os_opener);
+    void serialize(std::ostream &os);
+    void serialize(std::string_view filename);
 
-    static std::unique_ptr<Circuit> Deserialize(std::istream &is);
+    static circuit_ptr_t deserialize(std::istream &is);
+    static circuit_ptr_t deserialize(std::string_view filename);
 
     static std::string op_code_str() { return "circuit"; }
 
