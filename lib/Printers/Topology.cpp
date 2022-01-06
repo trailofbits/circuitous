@@ -9,8 +9,8 @@
 
 namespace circ {
 
-void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
-                   std::function<bool(Operation *)> accept) {
+void print_topology(std::ostream &os, Operation *op, unsigned max_depth,
+                    std::function<bool(Operation *)> accept) {
   if (!max_depth || !accept(op)) {
     os << 'V' << op->size;  // Treat this as a hole.
     return;
@@ -33,14 +33,14 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       break;
     case Extract::kind:
       os << "(E" << op->size << ' ';
-      PrintTopology(os, op->operands[0], max_depth, accept);
+      print_topology(os, op->operands[0], max_depth, accept);
       os << ')';
       break;
     case Concat::kind:
       os << "(C";
       for (auto sub_op : op->operands) {
         os << ' ';
-        PrintTopology(os, sub_op, max_depth, accept);
+        print_topology(os, sub_op, max_depth, accept);
       }
       os << ')';
       break;
@@ -49,7 +49,7 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
     case CountLeadingZeroes::kind:
     case CountTrailingZeroes::kind:
       os << "(F" << op->size << ' ';
-      PrintTopology(os, op->operands[0], max_depth, accept);
+      print_topology(os, op->operands[0], max_depth, accept);
       os << ')';
       break;
     case RegConstraint::kind:
@@ -59,7 +59,7 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       os << "(=";
       for (auto sub_op : op->operands) {
         os << ' ';
-        PrintTopology(os, sub_op, max_depth, accept);
+        print_topology(os, sub_op, max_depth, accept);
       }
       os << ')';
       break;
@@ -69,7 +69,7 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       topos.reserve(op->operands.Size());
       for (auto sub_op : op->operands) {
         std::stringstream ss;
-        PrintTopology(ss, sub_op, max_depth, accept);
+        print_topology(ss, sub_op, max_depth, accept);
         topos.emplace_back(ss.str());
       }
 
@@ -85,12 +85,12 @@ void PrintTopology(std::ostream &os, Operation *op, unsigned max_depth,
       os << "(^";
       for (auto sub_op : op->operands) {
         os << ' ';
-        PrintTopology(os, sub_op, max_depth, accept);
+        print_topology(os, sub_op, max_depth, accept);
       }
       os << ')';
       break;
     case Circuit::kind:
-      return PrintTopology(os, op->operands[0], max_depth + 1u, accept);
+      return print_topology(os, op->operands[0], max_depth + 1u, accept);
   }
 }
 
