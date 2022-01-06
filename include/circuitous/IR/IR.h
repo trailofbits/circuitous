@@ -37,7 +37,7 @@ struct Operation : public Node<Operation>, HasStringMeta {
   virtual ~Operation() = default;
 
   virtual std::string Name() const;
-  static std::string op_code_str() { LOG(FATAL) << "Not implemented"; }
+  static std::string op_code_str() { NOT_IMPLEMENTED(); }
   virtual bool Equals(const Operation *that) const;
 
   auto &operator[](std::size_t idx) { return operands[idx]; }
@@ -169,7 +169,7 @@ struct Register : Operation, make_kind< LeafValue, tag_fragment< 3 >, meta_fragm
 
   static std::string op_code_str() { return "register"; }
   std::string Name() const override { return "register." + reg_name; }
-  bool Equals(const Operation *other) const override { LOG(FATAL) << "TODO"; }
+  bool Equals(const Operation *other) const override { NOT_IMPLEMENTED(); }
 
   std::string reg_name;
 };
@@ -355,7 +355,7 @@ struct ReadConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 5
   static std::string op_code_str() { return "read_constraint"; }
   std::string Name() const override { return "read_constraint"; }
 
-  Operation *val_arg() const { LOG(FATAL) << "There is no `val_arg` in read_constraint."; }
+  Operation *val_arg() const { UNREACHABLE() << "There is no `val_arg` in read_constraint."; }
 };
 
 struct UnusedConstraint : Operation, make_kind< Constraint, tag_fragment< 6 > > {
