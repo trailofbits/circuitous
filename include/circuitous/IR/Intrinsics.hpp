@@ -197,7 +197,7 @@ namespace circ::irops {
     Instance_(llvm::CallInst *call) : fn((call) ? call->getCalledFunction() : nullptr) {}
     Instance_(llvm::Value *val) : Instance_(llvm::dyn_cast_or_null< llvm::CallInst >(val)) {}
 
-    operator bool() { return fn && I::is(fn); }
+    operator bool() const { return fn && I::is(fn); }
   };
 
   // Helper class that can wraps already existing function.
