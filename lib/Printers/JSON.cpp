@@ -9,7 +9,7 @@
 
 namespace circ {
 
-void PrintJSON(std::ostream &os, Circuit *circuit) {
+void print_json(std::ostream &os, Circuit *circuit) {
   auto id = [](Operation *op) -> std::string {
     CHECK(op);
     std::stringstream ss;

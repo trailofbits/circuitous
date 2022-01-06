@@ -10,7 +10,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ
 {
-  void PrintSMT(std::ostream &os, Circuit *circuit)
+  void print_smt(std::ostream &os, Circuit *circuit)
   {
     try {
       auto visitor = IRToSMTVisitor(circuit->ptr_size);
@@ -24,7 +24,7 @@ namespace circ
     }
   }
 
-  void PrintBitBlastSMT(std::ostream &os, Circuit *circuit)
+  void print_bitblasted_smt(std::ostream &os, Circuit *circuit)
   {
     try {
       auto visitor = IRToBitBlastableSMTVisitor(circuit->ptr_size);
