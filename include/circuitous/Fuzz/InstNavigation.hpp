@@ -24,7 +24,12 @@ namespace circ::ifuzz {
       return std::make_optional(&r_op.reg);
     }
     if (op_idx == 1) {
-      return std::make_optional( (snd == 0) ? &r_op.addr.base_reg : &r_op.addr.index_reg );
+      switch(snd) {
+        case 0: return { &r_op.addr.base_reg };
+        case 1: return { &r_op.addr.index_reg };
+        case 2: return { &r_op.addr.segment_base_reg };
+      }
+
     }
     if (op_idx == 0xff) {
       return std::nullopt;
@@ -40,8 +45,11 @@ namespace circ::ifuzz {
       return std::make_optional(&*s_op.reg);
     }
     if (op_idx == 1) {
-      return std::make_optional( (snd == 0) ? &*s_op.address->base_reg
-                                            : &*s_op.address->index_reg );
+      switch(snd) {
+        case 0: CHECK(s_op.address->base_reg.has_value()); return { &*s_op.address->base_reg };
+        case 1: CHECK(s_op.address->index_reg.has_value());return { &*s_op.address->index_reg };
+        case 2: CHECK(s_op.address->segment.has_value());  return { &*s_op.address->segment };
+      }
     }
     if (op_idx == 0xff) {
       return std::nullopt;
@@ -73,6 +81,7 @@ namespace circ::ifuzz {
   static inline auto reg_reg() { return std::make_tuple(0u, 0u); }
   static inline auto addr_base_reg() { return std::make_tuple(1u, 0u); }
   static inline auto addr_index_reg() { return std::make_tuple(1u, 1u); }
+  static inline auto addr_segment_reg() { return std::make_tuple(1u, 2u); }
 
   template<typename S>
   void assign_reg(S &vessel, reg_navigation_t navigation, shadowinst::Reg s_reg) {
