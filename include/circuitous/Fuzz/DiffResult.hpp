@@ -4,8 +4,9 @@
 
 #pragma once
 
-namespace circ::ifuzz::permutate {
+#include <circuitous/Support/Check.hpp>
 
+namespace circ::ifuzz::permutate {
 
   enum class diff_result : uint32_t
   {
@@ -19,7 +20,7 @@ namespace circ::ifuzz::permutate {
       case diff_result::unrelated: return "unrelated";
       case diff_result::exact:     return "exact";
       case diff_result::unknown:   return "unknown";
-      default: LOG(FATAL) << "Unreachable.";
+      default: UNREACHABLE();
     }
   }
 
@@ -38,8 +39,8 @@ namespace circ::ifuzz::permutate {
     if (a == diff_result::pure) return a;
     if (b == diff_result::pure) return b;
 
-    LOG(FATAL) << "Cannot join " << static_cast< uint32_t >(a) << " with "
-               << static_cast< uint32_t >(b);
+    UNREACHABLE() << "Cannot join " << static_cast< uint32_t >(a) << " with "
+                  << static_cast< uint32_t >(b);
   }
 
   using struct_icheck_res_t = std::vector< diff_result >;

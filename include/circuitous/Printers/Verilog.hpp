@@ -85,7 +85,7 @@ namespace circ::print::verilog {
 
     std::string &give_name(Operation *op, std::string name) {
       auto [it, flag] = op_names.emplace(op, std::move(name));
-      CHECK(flag) << std::endl << dbg().str();
+      CHECK(flag) << "\n" << dbg().str();
       return it->second;
     }
 
@@ -283,12 +283,12 @@ namespace circ::print::verilog {
         case Concat::kind:
           return ",";
         default:
-          LOG(FATAL) << "Unsupported op_code: " << pretty_print(op);
+          log_kill() << "Unsupported op_code: " << pretty_print(op);
       }
     }
 
     std::string Visit(Operation *op) {
-      LOG(FATAL) << "Cannot print in verilog: " << pretty_print< true >(op)
+      log_kill() << "Cannot print in verilog: " << pretty_print< true >(op)
                  << "\n" << ctx.dbg().str();
     }
 

@@ -125,7 +125,7 @@ namespace circ::eqsat {
     OpTemplate Visit(Or *op)  { return opcode(op); }
     OpTemplate Visit(And *op) { return opcode(op); }
 
-    OpTemplate Visit(Circuit *) { LOG(FATAL) << "Unexpected case encountered in Visit."; }
+    OpTemplate Visit(Circuit *) { UNREACHABLE() << "Unexpected case encountered in Visit."; }
   };
 
   struct EGraphBuilder
@@ -175,7 +175,7 @@ namespace circ::eqsat {
 
     OpTemplate make_constant_template(const constant &con) const
     {
-      LOG(FATAL) << "not implemented";
+      UNREACHABLE() << "not implemented";
     }
 
     OpTemplate make_operation_template(const operation &op) const
@@ -271,7 +271,7 @@ namespace circ::eqsat {
         .Default( std::nullopt );
 
         if ( !value )
-          LOG(FATAL) << "unhadled operation " << name;
+          UNREACHABLE() << "unhadled operation " << name;
         return value.value();
     }
 
@@ -303,7 +303,7 @@ namespace circ::eqsat {
             node.children().push_back( synth(child) );
           return graph.add(std::move(node)).first;
         },
-        [&] (const auto&)         -> Id { LOG(FATAL) << "unsupported node"; },
+        [&] (const auto&)         -> Id { UNREACHABLE() << "unsupported node"; },
       }, root(e));
     }
 
@@ -653,7 +653,7 @@ namespace circ::eqsat {
       }, op);
 
       if ( !value )
-        LOG(FATAL) << "unhadled opcode " << to_string(op);
+        UNREACHABLE() << "unhadled opcode " << to_string(op);
       return value;
     }
 
@@ -748,7 +748,7 @@ namespace circ::eqsat {
     using RewriteRules = eqsat::CircuitRewriteRules;
     using EGraph = typename Runner::EGraph;
 
-    LOG(INFO) << "Start equality saturation";
+    log_info() << "Start equality saturation";
 
     auto runner = Runner::make_runner(circuit);
 
@@ -806,7 +806,7 @@ namespace circ::eqsat {
     runner.run(bond_arithmetic);
 
     lower_advices(runner.egraph(), runner.builder());
-    LOG(INFO) << "Equality saturation stopped";
+    log_info() << "Equality saturation stopped";
 
     std::ofstream outa("egraph-after.dot");
     to_dot(runner.egraph(), outa);

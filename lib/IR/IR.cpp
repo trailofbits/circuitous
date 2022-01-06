@@ -5,15 +5,16 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/IR/Memory.hpp>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <glog/logging.h>
+#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Support/Check.hpp>
+
+
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/Module.h>
-#pragma clang diagnostic pop
+CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <sstream>
 #include <unordered_map>
@@ -62,7 +63,7 @@ bool Operation::Equals(const Operation *that) const {
 }
 
 std::string Operation::Name() const {
-  LOG(FATAL) << op_code << " does not provide Name() method override.";
+  UNREACHABLE() << op_code << " does not provide Name() method override.";
 }
 
 #define STREAM_NAME(cls, ...) \

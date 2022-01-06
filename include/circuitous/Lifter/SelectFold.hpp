@@ -172,11 +172,11 @@ namespace circ {
         uint32_t dbits_size = static_cast< uint32_t >(nbits - obits);
         return irops::make< irops::Concat >(ir, {ir.getIntN(dbits_size, 0), selector});
 
-        LOG(FATAL) << "Cannot coerce selector:\n" << dbg_dump(selector)
-                   << "\nof select:\n"
-                   << dbg_dump(original)
-                   << "\nWhere blueprint is:\n"
-                   << dbg_dump(node);
+        UNREACHABLE() << "Cannot coerce selector:\n" << dbg_dump(selector)
+                      << "\nof select:\n"
+                      << dbg_dump(original)
+                      << "\nWhere blueprint is:\n"
+                      << dbg_dump(node);
       };
 
       for (auto &[ctx_, selects] : ctx_to_selects) {

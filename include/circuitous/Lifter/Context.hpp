@@ -114,7 +114,7 @@ namespace circ {
       switch (ptr_size) {
         case 64: return allowed64.count(name) != 0;
         case 32: return allowed32.count(name) != 0;
-        default: LOG(FATAL) << "Unsupported ptr size";
+        default: UNREACHABLE() << "Unsupported ptr size";
       }
     }
 
@@ -130,7 +130,7 @@ namespace circ {
           dbg << " " << reg->name;
         }
       });
-      LOG(INFO) << "Initialized regs as: [" << dbg.str() << " ]" << std::endl;
+      log_info() << "Initialized regs as: [" << dbg.str() << " ]\n";
     }
   };
   using CtxRef = Ctx &;

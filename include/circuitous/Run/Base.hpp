@@ -151,7 +151,7 @@ namespace circ::run {
 
     template<typename T>
     std::unordered_map<T *, value_type> get_derived() const {
-      LOG(FATAL) << "Base_ cannot export derived values.";
+      log_kill() << "Base_ cannot export derived values.";
     }
 
     std::string val_as_str(Operation *op)

@@ -109,7 +109,7 @@ struct Verifier {
           return Exactly(2, op);
       }
     }
-    LOG(FATAL) << "Cannot verify kind: " << to_string(op->op_code);
+    UNREACHABLE() << "Cannot verify kind: " << to_string(op->op_code);
   }
 
   bool Verify(Operation *op) {
@@ -262,17 +262,17 @@ template<bool PrintWarnings=false>
 static inline void VerifyCircuit(const std::string &prefix,
                                  Circuit *circuit,
                                  const std::string &suffix="Done.") {
-  LOG(INFO) << prefix;
+  log_info() << prefix;
   const auto &[status, msg, warnings] = VerifyCircuit(circuit);
   if (!status) {
-    LOG(ERROR) << "WARNINGS:\n" << warnings;
-    LOG(ERROR) << "FATAL ERRORS:\n" << msg;
-    LOG(FATAL) << "Circuit is invalid";
+    log_kill() << "WARNINGS:\n" << warnings << "\n"
+                  << "FATAL ERRORS:\n" << msg << "\n"
+                  << "Circuit is invalid";
   }
   if (PrintWarnings) {
-    LOG(WARNING) << warnings;;
+    log_info() << warnings;;
   }
-  LOG(INFO) << suffix;
+  log_info() << suffix;
 }
 
 } // namespave circuitous

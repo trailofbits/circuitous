@@ -20,7 +20,7 @@ namespace circ
 
       os << solver.to_smt2() << '\n';
     } catch (const z3::exception &e) {
-      LOG(FATAL) << e.what() << '\n';
+      log_kill() << e.what() << '\n';
     }
   }
 
@@ -32,7 +32,7 @@ namespace circ
       auto bitblasted = bitblast(expr, visitor.ctx);
       os << bitblasted.to_smt2() << '\n';
     } catch (const z3::exception &e) {
-      LOG(FATAL) << e.what() << '\n';
+      log_kill() << e.what() << '\n';
     }
   }
 

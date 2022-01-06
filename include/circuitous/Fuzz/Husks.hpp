@@ -9,6 +9,8 @@
 #include <circuitous/Lifter/Shadows.hpp>
 #include <circuitous/Fuzz/InstNavigation.hpp>
 #include <circuitous/Fuzz/Permute.hpp>
+#include <circuitous/Support/Check.hpp>
+#include <circuitous/Support/Log.hpp>
 #include <circuitous/Util/LLVMUtil.hpp>
 
 #include <bitset>
@@ -72,7 +74,7 @@ namespace circ {
               return op->addr.base_reg.name + op->addr.index_reg.name
                     + std::to_string(op->addr.scale)
                     + std::to_string(op->addr.displacement);
-          default: LOG(FATAL) << "Cannot hash operand";
+          default: UNREACHABLE() << "Cannot hash operand";
         }
       };
       return group(ops, str_hash);
@@ -88,7 +90,7 @@ namespace circ {
               return op->addr.base_reg.name + op->addr.index_reg.name
                     + std::to_string(op->addr.scale)
                     + std::to_string(op->addr.displacement);
-          default: LOG(FATAL) << "Cannot hash operand";
+          default: UNREACHABLE() << "Cannot hash operand";
         }
       };
       return group(ops, str_hash);

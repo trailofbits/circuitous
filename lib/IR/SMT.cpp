@@ -170,7 +170,7 @@ namespace circ::smt
     else if (name == "InputImmediate")
       return circuit->Create< InputImmediate >(bv);
 
-    LOG(FATAL) << "unknown operation " << e << " " << name;
+    log_kill() << "unknown operation" << e << name;
   }
 
   Operation* constant(const z3::expr &e, Circuit *circuit)
@@ -222,7 +222,7 @@ namespace circ::smt
       return op;
     }
 
-    LOG(FATAL) << "unknown expr " << e;
+    UNREACHABLE() << "unknown expr " << e;
   }
 
   std::unique_ptr<Circuit> deserialize(const std::string &path)

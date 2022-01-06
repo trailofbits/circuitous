@@ -13,9 +13,9 @@
 #include <remill/BC/Util.h>
 #include <remill/Arch/Arch.h>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
+#include <circuitous/Util/Logging.hpp>
+
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/Instructions.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Metadata.h>
@@ -23,7 +23,10 @@
 #include <llvm/IR/Value.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
-#pragma clang diagnostic pop
+CIRCUITOUS_UNRELAX_WARNINGS
+
+#include <circuitous/Support/Log.hpp>
+#include <circuitous/Support/Check.hpp>
 
 namespace circ {
 
@@ -181,7 +184,7 @@ namespace circ {
 
     auto block = call->getParent();
     if (std::prev(block->end())->isTerminator()) {
-      LOG(WARNING) << "Going to inline ill formed block (terminator missing).";
+      log_error() << "Going to inline ill formed block (terminator missing).";
     }
     CHECK(call->getCalledFunction()->size() == 1);
 
@@ -232,7 +235,7 @@ namespace circ {
 
   template< typename T > requires std::is_base_of_v< llvm::Value, T >
   std::string dbg_dump(const std::unordered_set< T * > &vs) {
-    LOG(FATAL) << "Not implemented";
+      NOT_IMPLEMENTED();
   }
 
   static inline std::string dbg_dump(llvm::BasicBlock *block) {

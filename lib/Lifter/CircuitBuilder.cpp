@@ -14,6 +14,10 @@
 #include <circuitous/Lifter/Memory.hpp>
 #include <circuitous/IR/Lifter.hpp>
 
+#include <circuitous/Support/Log.hpp>
+#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Support/Check.hpp>
+
 #include <remill/BC/Compat/CallSite.h>
 
 CIRCUITOUS_RELAX_WARNINGS
@@ -343,11 +347,10 @@ void Circuit0::constraint_unused() {
     };
 
     auto get_in_twin = [&](llvm::Value *outreg) {
-      for (const auto &[_, in, out] : arg_map) {
+      for (const auto &[_, in, out] : arg_map)
         if (out == outreg)
          return in;
-      }
-      LOG(FATAL) << "Cannot match input register to output reg: " << dbg_dump(outreg);
+      UNREACHABLE() << "Cannot match input register to output reg: " << dbg_dump(outreg);
     };
 
     auto replace = [&](llvm::Instruction *inst, llvm::Value *patch) {
@@ -359,7 +362,7 @@ void Circuit0::constraint_unused() {
           inst->setOperand(i,coerced);
           return;
         }
-      LOG(FATAL) << "Was not able to patch undef value";
+      UNREACHABLE() << "Was not able to patch undef value";
     };
 
     std::vector< llvm::Instruction * > undefs;
@@ -380,14 +383,6 @@ void Circuit0::constraint_unused() {
 
       if (auto rcs = UndefReachability().run(undef))
       {
-        if (rcs->size() != 1) {
-          LOG(INFO) << rcs->size();
-          if (rcs->size() != 1) {
-            LOG(INFO) << dbg_dump(undef);
-            for (auto c : *rcs)
-              LOG(INFO) << dbg_dump(c);
-          }
-        }
         CHECK(rcs->size() != 0);
         auto patch = get_in_twin(whose_rc(*rcs->begin()));
         for (auto rc : *rcs)
@@ -395,7 +390,7 @@ void Circuit0::constraint_unused() {
         // It is enough to replace only one as the `undef` source is exactly one.
         replace(undef, patch);
       } else {
-        LOG(FATAL) << "verify depends on undef";
+        UNREACHABLE() << "verify depends on undef";
       }
     }
   }
@@ -418,10 +413,10 @@ void Circuit0::constraint_unused() {
 
     ctx.clean_module({circuit_fn});
 
-    irops::disable_opts<irops::VerifyInst, irops::Select>(ctx.module());
+    irops::disable_opts< irops::VerifyInst, irops::Select >(ctx.module());
 
     remill::VerifyModule(ctx.module());
-    OptimizeSilently(ctx.arch(), ctx.module(), {circuit_fn});
+    optimize_silently(ctx.arch(), ctx.module(), {circuit_fn});
 
     auto selects_map = ContextCollector< irops::VerifyInst, irops::Select >(circuit_fn).run();
     SelectFolder folder{ std::move(selects_map), circuit_fn };
@@ -432,70 +427,20 @@ void Circuit0::constraint_unused() {
     irops::enable_opts< irops::VerifyInst, irops::AdviceConstraint,
                         irops::ReadConstraint, irops::WriteConstraint >(ctx.module());
 
-    OptimizeSilently(ctx.arch(), ctx.module(), {circuit_fn});
+    optimize_silently(ctx.arch(), ctx.module(), {circuit_fn});
     unfold_advice_constraints(circuit_fn);
     propagate_undefs();
-    OptimizeSilently(ctx.arch(), ctx.module(), {circuit_fn});
+    optimize_silently(ctx.arch(), ctx.module(), {circuit_fn});
     remill::VerifyModule(ctx.module());
 
+
     return circuit_fn;
-  }
-
-  void circuit_builder::inject_semantic(ISEL_view isel) {
-    CHECK(isel.lifted);
-
-    State state { this->head, ctx.state_ptr_type()->getElementType() };
-    auto state_ptr = state.raw();
-    llvm::IRBuilder<> ir(this->head);
-
-    for (const auto &[reg, arg, _] : arg_map)
-      state.store(ir, reg, arg);
-
-    // Call semantic function
-    auto sem_call = call_semantic(ir, isel.lifted, state_ptr, pc(), ctx.undef_mem_ptr());
-    // Inline it
-    auto make_breakpoint = [](auto ir) {
-      return irops::make< irops::Breakpoint >(ir, ir.getTrue());
-    };
-    auto [begin, end] = inline_flattened(sem_call, make_breakpoint);
-    ir.SetInsertPoint(this->head);
-
-    auto params = decoder(ctx, ir, isel).byte_fragments();
-
-    auto mem_checks = mem::synthetize_memory(begin, end, ctx.ptr_size);
-    ir.SetInsertPoint(this->head);
-
-    auto [err_checks, c_ebit] = handle_errors(begin, end);
-
-    // Collect annotated instructions - this is the way separate components
-    // of the lfiting pipleline communicate
-    auto collected = shadowinst::collect_annotated(begin, end);
-    auto dst_intrinsics = std::move(collected[Names::meta::dst_reg]);
-
-    auto extra_params = std::move(collected[Names::meta::verify_args]);
-    for (std::size_t i = 0; i < extra_params.size(); ++i) {
-      extra_params[i] = irops::unwrap< irops::Transport >(extra_params[i]);
-    }
-
-    begin->eraseFromParent();
-    end->eraseFromParent();
-
-    auto dst_regs = lower_dst_regs(dst_intrinsics);
-    auto additional_checks = handle_dst_regs(c_ebit, dst_regs, isel, state);
-
-    ctxs.emplace_back(this->head,
-                      saturation_prop, timestamp_prop, params,
-                      mem_checks, err_checks
-                      ,extra_params
-                      ,additional_checks
-                      );
-
-    add_isel_metadata(ctxs.back().current, isel);
   }
 
   void circuit_builder::inject_semantic_modular(ISEL_view isel)
   {
     CHECK(isel.lifted);
+    log_info() << "Lifting: " << isel.instruction.Serialize();
 
     State state { this->head, ctx.state_ptr_type()->getElementType() };
     auto state_ptr = state.raw();
@@ -775,9 +720,9 @@ void Circuit0::constraint_unused() {
           reg_val = ir.CreateSelect(eq, full_val, reg_val);
         }
       }
-      CHECK_NOTNULL(current_ebit);
-      CHECK_NOTNULL(input_reg);
-      CHECK_NOTNULL(reg_val);
+      CHECK(current_ebit);
+      CHECK(input_reg);
+      CHECK(reg_val);
       // If error bit is raised we are not moving anywhere
       auto guard = ir.CreateSelect(current_ebit, input_reg, reg_val);
       params.push_back(irops::make< irops::OutputCheck >(ir, {guard, expected_reg_val}));

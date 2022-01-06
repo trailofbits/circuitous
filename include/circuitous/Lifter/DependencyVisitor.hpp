@@ -7,12 +7,13 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
 #pragma clang diagnostic ignored "-Wconversion"
-#include <glog/logging.h>
 #include <llvm/IR/CFG.h>
 #pragma clang diagnostic pop
 
 #include <sstream>
+
 #include <circuitous/Lifter/Context.hpp>
+#include <circuitous/Support/Check.hpp>
 
 namespace circ {
 

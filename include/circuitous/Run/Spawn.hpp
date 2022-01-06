@@ -6,6 +6,9 @@
 
 #include <circuitous/Run/Base.hpp>
 
+#include <circuitous/Support/Log.hpp>
+#include <circuitous/Support/Check.hpp>
+
 #include <deque>
 #include <unordered_map>
 
@@ -46,12 +49,11 @@ namespace circ::run {
 
     bool raise_level() {
       ++allowed;
-      LOG(INFO) << "Raising level";
       return true;
     }
 
     bool do_enable(Operation *op, uint64_t mem_idx) {
-      CHECK_EQ(mem_idx, allowed);
+      CHECK(mem_idx == allowed);
       auto &[count, ops] = constraints[mem_idx];
       if (!ops.count(op)) {
         return false;
@@ -70,7 +72,7 @@ namespace circ::run {
       }
       if (auto x = dynamic_cast<WriteConstraint *>(op)) { return x->mem_idx(); }
       if (auto x = dynamic_cast<ReadConstraint *>(op)) { return x->mem_idx(); }
-      LOG(FATAL) << "Unreachable";
+      UNREACHABLE() << "Unreachable";
     }
 
     bool enable(Operation *op) {
@@ -144,7 +146,7 @@ namespace circ::run {
     // Verbose notification for debug purposes
     void notify_verbose(Operation *from, Operation *to) {
       auto dbg_info = [](auto from, auto to) {
-        LOG(INFO) << pretty_print< false >(from) << " -- notifies -> " << pretty_print(to);
+        log_info() << pretty_print< false >(from) << " -- notifies -> " << pretty_print(to);
       };
       return notify(from, to, dbg_info);
     }

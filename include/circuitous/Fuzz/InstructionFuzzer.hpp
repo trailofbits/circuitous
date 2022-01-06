@@ -11,6 +11,9 @@
 #include <circuitous/Fuzz/Permute.hpp>
 #include <circuitous/Fuzz/Husks.hpp>
 
+#include <circuitous/Support/Check.hpp>
+#include <circuitous/Support/Log.hpp>
+
 #include <bitset>
 #include <optional>
 #include <string>
@@ -138,10 +141,10 @@ namespace circ {
         if (!permutations[i]) {
           continue;
         }
-        DLOG(INFO) << permutations.size() - 1 - i
+        log_dbg() << permutations.size() - 1 - i
                   << ": checking structure of:\n" << permutations[i]->Serialize();
         for (std::size_t op_i = 0; op_i < rinst.operands.size(); ++op_i) {
-          DLOG(INFO) << "Operand: " << op_i;
+          log_dbg() << "Operand: " << op_i;
 
           using namespace ifuzz::permutate;
           auto item = to_item(rinst, op_i);
@@ -150,7 +153,7 @@ namespace circ {
           if (DiffResult().are_dirty(res,item))
             dirts[op_i].insert(static_cast< uint32_t >(permutations.size() - 1 - i));
         }
-        DLOG(INFO) << "Done.";
+        log_dbg() << "Done.";
       }
       return std::make_tuple(op_bits, dirts);
     }
@@ -367,7 +370,7 @@ namespace circ {
         return a.imm.val == b.imm.val && a.imm.is_signed == b.imm.is_signed;
       }
 
-      LOG(FATAL) << "Unexpected operands to custom eq hook.";
+      UNREACHABLE() << "Unexpected operands to custom eq hook.";
     }
 
     bool eq_segment_change(const remill::Operand &a, const remill::Operand &b)
@@ -386,10 +389,10 @@ namespace circ {
         (std::string_view(a.addr.base_reg.name).ends_with("BP") ||
          std::string_view(a.addr.base_reg.name).ends_with("SP"));
       }
-      LOG(ERROR) << "Unexpected operands to custom eq hook: eq_segment_change.";
-      LOG(ERROR) << a.Serialize();
-      LOG(ERROR) << b.Serialize();
-      LOG(FATAL) << "Program end.";
+      log_error() << "Unexpected operands to custom eq hook: eq_segment_change.";
+      log_error() << a.Serialize();
+      log_error() << b.Serialize();
+      log_kill() << "Program end.";
     }
 
     bool eq(const remill::Operand::Register &a, const remill::Operand::Register &b)
@@ -402,7 +405,7 @@ namespace circ {
       return [=, &todo](maybe_rinst_t nrinst, const idxs_t idxs, std::string errs)
       {
         if (!nrinst) {
-          LOG(WARNING) << errs;
+          log_error() << errs;
           return;
         }
 
@@ -617,7 +620,7 @@ namespace circ {
       auto process = [&](maybe_rinst_t nrinst, const idxs_t idxs, std::string errs)
       {
         if (!nrinst) {
-          LOG(WARNING) << errs;
+          log_error() << errs;
           return;
         }
 
@@ -655,7 +658,7 @@ namespace circ {
         return;
       }
 
-      CHECK_EQ(raw_candidates.size(), 1);
+      CHECK(raw_candidates.size() == 1);
       auto &raw_candidate = raw_candidates[0];
 
       // Explicit copy!
@@ -704,7 +707,7 @@ namespace circ {
     }
 
     void reg_enlarge(shadowinst::Instruction &s_inst, const idx_vector_t &todo) {
-      DLOG(INFO) << "Going to enlarge regs.";
+      log_dbg() << "Going to enlarge regs.";
       reg_enlarge_< 0 >(s_inst, todo);
       reg_enlarge_< 1 >(s_inst, todo);
       reg_enlarge_< 2 >(s_inst, todo);
@@ -753,12 +756,12 @@ namespace circ {
 
       if (chosen == s_reg) {
          if (arch->address_size == 64)
-          LOG(FATAL) << "Reg enlargement heuristic did not choose any candidate!\n"
+          log_kill() << "Reg enlargement heuristic did not choose any candidate!\n"
                      << rinst.Serialize() << "\n"
                      << s_inst.to_string();
         else {
-          LOG(WARNING) << "Reg enlargement heuristic did not choose any candidate!\n"
-                       << rinst.Serialize();
+          log_error() << "Reg enlargement heuristic did not choose any candidate!\n"
+                      << rinst.Serialize();
           return true;
         }
       }

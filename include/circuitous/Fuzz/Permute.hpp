@@ -4,8 +4,11 @@
 
 #pragma once
 
+#include <circuitous/Support/Check.hpp>
+#include <circuitous/Support/Log.hpp>
 #include <circuitous/Util/LLVMUtil.hpp>
 #include <circuitous/Fuzz/DiffResult.hpp>
+
 
 #include <remill/Arch/Arch.h>
 #include <remill/Arch/Instruction.h>
@@ -267,7 +270,7 @@ namespace circ::ifuzz::permutate {
         switch (a->type) {
           case OpType::kTypeRegister: return this->Next::reg_dependency(a->reg, b->reg);
           case OpType::kTypeAddress: return this->Next::addr_dependency(a->addr, b->addr);
-          default: LOG(FATAL) << "Unreachable, should be caught be ealier assert";
+          default: UNREACHABLE() << "Unreachable, should be caught be ealier assert";
         }
       };
 
@@ -401,7 +404,7 @@ namespace circ::ifuzz::permutate {
     template< typename ... Args >
     result_t verbose_compare( Args &&...args ) {
       auto x = compare(std::forward< Args >(args) ...);
-      LOG(INFO) << this->ss.str();
+      log_info() << this->ss.str();
       return x;
     }
 

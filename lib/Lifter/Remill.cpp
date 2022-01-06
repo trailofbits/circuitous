@@ -6,11 +6,15 @@
 #include <circuitous/IR/Memory.hpp>
 #include <circuitous/IR/Lifter.hpp>
 #include <circuitous/IR/Verify.hpp>
+#include <circuitous/Support/Log.hpp>
+#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Support/Check.hpp>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <glog/logging.h>
+#include <circuitous/Dbg/CtxPrint.hpp>
+
+#include <iostream>
+
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/ADT/SmallString.h>
 #include <llvm/IR/BasicBlock.h>
 #include <llvm/IR/Constants.h>
@@ -24,7 +28,9 @@
 #include <llvm/IR/Module.h>
 #include <llvm/Support/MemoryBuffer.h>
 #include <llvm/Support/raw_ostream.h>
-#pragma clang diagnostic pop
+CIRCUITOUS_UNRELAX_WARNINGS
+
+
 #include <remill/Arch/Arch.h>
 #include <remill/Arch/Name.h>
 #include <remill/BC/Compat/Error.h>
@@ -104,7 +110,7 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
     if (auto freeze = llvm::dyn_cast<llvm::FreezeInst>(inst_val)) {
       return self->VisitFreeze(context, freeze);
     }
-    LOG(FATAL) << "Unexpected value during visit: " << remill::LLVMThingToString(inst_val);
+    UNREACHABLE() << "Unexpected value during visit: " << remill::LLVMThingToString(inst_val);
   }
 
   // Bottom out at a constant, ignore for now.
@@ -117,7 +123,7 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
       auto &entry_block = context->getEntryBlock();
       ce_inst->insertBefore(&*entry_block.getFirstInsertionPt());
       ce->replaceAllUsesWith(ce_inst);
-      CHECK_EQ(val, ce_inst);
+      CHECK(val == ce_inst);
       return self->Visit(context, val);  // Revisit.
     }
     if (auto ci = llvm::dyn_cast<llvm::ConstantInt>(val)) {
@@ -126,11 +132,11 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context,
     if (auto cf = llvm::dyn_cast<llvm::ConstantFP>(val)) {
       return self->VisitConstantFP(context, cf);
     }
-    LOG(FATAL)
+    UNREACHABLE()
         << "Unexpected constant encountered during dependency visitor: "
         << remill::LLVMThingToString(val);
   }
-  LOG(FATAL) << "Unexpected value encountered during dependency visitor: "
+  UNREACHABLE() << "Unexpected value encountered during dependency visitor: "
              << remill::LLVMThingToString(val);
 }
 
@@ -163,7 +169,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     if (name.endswith("_f80"))  return 80u;
     if (name.endswith("_f128")) return 128u;
 
-    LOG(FATAL) << "Unsupported memory read intrinsic: " << name.str();
+    UNREACHABLE() << "Unsupported memory read intrinsic: " << name.str();
   }
 
   auto is_supported(auto triple) {
@@ -265,7 +271,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       } else if (io_type == irops::io_type::out) {
         return fetch_leave< OT >(fn, size);
       }
-      LOG(FATAL) << "Unreachable";
+      UNREACHABLE() << "Unreachable";
     }();
     val_to_op[call] = leaf;
     return leaf;
@@ -295,20 +301,17 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
         return out;
       }
       default:
-        LOG(FATAL) << "Unsupported intrinsic call: "
-                   << remill::LLVMThingToString(call);
-        return nullptr;
+        UNREACHABLE() << "Unsupported intrinsic call: "
+                      << remill::LLVMThingToString(call);
     }
   }
 
   Operation *VisitIntrinsic(llvm::CallInst *call, llvm::Function *fn) {
     auto name = fn->getName();
-    if (name.startswith("__remill_read_memory_")) {
-      LOG(FATAL) << "__remill_read_memory_* should not be present!";
-    }
-    if (name.startswith("__remill_write_memory_")) {
-      LOG(FATAL) << "__remill_write_memory_* should not be present!";
-    }
+    CHECK(!name.startswith("__remill_read_memory_"))
+        << "__remill_read_memory_* should not be present!";
+    CHECK(!name.startswith("__remill_write_memory_"))
+      << "__remill_write_memory_* should not be present!";
 
     if (name.startswith("__remill_undefined_")) {
       return Emplace< Undefined >(call, SizeFromSuffix(name));
@@ -382,7 +385,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
       auto [size, io_type] = irops::Timestamp::parse_args< uint32_t >(fn);
       return VisitIOLeaf< InputTimestamp, OutputTimestamp >(call, fn, io_type, size);
     }
-    LOG(FATAL) << "Unsupported function: " << remill::LLVMThingToString(call);
+    UNREACHABLE() << "Unsupported function: " << remill::LLVMThingToString(call);
   }
 
   // This function is responsible for binding some node to `val` inside `val_to_op`.
@@ -392,8 +395,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
     }
 
     auto func = val->getCalledFunction();
-    LOG_IF(FATAL, !func) << "Cannot find called function used in call: "
-                         << remill::LLVMThingToString(val);
+    CHECK(func) << "Cannot find called function used in call: "
+                << remill::LLVMThingToString(val);
 
     Operation *op = nullptr;
     if (func->getIntrinsicID() != llvm::Intrinsic::not_intrinsic) {
@@ -452,7 +455,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
         case llvm::CmpInst::ICMP_SGT:  return Emplace<Icmp_sgt>(inst, size);
         case llvm::CmpInst::ICMP_SGE:  return Emplace<Icmp_sge>(inst, size);
         case llvm::CmpInst::ICMP_SLE:  return Emplace<Icmp_sle>(inst, size);
-        default: LOG(FATAL) << "Cannot lower llvm predicate " << cmp->getPredicate();
+        default: UNREACHABLE() << "Cannot lower llvm predicate " << cmp->getPredicate();
       }
     };
 
@@ -483,8 +486,8 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
         case llvm::BinaryOperator::URem: return handle_urem(inst);
 
         default :
-          LOG(FATAL) << "Cannot lower llvm inst: "
-                     << llvm::Instruction::getOpcodeName(op_code);
+          UNREACHABLE() << "Cannot lower llvm inst: "
+                        << llvm::Instruction::getOpcodeName(op_code);
       }
     };
 
@@ -567,7 +570,7 @@ class IRImporter : public BottomUpDependencyVisitor<IRImporter> {
 
     auto &bits_op = bits_to_constants[bits_str];
     if (!bits_op) {
-      CHECK_EQ(num_bits, bits_str.size());
+      CHECK(num_bits == bits_str.size());
       bits_op = impl->Create<Constant>(std::move(bits_str),
                                       static_cast<unsigned>(num_bits));
       annote_with_llvm_inst(bits_op, val);
@@ -706,9 +709,8 @@ auto Circuit::make_circuit(
     }
   }
 
-  // CHECK_LT(0u, num_inst_parts);
-  CHECK_LT(0u, num_input_regs);
-  CHECK_EQ(num_input_regs, num_output_regs);
+  CHECK(0u < num_input_regs);
+  CHECK(num_input_regs == num_output_regs);
 
   auto all_verifications = impl->Create<OnlyOneCondition>();
   impl->AddUse(all_verifications);

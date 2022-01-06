@@ -6,7 +6,7 @@ auto HasMemory::deconstruct(const llvm::APInt &value) -> Parsed {
   auto extractor = [](auto thing, auto from, auto size) -> llvm::APInt {
     return thing.extractBits(size, from);
   };
-  CHECK_EQ(value.getBitWidth(), irops::memory::size(hint_size));
+  CHECK(value.getBitWidth() == irops::memory::size(hint_size));
   return irops::memory::parse< llvm::APInt >(value, extractor, hint_size);
 }
 
@@ -34,7 +34,7 @@ auto Base_<S>::GetNodeVal(Operation *op) const -> value_type {
 
 template<typename S>
 void Base_<S>::Visit(Operation *op) {
-  LOG(FATAL) << "Unhandled operation: " << op->Name() << " " << op->id();
+  UNREACHABLE() << "Unhandled operation: " << op->Name() << " " << op->id();
 }
 
 template<typename S>

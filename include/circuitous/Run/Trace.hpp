@@ -90,15 +90,11 @@ namespace circ::run::trace {
   auto load_json(const std::string &path) {
     // Open JSON
     auto maybe_buff = llvm::MemoryBuffer::getFile(path);
-    if (!maybe_buff) {
-      LOG(FATAL) << "Error while opening JSON at: " << path;
-    }
+    CHECK(maybe_buff) << "Error while opening JSON at: " << path;
 
     // Parse JSON
     auto maybe_json = llvm::json::parse(maybe_buff.get()->getBuffer());
-    if (!maybe_json) {
-      LOG(FATAL) << "Error while parsing JSON at: " << path;
-    }
+    CHECK(maybe_json) << "Error while parsing JSON at: " << path;
 
     auto out = maybe_json.get().getAsObject();
     CHECK(out) << "Invalid loaded JSON object from: " << path;
