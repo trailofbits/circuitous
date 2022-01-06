@@ -34,6 +34,13 @@ namespace circ {
 
     HuskResolver(U &fuzzer_) : fuzzer(fuzzer_) {}
 
+    std::size_t get_op_idx(const remill::Operand *op) {
+      for (std::size_t i = 0; i < fuzzer.rinst.operands.size(); ++i)
+        if (&fuzzer.rinst.operands[i] == op)
+          return i;
+      UNREACHABLE() << "Not found";
+    }
+
     // TODO(lukas): This is heurisitc. Later we are most likely going to need
     //              support multiple strategies. Also the selected heuristic
     //              implies the permutate::Comparator stack configuration.
@@ -52,8 +59,35 @@ namespace circ {
       }
 
       rops_maps_t out;
+
+      auto handle_suspicious_group = [&](auto maps) {
+        log_error() << "handle_suspicious_group invoked on " << fuzzer.rinst.Serialize();
+        std::map< std::size_t, const remill::Operand * > w_to_idx;
+        std::map< std::size_t, const remill::Operand * > r_to_idx;
+        for (auto &[u, x] : maps)
+        {
+          auto i = get_op_idx(x);
+          if (x->action == remill::Operand::Action::kActionWrite)
+            w_to_idx[i] = x;
+          else if (x->action == remill::Operand::Action::kActionRead)
+            r_to_idx[i] = x;
+          else
+            UNREACHABLE() << "Unreachable";
+        }
+        CHECK(w_to_idx.size() == r_to_idx.size());
+        for (auto [i, op] : w_to_idx)
+        {
+          CHECK(r_to_idx.count(i + 1));
+          out.push_back({{i, op}, {i + 1, r_to_idx[i + 1]}});
+        }
+      };
+
       for (auto &[_, maps] : by_hash) {
-        out.push_back(std::move(maps));
+        if (maps.size() > 2) {
+          handle_suspicious_group(maps);
+        } else {
+          out.push_back(std::move(maps));
+        }
       }
       return out;
     }
