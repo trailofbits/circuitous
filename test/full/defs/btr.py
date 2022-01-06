@@ -15,10 +15,17 @@ btr = {
     .tags({"generated", "btr"}).seed(4123)
     .all_defined(random=True, DE = aflag_mut(MS())),
 
-    VerifyTest("btr-a_gen") \
+    VerifyTest("btr-b_spec") \
     .bytes(["660fb3c0"])
     .tags({"min", "btr"}).seed(4123)
     .all_defined(random=True, DE = aflag_mut(MS())),
+
+    VerifyTest("btr-c_spec") \
+    .bytes(["490fbab4810000000009"])
+    .tags({"todo", "btr"})
+    .DI(S(0x4000).RAX(0x100).R8(0x20).rwmem(0x430, "00" * 0x100))
+    .case(run_bytes=0, DE = aflag_mut(MS()), R=True),
+
 
 
 }
