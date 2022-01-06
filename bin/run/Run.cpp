@@ -3,8 +3,14 @@
  */
 
 #include <circuitous/Util/Logging.hpp>
+#include <circuitous/Support/Log.hpp>
+#include <circuitous/Support/Check.hpp>
+
+#include <circuitous/Support/CLIArgs.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
+#include <gflags/gflags.h>
+
 #include <llvm/Support/JSON.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
@@ -53,7 +59,7 @@ auto load_circ(const std::string &path) {
   }
 
   // Deserialize circuit from binary IR file
-  auto circuit = circ::Circuit::Deserialize(ir);
+  auto circuit = circ::Circuit::deserialize(ir);
 
   const auto &[status, msg, warnings] = circ::VerifyCircuit(circuit.get());
   if (!status) {
@@ -172,7 +178,7 @@ void run() {
       values[op] = (val) ? val->toString(16, false) : std::string("{ undef }");
     }
     std::ofstream os(FLAGS_dot_out);
-    circ::PrintDOT(os, circuit.get(), values);
+    circ::print_dot(os, circuit.get(), values);
   }
 }
 
@@ -196,8 +202,7 @@ int main(int argc, char *argv[]) {
   google::SetUsageMessage(usage.str());
   google::ParseCommandLineFlags(&argc, &argv, true);
 
-  LOG_IF(ERROR, FLAGS_ir_in.empty())
-      << "Must specify path to an input serialized circuitous IR file.";
+  CHECK(!FLAGS_ir_in.empty()) << "Must specify path to an input serialized circuitous IR file.";
 
   if (FLAGS_ir_in.empty()) {
     std::cerr << google::ProgramUsage();
