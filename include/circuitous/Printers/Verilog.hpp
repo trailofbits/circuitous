@@ -2,7 +2,7 @@
  * Copyright (c) 2021 Trail of Bits, Inc.
  */
 
-#pragma pragma once
+#pragma once
 
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Memory.hpp>
@@ -31,30 +31,30 @@ namespace circ::print::verilog {
       return ss.str();
     }
 
-    std::string to_verilog(auto size, auto value) {
+    static inline std::string to_verilog(auto size, auto value) {
       std::stringstream ss;
       ss << size << "'d" << value;
       return ss.str();
     }
 
-    std::string bin_zero(auto size) {
+    static inline std::string bin_zero(auto size) {
       return std::to_string(size) + "'b" + std::string(size, '0');
     }
 
-    std::string bin_one(auto size) {
+    static inline std::string bin_one(auto size) {
       return std::to_string(size) + "'b" + std::string(size, '1');
     }
 
-    std::string true_val() { return "1'b1"; }
-    std::string false_val() { return "1'b0"; }
+    static inline std::string true_val() { return "1'b1"; }
+    static inline std::string false_val() { return "1'b0"; }
 
-    std::string wire_name(Operation *op) {
+    static inline std::string wire_name(Operation *op) {
       std::stringstream ss;
       ss << std::hex << "v" << op->id();
       return ss.str();
     }
 
-    std::string wire_decl(const std::string &name, std::string lhs, auto size) {
+    static inline std::string wire_decl(const std::string &name, std::string lhs, auto size) {
       std::stringstream ss;
       ss << "wire ";
       if (size != 1)
@@ -63,7 +63,7 @@ namespace circ::print::verilog {
       return ss.str();
     }
 
-    std::string to_signed(const std::string &what) {
+    static inline std::string to_signed(const std::string &what) {
       return "$signed(" + what + ")";
     }
 
@@ -649,21 +649,21 @@ namespace circ::print::verilog {
     }
   }
 
-  static void print[[maybe_unused]](
+  static inline void print[[maybe_unused]](
       std::ostream &os, const std::string &module_name, Circuit *c)
   {
     ToStream ctx{os, c};
     ModuleDecl< iarg_fmt::UseName, ToStream >(ctx).define_module(module_name, c);
   }
 
-  static void print_solo[[maybe_unused]](
+  static inline void print_solo[[maybe_unused]](
       std::ostream &os, const std::string &module_name, Circuit *c, Operation *op)
   {
     ToStream ctx{os, c};
     ModuleDecl< iarg_fmt::Simple, ToStream >(ctx).define_module(module_name, op);
   }
 
-  static void print_solo[[maybe_unused]](std::ostream &os, Circuit *c, Operation *op)
+  static inline void print_solo[[maybe_unused]](std::ostream &os, Circuit *c, Operation *op)
   {
     return print_solo(os, get_module_name(op), c, op);
   }
