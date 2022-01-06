@@ -73,7 +73,7 @@ namespace circ
     void add_pass(const std::string &name)
     {
       auto pass = known_passes.at(name);
-      LOG(INFO) << "Adding pass: " << name;
+      log_info() << "Adding pass: " << name;
       passes.emplace_back(name, pass);
     }
 
@@ -141,41 +141,38 @@ namespace circ
     void make_snapshot(const CircuitPtr &circuit, std::optional< std::string > after = std::nullopt)
     {
       auto name = after ? after.value() : "start";
-      LOG(INFO) << "Start capturing statistics.";
+      log_info() << "Start capturing statistics.";
       RawNodesCounter collector;
       collector.Run(circuit.get());
-      LOG(INFO) << "Done capturing statistics.";
+      log_info() << "Done capturing statistics.";
       history.emplace_back(name, std::move(collector));
     }
 
     std::vector< Snapshot > history;
   };
 
-  template< typename Logger, typename Next >
+  template< typename Next >
   struct Defensive : Next
   {
     CircuitPtr run_pass(const NamedPass &npass, CircuitPtr &&circuit)
     {
       const auto &[name, pass] = npass;
 
-      Logger::log("Going to run transformation ", name);
+      log_info() << "Going to run transformation" << name;
       auto result = this->Next::run_pass(npass, std::move(circuit));
-      Logger::log("Done. Running verify pass:");
+      log_info() << "Done. Running verify pass:";
 
       const auto &[status, msg, warnings] = VerifyCircuit(result.get());
 
-      if (!status) {
-        Logger::fail("Verify failed");
-        Logger::fail(warnings);
-        Logger::fail(msg);
-        Logger::kill();
-      }
+      if (!status)
+        log_kill() << "Verify failed!\n"
+                   << warnings << "\n"
+                   << msg;
 
-      if (!warnings.empty()) {
-        Logger::log(warnings);
-      }
+      if (!warnings.empty())
+        log_error() << warnings;
 
-      Logger::log("Circuit is okay.");
+      log_info() <<"Circuit is okay.";
       return result;
     }
   };

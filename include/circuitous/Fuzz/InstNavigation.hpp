@@ -6,6 +6,7 @@
 #include <remill/Arch/Arch.h>
 #include <remill/Arch/Instruction.h>
 
+#include <circuitous/Support/Check.hpp>
 #include <circuitous/Lifter/Shadows.hpp>
 
 namespace circ::ifuzz {
@@ -28,7 +29,7 @@ namespace circ::ifuzz {
     if (op_idx == 0xff) {
       return std::nullopt;
     }
-    LOG(FATAL) << "Unknown fetch config";
+    UNREACHABLE() << "Unknown fetch config";
   }
 
   static inline auto fetch_reg(shadowinst::Operand &s_op, std::tuple<uint32_t, uint32_t> idxs)
@@ -45,7 +46,7 @@ namespace circ::ifuzz {
     if (op_idx == 0xff) {
       return std::nullopt;
     }
-    LOG(FATAL) << "Unknown fetch config";
+    UNREACHABLE() << "Unknown fetch config";
   }
 
   template<typename I>
@@ -112,7 +113,7 @@ namespace circ::ifuzz {
     else if constexpr ( I == sel::segment )
       return op.address && op.address->segment.has_value();
     else
-      LOG(FATAL) << "Unreachable";
+      UNREACHABLE() << "Unreachable";
   }
   template< uint32_t I >
   bool is_consistent(const shadowinst::Instruction &s_inst,
@@ -145,7 +146,7 @@ namespace circ::ifuzz {
     else if constexpr ( I == sel::base )    return op.address->base_reg;
     else if constexpr ( I == sel::index )   return op.address->index_reg;
     else if constexpr ( I == sel::segment ) return op.address->segment;
-    else LOG(FATAL) << "Unreachable";
+    else UNREACHABLE() << "Unreachable";
   }
 
   template< uint32_t I >
@@ -154,7 +155,7 @@ namespace circ::ifuzz {
     else if constexpr ( I == sel::base )    return op.address->base_reg;
     else if constexpr ( I == sel::index )   return op.address->index_reg;
     else if constexpr ( I == sel::segment ) return op.address->segment;
-    else LOG(FATAL) << "Unreachable";
+    else UNREACHABLE() << "Unreachable";
   }
   // Returns a copy!
   template< uint32_t I >
@@ -172,7 +173,7 @@ namespace circ::ifuzz {
     else if constexpr ( I == sel::base )    return op.addr.base_reg;
     else if constexpr ( I == sel::index )   return op.addr.index_reg;
     else if constexpr ( I == sel::segment ) return op.addr.segment_base_reg;
-    else LOG(FATAL) << "Unreachable";
+    else UNREACHABLE() << "Unreachable";
   }
 
   template< uint32_t I >
@@ -181,7 +182,7 @@ namespace circ::ifuzz {
     else if constexpr ( I == sel::base )    return op.addr.base_reg;
     else if constexpr ( I == sel::index )   return op.addr.index_reg;
     else if constexpr ( I == sel::segment ) return op.addr.segment_base_reg;
-    else LOG(FATAL) << "Unreachable";
+    else UNREACHABLE() << "Unreachable";
   }
 
   // TODO(lukas): tiny86 specific (possibly x86 specific as well).

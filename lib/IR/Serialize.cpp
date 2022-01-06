@@ -6,12 +6,9 @@
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Memory.hpp>
 #include <circuitous/Printers.h>
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <glog/logging.h>
-#pragma clang diagnostic pop
 
+#include <circuitous/Support/Log.hpp>
+#include <circuitous/Support/Check.hpp>
 
 #include <algorithm>
 #include <cstdint>
@@ -73,7 +70,7 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
       Write(Selector::Operation);
       raw_id_t id = hasher[op];
       Write(id);
-      CHECK_LE(0u, op->op_code);
+      CHECK(0u < op->op_code) << "Weird opcode" << op->op_code;
       raw_op_code_t op_code = op->op_code;
       Write(op_code);
       written.insert(op->id());
@@ -130,7 +127,7 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
   }
 
   // TODO(lukas): This should be called, but is not.
-  void Visit(Circuit *op) { LOG(FATAL) << "Not implemented."; }
+  void Visit(Circuit *op) { UNREACHABLE(); }
 
   void Visit(InputRegister *op) { write(op->reg_name, op->size); }
   void Visit(OutputRegister *op) { write(op->reg_name, op->size); }
@@ -223,7 +220,7 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
     const auto old_offset = static_cast<long long>(is.tellg());
     is >> byte;
     if (!is.eof()) {
-      CHECK_EQ(old_offset + 1, static_cast<long long>(is.tellg()));
+      CHECK(old_offset + 1 == static_cast<long long>(is.tellg()));
     }
   }
 
@@ -282,9 +279,7 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
       auto [hash] = read< raw_id_t >();
 
       auto op_it = id_to_op.find(hash);
-      if (op_it == id_to_op.end()) {
-        LOG(FATAL) << "Could not reference with id: " << hash;
-      }
+      CHECK(op_it != id_to_op.end()) << "Could not reference with id: " << hash;
       return op_it->second;
     }
     if (sel == Selector::Metadatum) {
@@ -293,12 +288,12 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
       id_to_op[id]->set_meta(std::move(key), std::move(val));
       return nullptr;
     }
-    LOG(FATAL) << "Unexpected tag for an operation reference: " << this->to_string(sel);
+    UNREACHABLE() << "Unexpected tag for an operation reference: " << this->to_string(sel);
   }
 
   template< typename T >
   Operation *Visit(T *op, uint64_t id) {
-    LOG(FATAL) << "Cannot deserialize " << T::kind << ". Most likely cause is missing impl.";
+    UNREACHABLE() << "Cannot deserialize " << T::kind << ". Most likely cause is missing impl.";
   }
 
   Operation *Decode(raw_id_t id, raw_op_code_t op_code) {
@@ -516,9 +511,8 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
   for (auto cond : circuit->Attr<PreservedConstraint>()) {
     auto lhs = dynamic_cast<InputRegister *>(cond->operands[0]);
     auto rhs = dynamic_cast<OutputRegister *>(cond->operands[1]);
-    CHECK_NOTNULL(lhs);
-    CHECK_NOTNULL(rhs);
-    CHECK_EQ(lhs->reg_name, rhs->reg_name);
+    CHECK(lhs && rhs);
+    CHECK(lhs->reg_name == rhs->reg_name);
     preserved_regs.emplace(lhs->reg_name, cond);
   }
 

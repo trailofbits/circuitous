@@ -52,7 +52,7 @@ namespace circ::shadowinst {
         auto big = orig->EnclosingRegister();
         return std::make_tuple(orig->size, big->size);
       }
-      LOG(FATAL) << "Cannot fetch info for reg that is not in arch.";
+      UNREACHABLE() << "Cannot fetch info for reg that is not in arch.";
     };
 
     for (auto &[reg, bits] : s_reg.translation_map) {
@@ -76,7 +76,7 @@ namespace circ::shadowinst {
         auto [x, y] = key;
         ss << "[ " << std::to_string(x) << " , " << std::to_string(y) << " ]";
       }
-      LOG(FATAL) << "out.size() != 1\n" << ss.str() << " in:\n" << s_reg.to_string();
+      UNREACHABLE() << "out.size() != 1\n" << ss.str() << " in:\n" << s_reg.to_string();
     }
 
     auto &[key, _] = *(out.begin());

@@ -9,10 +9,7 @@
 namespace circ
 {
 
-  template< typename Logger >
-  using DebugOptimizer = Passes< Defensive< Logger, WithHistory< PassesBase > > >;
-
-  template< typename Logger >
-  using DefaultOptimizer = Passes< Defensive< Logger, PassesBase > >;
+  using DebugOptimizer = Passes< Defensive< WithHistory< PassesBase > > >;
+  using DefaultOptimizer = Passes< Defensive< PassesBase > >;
 
 }  // namespace circ

@@ -4,7 +4,10 @@
 
 #pragma once
 
+#include <circuitous/Support/Check.hpp>
+#include <circuitous/Support/Log.hpp>
 #include <circuitous/Util/LLVMUtil.hpp>
+
 #include <circuitous/IR/Intrinsics.hpp>
 
 #include <circuitous/Fuzz/InstNavigation.hpp>
@@ -19,12 +22,10 @@
 #include <remill/BC/Lifter.h>
 #include <remill/BC/Util.h>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Function.h>
-#pragma clang diagnostic pop
+CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <cstdint>
 #include <map>
@@ -336,7 +337,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
       return std::string(name);
     }
 
-    LOG(FATAL) << "Cannot locate input " << name;
+    log_kill() << "Cannot locate input " << name;
   }
 
   llvm::Value *LiftRegisterOperand(remill::Instruction &inst,
@@ -493,9 +494,9 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
       if (s_reg->translation_map.size() == 0) {
         return LoadWordRegValOrZero_(block, state_ptr, r_reg.name, zero);
       }
-      CHECK_EQ(s_reg->translation_map.size(), 1);
+      CHECK(s_reg->translation_map.size() == 1);
       auto &entry = *s_reg->translation_map.begin();
-      CHECK_EQ(entry.second.size(), 1);
+      CHECK(entry.second.size() == 1);
       CHECK(entry.second.begin()->empty());
       return LoadWordRegValOrZero_(block, state_ptr, entry.first, zero);
     }
@@ -559,7 +560,7 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
         CHECK(CurrentShade().address->index_reg->regions ==
               CurrentShade().address->base_reg->regions);
         if (r_op.addr.scale != 1)
-          LOG(WARNING) << "Overriding scale to 1 based on shadow info.";
+          log_error() << "Overriding scale to 1 based on shadow info.";
         return 1ul;
       }
       return static_cast< uint64_t >(r_op.addr.scale);

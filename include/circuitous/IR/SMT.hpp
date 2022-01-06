@@ -12,6 +12,8 @@
 #include <unordered_map>
 
 #include <circuitous/Util/Logging.hpp>
+#include <circuitous/Support/Check.hpp>
+#include <circuitous/Support/Log.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/InstrTypes.h>
@@ -79,7 +81,7 @@ namespace circ
 
     z3::expr Visit(Operation *op)
     {
-      LOG(FATAL) << "Unhandled operation: " << op->Name();
+      log_kill() << "Unhandled operation: " << op->Name();
     }
 
     z3::expr& record(Operation *op, z3::expr e)
@@ -361,7 +363,7 @@ namespace circ
       auto extractor = [&](auto thing, auto from, auto size) -> z3::expr {
         return thing.extract(from + size - 1, from);
       };
-      CHECK_EQ(memory.get_sort().bv_size(), irops::memory::size(ptr_size));
+      CHECK(memory.get_sort().bv_size() == irops::memory::size(ptr_size));
       return irops::memory::parse< z3::expr >(memory, extractor, ptr_size);
     }
 
@@ -386,7 +388,7 @@ namespace circ
       auto ts =   parsed.timestamp() == Dispatch(op->ts_arg());
       return record(op, to_bv(used && mode && id && size & addr && ts));
     }
-    z3::expr Visit(UnusedConstraint *op)    { LOG(FATAL) << "Not implemented"; }
+    z3::expr Visit(UnusedConstraint *op) { NOT_IMPLEMENTED(); }
 
     z3::expr Visit(OnlyOneCondition *op)
     {
@@ -601,7 +603,7 @@ namespace circ
         stats += get_stats(e.arg(i), optimizer, cache);
 
     } else {
-      LOG(FATAL) << "unknown operation " << e << '\n';
+      log_kill() << "unknown operation " << e << '\n';
     }
 
     return stats;

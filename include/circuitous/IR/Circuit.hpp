@@ -85,7 +85,7 @@ namespace circ {
       if constexpr (sizeof...(Tail) != 0) {
         return this->Visit_<Tail ...>(op, std::forward<Args>(args)...);
       } else {
-        LOG(FATAL) << "unhandled operation";
+        UNREACHABLE() << "unhandled operation";
       }
     }
 
@@ -112,7 +112,7 @@ namespace circ {
       if constexpr (sizeof...(Tail) != 0) {
         return this->Visit_<Tail ...>(kind, std::forward<Args>(args)...);
       } else {
-        LOG(FATAL) << "Kind: " << kind << " does not correspond to known Operation!";
+        UNREACHABLE() << "Kind: " << kind << " does not correspond to known Operation!";
       }
     }
 
@@ -164,7 +164,7 @@ namespace circ {
     if constexpr (sizeof...(Tail) != 0) {
       return runtime_find_< F, Tail ... >(rkind, f);
     } else {
-      LOG(FATAL) << "runtime find on: " << shatter_fragment_as_str(rkind) << " failed";
+      UNREACHABLE() << "runtime find on: " << shatter_fragment_as_str(rkind) << " failed";
     }
   }
 
