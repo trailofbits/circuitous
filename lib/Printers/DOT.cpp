@@ -164,7 +164,7 @@ struct Printer : UniqueVisitor<Printer> {
 
 } // namespace dot
 
-void PrintDOT(std::ostream &os, Circuit *circuit,
+void print_dot(std::ostream &os, Circuit *circuit,
               const std::unordered_map<Operation *, std::string> &node_values) {
   circ::dot::Printer dot_os(os, node_values);
   dot_os.Visit(circuit);

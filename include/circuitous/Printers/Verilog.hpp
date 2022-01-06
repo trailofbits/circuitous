@@ -641,7 +641,7 @@ namespace circ::print::verilog {
 
   };
 
-  std::string get_module_name(Operation *op) {
+  static inline std::string get_module_name(Operation *op) {
     CHECK(!is_of< LeafValue >(op));
     switch (op->op_code) {
       case Circuit::kind: return "full_circuit";
