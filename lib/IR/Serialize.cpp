@@ -426,7 +426,7 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
 
 }  // namespace
 
-void Circuit::Serialize(std::ostream &os) {
+void Circuit::serialize(std::ostream &os) {
   SerializeVisitor vis(os);
   // TODO(lukas): `Write` should be called on Circuit.
   vis.Write(ptr_size);
@@ -444,32 +444,14 @@ void Circuit::Serialize(std::ostream &os) {
   os.flush();
 }
 
-void Circuit::Serialize(std::function<std::ostream &(const std::string &)> os_opener) {
-  std::unordered_map<std::string, SerializeVisitor> visitors;
-
-  std::string topology;
-  for (auto xor_all_op : Attr<OnlyOneCondition>()) {
-
-    // Each of `op` should be a single `VerifyInstruction` operation.
-    for (auto op : xor_all_op->operands) {
-      std::stringstream ss;
-      PrintTopology(
-          ss, op, ~0u, +[](Operation *) { return true; });
-      ss.str().swap(topology);
-
-      auto it = visitors.find(topology);
-      if (it == visitors.end()) {
-        bool added = false;
-        std::tie(it, added) = visitors.emplace(topology, os_opener(topology));
-        CHECK(added);
-      }
-
-      it->second.Write(op);
-    }
-  }
+void Circuit::serialize(std::string_view filename)
+{
+    std::ofstream file(filename, std::ios::binary | std::ios::trunc);
+    return serialize(file);
 }
 
-std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
+auto Circuit::deserialize(std::istream &is) -> circuit_ptr_t
+{
   // TODO(lukas): Configurable.
   DeserializeVisitor vis(is);
 
@@ -552,6 +534,12 @@ std::unique_ptr<Circuit> Circuit::Deserialize(std::istream &is) {
 
   // TODO(lukas): I think this is not supposed to be here.
   return vis.take_circuit();
+}
+
+auto Circuit::deserialize(std::string_view filename) -> circuit_ptr_t
+{
+    std::ifstream file(filename, std::ios::binary);
+    return deserialize(file);
 }
 
 }  // namespace circ
