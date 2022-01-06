@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <circuitous/Util/StrongType.hpp>
 
 #include <circuitous/Util/Parser.hpp>
 #include <circuitous/Util/Logging.hpp>

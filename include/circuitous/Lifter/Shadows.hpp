@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <iostream>
 #include <map>
 #include <optional>
 #include <set>
@@ -14,13 +15,10 @@
 #include <unordered_set>
 #include <vector>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <glog/logging.h>
-#pragma clang diagnostic pop
-
 #include <remill/Arch/Instruction.h>
+
+#include <circuitous/Support/Check.hpp>
+#include <circuitous/Support/Log.hpp>
 
 namespace circ::shadowinst {
 
@@ -560,7 +558,7 @@ namespace circ::shadowinst {
           return operands[idx];
         }
         default :
-          LOG(FATAL)
+          UNREACHABLE()
             << "Cannot replace shadow operand with type that is neither reg, addr nor imm.";
       }
     }
@@ -654,7 +652,7 @@ namespace circ::shadowinst {
         if (op.shift) {
           ss << "  Shift:" << std::endl;
           for (auto [from, size] : *op.shift) {
-            LOG(INFO) << " " << from << " , " << size << std::endl;
+            ss << " " << from << " , " << size << std::endl;
           }
         }
         if (op.address) {

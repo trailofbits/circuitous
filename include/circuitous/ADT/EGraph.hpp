@@ -244,7 +244,7 @@ namespace circ::eqsat {
       }
 
       auto new_id = _unions.merge(a, b);
-      CHECK_EQ(new_id, a);
+      CHECK(new_id == a);
 
       _pending.push_back(new_id);
 

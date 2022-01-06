@@ -61,7 +61,7 @@ void IOSem<S>::Visit(InputImmediate *op) {
 
 template<typename S>
 void IOSem<S>::Visit(OutputRegister *op) {
-  LOG(FATAL) << "Output values should not be visited in derivation mode.";
+  UNREACHABLE() << "Output values should not be visited in derivation mode.";
 }
 
 template<typename S>
@@ -71,7 +71,7 @@ void IOSem<S>::Visit(InputErrorFlag *op) {
 
 template<typename S>
 void IOSem<S>::Visit(OutputErrorFlag *op) {
-  LOG(FATAL) << "Output values should not be visited in derivation mode.";
+  UNREACHABLE() << "Output values should not be visited in derivation mode.";
 }
 
 template<typename S>
@@ -81,7 +81,7 @@ void IOSem<S>::Visit(InputInstructionBits *op) {
 
 template<typename S>
 void IOSem<S>::Visit(Advice *op) {
-  LOG(FATAL) << "Output values should not be visited in derivation mode.";
+  UNREACHABLE() << "Output values should not be visited in derivation mode.";
 }
 
 /* Conditions */
@@ -130,7 +130,7 @@ void CSem<S>::Visit(ReadConstraint *op_) {
     if (!this->defined(addr, size)) {
       std::stringstream ss;
       ss << "Memory at " << std::hex << addr << " is not defined with size: " << size;
-      LOG(WARNING) << ss.str();
+      log_error() << ss.str();
       self().SetNodeVal(op->hint_arg(), {});
       return this->FalseVal();
     }

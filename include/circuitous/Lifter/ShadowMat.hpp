@@ -13,6 +13,8 @@
 #include <unordered_set>
 #include <vector>
 
+#include <circuitous/Support/Check.hpp>
+
 #include <circuitous/Lifter/Context.hpp>
 #include <circuitous/Lifter/Shadows.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
@@ -73,7 +75,7 @@ namespace circ::shadowinst {
       if (is_ptr(head)) {
         return ir.CreateBitCast(val, head->getType());
       }
-      LOG(FATAL) << "Unreachable";
+      UNREACHABLE() << "Unreachable";
     }
 
     llvm::Value *chain(llvm::Value *condition, llvm::Value *on_true) {

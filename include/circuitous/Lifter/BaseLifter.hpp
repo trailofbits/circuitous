@@ -33,7 +33,7 @@
 
 namespace circ {
 
-  void OptimizeSilently(
+  void optimize_silently(
     const remill::Arch *arch, llvm::Module *module,
     const std::vector<llvm::Function *> &fns);
 
@@ -51,7 +51,7 @@ namespace circ {
   // the instruction in bytes as on x86, the iforms from XED don't guarantee us
   // the same size of bits.
   static std::string isel_name(const remill::Instruction &inst) {
-    CHECK_GE(15, inst.bytes.size());
+    CHECK(15 >= inst.bytes.size());
     return inst.function + ("123456789abcdef"[inst.bytes.size()]);
   }
 
@@ -77,13 +77,10 @@ namespace circ {
         return std::make_tuple( std::nullopt, buff );
 
       remill::Instruction inst;
-      DLOG(INFO) << "Trying to decode";
       if (!ctx.arch()->DecodeInstruction(0, buff, inst) || !inst.IsValid()) {
         // Failed, move one byte.
-        DLOG(INFO) << "  failed, moving by one";
         return decode(buff.substr(1));
       }
-      DLOG(INFO) << "  success: " << inst.function;
       // Success, return inst with shorter buffer.
       return std::make_tuple( std::make_optional(std::move(inst)),
                               buff.substr(inst.bytes.size()) );
@@ -109,12 +106,12 @@ namespace circ {
 
     void process(remill::Instruction inst) {
       if (!IsDecodePositionIndependent(ctx._arch, inst)) {
-        LOG(ERROR) << "Skipping position-dependent instruction: " << inst.Serialize();
+        log_error() << "Skipping position-dependent instruction: " << inst.Serialize();
         return;
       }
 
       // Make sure the size of inst is not bigger than our assumption.
-      CHECK_LE(inst.bytes.size() * 8u, kMaxNumInstBits);
+      CHECK(inst.bytes.size() * 8u <= kMaxNumInstBits);
 
       // Group the unique decoded instructions in terms of their ISELs, i.e. the
       // general semantic category of those instructions.
@@ -125,7 +122,7 @@ namespace circ {
           if (auto [it, inserted] = isel_index.emplace(isel_name(inst), grouped_insts.size());
               !inserted) {
             auto &iclass = grouped_insts[it->second];
-            CHECK_EQ(inst.bytes.size(), iclass.instructions.back().bytes.size());
+            CHECK(inst.bytes.size() == iclass.instructions.back().bytes.size());
             return iclass;
           }
           // We need to create it -- `isel_index` was already update in the `if`,
@@ -150,7 +147,7 @@ namespace circ {
       disable_opts(inst_funcs);
 
       remill::VerifyModule(ctx.module());
-      OptimizeSilently(ctx.arch(), ctx.module(), inst_funcs);
+      optimize_silently(ctx.arch(), ctx.module(), inst_funcs);
 
       std::vector<llvm::Function *> reopt_funcs;
       for (auto func : inst_funcs) {
@@ -164,9 +161,9 @@ namespace circ {
         flatten_cfg(func, intrinsics);
       }
       check_unsupported_intrinscis(inst_funcs);
-      // TOOD(lukas): Inline into the loop once the `OptimizeSilently` does
+      // TOOD(lukas): Inline into the loop once the `optimize_silently` does
       //              only function verification (now does module).
-      OptimizeSilently(ctx.arch(), ctx.module(), reopt_funcs);
+      optimize_silently(ctx.arch(), ctx.module(), reopt_funcs);
 
       // We're done; make the instruction functions more amenable for inlining
       // and elimination.
@@ -244,11 +241,11 @@ namespace circ {
         return true;
 
       if (status == remill::LiftStatus::kLiftedUnsupportedInstruction)
-        LOG(ERROR) << "Missing semantics for instruction: " << inst.Serialize();
+        log_error() << "Missing semantics for instruction: " << inst.Serialize();
       else if (status == remill::LiftStatus::kLiftedInvalidInstruction)
-        LOG(ERROR) << "Invalid instruction: " << inst.Serialize();
+        log_error() << "Invalid instruction: " << inst.Serialize();
       else
-        LOG(FATAL) << "Instruction lifter ended with unexpected error: " << inst.Serialize();
+        UNREACHABLE() << "Instruction lifter ended with unexpected error: " << inst.Serialize();
 
       return false;
     }
@@ -266,6 +263,8 @@ namespace circ {
           auto func = remill::DeclareLiftedFunction(ctx.module(), name);
           group.lifted_fns[i] = func;
 
+          log_dbg() << inst.Serialize();
+          log_dbg() << group.shadows[i].to_string();
           remill::CloneBlockFunctionInto(func);
           auto block = &func->getEntryBlock();
 
@@ -298,11 +297,11 @@ namespace circ {
 
     InstSelections Run(llvm::StringRef buff) {
       auto isels = decode(buff);
-      DLOG(INFO) << "Decoding done.";
+      log_info() << "Decoding done.";
       fuzz(isels);
-      DLOG(INFO) << "Fuzzing done.";
+      log_info() << "Fuzzing done.";
       lift(isels);
-      DLOG(INFO) << "Lifting done.";
+      log_info() << "Lifting done.";
       return isels;
     }
 
