@@ -5,15 +5,16 @@
 #pragma once
 
 #include <circuitous/IR/Intrinsics.hpp>
+#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Support/Check.hpp>
+#include <circuitous/Support/Log.hpp>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
+CIRCUITOUS_RELAX_WARNINGS
 #include <glog/logging.h>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Verifier.h>
-#pragma clang diagnostic pop
+CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ {
 
@@ -67,8 +68,7 @@ struct Flattener {
   llvm::Value *GetCondition(llvm::BasicBlock *block, llvm::BasicBlock *pred_block,
                             llvm::IRBuilder<> &ir) {
     const auto pred_cond = reaching_cond[pred_block];
-    LOG_IF(FATAL, !pred_cond)
-        << "Cycle in control-flow graphs are not handled";
+    CHECK(pred_cond) << "Cycle in control-flow graphs are not handled";
 
     // Figure out the reaching condition for `block` coming through
     // `pred`.
@@ -82,10 +82,9 @@ struct Flattener {
       auto true_succ = pred_br->getSuccessor(0);
       auto false_succ = pred_br->getSuccessor(1);
 
-      if (true_succ == false_succ) {
-        // TODO(lukas): Probably just return `pred_cond`
-        LOG(FATAL) << "TODO: Not sure how to handle when true_succ == false_succ";
-      }
+      // TODO(lukas): Probably just return `pred_cond`
+      CHECK(true_succ != false_succ)
+        << "TODO: Not sure how to handle when true_succ == false_succ";
       auto edge_cond = pred_br->getCondition();
       if (true_succ == block) {
         return ir.CreateAnd(pred_cond, edge_cond);
@@ -142,7 +141,7 @@ struct Flattener {
           llvm::IRBuilder<> ir(new_block);
 
           const auto num_preds = phi->getNumIncomingValues();
-          CHECK_LT(0, num_preds);
+          CHECK(0 < num_preds);
 
           llvm::Value *sel_val = nullptr;
 
@@ -153,8 +152,8 @@ struct Flattener {
           } else if (2 == num_preds) {
             auto pred_block = phi->getIncomingBlock(0);
             auto val_cond = pred_conds[block][pred_block];
-            LOG_IF(FATAL, !val_cond) << "Missing reaching condition for value";
-            CHECK_NE(val_cond, ir.getTrue());
+            CHECK(val_cond) << "Missing reaching condition for value";
+            CHECK(val_cond != ir.getTrue());
             auto true_val = phi->getIncomingValue(0);
             auto false_val = phi->getIncomingValue(1);
             sel_val = ir.CreateSelect(val_cond, true_val, false_val);
@@ -166,8 +165,8 @@ struct Flattener {
               auto pred_block = phi->getIncomingBlock(i);
               auto pred_val = phi->getIncomingValue(i);
               auto val_cond = pred_conds[block][pred_block];
-              LOG_IF(FATAL, !val_cond) << "Missing reaching condition for value";
-              CHECK_NE(val_cond, ir.getTrue());
+              CHECK(val_cond) << "Missing reaching condition for value";
+              CHECK(val_cond != ir.getTrue());
               sel_val = ir.CreateSelect(val_cond, pred_val, sel_val);
             }
           }
@@ -232,7 +231,7 @@ struct Flattener {
 
     llvm::Value *sel_val = ir.CreateCall(error, args);
     for (auto [ret_inst, reaching_cond] : ret_vals) {
-      CHECK_NE(reaching_cond, ir.getTrue());
+      CHECK(reaching_cond != ir.getTrue());
       llvm::Value *ret_val = ret_inst->getReturnValue();
       sel_val = ir.CreateSelect(reaching_cond, ret_val, sel_val);
       ret_inst->eraseFromParent();
