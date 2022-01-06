@@ -11,574 +11,656 @@ from itertools import permutations
 _regs = [ "RIP", "RSP", "RBP",
           "RAX", "RBX", "RCX", "RDX", "RSI", "RDI",
           "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"]
-_e_regs = ["EAX, EBX", "ECX", "EDX", "ESI", "EDI", "EIP", "ESP", "EBP"]
+_e_regs = ["EAX", "EBX", "ECX", "EDX", "ESI", "EDI", "EIP", "ESP", "EBP"]
 _b_regs = ["AX", "BX", "CX", "DX"]
 _a_regs = ["AL", "AH"]
 _aflags = ["AF", "CF", "OF", "ZF", "PF", "SF", "DF"]
-_all_regs = _regs + _aflags + _e_regs + _b_regs + _a_regs
+_segments = ["SSBASE", "DSBASE", "FSBASE", "CSBASE", "GSBASE", "ESBASE"]
+_all_regs = _regs + _aflags + _e_regs + _b_regs + _a_regs + _segments
 
 class MemHint:
-  READ = 0
-  WRITE = 1
-  __slots__ = ('used','addr', 'value', 'type', 'size', 'ts')
+    READ = 0
+    WRITE = 1
+    __slots__ = ('used','addr', 'value', 'type', 'size', 'ts')
 
-  def __init__(self, addr_, val_, type_, size_, ts_=0):
-    assert isinstance(addr_, int)
-    assert isinstance(val_, int)
-    assert isinstance(type_, int)
-    assert isinstance(size_, int)
+    def __init__(self, addr_, val_, type_, size_, ts_=0):
+        assert isinstance(addr_, int)
+        assert isinstance(val_, int)
+        assert isinstance(type_, int)
+        assert isinstance(size_, int)
 
-    self.used = 1
-    self.addr = addr_
-    self.value = val_
+        self.used = 1
+        self.addr = addr_
+        self.value = val_
 
-    assert type_ in [MemHint.READ, MemHint.WRITE]
-    self.type = type_
+        assert type_ in [MemHint.READ, MemHint.WRITE]
+        self.type = type_
 
-    self.size = size_
-    self.ts = ts_
+        self.size = size_
+        self.ts = ts_
 
-  def read(addr_, val_, size_):
-    return MemHint(addr_, val_, MemHint.READ, size_)
-  def write(addr_, val_, size_):
-    return MemHint(addr_, val_, MemHint.WRITE, size_)
+    def read(addr_, val_, size_):
+        return MemHint(addr_, val_, MemHint.READ, size_)
+    def write(addr_, val_, size_):
+        return MemHint(addr_, val_, MemHint.WRITE, size_)
 
-  def zero_hint():
-    x = MemHint(None, None, MemHint.READ, None)
-    x.used = False
-    return x
+    def zero_hint():
+        x = MemHint(None, None, MemHint.READ, None)
+        x.used = False
+        return x
 
-  def get_unused(self):
-    return "0"
+    def get_unused(self):
+        return "0"
 
-  def get(self):
-    out  = self.ts << (64 + 64 + 8)
-    out += self.value << (64 + 8)
-    out += self.addr << 8
-    out += (self.size << 4) + (self.type << 1) + 1
-    return str(out)
+    def get(self):
+        out  = self.ts << (64 + 64 + 8)
+        out += self.value << (64 + 8)
+        out += self.addr << 8
+        out += (self.size << 4) + (self.type << 1) + 1
+        return str(out)
 
-  def __eq__(self, other):
-    if other is None:
-      return False
+    def __eq__(self, other):
+        if other is None:
+            return False
 
-    if other.used != self.used:
-      return False
+        if other.used != self.used:
+            return False
 
-    if self.used == False:
-      return True
+        if self.used == False:
+            return True
 
-    return self.addr == other.addr \
-           and self.value == other.value \
-           and self.type == other.type \
-           and self.size == other.size
+        return self.addr == other.addr \
+               and self.value == other.value \
+               and self.type == other.type \
+               and self.size == other.size
 
-  def __str__(self):
-    if self.used == False:
-      return "[ unused ]"
+    def __str__(self):
+        if self.used == False:
+            return "[ unused ]"
 
-    out = "[ "
-    out += "READ " if self.type == MemHint.READ else "WRITE: "
-    out += hex(self.addr) + " := "
-    out += str(self.value) + " , "
-    out += str(self.size) + " ]"
-    return out
+        out = "[ "
+        out += "READ " if self.type == MemHint.READ else "WRITE: "
+        out += hex(self.addr) + " := "
+        out += str(self.value) + " , "
+        out += str(self.size) + " ]"
+        return out
 
 def split_hints(hints):
-  write = []
-  read = []
-  unused = []
-  for h in hints:
-    if h.used == False:
-      unused.append(h)
-    elif h.type == MemHint.READ:
-      read.append(h)
-    elif h.type == MemHint.WRITE:
-      write.append(h)
-    else:
-      assert False
-  return (unused, read, write)
+    write = []
+    read = []
+    unused = []
+    for h in hints:
+        if h.used == False:
+            unused.append(h)
+        elif h.type == MemHint.READ:
+            read.append(h)
+        elif h.type == MemHint.WRITE:
+            write.append(h)
+        else:
+            assert False
+    return (unused, read, write)
 
 def permute_compare(fst, snd):
-  if len(fst) == 0 and len(snd) == 0:
-    return True
-  eqs = 0
-  for tmp in permutations(snd):
-    if tmp == tuple(fst):
-      eqs += 1
-  return eqs == 1
+    if len(fst) == 0 and len(snd) == 0:
+        return True
+    eqs = 0
+    for tmp in permutations(snd):
+        if tmp == tuple(fst):
+            eqs += 1
+    return eqs == 1
 
 #TODO(lukas): Handle unused better
 def compare_hints(fst, snd):
-  assert fst is not None and snd is not None
-  _, fst_read, fst_write = split_hints(fst)
-  _, snd_read, snd_write = split_hints(snd)
-  reads = permute_compare(fst_read, snd_read)
-  writes = permute_compare(fst_write, snd_write)
-  return reads and writes
+    assert fst is not None and snd is not None
+    _, fst_read, fst_write = split_hints(fst)
+    _, snd_read, snd_write = split_hints(snd)
+    reads = permute_compare(fst_read, snd_read)
+    writes = permute_compare(fst_write, snd_write)
+    return reads and writes
 
 
 class MI_gen:
-  __slot__ = ('seed', 'generated')
+    __slot__ = ('seed', 'generated')
 
-  def __init__(self, seed_=None):
-    seed_ = seed_ if seed_ is not None else 42
-    self.seed = seed_
-    self.generated = MemInput()
+    def __init__(self, seed_=None):
+        seed_ = seed_ if seed_ is not None else 42
+        self.seed = seed_
+        self.generated = MemInput()
 
-    random.seed(self.seed)
+        random.seed(self.seed)
 
-  def data(self, size):
-    out = []
-    for _ in range(size):
-      out.append(random.randint(0, 16))
-    return out
+    def data(self, size):
+        out = []
+        for _ in range(size):
+            out.append(random.randint(0, 16))
+        return out
 
-  def mem_(self, addr, size, **kwargs):
-    self.generated.add(addr, self.data(size), **kwargs)
-    return self
+    def mem_(self, addr, size, **kwargs):
+        self.generated.add(addr, self.data(size), **kwargs)
+        return self
 
-  def r(self, addr, size):
-    return self.mem_(addr, size, r=True)
+    def r(self, addr, size):
+        return self.mem_(addr, size, r=True)
 
-  def rw(self, addr, size):
-    return self.mem_(addr, size, r=True, w=True)
+    def rw(self, addr, size):
+        return self.mem_(addr, size, r=True, w=True)
 
 
 def MIG(seed=None): return MI_gen(seed)
 
 class MemInput:
-  __slots__ = ('entries')
+    __slots__ = ('entries')
 
-  def __init__(self):
-    self.entries = []
+    def __init__(self):
+        self.entries = []
 
-  def add(self, addr, data, **kwargs):
-    if isinstance(data, str):
-      bytes = []
-      for i in range(0, len(data), 2):
-        bytes.append(int(data[i] + data[i + 1], 16))
-    elif isinstance(data, list):
-      bytes = data
-    else:
-      assert False
-    r = kwargs.get('r', False)
-    w = kwargs.get('w', False)
-    e = kwargs.get('e', False)
-    self.entries.append((addr, bytes, (r, w, e)))
+    def add(self, addr, data, **kwargs):
+        if isinstance(data, str):
+            bytes = []
+            for i in range(0, len(data), 2):
+                bytes.append(int(data[i] + data[i + 1], 16))
+        elif isinstance(data, list):
+            bytes = data
+        else:
+            assert False
+        r = kwargs.get('r', False)
+        w = kwargs.get('w', False)
+        e = kwargs.get('e', False)
+        self.entries.append((addr, bytes, (r, w, e)))
 
-  def get(self):
-    out = {}
-    for addr, data, _ in self.entries:
-      out[hex(addr)[2:]] = "".join([f"{x:02x}" for x in data])
-    return out
+    def get(self):
+        out = {}
+        for addr, data, _ in self.entries:
+            out[hex(addr)[2:]] = "".join([f"{x:02x}" for x in data])
+        return out
 
-  def extend(self, other):
-    self.entries += other.entries
-    return self
+    def extend(self, other):
+        self.entries += other.entries
+        return self
 
 
 class StateBase:
-  __slots__ = ('registers', '_ebit', 'timestamp', 'undefined', 'mem_hints',
-               'memory', '_seed')
+    __slots__ = ('registers', '_ebit', 'timestamp', 'undefined', 'mem_hints',
+                 'memory', '_seed')
 
-  def __init__(self):
-    self.registers = {}
-    self._ebit = None
-    self.timestamp = None
-    self.undefined = set()
-    self.mem_hints = []
+    def __init__(self):
+        self.registers = {}
+        self._ebit = None
+        self.timestamp = None
+        self.undefined = set()
+        self.mem_hints = []
 
-    self.memory = None
-    self._seed = 42
+        self.memory = None
+        self._seed = 42
 
-  def set_reg(self, reg, val):
-    self.registers[reg] = val
-    if reg in self.undefined:
-      self.undefined.remove(reg)
-    return self
+    def set_reg(self, reg, val):
+        self.registers[reg] = val
+        if reg in self.undefined:
+            self.undefined.remove(reg)
+        return self
 
-  def unset_reg(self, reg):
-    if reg in self.registers:
-      self.registers.pop(reg)
-    self.undefined.add(reg)
-    return self
+    def unset_reg(self, reg):
+        if reg in self.registers:
+            self.registers.pop(reg)
+        self.undefined.add(reg)
+        return self
 
-  def ebit(self, val) :
-    self._ebit = val
-    return self
+    def ebit(self, val) :
+        self._ebit = val
+        return self
 
-  def ts(self, val) :
-    self.timestamp = val
-    return self
+    def ts(self, val) :
+        self.timestamp = val
+        return self
 
-  def aflags(self, val):
-    for flag in _aflags:
-      self.registers[flag] = val
-    return self
+    def aflags(self, val):
+        for flag in _aflags:
+            self.registers[flag] = val
+        return self
 
-  def mem_hint(self, val):
-    if self.mem_hints is None:
-      self.mem_hints = []
-    if isinstance(val, list):
-      for x in val:
-        self.mem_hint(x)
-    else:
-      self.mem_hints.append(val)
-    return self
+    def segments(self, val):
+        for segment_base in _segments:
+            self.registers[segment_base] = val
+        return self
 
-
-  def mig(self, gen):
-    if self.memory is None:
-      self.memory = MemInput()
-    self.memory.extend(gen.generated)
-    return self
-
-  def mem(self, addr, data, **kwargs):
-    if self.memory is None:
-      self.memory = MemInput()
-    self.memory.add(addr, data, **kwargs)
-    return self
-
-  def rmem(self, addr, data): return self.mem(addr, data, r=True)
-  def rwmem(self, addr, data): return self.mem(addr, data, r=True, w=True)
-  def emem(self, addr, data): return self.mem(addr, data, e=True)
+    def mem_hint(self, val):
+        if self.mem_hints is None:
+            self.mem_hints = []
+        if isinstance(val, list):
+            for x in val:
+                self.mem_hint(x)
+        else:
+            self.mem_hints.append(copy.deepcopy(val))
+        return self
 
 
-class State(StateBase):
+    def mig(self, gen):
+        if self.memory is None:
+            self.memory = MemInput()
+        self.memory.extend(gen.generated)
+        return self
 
-  __slots__ = ('bytes', 'result')
+    def mem(self, addr, data, **kwargs):
+        if self.memory is None:
+            self.memory = MemInput()
+        self.memory.add(addr, data, **kwargs)
+        return self
 
-  def __init__(self, default_val = None, default_rip = 0x87000):
-    super().__init__()
-    for x in _regs:
-      self.set_reg(x, default_val)
-    for x in _aflags:
-      if default_val is not None:
-        self.set_reg(x, default_val % 2)
-      else:
-        self.set_reg(x, default_val)
-    self.set_reg("RIP", default_rip)
-    self.ebit(False)
-    self.ts(0)
+    def rmem(self, addr, data): return self.mem(addr, data, r=True)
+    def rwmem(self, addr, data): return self.mem(addr, data, r=True, w=True)
+    def emem(self, addr, data): return self.mem(addr, data, e=True)
 
-    self.bytes = None
-    self.result = None
 
-  def disarm(self):
-    self.registers = None
-    self._ebit = None
-    self.timestamp = None
+class StateImpl(StateBase):
+    __slots__ = ('bytes', 'result')
 
-  def __bool__(self):
-    return self.registers is not None \
-           or self.ebit is not None \
-           or self.timestamp is not None
+    def __init__(self):
+        super().__init__()
 
-  def mutate(self, other):
-    mutated = copy.deepcopy(self)
+    def disarm(self):
+        self.registers = None
+        self.timestamp = None
 
-    for reg, val in other.registers.items():
-      mutated.set_reg(reg, val)
+    def __bool__(self):
+        return self.registers is not None \
+               or self.ebit is not None \
+               or self.timestamp is not None
 
-    for reg in other.undefined:
-      if reg in mutated.registers:
-        mutated.registers.pop(reg)
-      mutated.undefined.add(reg)
+    def mutate(self, other):
+        mutated = copy.deepcopy(self)
 
-    if other._ebit is not None:
-      mutated._ebit = other._ebit
+        for reg, val in other.registers.items():
+            mutated.set_reg(reg, val)
 
-    if other.timestamp is not None:
-      mutated.timestamp = other.timestamp
+        for reg in other.undefined:
+            if reg in mutated.registers:
+                mutated.registers.pop(reg)
+            mutated.undefined.add(reg)
 
-    if other.memory is not None:
-      mutated.memory = other.memory
+        if other._ebit is not None:
+            mutated._ebit = other._ebit
 
-    if other.mem_hints is not None:
-      mutated.mem_hint(other.mem_hints)
-    return mutated
+        if other.timestamp is not None:
+            mutated.timestamp = other.timestamp
 
-  def set_bytes(self, bytes_):
-    self.bytes = bytes_
-    return self
+        if other.memory is not None:
+            mutated.memory = copy.deepcopy(other.memory)
 
-  def get(self):
-    out = {"inst_bits" : self.bytes if self.bytes is not None else "0",
-           "ebit" : self._ebit,
-           "timestamp" : self.timestamp,
-           "regs" : {},
-           "mem_hints": {},
-           "memory": {}}
-    for reg, val in self.registers.items():
-      if val is not None:
-        out["regs"][reg] = str(val)
-    #for id, hint in enumerate(self.mem_hints):
-    #  out["mem_hints"][id] = hint.get()
-    if self.memory is not None:
-      out["memory"] = self.memory.get()
-    return out
+        if other.mem_hints is not None:
+            mutated.mem_hint(other.mem_hints)
+        return mutated
 
-  def as_json_file(self, prefix="def.", dir=None):
-    fname = prefix + "input.json"
-    path = fname if dir is None else os.path.join(dir, fname)
-    with open(path, 'w') as out:
-      json.dump(self.get(), out)
-    return path
+    def set_bytes(self, bytes_):
+        self.bytes = bytes_
+        return self
+
+    def get(self):
+        out = {"inst_bits" : self.bytes if self.bytes is not None else "0",
+               "ebit" : self._ebit,
+               "timestamp" : self.timestamp,
+               "regs" : {},
+               "mem_hints": {},
+               "memory": {}}
+        for reg, val in self.registers.items():
+            if val is not None:
+                out["regs"][reg] = str(val)
+        #for id, hint in enumerate(self.mem_hints):
+        #  out["mem_hints"][id] = hint.get()
+        if self.memory is not None:
+            out["memory"] = self.memory.get()
+        return out
+
+    def as_json_file(self, prefix="def.", dir=None):
+        fname = prefix + "input.json"
+        path = fname if dir is None else os.path.join(dir, fname)
+        with open(path, 'w') as out:
+            json.dump(self.get(), out)
+        return path
+
+class State32(StateImpl):
+    def __init__(self, default_val = None, default_rip = 0x87000):
+        super().__init__()
+        for x in _e_regs:
+            self.set_reg(x, default_val)
+        for x in _aflags:
+            if default_val is not None:
+                self.set_reg(x, default_val % 2)
+            else:
+                self.set_reg(x, default_val)
+        self.set_reg("EIP", default_rip)
+        self.ebit(False)
+        self.ts(0)
+
+        self.bytes = None
+        self.result = None
+
+class State(StateImpl):
+    def __init__(self, default_val = None, default_rip = 0x87000):
+        super().__init__()
+        for x in _regs:
+            self.set_reg(x, default_val)
+        for x in _aflags:
+            if default_val is not None:
+                self.set_reg(x, default_val % 2)
+            else:
+                self.set_reg(x, default_val)
+        self.set_reg("RIP", default_rip)
+        self.ebit(False)
+        self.ts(0)
+
+        self.bytes = None
+        self.result = None
+
 
 class Mutator(StateBase):
-  pass
+    pass
+
+class Mutator32(StateBase):
+    pass
 
 def MS():
   return Mutator()
 
+def MS32():
+  return Mutator32()
+
+
 def S(x = None):
   return State(x)
 
+def S32(x = None):
+  return State32(x)
+
 for reg in _regs + _aflags:
-  def s_reg_mem(self, reg, value, size, **kwargs):
-    self.set_reg(reg, value)
-    self.mig(MIG().mem_(value, size, **kwargs))
-    return self
+    def s_reg_mem(self, reg, value, size, **kwargs):
+        self.set_reg(reg, value)
+        self.mig(MIG().mem_(value, size, **kwargs))
+        return self
 
-  def s_reg_rmem(reg):
-    def tmp(self, value, size=0x100):
-      return s_reg_mem(self, reg, value, size, r=True)
-    return tmp
+    def s_reg_rmem(reg):
+        def tmp(self, value, size=0x100):
+            return s_reg_mem(self, reg, value, size, r=True)
+        return tmp
 
-  def s_reg_wrmem(reg):
-    def tmp(self, value, size=0x100):
-      return s_reg_mem(self, reg, value, size, r=True, w=True)
-    return tmp
+    def s_reg_wrmem(reg):
+        def tmp(self, value, size=0x100):
+            return s_reg_mem(self, reg, value, size, r=True, w=True)
+        return tmp
 
-  setattr(StateBase, "rm_" + reg, s_reg_rmem(reg))
-  setattr(StateBase, "wrm_" + reg, s_reg_wrmem(reg))
+    setattr(State, "rm_" + reg, s_reg_rmem(reg))
+    setattr(State, "wrm_" + reg, s_reg_wrmem(reg))
 
-  setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))
-  setattr(Mutator, reg, lambda s,v,r=reg : s.set_reg(r, v))
-  setattr(Mutator, "u" + reg, lambda s,r=reg : s.unset_reg(r))
+    setattr(State, reg, lambda s,v,r=reg : s.set_reg(r, v))
+    setattr(Mutator, reg, lambda s,v,r=reg : s.set_reg(r, v))
+    setattr(Mutator, "u" + reg, lambda s,r=reg : s.unset_reg(r))
+
+
+for reg in _e_regs + _aflags + _segments:
+    def s_reg_mem(self, reg, value, size, **kwargs):
+        self.set_reg(reg, value)
+        self.mig(MIG().mem_(value, size, **kwargs))
+        return self
+
+    def s_reg_rmem(reg):
+        def tmp(self, value, size=0x100):
+            return s_reg_mem(self, reg, value, size, r=True)
+        return tmp
+
+    def s_reg_wrmem(reg):
+        def tmp(self, value, size=0x100):
+            return s_reg_mem(self, reg, value, size, r=True, w=True)
+        return tmp
+
+    setattr(State32, "rm_" + reg, s_reg_rmem(reg))
+    setattr(State32, "wrm_" + reg, s_reg_wrmem(reg))
+
+    print("Injecting", reg)
+    setattr(State32, reg, lambda s,v,r=reg : s.set_reg(r, v))
+    setattr(Mutator32, reg, lambda s,v,r=reg : s.set_reg(r, v))
+    setattr(Mutator32, "u" + reg, lambda s,r=reg : s.unset_reg(r))
+
+
 
 def random_state(seed):
-  random.seed(seed)
-  out = S(0x1031)
-  for reg in _regs:
-    getattr(out, reg)(random.randint(0, (1 << 64) - 1))
-  for reg in _aflags:
-    getattr(out, reg)(random.randint(0, 1))
-  return out
+    random.seed(seed)
+    out = S(0x1031)
+    for reg in _regs:
+        getattr(out, reg)(random.randint(0, (1 << 64) - 1))
+    for reg in _aflags:
+        getattr(out, reg)(random.randint(0, 1))
+    return out
 
 def populate_state(gen):
-  out = S(0x1031)
-  for reg in _regs:
-    getattr(out, reg)(gen(0, (1 << 25) - 1))
-  for reg in _aflags:
-    getattr(out, reg)(gen(0, 1))
-  return out
+    out = S(0x1031)
+    for reg in _regs:
+        getattr(out, reg)(gen(0, (1 << 25) - 1))
+    for reg in _aflags:
+        getattr(out, reg)(gen(0, 1))
+    return out
 
 
 class TestCase:
-  __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated', '_result_generator',
-               'run_mode', 'seed')
+    __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated', '_result_generator',
+                 'run_mode', 'seed')
 
-  def __init__(self, name_=None, bytes_=None, input_=None, expected_=None):
-    self.name = name_
-    self.bytes = bytes_
-    self.input = input_
-    self.expected = expected_
-    self.simulated = State()
-    self._result_generator = None
-    self.run_mode = '--derive'
-    self.seed = 42
+    def __init__(self, name_=None, bytes_=None, input_=None, expected_=None):
+        self.name = name_
+        self.bytes = bytes_
+        self.input = input_
+        self.expected = expected_
+        self.simulated = State()
+        self._result_generator = None
+        self.run_mode = '--derive'
+        self.seed = 42
 
 # Base class to define tests with -- unfortunately it already does a lot of custom options
 # feel free to come with better decomposition
 # Core method is the `case` method which adds the tests to be run. It has a lot of options,
 # some of which can be "inherited" from the `Test` itself (to avoid code repetition).
 class Test:
-  __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
-               '_tags', '_names', '_lift_opts', '_inst_arr',
-               'default_istate', 'e_mutators', '_mode', 'rand_gen')
+    __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
+                 '_tags', '_names', '_lift_opts', '_inst_arr',
+                 'default_istate', 'e_mutators', '_mode', 'rand_gen',
+                 '_arch', '_circuit')
 
-  def __init__(self, name_=""):
-    # TODO(lukas): Split this into
-    #                * inheritable attributes
-    #                * helpers
-    self.name = name_
-    self.cases = []
-    self.dir = None
-    self.metafiles = {}
+    def __init__(self, name_=""):
+        # TODO(lukas): Split this into
+        #                * inheritable attributes
+        #                * helpers
+        self.name = name_
+        self.cases = []
+        self.dir = None
+        self.metafiles = {}
 
-    self._tags = set()
-    self._names = 0
-    self._lift_opts = []
+        self._tags = set()
+        self._names = 0
+        self._lift_opts = []
 
-    self.default_istate = State()
-    self.e_mutators = []
+        self.default_istate = State()
+        self.e_mutators = []
 
-    # To allow a delayed byte generation, we allow two types of bytes
-    # TODO(lukas): What if I want to combine them?
+        # To allow a delayed byte generation, we allow two types of bytes
+        # TODO(lukas): What if I want to combine them?
 
-    # _bytes must always be a `Union[str, LazyBytes]`
-    self._bytes = None
-    # _inst_arr must always be a `Union[list[str], LazyBytes]`
-    self._inst_arr = []
+        # _bytes must always be a `Union[str, LazyBytes]`
+        self._bytes = None
+        # _inst_arr must always be a `Union[list[str], LazyBytes]`
+        self._inst_arr = []
 
-    self._mode = None
-    self.rand_gen = None
+        self._mode = None
+        self._arch = "amd64"
+        self.rand_gen = None
 
-  def mode(self, what) :
-    self._mode = what
-    return self
+        self._circuit = None
 
-  def bytes(self, bytes_):
-    assert bytes_ is not None, "Cannot build the bytes yet (TODO)."
-    if isinstance(bytes_, list):
-      self._inst_arr = bytes_
-      self._bytes = "".join(bytes_)
-    elif isinstance(bytes_, str):
-      self._inst_arr = [bytes_]
-      self._bytes = bytes_
-    else:
-      self._inst_arr = bytes_
-      self._bytes = bytes_
-    return self
+    def arch(self, trg):
+        self._arch = trg
+        return self
 
-  def DI(self, state):
-    self.default_istate = state
-    return self
+    def set_circut(self, what):
+        self._circuit = what
+        return self
 
-  def lift_opts(self, args):
-    self._lift_opts += args
-    return self
+    def get_circuit(self, what):
+        return self._circuit
 
-  def _input_state(self, **kwargs):
-    assert not(bool('I' in kwargs) and bool('DI' in kwargs))
-    istate = kwargs.get('I', None)
-    if istate is not None:
-      return istate
+    def mode(self, what) :
+        self._mode = what
+        return self
 
-    # We know it is present due to lead assert
-    distate = kwargs.get('DI', None)
-    if distate is not None:
-      return self.default_istate.mutate(distate)
-    return copy.deepcopy(self.default_istate)
+    def bytes(self, bytes_):
+        assert bytes_ is not None, "Cannot build the bytes yet (TODO)."
+        if isinstance(bytes_, list):
+            self._inst_arr = bytes_
+            self._bytes = "".join(bytes_)
+        elif isinstance(bytes_, str):
+            self._inst_arr = [bytes_]
+            self._bytes = bytes_
+        else:
+            self._inst_arr = bytes_
+            self._bytes = bytes_
+        return self
 
-  def _expected_state(self, **kwargs):
-    assert not(bool('E' in kwargs) and bool('DE' in kwargs))
-    estate = kwargs.get('E', None)
-    if estate is not None:
-      return estate
+    def DI(self, state):
+        self.default_istate = state
+        return self
 
-    # We know it is present due to lead assert
-    destate = kwargs.get('DE', None)
-    if destate is not None:
-      self.e_mutators.append(destate)
-      return self.default_istate.mutate(destate)
-    else:
-      self.e_mutators.append(MS())
-    return State()
+    def lift_opts(self, args):
+        self._lift_opts += args
+        return self
 
-  # Options -- [] denotes optional, <> denotes that it is inherited if not specified:
-  #  [*] 'name' - name of the case for better orientation
-  #  <*> 'lift_bytes' - bytes to lift
-  #  <*> 'run_bytes' - string representation of bytes or a number, which is an index
-  #                    into `Test` lift bytes
-  #   *  'R' - expected output
-  #  [*] 'RG' - generator of expected output -- see `Acceptance` class. Useful is result
-  #             is different with different lift options.
-  #  <*> 'I'  - input state, inherited from `Test` if not present
-  #  [*] 'DI' - use `Test` input state but modify it
-  #   *  'E'  - expected output state
-  #  [*] 'DE' - same as `DI` but for expected
-  # TODO(lukas): Fix `run_bytes` indexing into `Test` lift_bytes.
-  #              Test if `lift_bytes` actually work.
-  def case(self, name_=None, **kwargs):
-    case = TestCase()
-    case.run_mode = self._mode if self._mode is not None else case.run_mode
-    self._names += 1
-    assert name_ not in [x.name for x in self.cases]
-    case.name = name_
-    case.name = kwargs.get('name',
-                           case.name if case.name is not None else str(self._names))
-    case.bytes = kwargs.get('lift_bytes', self._bytes)
+    def extra_lift_opts(self):
+        return self._lift_opts + ['--arch', self._arch]
 
-    case.expected = self._expected_state(**kwargs)
-    case.input = self._input_state(**kwargs)
+    def _input_state(self, **kwargs):
+        assert not(bool('I' in kwargs) and bool('DI' in kwargs))
+        istate = kwargs.get('I', None)
+        if istate is not None:
+            return istate
 
-    inst_chooser = kwargs.get('run_bytes', None)
+        # We know it is present due to lead assert
+        distate = kwargs.get('DI', None)
+        if distate is not None:
+            return self.default_istate.mutate(distate)
+        return copy.deepcopy(self.default_istate)
 
-    # TODO(lukas): A "bit" bleh.
-    if inst_chooser is None:
-      assert len(self._inst_arr) == 1, "Cannot default to multiple insts."
-      case.input.bytes = self._bytes
-    elif isinstance(inst_chooser, int):
-      case.input.bytes = self._inst_arr[inst_chooser]
-    elif isinstance(inst_chooser, list):
-      assert len(inst_chooser) == 1, "Cannot run more than one inst."
-      case.input.bytes = "".join(inst_chooser[0])
-    else:
-      case.input.bytes = inst_chooser
+    def _expected_state(self, **kwargs):
+        assert not(bool('E' in kwargs) and bool('DE' in kwargs))
+        estate = kwargs.get('E', None)
+        if estate is not None:
+            return estate
 
-    case.expected.result = kwargs.get('R', None)
-    assert case.expected.result is not None
-    verdict = kwargs = kwargs.get('RG', None)
-    case._result_generator = verdict
-    self.cases.append(case)
-    return self
+        # We know it is present due to lead assert
+        destate = kwargs.get('DE', None)
+        if destate is not None:
+            self.e_mutators.append(destate)
+            return self.default_istate.mutate(destate)
+        else:
+            self.e_mutators.append(MS())
+        return State()
 
-  def all_defined(self, **kwargs):
-    for idx, bytes in enumerate(self._inst_arr):
-      if kwargs.get('random', False):
-        self.case(run_bytes = idx, I =populate_state(self.get_val_gen()) ,R = True, **kwargs)
-      else:
-        self.case(run_bytes = idx, R = True, **kwargs)
-    return self
+    # Options -- [] denotes optional, <> denotes that it is inherited if not specified:
+    #  [*] 'name' - name of the case for better orientation
+    #  <*> 'lift_bytes' - bytes to lift
+    #  <*> 'run_bytes' - string representation of bytes or a number, which is an index
+    #                    into `Test` lift bytes
+    #   *  'R' - expected output
+    #  [*] 'RG' - generator of expected output -- see `Acceptance` class. Useful is result
+    #             is different with different lift options.
+    #  <*> 'I'  - input state, inherited from `Test` if not present
+    #  [*] 'DI' - use `Test` input state but modify it
+    #   *  'E'  - expected output state
+    #  [*] 'DE' - same as `DI` but for expected
+    # TODO(lukas): Fix `run_bytes` indexing into `Test` lift_bytes.
+    #              Test if `lift_bytes` actually work.
+    def case(self, name_=None, **kwargs):
+        case = TestCase()
+        case.run_mode = self._mode if self._mode is not None else case.run_mode
+        self._names += 1
+        assert name_ not in [x.name for x in self.cases]
+        case.name = name_
+        case.name = kwargs.get('name',
+                               case.name if case.name is not None else str(self._names))
+        case.bytes = kwargs.get('lift_bytes', self._bytes)
 
-  def seed(self, x):
-    assert self.rand_gen is None
-    self.rand_gen = random.Random(x)
-    return self
+        case.expected = self._expected_state(**kwargs)
+        case.input = self._input_state(**kwargs)
 
-  def get_val_gen(self):
-    def val_gen(a, b):
-      return self.rand_gen.randint(a, b)
-    return val_gen
+        inst_chooser = kwargs.get('run_bytes', None)
 
-  def random(self, number, **kwargs):
-    for _ in range(number):
-      self.case(I = populate_state(self.get_val_gen()), **kwargs)
-    return self
+        # TODO(lukas): A "bit" bleh.
+        if inst_chooser is None:
+            assert len(self._inst_arr) == 1, "Cannot default to multiple insts."
+            case.input.bytes = self._bytes
+        elif isinstance(inst_chooser, int):
+            case.input.bytes = self._inst_arr[inst_chooser]
+        elif isinstance(inst_chooser, list):
+            assert len(inst_chooser) == 1, "Cannot run more than one inst."
+            case.input.bytes = "".join(inst_chooser[0])
+        else:
+            case.input.bytes = inst_chooser
 
-  def scases(self, compiler, insts, **kwargs):
-    for x in insts:
-      self.case(run_bytes = compiler([x]), **kwargs)
-    return self
+        case.expected.result = kwargs.get('R', None)
+        assert case.expected.result is not None
+        verdict = kwargs = kwargs.get('RG', None)
+        case._result_generator = verdict
+        self.cases.append(case)
+        return self
 
-  def tags(self, tags_):
-    if isinstance(tags_, str):
-      self._tags.add(tags_)
-    else:
-      self._tags.update(tags_)
-    return self
+    def all_defined(self, **kwargs):
+        for idx, bytes in enumerate(self._inst_arr):
+            if kwargs.get('random', False):
+                self.case(run_bytes = idx, I = populate_state(self.get_val_gen()),
+                          R = True, **kwargs)
+            else:
+                self.case(run_bytes = idx, R = True, **kwargs)
+        return self
 
-  def generate(self, **kwargs):
-    def check_bytes(which):
-      if not isinstance(which, str):
-        return "".join(which.compile())
-      return which
+    def seed(self, x):
+        assert self.rand_gen is None
+        self.rand_gen = random.Random(x)
+        return self
 
-    print("[ > ] Generating test case", self.name)
-    self._bytes = check_bytes(self._bytes)
-    for idx, case in enumerate(self.cases):
-      case.bytes = check_bytes(case.bytes)
-      case.input.bytes = check_bytes(case.input.bytes)
-      if case._result_generator is not None:
-        should, val = case._result_generator.generate(self, **kwargs)
-        if should:
-          case.expected.result = val
+    def get_val_gen(self):
+        def val_gen(a, b):
+            return self.rand_gen.randint(a, b)
+        return val_gen
 
-  def resolve_undefs(self):
-    for case in self.cases:
-      for reg in case.expected.undefined:
-        assert reg in case.input.registers
-        case.expected.registers[reg] = case.input.registers[reg]
+    def random(self, number, **kwargs):
+        for _ in range(number):
+            self.case(I = populate_state(self.get_val_gen()), **kwargs)
+        return self
+
+    def scases(self, compiler, insts, **kwargs):
+        for x in insts:
+            self.case(run_bytes = compiler([x]), **kwargs)
+        return self
+
+    def tags(self, tags_):
+        if isinstance(tags_, str):
+            self._tags.add(tags_)
+        else:
+            self._tags.update(tags_)
+        return self
+
+    def generate(self, **kwargs):
+        def check_bytes(which):
+            if not isinstance(which, str):
+                return "".join(which.compile())
+            return which
+
+        print("[ > ] Generating test case", self.name)
+        self._bytes = check_bytes(self._bytes)
+        for idx, case in enumerate(self.cases):
+            case.bytes = check_bytes(case.bytes)
+            case.input.bytes = check_bytes(case.input.bytes)
+            if case._result_generator is not None:
+                should, val = case._result_generator.generate(self, **kwargs)
+                if should:
+                     case.expected.result = val
+
+    def resolve_undefs(self):
+        for case in self.cases:
+            for reg in case.expected.undefined:
+                assert reg in case.input.registers
+                case.expected.registers[reg] = case.input.registers[reg]
