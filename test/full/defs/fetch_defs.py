@@ -54,6 +54,9 @@ import defs.clc
 import defs.popf
 import defs.pushf
 
+import defs.stringops
+import defs.x86
+
 def fetch(tests):
     out = set()
     out.update(_fetch_defs(defs.mov))
@@ -115,6 +118,9 @@ def fetch(tests):
 
     out.update(_fetch_defs(defs.popf))
     out.update(_fetch_defs(defs.pushf))
+
+    out.update(_fetch_defs(defs.stringops))
+    out.update(_fetch_defs(defs.x86))
 
     return out
 
