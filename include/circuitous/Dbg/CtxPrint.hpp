@@ -20,7 +20,7 @@ namespace circ::_dbg {
     using op_ctxs_t = CtxGatherer::op_ctxs_t;
 
     uint64_t ctx_count = 0;
-    std::unordered_map< uint64_t, llvm::Value * > ctx_ids;
+    std::unordered_map< uint64_t, llvm::Instruction * > ctx_ids;
     llvm::Function *fn = nullptr;
     op_ctxs_t op_ctxs;
     std::stringstream ss;
