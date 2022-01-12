@@ -50,7 +50,7 @@ DEFINE_string(seed_dbg_in, "", "Load input from circuitous-seed --dbg produced f
 DEFINE_bool(eqsat, false, "Enable equality saturation based optimizations.");
 DEFINE_bool(dbg, false, "Enable various debug dumps");
 
-namespace opt = circ::opt;
+namespace cli = circ::cli;
 
 namespace
 {
@@ -86,12 +86,13 @@ namespace
     using circuit_ptr_t = circ::Circuit::circuit_ptr_t;
 
     // optimize the circuit.
-    template< typename Optimizer >
-    circuit_ptr_t optimize(circuit_ptr_t &&circuit)
+    template< typename Optimizer, typename CLI >
+    circuit_ptr_t optimize(circuit_ptr_t &&circuit, const CLI &cli)
     {
         Optimizer opt;
 
-        opt.add_pass("dummy-pass");
+        if (cli.template present< cli::EqSat >())
+            opt.add_pass("eqsat");
 
         auto result = opt.run(std::move(circuit));
         circ::log_info() << "Optimizations done.";
@@ -121,7 +122,7 @@ std::string status(const Parser &parser, std::tuple< Ts ... >)
 
 circ::CircuitPtr get_input_circuit(auto &cli)
 {
-    using in_opts = std::tuple< opt::SeedDbgIn, opt::IRIn, opt::SMTIn, opt::BytesIn >;
+    using in_opts = std::tuple< cli::SeedDbgIn, cli::IRIn, cli::SMTIn, cli::BytesIn >;
     if (!cli.exactly_one_present(in_opts{}))
     {
         std::cerr << "Multiple options to produce circuit specified, do not know how to "
@@ -132,20 +133,20 @@ circ::CircuitPtr get_input_circuit(auto &cli)
 
     auto make_circuit = [&](auto buf) {
         circ::log_info() << "Going to make circuit";
-        return circ::Circuit::make_circuit(*cli.template get< opt::Arch >(),
-                                           *cli.template get< opt::OS >(),
+        return circ::Circuit::make_circuit(*cli.template get< cli::Arch >(),
+                                           *cli.template get< cli::OS >(),
                                            buf);
     };
 
-    if (auto bytes = cli.template get< opt::BytesIn >())
+    if (auto bytes = cli.template get< cli::BytesIn >())
         return make_circuit(as_string_view(*bytes));
 
-    if (auto ir_file = cli.template get< opt::IRIn >())
+    if (auto ir_file = cli.template get< cli::IRIn >())
         return circ::Circuit::deserialize(*ir_file);
-    if (auto smt_file = cli.template get< opt::SMTIn >())
+    if (auto smt_file = cli.template get< cli::SMTIn >())
         return circ::smt::deserialize(*smt_file);
 
-    if (auto seed_dbg_file = cli.template get< opt::SeedDbgIn >())
+    if (auto seed_dbg_file = cli.template get< cli::SeedDbgIn >())
     {
         std::vector< uint8_t > buf;
         for (const auto &bytes : load_seed_dbg(*seed_dbg_file))
@@ -157,23 +158,23 @@ circ::CircuitPtr get_input_circuit(auto &cli)
 
 void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 {
-    if (auto ir_out = cli.template get< opt::IROut >())
+    if (auto ir_out = cli.template get< cli::IROut >())
         circuit->serialize(*ir_out);
 
-    if (auto json_out = cli.template get< opt::JsonOut >())
+    if (auto json_out = cli.template get< cli::JsonOut >())
         circ::print_circuit(*json_out, circ::print_json, circuit.get());
 
-    if (auto dot_out = cli.template get< opt::DotOut >())
+    if (auto dot_out = cli.template get< cli::DotOut >())
         circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
                             std::unordered_map< circ::Operation *, std::string>{});
 
-    if (auto verilog_out = cli.template get< opt::VerilogOut >())
+    if (auto verilog_out = cli.template get< cli::VerilogOut >())
         circ::print_circuit(*verilog_out, circ::print_verilog, "circuit", circuit.get());
 
-    if (auto smt_out = cli.template get< opt::SMTOut >())
+    if (auto smt_out = cli.template get< cli::SMTOut >())
         circ::print_circuit(*smt_out, circ::print_smt, circuit.get());
 
-    if (auto bitblast_smt = cli.template get< opt::BitBlastSmtOut >())
+    if (auto bitblast_smt = cli.template get< cli::BitBlastSmtOut >())
         circ::print_circuit(*bitblast_smt, circ::print_bitblasted_smt, circuit.get());
 }
 
@@ -197,12 +198,12 @@ auto parse_and_validate_cli(int argc, char *argv[])
 
 int main(int argc, char *argv[]) {
     using parser_t = circ::CmdParser<
-        opt::Arch, opt::OS, opt::Dbg,
-        opt::IRIn, opt::SMTIn, opt::BytesIn, opt::SeedDbgIn,
-        opt::SMTOut, opt::JsonOut, opt::BitBlastSmtOut, opt::VerilogOut,
-        opt::IROut, opt::DotOut,
-        opt::BitBlastStats,
-        opt::LogToStderr, opt::LogDir >;
+        cli::Arch, cli::OS, cli::Dbg,
+        cli::IRIn, cli::SMTIn, cli::BytesIn, cli::SeedDbgIn,
+        cli::SMTOut, cli::JsonOut, cli::BitBlastSmtOut, cli::VerilogOut,
+        cli::IROut, cli::DotOut,
+        cli::BitBlastStats,
+        cli::LogToStderr, cli::LogDir >;
 
     auto parsed_cli = parse_and_validate_cli< parser_t >(argc, argv);
     if (!parsed_cli)
@@ -228,10 +229,10 @@ int main(int argc, char *argv[]) {
 
     VerifyCircuit("Verifying loaded circuit.", circuit.get(), "Circuit is valid.");
 
-    if (parsed_cli.present< opt::Dbg >())
-        circuit = optimize< circ::DebugOptimizer >(std::move(circuit));
+    if (parsed_cli.present< cli::Dbg >())
+        circuit = optimize< circ::DebugOptimizer >(std::move(circuit), parsed_cli);
     else
-        circuit = optimize< circ::DefaultOptimizer >(std::move(circuit));
+        circuit = optimize< circ::DefaultOptimizer >(std::move(circuit), parsed_cli);
 
     circ::log_info() << "Storing circuit.";
     store_outputs(parsed_cli, circuit);
