@@ -84,19 +84,31 @@ namespace gap {
         TerminatingMessage(std::cerr, std::move(loc)).do_kill("not implemented");
     }
 
-    auto CHECK(const auto &condition, source_location loc = source_location::current())
+    [[ noreturn ]] static inline void not_implemented(
+            source_location loc = source_location::current())
+    {
+        TerminatingMessage(std::cerr, std::move(loc)).do_kill("not implemented");
+    }
+
+    auto CHECK(auto &&condition, source_location loc = source_location::current())
     -> CheckMessage
     {
         return { std::cerr, std::move( loc ), static_cast< bool >(condition) };
     }
 
-    auto enforce(const auto &condition, source_location loc = source_location::current())
+    auto check(auto &&condition, source_location loc = source_location::current())
     -> CheckMessage
     {
         return { std::cerr, std::move( loc ), static_cast< bool >(condition) };
     }
 
     static inline auto UNREACHABLE(source_location loc = source_location::current())
+    -> TerminatingMessage
+    {
+        return TerminatingMessage( std::cerr, std::move( loc ) );
+    }
+
+    static inline auto unreachable(source_location loc = source_location::current())
     -> TerminatingMessage
     {
         return TerminatingMessage( std::cerr, std::move( loc ) );
