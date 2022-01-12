@@ -134,12 +134,13 @@ class Lifter(SimulateCWDMixin):
 
     def lift(self, bytes, extra_args):
         args = [self.binary,
-                "--log_dir", self.test_dir,
-                "--bytes_in", bytes,
-                "--json_out", self.locate("out.json"),
-                "--ir_out", self.locate(self.circuit_name(bytes))]
+                "--os", "macos",
+                "--log-dir", self.test_dir,
+                "--bytes-in", bytes,
+                "--json-out", self.locate("out.json"),
+                "--ir-out", self.locate(self.circuit_name(bytes))]
         if dbg_verbose:
-            args += ["--dot_out", self.locate(self.circuit_name(bytes) + ".dot")]
+            args += ["--dot-out", self.locate(self.circuit_name(bytes) + ".dot")]
         args += extra_args
         pipes = subprocess.Popen(args,
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
@@ -164,15 +165,15 @@ class Interpret(SimulateCWDMixin):
     def run_case(self, case, ir, parent):
         args = [self.binary,
                 case.run_mode,
-                "--log_dir", self.test_dir,
-                "--singular_current", case.input.as_json_file(case.name, self.test_dir),
-                "--export_derived", self.locate(case.name + ".result.json"),
-                "--ir_in", ir]
+                "--log-dir", self.test_dir,
+                "--singular-current", case.input.as_json_file(case.name, self.test_dir),
+                "--export-derived", self.locate(case.name + ".result.json"),
+                "--ir-in", ir]
         if case.run_mode == '--verify':
-            args += ["--singular_next",
+            args += ["--singular-next",
                      case.expected.as_json_file(case.name + "next", self.test_dir)]
         if dbg_verbose:
-            args += ["--dot_out", self.locate(case.name + ".result.dot")]
+            args += ["--dot-out", self.locate(case.name + ".result.dot")]
             args += ["--logtostderr"]
             parent.metafiles[case.name + ".result.dot"] = self.locate(case.name + ".result.dot")
         if interpreter_death:
