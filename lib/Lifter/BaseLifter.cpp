@@ -9,16 +9,15 @@
 #include <remill/BC/Util.h>
 #include <remill/BC/Optimizer.h>
 
-#include "Flatten.hpp"
+#include <circuitous/Lifter/Flatten.hpp>
 #include <circuitous/Fuzz/InstructionFuzzer.hpp>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <glog/logging.h>
+#include <circuitous/Util/Logging.hpp>
+
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/CodeGen/IntrinsicLowering.h>
-#pragma clang diagnostic pop
+CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ {
 

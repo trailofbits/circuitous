@@ -4,13 +4,14 @@
 
 #include <circuitous/IR/Circuit.hpp>
 
+#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Support/Check.hpp>
+
 #include <ostream>
 #include <unordered_map>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <glog/logging.h>
+
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/DataLayout.h>
 #include <llvm/IR/Instruction.h>
 #include <llvm/IR/Instructions.h>

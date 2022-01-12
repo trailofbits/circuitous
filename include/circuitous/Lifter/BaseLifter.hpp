@@ -18,18 +18,18 @@
 #include <circuitous/Lifter/Context.hpp>
 #include <circuitous/Util/LLVMUtil.hpp>
 
+#include <circuitous/Support/Check.hpp>
+#include <circuitous/Util/Logging.hpp>
+
 #include <remill/Arch/Arch.h>
 #include <remill/BC/IntrinsicTable.h>
 #include <remill/BC/Lifter.h>
 #include <remill/BC/Optimizer.h>
 #include <remill/BC/Util.h>
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <glog/logging.h>
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/Module.h>
-#pragma clang diagnostic pop
+CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ {
 
