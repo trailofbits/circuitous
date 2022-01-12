@@ -83,6 +83,7 @@ add_library(circuitous_printers STATIC
   lib/Printers/Python.cpp
   lib/Printers/JSON.cpp
   lib/Printers/Topology.cpp
+  lib/Printers/Printers.cpp
   lib/Printers/SMT.cpp
 )
 
