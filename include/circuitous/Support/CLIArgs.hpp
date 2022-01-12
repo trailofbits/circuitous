@@ -6,7 +6,7 @@
 
 #include <circuitous/Util/CmdParser.hpp>
 
-namespace circ::opt
+namespace circ::cli
 {
     template< typename Self >
     struct derive_short_help
@@ -207,5 +207,5 @@ namespace circ::opt
     {
         static inline const auto opt = circ::CmdOpt("--eqsat", false);
     };
-} // namespace circ::opt
+} // namespace circ::cli
 
