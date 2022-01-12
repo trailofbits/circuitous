@@ -103,6 +103,11 @@ namespace circ::opt
         static inline const auto opt = circ::CmdOpt("--logtostderr", false);
     };
 
+    struct LogDir : circ::DefaultCmdOpt, PathArg
+    {
+        static inline const auto opt = circ::CmdOpt("--log-dir", false);
+    };
+
 
     struct IROut : circ::DefaultCmdOpt, derive_short_help< IROut >, PathArg
     {
