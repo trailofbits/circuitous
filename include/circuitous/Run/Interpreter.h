@@ -153,7 +153,7 @@ namespace circ::run {
       if (successes.size() == 1) {
         acceptor = *successes.begin();
       }
-      CHECK(successes.size() > 1) << "Multiple contexts satisfied." << successes.size();
+      CHECK(!(successes.size() > 1)) << "Multiple contexts satisfied." << successes.size();
       return successes.size() == 1;
     }
   };
