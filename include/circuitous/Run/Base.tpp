@@ -25,7 +25,6 @@ llvm::APInt HasMemory::construct(const Parsed &parsed)
 template<typename S>
 void Base_<S>::SetNodeVal(Operation *op, const value_type &val)
 {
-    log_info() << pretty_print(op) << " := " << val->toString(16, false);
     this->node_values[op] = val;
 }
 
