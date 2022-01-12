@@ -101,21 +101,11 @@ namespace
 
 }  // namespace
 
-// TODO(lukas): This can be generalised using templated lambdas, but my local clang crashes
-//              on them. Revisit with later version.
-template< typename Parser, typename H, typename ... Ts >
-uint64_t count_matched(const Parser &parser)
-{
-    uint64_t self = parser.template matched< H >();
-    if constexpr (sizeof ... (Ts) == 0) return self;
-    else return self + count_matched< Parser, Ts ... >(parser);
-}
-
 template< typename Parser, typename H, typename ... Ts >
 std::string collect_status(const Parser &parser)
 {
     std::string self = H::opt.primary + " -> ";
-    if (parser.template matched< H >())
+    if (parser.template present< H >())
         self += "matched!\n";
     else
         self += "not matched!\n";
@@ -124,21 +114,15 @@ std::string collect_status(const Parser &parser)
 }
 
 template< typename Parser, typename ... Ts >
-bool exactly_one_matched(const Parser &parser, std::tuple< Ts ... >)
-{
-    return count_matched< Parser, Ts ... >(parser) == 1;
-}
-
-template< typename Parser, typename ... Ts >
 std::string status(const Parser &parser, std::tuple< Ts ... >)
 {
     return collect_status< Parser, Ts ... >(parser);
 }
 
-circ::CircuitPtr get_input_circuit(const auto &cli)
+circ::CircuitPtr get_input_circuit(auto &cli)
 {
     using in_opts = std::tuple< opt::SeedDbgIn, opt::IRIn, opt::SMTIn, opt::BytesIn >;
-    if (!exactly_one_matched(cli, in_opts{}))
+    if (!cli.exactly_one_present(in_opts{}))
     {
         std::cerr << "Multiple options to produce circuit specified, do not know how to "
                   << "proceed!" << std::endl;
@@ -194,33 +178,31 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 }
 
 template< typename Parser >
-auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< Parser >
+auto parse_and_validate_cli(int argc, char *argv[])
 {
-    auto parser = Parser{};
-    parser.parse_argv(argc, argv);
-
     auto yield_err = [&](const auto &lopt, const auto &msg)
     {
         std::cerr << lopt << " validate() failed with: " << msg << std::endl;
     };
 
-    if (!parser.validate(yield_err))
+    auto parsed = Parser::parse_argv(argc, argv).validate(yield_err);
+
+    if (!parsed)
     {
         std::cerr << "Command line arguments were not validated correctly, see "
                   << "stderr for more details.";
-        return {};
     }
-    return { parser };
+    return parsed;
 }
 
 int main(int argc, char *argv[]) {
-    using parser_t = circ::CmdOpts<
+    using parser_t = circ::CmdParser<
         opt::Arch, opt::OS, opt::Dbg,
         opt::IRIn, opt::SMTIn, opt::BytesIn, opt::SeedDbgIn,
         opt::SMTOut, opt::JsonOut, opt::BitBlastSmtOut, opt::VerilogOut,
         opt::IROut, opt::DotOut,
         opt::BitBlastStats,
-        opt::LogToStderr >;
+        opt::LogToStderr, opt::LogDir >;
 
     auto parsed_cli = parse_and_validate_cli< parser_t >(argc, argv);
     if (!parsed_cli)
@@ -236,8 +218,8 @@ int main(int argc, char *argv[]) {
     google::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
-    std::cout << parsed_cli->dbg_str();
-    auto circuit = get_input_circuit(*parsed_cli);
+    std::cout << parsed_cli.dbg_str();
+    auto circuit = get_input_circuit(parsed_cli);
     if (!circuit)
     {
         std::cerr << "Not able to load circuit.\n";
@@ -246,14 +228,13 @@ int main(int argc, char *argv[]) {
 
     VerifyCircuit("Verifying loaded circuit.", circuit.get(), "Circuit is valid.");
 
-    if (parsed_cli->matched< opt::Dbg >())
+    if (parsed_cli.present< opt::Dbg >())
         circuit = optimize< circ::DebugOptimizer >(std::move(circuit));
     else
         circuit = optimize< circ::DefaultOptimizer >(std::move(circuit));
 
     circ::log_info() << "Storing circuit.";
-    gap::enforce(false) << "Controlled fail.";
-    store_outputs(*parsed_cli, circuit);
+    store_outputs(parsed_cli, circuit);
 
     return 0;
 }
