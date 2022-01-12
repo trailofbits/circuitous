@@ -71,21 +71,73 @@ namespace circ
             -> std::same_as< std::optional< std::string > >;
     };
 
-    template< typename ... Cmds >
-    struct CmdOpts
-    {
-        using tokens_t = std::vector< std::string >;
-        using tokens_view_t = const tokens_t &;
 
+
+    template< typename Self >
+    struct Printable
+    {
+        auto dbg_str() const
+        {
+            std::stringstream ss;
+            ss << "Matched results of parsing:\n";
+            for (const auto &[lopt, tokens] : static_cast< const Self & >(*this).parsed)
+            {
+                ss << " * " << lopt;
+                if (tokens.empty())
+                {
+                    ss << "\n";
+                    continue;
+                }
+                ss << " ->\n";
+                for (const auto &token : tokens)
+                    ss << "    " << token << "\n";
+            }
+            return ss.str();
+        }
+    };
+
+    template< typename ... Cmds >
+    struct ParsedCmd : Printable< ParsedCmd< Cmds ... > >
+    {
+        using self_t = ParsedCmd< Cmds ... >;
+        using tokens_t = std::vector< std::string >;
         using parse_map_t = std::unordered_map< std::string, tokens_t >;
 
         parse_map_t parsed;
+        bool is_valid;
 
-        std::size_t current = 0;
-        tokens_t tokens;
+        ParsedCmd(parse_map_t parsed_, bool v) : parsed(std::move(parsed_)), is_valid(v) {}
+
+        /** Additional validation - make extra middle class **/
+
+        template< typename ... Ts >
+        self_t& exactly_one_present(std::tuple< Ts ... >)
+        {
+            is_valid &= count_matched< Ts ... >() == 1;
+            return *this;
+        }
+
+        template< typename H, typename ... Ts >
+        uint64_t count_matched() const
+        {
+            uint64_t self = present< H >();
+            if constexpr (sizeof ... (Ts) == 0) return self;
+            else return self + count_matched< Ts ... >();
+        }
+
+        operator bool() const { return is_valid; }
 
         /** Access **/
 
+        template< typename Cmd >
+        std::optional< tokens_t > get_raw() const
+        {
+            auto it = parsed.find(Cmd::opt.primary);
+            if (it == parsed.end())
+                return {};
+
+            return { it->second };
+        }
         // TODO(lukas): See if the `-> decltype( ... )` can be removed
         template< typename Cmd >
         auto get() const -> decltype( Cmd::cast( {} ) )
@@ -105,41 +157,37 @@ namespace circ
         }
 
         template< typename Cmd >
-        std::optional< tokens_t > get_raw() const
-        {
-            auto it = parsed.find(Cmd::opt.primary);
-            if (it == parsed.end())
-                return {};
+        bool present() const { return parsed.count(Cmd::opt.primary); }
+    };
 
-            return { it->second };
+    template< typename ... Cmds >
+    struct CmdParser : Printable< CmdParser< Cmds ... > >
+    {
+      private:
+        using self_t = CmdParser< Cmds ... >;
+
+        using tokens_t = std::vector< std::string >;
+        using tokens_view_t = const tokens_t &;
+
+        using parse_map_t = std::unordered_map< std::string, tokens_t >;
+
+        parse_map_t parsed;
+
+        std::size_t current = 0;
+        tokens_t tokens;
+
+      public:
+
+        static self_t parse_argv(int argc, char **argv)
+        {
+            self_t parser;
+            for (int i = 1; i < argc; ++i)
+                parser.tokens.push_back(argv[i]);
+            parser.match_opt();
+            return parser;
         }
 
-        template< typename Cmd >
-        bool matched() const
-        {
-            return present< Cmd >();
-        }
 
-        /** Debugging/Visualization **/
-
-        std::string dbg_str() const
-        {
-            std::stringstream ss;
-            ss << "Matched results of parsing:\n";
-            for (const auto &[lopt, tokens] : parsed)
-            {
-                ss << " * " << lopt;
-                if (tokens.empty())
-                {
-                    ss << "\n";
-                    continue;
-                }
-                ss << " ->\n";
-                for (const auto &token : tokens)
-                    ss << "    " << token << "\n";
-            }
-            return ss.str();
-        }
 
         /** Validation **/
 
@@ -151,24 +199,44 @@ namespace circ
         // and false is returned.
         // NOTE(lukas): `yield` can (and very often will) have state. Watch out for copies.
         template< typename Yield >
-        bool validate(Yield &&yield)
+        auto validate(Yield &&yield) -> ParsedCmd< Cmds ... >
         {
-            return validate< Yield, Cmds ... >(yield);
+            return _validate< Yield, Cmds ... >(yield);
+        }
+
+
+        auto validate() -> ParsedCmd< Cmds ... >
+        {
+            auto yield_basic_err = [&](const auto &lopt, const auto &msg)
+            {
+                std::cerr << lopt << " validate() failed with: " << msg << std::endl;
+            };
+            return validate(yield_basic_err);
+        }
+
+      private:
+
+        template< typename Yield, typename ... Ts >
+        auto _validate(Yield &yield) -> ParsedCmd< Cmds ... >
+        {
+            // First argument is a move of `parsed` which would empty `this`; therefore
+            // we need to first check the validity.
+            bool validity = is_valid< Yield, Ts ... >(yield);
+            return ParsedCmd< Cmds ... >(std::move(parsed), validity);
         }
 
         template< typename Yield, typename H, typename ... Ts >
-        bool validate(Yield &yield)
+        bool is_valid(Yield &yield)
         {
-            auto current = validate_one< Yield, H >(yield);
+            auto current = is_one_valid< Yield, H >(yield);
             if constexpr ( sizeof ... (Ts) != 0 )
-                return current && validate< Yield, Ts ... >(yield);
+                return current && is_valid< Yield, Ts ... >(yield);
             else
                 return current;
-
         }
 
         template< typename Yield, typename Cmd >
-        bool validate_one(Yield &yield)
+        bool is_one_valid(Yield &yield)
         {
             auto report_fail = [&](auto msg) {
                 yield(Cmd::opt.primary, msg);
@@ -188,18 +256,23 @@ namespace circ
             return true;
         }
 
+        /** Access **/
+
+        template< typename Cmd >
+        std::optional< tokens_t > get_raw() const
+        {
+            auto it = parsed.find(Cmd::opt.primary);
+            if (it == parsed.end())
+                return {};
+
+            return { it->second };
+        }
+
         /** Parsing **/
 
         void parse(std::string_view str)
         {
             tokens = tokenize(str);
-            match_opt();
-        }
-
-        void parse_argv(int argc, char **argv)
-        {
-            for (int i = 1; i < argc; ++i)
-                tokens.push_back(argv[i]);
             match_opt();
         }
 
@@ -235,6 +308,9 @@ namespace circ
 
         template< typename Cmd >
         bool present() const { return parsed.count(Cmd::opt.primary); }
+
+        template< typename Cmd >
+        bool matched() const { return present< Cmd >(); }
 
         template< typename Cmd, typename P >
         void take_while(P &&pred)
@@ -326,4 +402,5 @@ namespace circ
             return out;
         }
     };
+
 } // namespace circ
