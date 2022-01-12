@@ -12,11 +12,16 @@
 #include <circuitous/IR/Intrinsics.hpp>
 #include <circuitous/Util/Logging.hpp>
 
+#include <circuitous/Support/Log.hpp>
+#include <circuitous/Support/Check.hpp>
+#include <circuitous/Util/Logging.hpp>
+
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/ADT/StringRef.h>
 #include <llvm/IR/InstrTypes.h>
 #include <llvm/ADT/APInt.h>
 CIRCUITOUS_UNRELAX_WARNINGS
+
 namespace circ::run {
 
   // TODO(lukas): Most likely it will be required for this to be an attribute
