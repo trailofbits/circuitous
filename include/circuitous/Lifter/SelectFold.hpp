@@ -233,7 +233,9 @@ namespace circ {
         auto user = use.getUser();
         if (auto call = llvm::dyn_cast< llvm::CallInst >(user))
           return false;
-        return op_ctxs[user] == op_ctxs[call];
+        auto as_inst = llvm::dyn_cast< llvm::Instruction >(user);
+        check(as_inst);
+        return op_ctxs[as_inst] == op_ctxs[call];
       };
 
       ac.dynamic()->replaceUsesWithIf(ac.advice(), have_compatible_ctxs);

@@ -100,10 +100,11 @@ namespace circ {
   };
 
   struct CtxGatherer {
-    using op_ctxs_t = std::unordered_map< llvm::Value *, std::unordered_set< llvm::Value * > >;
+    using op_ctxs_t = std::unordered_map< llvm::Instruction *,
+                                          std::unordered_set< llvm::Instruction * > >;
     op_ctxs_t op_ctxs;
 
-    void color(llvm::Value *ctx, llvm::Instruction *current) {
+    void color(llvm::Instruction *ctx, llvm::Instruction *current) {
       op_ctxs[current].insert(ctx);
 
       for (auto u : current->operand_values())
