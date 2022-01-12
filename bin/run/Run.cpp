@@ -54,7 +54,7 @@ DEFINE_bool(sim, false, "Interactive");
 DEFINE_bool(die, false, "DBG: Artificially kill program and dump state of all runners.");
 
 // `circuitous-run` specific command line flags.
-namespace circ::opt::run
+namespace circ::cli::run
 {
     struct SingularCurrent : DefaultCmdOpt, PathArg
     {
@@ -128,7 +128,7 @@ namespace circ::opt::run
         static inline const auto opt = CmdOpt("--ir-in", true);
     };
 
-} // namespace circ::opt::run
+} // namespace circ::cli::run
 
 auto load_circ(const std::string &path) {
     // Read input circuit file
@@ -263,7 +263,7 @@ void run(const CLI &cli) {
 
 auto parse_cmd(int argc, char *argv[])
 {
-    using namespace circ::opt;
+    using namespace circ::cli;
     using parser_t = circ::CmdParser<
         IRIn, LogDir, LogToStderr, DotOut,
         //StateIn, StateOut, DotOut,
@@ -290,16 +290,16 @@ int main(int argc, char *argv[])
     //google::InstallFailureSignalHandler();
     google::ParseCommandLineFlags(&argc, &argv, true);
 
-    using run_modes_t = std::tuple< circ::opt::run::Derive, circ::opt::run::Verify >;
+    using run_modes_t = std::tuple< circ::cli::run::Derive, circ::cli::run::Verify >;
     if (!cli.exactly_one_present(run_modes_t{}))
     {
         std::cerr << "Must choose one of run or derive!\n" << std::endl;
         return 1;
     }
 
-    if (cli.present< circ::opt::run::Verify >())
+    if (cli.present< circ::cli::run::Verify >())
         run< circ::run::VQueueInterpreter >(cli);
-    else if (cli.present< circ::opt::run::Derive >())
+    else if (cli.present< circ::cli::run::Derive >())
         run< circ::run::DQueueInterpreter >(cli);
 
     return 0;
