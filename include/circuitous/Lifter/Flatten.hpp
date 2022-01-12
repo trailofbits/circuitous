@@ -10,7 +10,6 @@
 #include <circuitous/Support/Log.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
-#include <glog/logging.h>
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>
 #include <llvm/IR/Verifier.h>
