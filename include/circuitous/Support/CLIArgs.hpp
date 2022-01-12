@@ -203,5 +203,9 @@ namespace circ::opt
         static std::string short_help() { return help(); }
     };
 
+    struct EqSat : circ::DefaultCmdOpt, Arity< 0 >
+    {
+        static inline const auto opt = circ::CmdOpt("--eqsat", false);
+    };
 } // namespace circ::opt
 
