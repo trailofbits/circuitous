@@ -2,16 +2,16 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include "CircuitBuilder.h"
+#include <circuitous/Lifter/CircuitBuilder.hpp>
 
-#include "Flatten.hpp"
-
-#include <circuitous/Lifter/DependencyVisitor.hpp>
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/Component.hpp>
-#include <circuitous/Lifter/SelectFold.hpp>
+#include <circuitous/Lifter/DependencyVisitor.hpp>
 #include <circuitous/Lifter/Error.hpp>
+#include <circuitous/Lifter/Flatten.hpp>
 #include <circuitous/Lifter/Memory.hpp>
+#include <circuitous/Lifter/SelectFold.hpp>
+
 #include <circuitous/IR/Lifter.hpp>
 
 #include <circuitous/Support/Log.hpp>
