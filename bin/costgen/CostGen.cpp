@@ -8,6 +8,11 @@
 #include <circuitous/Printers/Verilog.hpp>
 #include <circuitous/Util/Logging.hpp>
 
+CIRCUITOUS_RELAX_WARNINGS
+#include <gflags/gflags.h>
+#include <glog/logging.h>
+CIRCUITOUS_UNRELAX_WARNINGS
+
 #include <fstream>
 #include <iostream>
 #include <tuple>
