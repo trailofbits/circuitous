@@ -266,6 +266,17 @@ namespace circ::run
         template<typename T>
         void init_notify_()
         {
+            auto check_position = [&](auto node, auto user)
+            {
+                if constexpr (!std::is_same_v< T, Advice >) return true;
+                else {
+                    for (std::size_t i = 0; i < user->operands.size(); ++i)
+                        if (node == user->operands[i])
+                            return i == 1;
+                    unreachable();
+                }
+            };
+
             for (auto node : circuit->template Attr<T>())
             {
                 if (this->node_values.count(node))
@@ -275,8 +286,10 @@ namespace circ::run
                     continue;
 
                 for (auto user : node->users)
-                    if (constrained_by(node, user))
+                {
+                    if (constrained_by(node, user) && check_position(node, user))
                         state.notify(node, user);
+                }
             }
         }
 
