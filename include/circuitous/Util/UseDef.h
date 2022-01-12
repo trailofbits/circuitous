@@ -4,12 +4,6 @@
 
 #pragma once
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-compare"
-#pragma clang diagnostic ignored "-Wconversion"
-#include <glog/logging.h>
-#pragma clang diagnostic pop
-
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -17,6 +11,8 @@
 #include <memory>
 #include <unordered_set>
 #include <vector>
+
+#include <circuitous/Support/Check.hpp>
 
 namespace circ {
 
@@ -110,9 +106,7 @@ struct Value {
 
   void RemoveUser(T *user) {
     auto it = std::find(users.begin(), users.end(), user);
-    if (it == users.end()) {
-      LOG(FATAL) << "Trying to remove user that is not part of the list.";
-    }
+    CHECK(it != users.end()) << "Trying to remove user that is not part of the list.";
     std::swap(users.back(), *it);
     users.pop_back();
   }
@@ -147,10 +141,7 @@ struct Node : Value<T>, User<T> {
 
 
   void ReplaceAllUsesWith(T *other) {
-    if (other == this) {
-      LOG(FATAL) << "Trying to replace all uses of X with X, probably error.";
-      return;
-    }
+    CHECK(other != this) << "Trying to replace all uses of X with X, probably error.";
 
     auto fetch = [&](const auto &where){
       for (std::size_t i = 0; i < where.size(); ++i) {
@@ -158,7 +149,7 @@ struct Node : Value<T>, User<T> {
           return i;
         }
       }
-      LOG(FATAL) << "User and uses are out of sync.";
+      UNREACHABLE() << "User and uses are out of sync.";
     };
 
     for (auto user : this->users) {

@@ -6,9 +6,12 @@
 #include <circuitous/IR/Memory.hpp>
 #include <circuitous/IR/Lifter.hpp>
 #include <circuitous/IR/Verify.hpp>
+
+#include <circuitous/Lifter/CircuitBuilder.hpp>
+
+#include <circuitous/Support/Check.hpp>
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Util/Logging.hpp>
-#include <circuitous/Support/Check.hpp>
 
 #include <circuitous/Dbg/CtxPrint.hpp>
 
