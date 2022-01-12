@@ -13,6 +13,9 @@
 
 namespace circ {
     using ::gap::NOT_IMPLEMENTED;
+    using ::gap::not_implemented;
     using ::gap::UNREACHABLE;
+    using ::gap::unreachable;
     using ::gap::CHECK;
+    using ::gap::check;
 } // namespace circ
