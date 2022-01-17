@@ -67,10 +67,7 @@ namespace {
 
         explicit SerializeVisitor(std::ostream &os_) : os(os_) {}
 
-        void Write(Selector sel)
-        {
-            Write(static_cast< std::underlying_type_t< Selector > >(sel));
-        }
+        void serialize(Operation *op) { return Write(op); }
 
         void Write(Operation *op)
         {
@@ -88,6 +85,11 @@ namespace {
                 Write(Selector::Reference);
                 Write< raw_id_t >(op->id());
             }
+        }
+
+        void Write(Selector sel)
+        {
+            Write(static_cast< std::underlying_type_t< Selector > >(sel));
         }
 
         void Write(uint8_t byte) { os << byte; }
@@ -135,7 +137,7 @@ namespace {
         }
 
         // TODO(lukas): This should be called, but is not.
-        void Visit(Circuit *op) { UNREACHABLE(); }
+        void Visit(Circuit *op) { write(op->ptr_size, op->operands);  }
 
         void Visit(InputRegister *op) { write(op->reg_name, op->size); }
         void Visit(OutputRegister *op) { write(op->reg_name, op->size); }
@@ -205,14 +207,8 @@ namespace {
             : is(is_)
         {}
 
-        void read_header()
-        {
-            auto [ptr_size] = read< uint32_t >();
-            circuit = std::make_unique< Circuit >(ptr_size);
-        }
-
-        Circuit *get_circuit() { CHECK(circuit); return circuit.get(); }
-        std::unique_ptr< Circuit > take_circuit() { return std::move(circuit); }
+        Circuit *get_circuit() { check(circuit); return circuit.get(); }
+        std::unique_ptr< Circuit > take_circuit() { check(circuit); return std::move(circuit); }
 
         void Read(Selector &sel)
         {
@@ -343,6 +339,16 @@ namespace {
           return make_op< T >(id, read< std::string, unsigned >());
         }
 
+        Operation *Visit(Circuit *, uint64_t id)
+        {
+            check(!circuit) << "Found multiple Circuit * while deserializing!";
+
+            auto [ptr_size] = read< uint32_t >();
+            circuit = std::make_unique< Circuit >(ptr_size);
+            ReadOps(circuit.get());
+            return circuit.get();
+        }
+
         Operation *Visit(InputRegister *, uint64_t id)
         {
             return reg_like_< InputRegister >(id);
@@ -460,13 +466,11 @@ void Circuit::serialize(std::ostream &os)
 {
     SerializeVisitor vis(os);
     // TODO(lukas): `Write` should be called on Circuit.
-    vis.Write(ptr_size);
-    for (auto xor_all_op : Attr< OnlyOneCondition >())
-      for (auto op : xor_all_op->operands)
-        vis.Write(op);
+    check(this->operands.size() == 1);
+    vis.serialize(this);
 
     auto write_metadata = [&](auto op) {
-      vis.write_metadata(op);
+        vis.write_metadata(op);
     };
     ForEachOperation(write_metadata);
 
@@ -487,7 +491,6 @@ auto Circuit::deserialize(std::istream &is) -> circuit_ptr_t
     auto old_flags = is.flags();
     is.unsetf(std::ios::skipws);
 
-    vis.read_header();
     while (is.good() && !is.eof() && EOF != is.peek())
       std::ignore = vis.Read();
 
