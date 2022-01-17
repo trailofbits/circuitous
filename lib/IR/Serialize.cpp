@@ -469,9 +469,7 @@ void Circuit::serialize(std::ostream &os)
     check(this->operands.size() == 1);
     vis.serialize(this);
 
-    auto write_metadata = [&](auto op) {
-        vis.write_metadata(op);
-    };
+    auto write_metadata = [&](auto op) { vis.write_metadata(op); };
     ForEachOperation(write_metadata);
 
     os.flush();
@@ -492,76 +490,9 @@ auto Circuit::deserialize(std::istream &is) -> circuit_ptr_t
     is.unsetf(std::ios::skipws);
 
     while (is.good() && !is.eof() && EOF != is.peek())
-      std::ignore = vis.Read();
+        std::ignore = vis.Read();
 
     is.flags(old_flags);
-    auto circuit = vis.get_circuit();
-
-    std::unordered_map<std::string, OutputRegister *> out_regs;
-    std::unordered_map<std::string, InputRegister *> in_regs;
-    std::unordered_set<std::string> seen_reg_names;
-    for (auto in_reg : circuit->Attr< InputRegister >())
-        in_regs.emplace(in_reg->reg_name, in_reg);
-
-    for (auto out_reg : circuit->Attr< OutputRegister >())
-        out_regs.emplace(out_reg->reg_name, out_reg);
-
-    for (const auto &[name, op] : in_regs)
-        if (!out_regs.count(name))
-        {
-            out_regs.emplace(name,
-                             circuit->Create< OutputRegister >(op->reg_name , op->size));
-        }
-
-    for (const auto &[name, op] : out_regs)
-        if (!in_regs.count(name))
-            in_regs.emplace(name, circuit->Create< InputRegister >(op->reg_name, op->size));
-
-    std::unordered_map< std::string, PreservedConstraint * > preserved_regs;
-    for (auto cond : circuit->Attr< PreservedConstraint >())
-    {
-        auto lhs = dynamic_cast< InputRegister * >(cond->operands[0]);
-        auto rhs = dynamic_cast< OutputRegister * >(cond->operands[1]);
-        check(lhs && rhs);
-        check(lhs->reg_name == rhs->reg_name);
-        preserved_regs.emplace(lhs->reg_name, cond);
-    }
-
-    auto xor_all = circuit->Create<OnlyOneCondition>();
-    circuit->AddUse(xor_all);
-
-    for (auto [_, op] : vis.id_to_op)
-    {
-        auto verify = dynamic_cast< VerifyInstruction * >(op);
-        if (!verify)
-            continue;
-
-        xor_all->AddUse(verify);
-
-        seen_reg_names.clear();
-        for (auto op : verify->operands)
-        {
-            OutputRegister *out_reg = nullptr;
-
-            if (auto transition = dynamic_cast< RegConstraint * >(op))
-                out_reg = dynamic_cast< OutputRegister * >(transition->operands[1]);
-
-            else if (auto preserved = dynamic_cast< PreservedConstraint * >(op))
-                out_reg = dynamic_cast< OutputRegister * >(preserved->operands[1]);
-
-            else if (auto copied = dynamic_cast<CopyConstraint *>(op))
-                out_reg = dynamic_cast< OutputRegister * >(copied->operands[1]);
-
-            if (out_reg)
-            {
-              check(in_regs.count(out_reg->reg_name));
-              check(out_regs.count(out_reg->reg_name));
-              seen_reg_names.insert(out_reg->reg_name);
-            }
-        }
-    }
-
-    // TODO(lukas): I think this is not supposed to be here.
     return vis.take_circuit();
 }
 
