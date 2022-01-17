@@ -2,7 +2,6 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <circuitous/IR/Hash.h>
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Memory.hpp>
 #include <circuitous/Printers.h>
@@ -57,7 +56,6 @@ namespace {
         using Selector = FileConfig::Selector;
 
         std::ostream &os;
-        IdentityHasher hasher;
         std::unordered_set<uint64_t> written;
 
         ~SerializeVisitor()
@@ -74,8 +72,7 @@ namespace {
             if (!written.count(op->id()))
             {
                 Write(Selector::Operation);
-                raw_id_t id = hasher[op];
-                Write(id);
+                Write(op->id());
                 check(0u < op->op_code) << "Weird opcode" << op->op_code;
                 raw_op_code_t op_code = op->op_code;
                 Write(op_code);
