@@ -118,6 +118,10 @@ class SerializeVisitor : public Visitor<SerializeVisitor>, FileConfig {
   }
 
   void write_metadata(Operation *op) {
+    // TODO(lukas): Was excluded (most likely dead node). However, we want to serialize
+    //              *all* nodes, rewrite as check once serializer is fixed.
+    if (!written.count(op->id()))
+      return;
     for (auto &[key, val] : op->meta) {
       Write(Selector::Metadatum);
       Write(op->id());
@@ -284,7 +288,8 @@ struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
     }
     if (sel == Selector::Metadatum) {
       auto [id, key, val] = read< raw_id_t, std::string, std::string >();
-      CHECK(id_to_op.count(id));
+      check(id_to_op.count(id)) << "Trying to attach metadata [ " << key << ": " << val
+                                << "] to operation with id" << id << "that is not present.";
       id_to_op[id]->set_meta(std::move(key), std::move(val));
       return nullptr;
     }
