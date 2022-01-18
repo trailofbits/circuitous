@@ -7,87 +7,115 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/IR/Storage.hpp>
 
+#include <type_traits>
+
 namespace circ
 {
-    // Basic visitor, provides:
-    // `Visit( Operation *op )` that will call `op->Traverse( *this )` (generic case)
-    // `Dispatch( Operation *op, Args ... )` which will cast `op` to it's type and call
-    // appropriate `Visit(X)`. `Visit` defined in `Derived` class has priority.
-    template< typename D, typename L > struct Visitor_ {};
+    // Visitors to allow some structured work on the operation tree.
+    // There are several methods provided:
+    // `Dispatch()` - top-level to be called in user code to start the walk
+    // `Visit_()` - tries to match it's argument to any known operation and if it matches
+    //              casts it and calls `Visit(X)`. If not type is matched, calls
+    //              `DefaultVisit()` instead.
+    // `DefaultVisit()` - method to be called if no type was matched in `Visit_`.
+    // `Visit(X)` - method that is called with correctly casted type. Usually implemented
+    //              in user code.
+    // For recursive traversal there is `Operation::Traverse()`.
+    // `IsConst` tells the class whether `Visit(X)` is operating on `const Operation *` or
+    // only `Operation *`.
+    template< typename Derived, bool IsConst, typename List > struct VisitorBase;
 
-    // Instead of providing base case, runtime death happens if appropriate specialization
-    // of `Visit(X)` is not provided.
-    template< typename D, typename L > struct NonRecursiveVisitor_ {};
+    // Slightly different implementation, as it operates on tags rather than objects
+    // themselves (e.g. `uint32_t` vs `Operation *`.
+    // Specialized `Visit(X)` methods are however still of type
+    // `Visit( X *, Args && ... )`, however the first pointer is **nullptr** and serves
+    // as type dispatch. Do not dereference it.
+    template< typename Derived, typename List > struct DVisitorBase {};
 
-    // Same as basic visitor, only dispatch happends on tag itself, not the whole
-    // structure -- there is no `Operation *` anywhere (if needed, can be passed in extra
-    // arguments, but then usually the basic visitor is better)
-    template< typename D, typename L > struct DVisitor_ {};
+    // `DefaultVisit` simply calls `Visit(Operation *op)`.
+    template< typename Derived, bool IsConst, typename List > struct Visitor_ {};
+    // `DefaultVisit` calls `unreachable()`.
+    template< typename Derived, bool IsConst, typename List > struct NonDefaultingVisitor_ {};
 
-    template< typename Derived, typename ... Ops >
-    struct Visitor_< Derived, tl::TL< Ops ... > >
+
+    template< typename Derived, bool IsConst, typename ... Ops >
+    struct VisitorBase< Derived, IsConst, tl::TL< Ops ... > >
     {
-        void Visit(Operation *op) { op->Traverse(*this); }
+        template< typename T >
+        using adjust_constness_t = std::conditional_t< IsConst, const T, T >;
+        using operation_t = adjust_constness_t< Operation * >;
 
-        Derived &self() { return static_cast<Derived &>(*this); }
+        Derived &self() { return static_cast< Derived & >(*this); }
+        const Derived &self() const { return static_cast< const Derived & >(*this); }
 
-        template< typename T, typename ...Tail, typename ... Args >
-        auto Visit_(Operation *op, Args &&...args)
-        {
-            if (is_specialization< T >(op->op_code))
-                return self().Visit(dynamic_cast< T * >(op), std::forward< Args >(args)...);
-
-            if constexpr (sizeof...(Tail) != 0) {
-                return this->Visit_< Tail ... >(op, std::forward< Args >(args)...);
-            } else {
-                return self().Visit(op, std::forward< Args >(args)...);
-            }
-        }
-
-        template<typename ...Args>
-        auto Dispatch(Operation *op, Args &&...args)
+        template< typename ... Args >
+        auto Dispatch(operation_t op, Args && ... args)
         {
             return this->Visit_< Ops ... >(op, std::forward< Args >(args)...);
         }
-    };
 
-    template< typename Derived >
-    using Visitor = Visitor_< Derived, all_nodes_list_t >;
-
-
-    template< typename Derived, typename ... Ops >
-    struct NonRecursiveVisitor_< Derived, tl::TL< Ops ... > >
-    {
-        Derived &self() { return static_cast<Derived &>(*this); }
-
-        template< typename T, typename ...Tail, typename ... Args >
-        auto Visit_(Operation *op, Args &&...args)
+        // This method is not supposed to be overwritten by Derived class!
+        template< typename T, typename ... Tail, typename ... Args >
+        auto Visit_(operation_t op, Args && ...args)
         {
-            if (is_specialization< T >(op->op_code))
-                return self().Visit(dynamic_cast< T * >(op), std::forward<Args>(args)...);
 
-            if constexpr (sizeof...(Tail) != 0) {
+            if (is_specialization< T >(op->op_code))
+            {
+                auto casted = dynamic_cast< adjust_constness_t< T * > >(op);
+                return self().Visit(casted, std::forward< Args >(args) ... );
+            }
+
+            if constexpr (sizeof ... (Tail) != 0) {
                 return this->Visit_< Tail ... >(op, std::forward< Args >(args)...);
             } else {
-                unreachable() << "unhandled operation";
+                return self().DefaultVisit(op, std::forward< Args >(args) ...);
             }
-        }
-
-        template< typename ...Args >
-        auto Dispatch(Operation *op, Args &&...args)
-        {
-          return this->Visit_< Ops ... >(op, std::forward< Args >(args)...);
         }
     };
 
-    template< typename Derived >
-    using NonRecursiveVisitor = NonRecursiveVisitor_< Derived, all_nodes_list_t >;
-
-
-    template< typename Derived, typename ... Ops >
-    struct DVisitor_< Derived, tl::TL< Ops ... > >
+    template< typename Derived, bool IsConst, typename ... Ops >
+    struct Visitor_< Derived, IsConst, tl::TL< Ops ... > >
+        : VisitorBase< Derived, IsConst, tl::TL< Ops ... > >
     {
-        Derived &self() { return static_cast<Derived &>(*this); }
+        using parent_t = VisitorBase< Derived, IsConst, tl::TL< Ops ... > >;
+        using operation_t = typename parent_t::operation_t;
+
+        template< typename ... Args >
+        auto DefaultVisit(operation_t op, Args && ... args)
+        {
+            return this->self().Visit(op, std::forward< Args >(args) ...);
+        }
+    };
+
+    template< typename Derived, bool IsConst = false >
+    using Visitor = Visitor_< Derived, IsConst, all_nodes_list_t >;
+
+    template< typename Derived, bool IsConst, typename ... Ops >
+    struct NonDefaultingVisitor_< Derived, IsConst, tl::TL< Ops ... > >
+        : VisitorBase< Derived, IsConst, tl::TL< Ops ... > >
+    {
+        using parent_t = VisitorBase< Derived, IsConst, tl::TL< Ops ... > >;
+        using operation_t = typename parent_t::operation_t;
+
+        using parent_t::Visit_;
+
+        template< typename ... Args >
+        auto DefaultVisit(operation_t op, Args && ... args )
+        -> decltype(this->template Visit_< Ops ... >(op, std::forward< Args >(args) ...))
+        {
+            unreachable() << "Missing Visitor::Visit(X) for " << pretty_print(op);
+        }
+    };
+
+    template< typename Derived, bool IsConst = false >
+    using NonDefaultingVisitor = NonDefaultingVisitor_< Derived, IsConst, all_nodes_list_t >;
+
+    // NOTE(lukas): This probably could be unified with the rest of the stack, but it would
+    //              be quite messy and overall not that worth.
+    template< typename Derived, typename ... Ops >
+    struct DVisitorBase< Derived, tl::TL< Ops ... > >
+    {
+        Derived &self() { return static_cast< Derived & >(*this); }
 
         template< typename T, typename ...Tail, typename ...Args >
         auto Visit_(uint32_t kind, Args &&... args)
@@ -98,7 +126,7 @@ namespace circ
             if constexpr (sizeof...(Tail) != 0) {
                 return this->Visit_< Tail ... >(kind, std::forward< Args >(args)...);
             } else {
-                UNREACHABLE() << "Kind: " << kind << " does not correspond to known Operation!";
+                unreachable() << "Kind: " << kind << " does not correspond to known Operation!";
             }
         }
 
@@ -110,22 +138,23 @@ namespace circ
     };
 
     template< typename Derived >
-    using DVisitor = DVisitor_< Derived, all_nodes_list_t >;
+    using DVisitor = DVisitorBase< Derived, all_nodes_list_t >;
 
-    template< typename Derived >
-    struct UniqueVisitor : public Visitor< Derived >
+    template< typename Derived, bool IsConst = false >
+    struct UniqueVisitor : Visitor< Derived, IsConst >
     {
-        using parent = Visitor<Derived>;
+        using parent_t = Visitor< Derived, IsConst >;
+        using operation_t = typename parent_t::operation_t;
 
-        void Dispatch(Operation *op)
+        auto Dispatch(operation_t op)
         {
             if (seen_ops.count(op))
                 return;
             seen_ops.insert(op);
-            this->parent::Dispatch(op);
+            return this->parent_t::Dispatch(op);
         }
 
-        void Reset() { seen_ops.clear(); }
+        void reset() { seen_ops.clear(); }
 
         std::unordered_set< Operation * > seen_ops;
     };
