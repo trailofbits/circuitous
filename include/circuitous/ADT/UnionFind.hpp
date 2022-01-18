@@ -7,70 +7,72 @@
 #include <cstdint>
 #include <vector>
 
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Support/Check.hpp>
 #include <circuitous/Util/StrongType.hpp>
 
-namespace circ {
+namespace circ
+{
 
-  struct UnionFind {
-
-    struct id_tag;
-    using Id = strong_type< std::size_t, id_tag >;
-
-
-    inline Id make_set() noexcept
+    struct UnionFind
     {
-      _parents.push_back( Id(_parents.size()) );
-      return _parents.back();
-    }
 
-    [[nodiscard]] inline Id& parent(Id id) noexcept
-    {
-      CHECK( _parents.size() > id.ref() );
-      return _parents[id.ref()];
-    }
+        struct id_tag;
+        using Id = strong_type< std::size_t, id_tag >;
 
-    [[nodiscard]] inline Id parent(Id id) const noexcept
-    {
-      CHECK( _parents.size() > id.ref() );
-      return _parents[id.ref()];
-    }
 
-    // Obtains a root 'id' for given node, but does not
-    // update union-find hierarchy.
-    // Preferably use find_compress that performs also
-    // a path compression.
-    [[nodiscard]] inline Id find(Id node) const noexcept
-    {
-      while (node != parent(node)) {
-        node = parent(node);
-      }
-      return node;
-    }
+        inline Id make_set() noexcept
+        {
+            _parents.push_back( Id(_parents.size()) );
+            return _parents.back();
+        }
 
-    // Performs 'find' with a path compression
-    inline Id find_compress(Id node) noexcept
-    {
-      while (node != parent(node)) {
-        auto gradparent = parent(parent(node));
-        parent(node) = gradparent;
-        node = gradparent;
-      }
-      return node;
-    }
+        [[nodiscard]] inline Id& parent(Id id) noexcept
+        {
+            check( _parents.size() > id.ref() );
+            return _parents[id.ref()];
+        }
 
-    inline Id merge(Id a, Id b) noexcept
-    {
-      CHECK(a == parent(a));
-      CHECK(b == parent(b));
-      CHECK(a != b);
+        [[nodiscard]] inline Id parent(Id id) const noexcept
+        {
+            check( _parents.size() > id.ref() );
+            return _parents[id.ref()];
+        }
 
-      parent(b) = a;
-      return a;
-    }
+        // Obtains a root 'id' for given node, but does not
+        // update union-find hierarchy.
+        // Preferably use find_compress that performs also
+        // a path compression.
+        [[nodiscard]] inline Id find(Id node) const noexcept
+        {
+            while (node != parent(node)) {
+                node = parent(node);
+            }
+            return node;
+        }
 
-  private:
-    std::vector< Id > _parents;
-  };
+        // Performs 'find' with a path compression
+        inline Id find_compress(Id node) noexcept
+        {
+            while (node != parent(node)) {
+                auto gradparent = parent(parent(node));
+                parent(node) = gradparent;
+                node = gradparent;
+            }
+            return node;
+        }
+
+        inline Id merge(Id a, Id b) noexcept
+        {
+            check(a == parent(a));
+            check(b == parent(b));
+            check(a != b);
+
+            parent(b) = a;
+            return a;
+        }
+
+      private:
+        std::vector< Id > _parents;
+    };
 
 } // namespace circ
