@@ -9,7 +9,20 @@
 
 namespace circ
 {
+    // Basic visitor, provides:
+    // `Visit( Operation *op )` that will call `op->Traverse( *this )` (generic case)
+    // `Dispatch( Operation *op, Args ... )` which will cast `op` to it's type and call
+    // appropriate `Visit(X)`. `Visit` defined in `Derived` class has priority.
     template< typename D, typename L > struct Visitor_ {};
+
+    // Instead of providing base case, runtime death happens if appropriate specialization
+    // of `Visit(X)` is not provided.
+    template< typename D, typename L > struct NonRecursiveVisitor_ {};
+
+    // Same as basic visitor, only dispatch happends on tag itself, not the whole
+    // structure -- there is no `Operation *` anywhere (if needed, can be passed in extra
+    // arguments, but then usually the basic visitor is better)
+    template< typename D, typename L > struct DVisitor_ {};
 
     template< typename Derived, typename ... Ops >
     struct Visitor_< Derived, tl::TL< Ops ... > >
@@ -41,7 +54,6 @@ namespace circ
     template< typename Derived >
     using Visitor = Visitor_< Derived, all_nodes_list_t >;
 
-    template< typename D, typename L > struct NonRecursiveVisitor_ {};
 
     template< typename Derived, typename ... Ops >
     struct NonRecursiveVisitor_< Derived, tl::TL< Ops ... > >
@@ -71,7 +83,6 @@ namespace circ
     template< typename Derived >
     using NonRecursiveVisitor = NonRecursiveVisitor_< Derived, all_nodes_list_t >;
 
-    template< typename D, typename L > struct DVisitor_ {};
 
     template< typename Derived, typename ... Ops >
     struct DVisitor_< Derived, tl::TL< Ops ... > >
