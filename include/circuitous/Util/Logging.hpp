@@ -13,8 +13,3 @@
 
 #define CIRCUITOUS_UNRELAX_WARNINGS \
   _Pragma( "clang diagnostic pop" ) \
-
-CIRCUITOUS_RELAX_WARNINGS
-#include <gflags/gflags.h>
-#include <glog/logging.h>
-CIRCUITOUS_UNRELAX_WARNINGS
