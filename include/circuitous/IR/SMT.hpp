@@ -34,7 +34,6 @@ namespace circ
   {
     using Base = Visitor< Derived >;
     using Base::Dispatch;
-    using Base::Visit;
 
     BaseSMTVisitor(auto ptr_size_) : ptr_size(ptr_size_), consts(ctx) {}
 
