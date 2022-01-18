@@ -31,7 +31,7 @@
 
 namespace circ::eqsat {
 
-  struct OpTemplateBuilder : NonRecursiveVisitor< OpTemplateBuilder >
+  struct OpTemplateBuilder : NonDefaultingVisitor< OpTemplateBuilder >
   {
     using Base = Visitor< OpTemplateBuilder >;
 
