@@ -6,6 +6,7 @@
 
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Memory.hpp>
+#include <circuitous/IR/Visitors.hpp>
 
 #include <cmath>
 #include <deque>

@@ -5,6 +5,7 @@
 #pragma once
 
 #include <functional>
+#include <fstream>
 #include <ostream>
 #include <string>
 #include <unordered_map>
