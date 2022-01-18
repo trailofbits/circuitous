@@ -46,6 +46,8 @@ namespace gap {
         using Base = CheckBaseMessage< TerminatingMessage >;
         using Base::Base;
 
+        using Base::operator<<;
+
         [[ noreturn ]] ~TerminatingMessage() { this->Base::do_kill(); }
     };
 

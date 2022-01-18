@@ -194,6 +194,7 @@ namespace gap::log {
         {
             using parent_t = LogBase< L, LogMessage< L > >;
             using parent_t::parent_t;
+            using parent_t::operator<<;
 
             ~LogMessage() { this->finalize(); }
 
@@ -205,6 +206,7 @@ namespace gap::log {
         {
             using parent_t = LogBase< L, KillMessage< L > >;
             using parent_t::parent_t;
+            using parent_t::operator<<;
 
             [[ noreturn ]] ~KillMessage()
             {
