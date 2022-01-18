@@ -5,6 +5,7 @@
 #pragma once
 
 #include <circuitous/IR/Circuit.hpp>
+#include <circuitous/IR/Visitors.hpp>
 
 #include <unordered_map>
 #include <map>

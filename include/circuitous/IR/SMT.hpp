@@ -24,6 +24,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <circuitous/IR/Storage.hpp>
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
+#include <circuitous/IR/Visitors.hpp>
 
 namespace circ
 {

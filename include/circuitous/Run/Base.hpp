@@ -6,6 +6,7 @@
 
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Verify.hpp>
+#include <circuitous/IR/Visitors.hpp>
 #include <circuitous/IR/Shapes.hpp>
 
 #include <circuitous/Run/Trace.hpp>
