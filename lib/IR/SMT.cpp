@@ -2,18 +2,22 @@
  * Copyright (c) 2021 Trail of Bits, Inc.
  */
 
+#include <circuitous/Printers.h>
+
 #include <algorithm>
-#include <circuitous/IR/SMT.hpp>
 #include <memory>
 #include <string>
-#include "circuitous/IR/Circuit.hpp"
 
+#include <circuitous/IR/Circuit.hpp>
+#include <circuitous/IR/SMT.hpp>
+
+CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/ADT/APInt.h>
 #include <llvm/ADT/StringRef.h>
 #include <z3++.h>
 #include <z3_api.h>
+CIRCUITOUS_UNRELAX_WARNINGS
 
-#include <circuitous/Printers.h>
 
 namespace circ::smt
 {
