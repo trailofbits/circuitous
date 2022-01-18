@@ -271,7 +271,7 @@ namespace circ::eqsat {
         .Default( std::nullopt );
 
         if ( !value )
-          UNREACHABLE() << "unhadled operation " << name;
+          unreachable() << "unhadled operation " << name;
         return value.value();
     }
 
@@ -290,7 +290,7 @@ namespace circ::eqsat {
 
     Id synthesize(const expr &e, const auto &subs, const auto &places, const auto &subexprs) const
     {
-      CHECK(subs.size() == places.size());
+      check(subs.size() == places.size());
       auto synth = [&] (const auto &sub) { return synthesize(sub, subs, places, subexprs); };
 
       return std::visit( overloaded {
@@ -369,7 +369,7 @@ namespace circ::eqsat {
     // One iteration of the saturation loop
     Status step(const Rules &rules)
     {
-      LOG(INFO) << "[eqsat] step\n";
+      log_info() << "[eqsat] step\n";
       ++steps;
 
       // TODO(Heno): check limits & timeout
@@ -384,7 +384,7 @@ namespace circ::eqsat {
       bool saturated = true;
 
       for (const auto &[rule, match] : matches) {
-        LOG(INFO) << "[eqsat] " << rule.get().name << " matched " << match.size() << "\n";
+        log_info() << "[eqsat] " << rule.get().name << " matched " << match.size() << "\n";
         if (match.size() > 0)
           saturated = false;
         _scheduler.apply_rule(_egraph, rule, match);
@@ -562,7 +562,7 @@ namespace circ::eqsat {
 
     Operation* make_operation(const SizedOp &op, Circuit *circuit)
     {
-      CHECK(op.size.has_value());
+      check(op.size.has_value());
       auto size = op.size.value();
       return llvm::StringSwitch< Operation* >(op.op_code_name)
         .Case("in.timestamp",     circuit->Create< InputTimestamp >( size ))
@@ -699,7 +699,7 @@ namespace circ::eqsat {
       auto circuit = std::make_unique<Circuit>(ptr_size);
 
       auto node = graph.node(root);
-      CHECK(name(node) == "circuit");
+      check(name(node) == "circuit");
 
       for (const auto &child : graph.children(node))
         circuit->AddUse( extract(child, circuit.get()) );
@@ -726,7 +726,7 @@ namespace circ::eqsat {
         return cached.at(enode);
 
       if (detail::needs_compute_bitwidth(enode)) {
-        LOG(FATAL) << "Not implemented: update bitwidths of " << name(enode);
+        log_kill() << "Not implemented: update bitwidths of " << name(enode);
       }
 
       auto op = make_operation(enode, circuit);
