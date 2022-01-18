@@ -409,7 +409,7 @@ namespace circ::ifuzz::permutate
             OpType type = items.begin()->second->type;
             for (auto [_, op] : items)
             {
-                check (op->type == type)
+                check(op->type == type)
                     << "Cannot compare as group operands of different types!";
             }
             return type;
@@ -424,7 +424,7 @@ namespace circ::ifuzz::permutate
         {
             auto type = get_op_type(items);
             auto exec = [&](auto identity) {
-                return check(original, permutation, items, identity);
+                return investigate(original, permutation, items, identity);
             };
 
             switch(type)
@@ -445,7 +445,7 @@ namespace circ::ifuzz::permutate
         }
 
         template< typename Fn >
-        result_t check(cri &original, cri &permutation, const Item_t &op, Fn &&on_self)
+        result_t investigate(cri &original, cri &permutation, const Item_t &op, Fn &&on_self)
         {
             return Next::check_structure(original, permutation, op, on_self);
         }
