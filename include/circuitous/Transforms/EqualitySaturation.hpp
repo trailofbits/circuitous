@@ -551,9 +551,10 @@ namespace circ::eqsat {
         Substitutions subs;
         for (unsigned int j = 0; j < matched.size(); j++) {
           if (i & (1 << j)) {
-            const auto &[id, subs] = matched[j];
-            ids.insert(id);
-            subs.insert(subs.begin(), subs.end());
+            // Avoid potential name clash with above `subs` and `id`.
+            const auto &[matched_id, matched_subs] = matched[j];
+            ids.insert(matched_id);
+            subs.insert(matched_subs.begin(), matched_subs.end());
           }
         }
 
