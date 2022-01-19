@@ -25,6 +25,9 @@ llvm::APInt HasMemory::construct(const Parsed &parsed)
 template<typename S>
 void Base_<S>::SetNodeVal(Operation *op, const value_type &val)
 {
+    log_dbg() << "Assign:"
+              << pretty_print< false >(op) << ":="
+              << ((val.has_value()) ? val->toString(16, false) : "( no value }");
     this->node_values[op] = val;
 }
 
@@ -33,6 +36,8 @@ auto Base_<S>::GetNodeVal(Operation *op) const -> value_type
 {
     auto iter{this->node_values.find(op)};
     CHECK(iter != this->node_values.end()) << op->Name();
+    log_dbg() << "Retrieve:" << pretty_print< false >(op) << " =>> "
+              << ((iter->second) ? iter->second->toString(16, false) : "( no value )");
     return iter->second;
 }
 

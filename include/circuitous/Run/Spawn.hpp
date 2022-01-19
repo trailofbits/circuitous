@@ -57,7 +57,7 @@ namespace circ::run
 
         bool do_enable(Operation *op, uint64_t mem_idx)
         {
-            CHECK(mem_idx == allowed);
+            check(mem_idx == allowed);
             auto &[count, ops] = constraints[mem_idx];
             if (!ops.count(op))
                 return false;
@@ -77,7 +77,7 @@ namespace circ::run
 
             if (auto x = dynamic_cast<WriteConstraint *>(op)) return x->mem_idx();
             if (auto x = dynamic_cast<ReadConstraint *>(op)) return x->mem_idx();
-            UNREACHABLE() << "Unreachable";
+            unreachable() << "Unreachable";
         }
 
         bool enable(Operation *op)
@@ -154,7 +154,7 @@ namespace circ::run
         void notify_verbose(Operation *from, Operation *to)
         {
             auto dbg_info = [](auto from, auto to) {
-                log_info() << pretty_print< false >(from) << " -- notifies -> "
+                log_dbg() << pretty_print< false >(from) << " -- notifies -> "
                            << pretty_print(to);
             };
             return notify(from, to, dbg_info);
@@ -163,7 +163,7 @@ namespace circ::run
         // General notify that does no extra work
         void notify(Operation *from, Operation *to)
         {
-            return notify(from, to, [](auto, auto){});
+            return notify_verbose(from, to);
         }
 
         // Implementation
@@ -229,30 +229,45 @@ namespace circ::run
         {
             if (node_values.count(op))
             {
-                CHECK(node_values[op] == val)
+                auto fmt = [](auto what) -> std::string
+                {
+                    if (!what)
+                        return "( no value )";
+                    std::stringstream ss;
+                    ss << "[ "<< what->getBitWidth() << "b: " << what->toString(16, false)
+                       << " ]";
+                    return ss.str();
+                };
+                check(this->get(op) == val)
                     << pretty_print(op) << " already has value "
-                    << node_values[op]->toString(16, false) << " "
-                    << node_values[op]->getBitWidth()
+                    << fmt(this->get(op))
                     << " yet we try to set "
                     << val->toString(16, false) << " " << val->getBitWidth();
+                log_dbg() << "Assign:" << pretty_print< false >(op)
+                          << "value was already set.";
                 return;
             }
             // This node is not used in current context, just skip.
             if (!collector->op_to_ctxs[op].count(current) && !is_of< LeafValue >(op))
+            {
+                log_dbg() << "Assign:" << pretty_print< false >(op)
+                          << "node not in the current context, do not set value.";
                 return;
+            }
             this->parent_t::SetNodeVal(op, val);
             state.SetNodeVal(op);
         }
 
         void Dispatch(Operation *op)
         {
+            log_dbg() << "Dispatching: " << pretty_print(op);
             if (collector->op_to_ctxs[op].count(current))
                 parent_t::Dispatch(op);
         }
 
         void set_memory(uint64_t addr, const std::string &data)
         {
-            CHECK(data.size() % 2 == 0);
+            check(data.size() % 2 == 0);
             uint64_t offset = 0;
             for (std::size_t i = 0; i < data.size(); i += 2)
             {
@@ -423,10 +438,12 @@ namespace circ::run
                 auto x = state.Pop();
                 Dispatch(x);
                 if (auto r = short_circuit(x)) {
+                    log_dbg() << "Short circuiting to result, as decode was not satisfied.";
                     result = *r;
                     return *result;
                 }
             }
+            log_dbg() << "Run done, fetching result.";
             result = [&](){
                 if (auto res = this->GetNodeVal(current)) {
                     return *res == this->TrueVal();
