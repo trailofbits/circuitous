@@ -266,6 +266,7 @@ auto parse_cmd(int argc, char *argv[])
     using namespace circ::cli;
     using parser_t = circ::CmdParser<
         IRIn, LogDir, LogToStderr, DotOut,
+        Dbg,
         //StateIn, StateOut, DotOut,
         run::SingularCurrent, run::SingularNext,
         run::ExportDerived,
@@ -296,6 +297,8 @@ int main(int argc, char *argv[])
         std::cerr << "Must choose one of run or derive!\n" << std::endl;
         return 1;
     }
+    if (cli.present< circ::cli::Dbg >())
+        circ::add_sink< circ::severity::dbg >(std::cerr);
 
     if (cli.present< circ::cli::run::Verify >())
         run< circ::run::VQueueInterpreter >(cli);
