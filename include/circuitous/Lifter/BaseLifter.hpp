@@ -260,12 +260,12 @@ namespace circ {
           auto name = lifted_name(inst.bytes) + std::to_string(++unique_id);
           CHECK(!ctx.module()->getFunction(name));
 
-          auto func = remill::DeclareLiftedFunction(ctx.module(), name);
+          auto func = ctx.arch()->DeclareLiftedFunction(name, ctx.module());
+          ctx.arch()->InitializeEmptyLiftedFunction(func);
           group.lifted_fns[i] = func;
 
           log_dbg() << inst.Serialize();
           log_dbg() << group.shadows[i].to_string();
-          remill::CloneBlockFunctionInto(func);
           auto block = &func->getEntryBlock();
 
           Impl lifter(ctx.arch(), ctx.module());
