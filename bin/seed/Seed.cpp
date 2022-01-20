@@ -50,7 +50,8 @@ DEFINE_string(filter, "", "File that contains allowed opcodes.");
 // TODO(lukas): Allow multiple sources
 // TODO(lukas): Allow also lift?
 
-namespace prune {
+namespace prune
+{
 
     std::set< std::string > parse_spec(llvm::StringRef line)
     {
@@ -83,10 +84,12 @@ namespace prune {
           return out;
       }
 
-    struct Spec {
+    struct Spec
+    {
         std::set< std::string > allowed;
 
-        void allow(const std::set< std::string > &to_allow) {
+        void allow(const std::set< std::string > &to_allow)
+        {
             for (const auto &x : to_allow)
             {
                 std::cout << "Allowing: " << x << std::endl;
@@ -99,7 +102,8 @@ namespace prune {
             return allowed.count(llvm::StringRef(other).upper());
         }
 
-        static Spec load(const std::string &file) {
+        static Spec load(const std::string &file)
+        {
             Spec out;
             std::ifstream input(file);
             for (std::string line; std::getline(input, line);)
@@ -108,7 +112,8 @@ namespace prune {
         }
     };
 
-    struct X86Prefixes {
+    struct X86Prefixes
+    {
         static inline std::set< std::string > bytes = {
             "F0", // LOCK
             "F2", // REPN(E/Z)
@@ -129,7 +134,8 @@ namespace prune {
     };
 
     template< typename Prefixes >
-    struct Exec {
+    struct Exec
+    {
         Spec spec;
         //std::stringstream dbg;
 
@@ -190,7 +196,8 @@ namespace prune {
             out << bytes << " " << iform << std::endl;
     }
 
-    int exec() {
+    int exec()
+    {
         CHECK(!FLAGS_prune_spec.empty());
         CHECK(!FLAGS_prune_in.empty());
         CHECK(!FLAGS_dbg.empty());
@@ -219,7 +226,8 @@ void dbg_dump_buffer(const llvm::StringRef &buffer)
     }
 }
 
-std::string dbg_dump_bytes(const llvm::StringRef &bytes) {
+std::string dbg_dump_bytes(const llvm::StringRef &bytes)
+{
     std::stringstream ss;
     for (auto c : bytes) {
         ss << std::setw(2) << std::setfill('0') << std::hex
@@ -229,15 +237,19 @@ std::string dbg_dump_bytes(const llvm::StringRef &bytes) {
 }
 
 
-struct rinst_fn_comparator {
-    auto operator()(const remill::Instruction &a, const remill::Instruction &b) const {
+struct rinst_fn_comparator
+{
+    auto operator()(const remill::Instruction &a, const remill::Instruction &b) const
+    {
         return std::less< std::string >{}(a.function, b.function);
     }
 };
 
-struct rinst_bytes_comparator {
+struct rinst_bytes_comparator
+{
     using T = const remill::Instruction &;
-    auto operator()(T a, T b) const {
+    auto operator()(T a, T b) const
+    {
         return a.bytes == b.bytes;
     }
 };
@@ -417,7 +429,8 @@ C load_config(const std::string &config)
     return out;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
     google::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
@@ -457,7 +470,8 @@ int main(int argc, char *argv[]) {
     Parser< Parsed > parser{ *owning_arch_ptr, acceptor };
 
     uint32_t idx = 0;
-    for (auto file : input_list) {
+    for (auto file : input_list)
+    {
         auto before = parser.parsed->size();
         auto begin = std::chrono::steady_clock::now();
         std::cout << "[ " << ++idx << " / " << input_list.size() << " ]"
