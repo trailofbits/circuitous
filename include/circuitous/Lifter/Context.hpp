@@ -135,6 +135,11 @@ namespace circ {
   };
   using CtxRef = Ctx &;
 
+  struct has_ctx_ref {
+    CtxRef ctx;
+    has_ctx_ref(CtxRef ctx_) : ctx(ctx_) {}
+  };
+
   // Maximum size of encoding of instruction on amd64
   // TODO(lukas): Make configurable based on arch
   static constexpr const uint32_t kMaxNumInstBits = 15 * 8;

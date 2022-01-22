@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <circuitous/Lifter/Context.hpp>
+#include <circuitous/Lifter/Decoder.hpp>
 #include <circuitous/Util/LLVMUtil.hpp>
 
 #include <circuitous/Support/Check.hpp>
@@ -54,90 +55,6 @@ namespace circ {
     CHECK(15 >= inst.bytes.size());
     return inst.function + ("123456789abcdef"[inst.bytes.size()]);
   }
-
-  struct has_ctx_ref {
-    CtxRef ctx;
-    has_ctx_ref(CtxRef ctx_) : ctx(ctx_) {}
-  };
-
-  struct Decoder : has_ctx_ref {
-    using maybe_inst_t = std::optional< remill::Instruction >;
-    using has_ctx_ref::has_ctx_ref;
-    using self_ref = Decoder &;
-
-    std::vector< InstructionSelection > grouped_insts;
-    std::set< std::string > inst_bytes;
-    std::unordered_map< std::string, size_t > isel_index;
-
-    // Try to decode bytes in buff using arch from `ctx_ref`.
-    auto decode(std::string_view buff) -> std::tuple< maybe_inst_t, std::string_view >
-    {
-      // Nothing to do anymore.
-      if (buff.empty())
-        return std::make_tuple( std::nullopt, buff );
-
-      remill::Instruction inst;
-      if (!ctx.arch()->DecodeInstruction(0, buff, inst) || !inst.IsValid()) {
-        // Failed, move one byte.
-        return decode(buff.substr(1));
-      }
-      // Success, return inst with shorter buffer.
-      return std::make_tuple( std::make_optional(std::move(inst)),
-                              buff.substr(inst.bytes.size()) );
-    }
-
-    // Recursively try to decode everything present, call `process` for each decoded inst.
-    auto decode_all_(std::string_view buff) {
-      while (!buff.empty())
-      {
-
-        auto [inst, rest] = decode(buff);
-        if (inst)
-          process(std::move(*inst));
-        buff = rest;
-      }
-    }
-
-    self_ref decode_all(llvm::StringRef buff) {
-      std::string_view coerced(buff.data(), buff.size());
-      decode_all_(coerced);
-      return *this;
-    }
-
-    void process(remill::Instruction inst) {
-      if (!IsDecodePositionIndependent(ctx._arch, inst)) {
-        log_error() << "Skipping position-dependent instruction: " << inst.Serialize();
-        return;
-      }
-
-      // Make sure the size of inst is not bigger than our assumption.
-      CHECK(inst.bytes.size() * 8u <= kMaxNumInstBits);
-
-      // Group the unique decoded instructions in terms of their ISELs, i.e. the
-      // general semantic category of those instructions.
-      if (auto [_, inserted] = inst_bytes.insert(inst.bytes); inserted) {
-        auto &iclass = [&]() -> InstructionSelection & {
-
-          // Is it present already?
-          if (auto [it, inserted] = isel_index.emplace(isel_name(inst), grouped_insts.size());
-              !inserted) {
-            auto &iclass = grouped_insts[it->second];
-            CHECK(inst.bytes.size() == iclass.instructions.back().bytes.size());
-            return iclass;
-          }
-          // We need to create it -- `isel_index` was already update in the `if`,
-          return grouped_insts.emplace_back();
-        }();
-
-        iclass.PartialAdd(std::move(inst),
-                          InstructionSelection::RemillBytesToEncoding(inst.bytes));
-      }
-    }
-
-    // Take all decoded instructions.
-    auto take() { return std::move( grouped_insts ); }
-  };
-
 
   template< typename Impl >
   struct ILifter : has_ctx_ref {
