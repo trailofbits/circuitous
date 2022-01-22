@@ -231,21 +231,5 @@ namespace circ {
                 inst.shadows[i] = InstructionFuzzer{arch.get(), inst.instructions[i]}.FuzzOps();
     }
 
-    bool IsDecodePositionIndependent(const remill::Arch::ArchPtr &arch,
-                                   const remill::Instruction &inst)
-    {
-        remill::Instruction copy;
-        if (!arch->DecodeInstruction(inst.pc + 32, inst.bytes, copy) ||
-            inst.operands.size() != copy.operands.size())
-        {
-            return false;
-        }
-
-        for (auto i = 0u; i < inst.operands.size(); ++i)
-            if (inst.operands[i].Serialize() != copy.operands[i].Serialize())
-                return false;
-
-        return true;
-    }
 
 } // namespace circ
