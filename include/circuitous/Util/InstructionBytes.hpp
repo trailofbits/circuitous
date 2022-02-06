@@ -34,7 +34,7 @@ namespace circ
             return ss.str();
         }
 
-        const underlying_t &raw() { return data; }
+        const underlying_t &raw() const { return data; }
 
         const auto &push_back(char what)
         {
