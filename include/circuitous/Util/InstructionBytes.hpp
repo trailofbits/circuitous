@@ -41,6 +41,21 @@ namespace circ
             data.push_back(what);
             return data.back();
         }
+
+        template< uint64_t N >
+        std::bitset< N > to_enc() const
+        {
+            std::bitset< N > out;
+            std::size_t i = 0;
+            for (char byte_ : underlying_t(data.rbegin(), data.rend()))
+            {
+                const auto byte = static_cast< uint8_t >(byte_);
+                for (auto b = 0u; b < 8u; ++b, ++i)
+                    if ((byte >> b) & 1u)
+                        out.set(i);
+            }
+            return out;
+        }
     };
 
     // TODO(lukas): Make generic and make sure it compiles properly.
