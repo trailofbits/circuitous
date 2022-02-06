@@ -801,4 +801,12 @@ namespace circ
                 = static_cast< char >(byte ^ (mask << (7 - idxs[current] % 8)));
         }
     };
+
+
+    static inline shadowinst::Instruction fuzz_operands(const remill::Arch &arch,
+                                                        const remill::Instruction &rinst)
+    {
+        return InstructionFuzzer{&arch, rinst}.FuzzOps();
+    }
+
 } // namespace circ
