@@ -23,7 +23,7 @@ namespace circ
         underlying_t data;
 
         InstBytes() = default;
-        InstBytes(std::string data_) : data(std::move(data_)) {}
+        explicit InstBytes(std::string data_) : data(std::move(data_)) {}
 
         std::string as_hex_str() const
         {
