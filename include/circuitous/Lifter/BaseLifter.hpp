@@ -244,38 +244,4 @@ namespace circ
             return { func };
         }
     };
-
-    // Lifter responsible for producing the ISELs and lifting the instructions
-    // using the `ILifter` (which is required to be stateless w.r.t to inst lifts).
-    template< typename ILifter_ >
-    struct BaseLifter : has_ctx_ref {
-      using arch_ptr_t = Ctx::arch_ptr_t;
-      using has_ctx_ref::has_ctx_ref;
-
-
-      InstSelections Run(llvm::StringRef buff) {
-        return {};
-        //auto isels = decode(buff);
-        //log_info() << "Decoding done.";
-        //fuzz(isels);
-        //log_info() << "Fuzzing done.";
-        //lift(isels);
-        //log_info() << "Lifting done.";
-        //return isels;
-      }
-
-      void fuzz(InstSelections &insts)
-      {
-          //circ::fuzz_operands(ctx._arch, insts);
-      }
-
-      // Decode all instructions in `buff` using `arch`. Group the instructions in
-      // terms of a general semantic category/class.
-      auto decode(llvm::StringRef buff) -> std::vector< remill::Instruction >
-      {
-          return Decoder(ctx).decode_all(buff);
-      }
-
-      auto lift(auto &isels) { return ILifter< ILifter_ >(ctx).lift(isels); }
-    };
 } // namespace circ
