@@ -48,7 +48,7 @@ namespace circ::ifuzz::permutate
     using struct_icheck_res_t = std::vector< diff_result >;
     using struct_check_result_t = std::optional< struct_icheck_res_t >;
 
-    std::string to_string(const struct_check_result_t &a)
+    static inline std::string to_string(const struct_check_result_t &a)
     {
         std::stringstream ss;
         if (!a)
