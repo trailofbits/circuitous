@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021 - 2022 Trail of Bits, Inc.
+ * Copyright (c) 2022 Trail of Bits, Inc.
  */
 
 #include <circuitous/Lifter/Decoder.hpp>
@@ -52,57 +52,37 @@ namespace circ
     }
 
     // Recursively try to decode everything present, call `process` for each decoded inst.
-    void Decoder::decode_all_(std::string_view buff)
+    auto Decoder::decode_all_(std::string_view buff) -> std::vector< remill::Instruction >
     {
+        std::vector< remill::Instruction > out;
         while (!buff.empty())
         {
             auto [inst, rest] = decode(buff);
             if (inst)
-                process(std::move(*inst));
+            {
+                if (!IsDecodePositionIndependent(ctx._arch, *inst))
+                    log_error() << "Skipping position-dependent instruction: "
+                                << inst->Serialize();
+                else
+                    out.push_back(std::move(*inst));
+            }
             buff = rest;
         }
+        return out;
     }
 
-    auto Decoder::decode_all(llvm::StringRef buff) -> self_t &
+    auto Decoder::decode_all(llvm::StringRef buff) -> std::vector< remill::Instruction >
     {
         std::string_view coerced(buff.data(), buff.size());
-        decode_all_(coerced);
-        return *this;
+        return decode_all_(coerced);
     }
 
-    void Decoder::process(remill::Instruction inst)
+    auto Decoder::decode(const InstBytes &bytes) -> std::optional< remill::Instruction >
     {
-        if (!IsDecodePositionIndependent(ctx._arch, inst))
-        {
-            log_error() << "Skipping position-dependent instruction: " << inst.Serialize();
-            return;
-        }
-
-        // Make sure the size of inst is not bigger than our assumption.
-        CHECK(inst.bytes.size() * 8u <= kMaxNumInstBits);
-
-        // Group the unique decoded instructions in terms of their ISELs, i.e. the
-        // general semantic category of those instructions.
-        if (auto [_, inserted] = inst_bytes.insert(inst.bytes); inserted)
-        {
-            auto &iclass = [&]() -> InstructionSelection &
-            {
-                // Is it present already?
-                if (auto [it, inserted] =
-                        isel_index.emplace(isel_name(inst), grouped_insts.size());
-                    !inserted)
-                {
-                    auto &iclass = grouped_insts[it->second];
-                    CHECK(inst.bytes.size() == iclass.instructions.back().bytes.size());
-                    return iclass;
-                }
-                // We need to create it -- `isel_index` was already update in the `if`,
-                return grouped_insts.emplace_back();
-            }();
-
-            iclass.PartialAdd(std::move(inst),
-                              InstructionSelection::RemillBytesToEncoding(inst.bytes));
-        }
+        auto [maybe_inst, tail] = decode(bytes.raw());
+        if (!maybe_inst || tail.size() != 0)
+            return {};
+        return maybe_inst;
     }
 
 } // namespace circ
