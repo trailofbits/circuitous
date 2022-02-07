@@ -21,6 +21,7 @@ CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/Metadata.h>
 #include <llvm/IR/Module.h>
 #include <llvm/IR/Value.h>
+#include <llvm/IR/Verifier.h>
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/Transforms/Utils/Cloning.h>
 CIRCUITOUS_UNRELAX_WARNINGS
@@ -261,5 +262,16 @@ namespace circ
     static inline std::string dbg_dump(llvm::Type *ty)
     {
         return remill::LLVMThingToString(ty);
+    }
+
+    using verify_result_t = std::optional< std::string >;
+    static inline verify_result_t verify_function(llvm::Function &fn)
+    {
+        std::string error;
+        llvm::raw_string_ostream os(error);
+        if (!llvm::verifyFunction(fn, &os))
+            return {};
+        os.flush();
+        return { std::move(error) };
     }
 } // namespace circ
