@@ -10,6 +10,7 @@
 #include <circuitous/Lifter/Error.hpp>
 #include <circuitous/Lifter/Flatten.hpp>
 #include <circuitous/Lifter/Memory.hpp>
+#include <circuitous/Lifter/Instruction.hpp>
 #include <circuitous/Lifter/SelectFold.hpp>
 
 #include <circuitous/IR/Lifter.hpp>
@@ -33,7 +34,6 @@ CIRCUITOUS_UNRELAX_WARNINGS
 DEFINE_bool(liftv2, true, "Produce circuit that allows only verify mode, but is smaller");
 
 namespace circ {
-namespace {
 
     // TODO(pag): Add other architecture flag names here.
     static const std::string kFlagRegisters =
@@ -87,8 +87,6 @@ namespace {
         CHECK(std::unordered_set<reg_ptr_t>(out.begin(), out.end()).size() == out.size());
         return out;
     }
-
-}  // namespace
 
     void State::store(llvm::IRBuilder<> &ir, const reg_ptr_t reg, llvm::Value *val)
     {
@@ -257,6 +255,19 @@ namespace {
 
         auto [name, _] = arg->getName().rsplit('.');
         return std::make_optional(name.str());
+    }
+
+    void circuit_builder::inject(const InstructionBatch &batch)
+    {
+        for (const auto &info : batch.get())
+            inject(info);
+    }
+
+    void circuit_builder::inject(const InstructionInfo &info)
+    {
+        auto view = ISEL_view(info.rinst(), info.enc(), info.shadow(), info.lifted());
+        inject_semantic_modular(view);
+        this->move_head();
     }
 
     void circuit_builder::handle_undef(const std::string &name)
@@ -782,4 +793,26 @@ namespace {
         return out;
     }
 
+    void CircuitMaker::prepare_module()
+    {
+        if (auto used = ctx.module()->getGlobalVariable("llvm.used"))
+            used->eraseFromParent();
+
+        EraseFns(ctx.module(), { "__remill_intrinsics", "__remill_mark_as_used" });
+
+        // These improve optimizability.
+        mute_state_escape("__remill_function_return");
+        mute_state_escape("__remill_error");
+        mute_state_escape("__remill_missing_block");
+    }
+
+    llvm::Function * CircuitMaker::make_from(const InstructionBatch &batch)
+    {
+        prepare_module();
+
+        circuit_builder builder(ctx, "circuit.1.0");
+        builder.inject(batch);
+
+        return PostLiftOpt::run(builder.finish());
+    }
 }  // namespace circ
