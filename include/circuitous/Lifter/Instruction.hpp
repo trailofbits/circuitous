@@ -52,6 +52,11 @@ namespace circ
         lifted_t &lifted() { check(_lifted); return *_lifted; }
         enc_t &enc()       { check(_enc); return *_enc; }
 
+        const rinst_t &rinst()   const { check(_rinst); return *_rinst; }
+        const shadow_t &shadow() const { check(_shadow); return *_shadow; }
+        const lifted_t &lifted() const { check(_lifted); return *_lifted; }
+        const enc_t &enc()       const { check(_enc); return *_enc; }
+
         void set(rinst_t r) { _rinst = std::make_optional( std::move(r) ); }
         void set(shadow_t s) { _shadow = std::make_optional( std::move(s) ); }
         void set(enc_t e) { _enc = std::make_optional( std::move(e) ); }
