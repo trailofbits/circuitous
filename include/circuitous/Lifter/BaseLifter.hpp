@@ -41,12 +41,44 @@ namespace circ
                            const std::vector<llvm::Function *> &fns);
 
     // Flatten all control flow into pure data-flow inside of a function.
+    // TODO(lukas): Write down what are guarantees w.r.t. to metadata.
     void flatten_cfg(llvm::Function *func, const remill::IntrinsicTable &intrinsics);
 
+    // Should remain stateless and cheap to construct.
     template< typename Impl >
     struct ILifter : has_ctx_ref
     {
         using has_ctx_ref::has_ctx_ref;
+
+        // Optimize -> Flatten -> Optimize
+        // Can return (but does not have to) new function.
+        llvm::Function *post_process(llvm::Function * fn)
+        {
+            disable_opts(fn);
+
+            auto has_error = verify_function(*fn);
+            check(!has_error) << "Trying to post-process invalid function.\n" << *has_error;
+
+            remill::VerifyModule(ctx.module());
+            optimize_silently(ctx.arch(), ctx.module(), { fn });
+
+            if (fn->size() == 1)
+                return fn;
+
+
+            remill::IntrinsicTable intrinsics(ctx.module());
+            flatten_cfg(fn, intrinsics);
+
+            check_unsupported_intrinsics({ fn });
+            // TOOD(lukas): Inline into the loop once the `optimize_silently` does
+            //              only function verification (now does module).
+            optimize_silently(ctx.arch(), ctx.module(), { fn });
+
+            // We're done; make the instruction functions more amenable for inlining
+            // and elimination.
+            enable_opts(fn);
+            return fn;
+        }
 
         void after_lift_opts(std::vector< llvm::Function * > &inst_funcs)
         {
@@ -227,13 +259,13 @@ namespace circ
             check(info.has_shadow()) << "Cannot lift from InstructionInfo that has no shadow!";
             auto &rinst = info.rinst();
             auto name = craft_lifted_name(rinst.bytes);
-            auto func = ctx.arch()->DeclareLiftedFunction(name, ctx.module());
-            ctx.arch()->InitializeEmptyLiftedFunction(func);
+            auto fn = ctx.arch()->DeclareLiftedFunction(name, ctx.module());
+            ctx.arch()->InitializeEmptyLiftedFunction(fn);
 
             Impl lifter(ctx.arch(), ctx.module());
             lifter.SupplyShadow(&info.shadow());
-            check(func->size() == 1);
-            auto block = &func->getEntryBlock();
+            check(fn->size() == 1);
+            auto block = &fn->getEntryBlock();
             auto status = lifter.LiftIntoBlock(rinst, block, false);
 
             if (!was_lifted_correctly(status, rinst))
@@ -241,7 +273,14 @@ namespace circ
 
             llvm::ReturnInst::Create(*ctx.llvm_ctx(), remill::LoadMemoryPointer(block), block);
 
-            return { func };
+            // Check if unsupported intrinsics are present (some wild intrinsic can appear
+            // when lifting new isels or llvm versions are changed).
+            auto report = report_unsupported_intrinsic_calls(fn);
+            // TODO(lukas): For now, this is hard error as there is no reasonable recovery,
+            //              in future we can propage it up.
+            check(!report) << "Unsupported intrinsics call, dumping report.\n" << *report;
+
+            return { post_process(fn) };
         }
     };
 } // namespace circ
