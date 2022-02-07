@@ -203,6 +203,16 @@ namespace circ {
       : instruction(isel.instructions[i]), encoding(isel.encodings[i]),
         shadow(isel.shadows[i]), lifted(isel.lifted_fns[i])
     {}
+
+    ISEL_view(const remill::Instruction &rinst_,
+              const InstructionEncoding &enc_,
+              const shadowinst::Instruction &shadow_,
+              llvm::Function *lifted_)
+        : instruction(rinst_),
+          encoding(enc_),
+          shadow(shadow_),
+          lifted(lifted_)
+    {}
   };
 
 } // namespace circ
