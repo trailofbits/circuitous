@@ -10,11 +10,12 @@
 #include <string>
 #include <unordered_map>
 
+#include <circuitous/Support/Check.hpp>
+
 namespace circ {
 
     struct Circuit;
     struct Operation;
-
 
     void print_dot(std::ostream &os, Circuit *circuit,
                     const std::unordered_map<Operation *, std::string> & = {});
@@ -30,10 +31,10 @@ namespace circ {
     template< typename Printer, typename ... Args >
     void print_circuit(std::string_view filename, Printer printer, Args &&... args  )
     {
-        std::fstream file(filename);
+        std::ofstream file(filename);
+        check(file);
         printer(file, std::forward< Args >(args) ...);
+        file.flush();
     }
-
-
 
 }  // namespace circ
