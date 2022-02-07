@@ -224,12 +224,4 @@ namespace circ {
         Flattener(func, intrinsics.error).Run();
     }
 
-    void fuzz_operands(const remill::Arch::ArchPtr &arch, InstSelections &insts)
-    {
-        for (auto &inst : insts)
-            for (auto i = 0U; i < inst.instructions.size(); ++i)
-                inst.shadows[i] = InstructionFuzzer{arch.get(), inst.instructions[i]}.FuzzOps();
-    }
-
-
 } // namespace circ
