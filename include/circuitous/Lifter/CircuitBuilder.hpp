@@ -26,6 +26,8 @@
 
 namespace circ
 {
+    // Forward declare
+    struct InstructionBatch;
 
     struct PostLiftOpt
     {
@@ -210,6 +212,9 @@ namespace circ
                 default_rcs[reg->name] = irops::make< irops::OutputCheck >(irb, {in, out});
         }
 
+        void inject(const InstructionBatch &batch);
+        void inject(const InstructionInfo &batch);
+
         void inject_isels(const isels_t& isels)
         {
             for (const auto &isel : isels)
@@ -282,8 +287,15 @@ namespace circ
     struct CircuitMaker
     {
         using InstSelections = std::vector<InstructionSelection>;
+
+      private:
+
         CtxRef ctx;
 
+        // TODO(lukas): Is this even needed anymore?
+        void prepare_module();
+
+      public:
         explicit CircuitMaker(CtxRef ctx_) : ctx(ctx_) {}
 
         // TODO(lukas): Is this still neeeded?
@@ -305,6 +317,9 @@ namespace circ
                 }
             }
         }
+
+        llvm::Function *make_from(const InstructionBatch &batch);
+
 
         llvm::Function *make(llvm::StringRef buff)
         {
