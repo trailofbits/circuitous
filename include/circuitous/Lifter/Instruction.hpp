@@ -6,7 +6,6 @@
 #include <circuitous/Fuzz/InstructionFuzzer.hpp>
 
 #include <circuitous/Lifter/Context.hpp>
-#include <circuitous/Lifter/BaseLifter.hpp>
 
 #include <circuitous/Util/Logging.hpp>
 #include <circuitous/Util/InstructionBytes.hpp>
@@ -60,8 +59,18 @@ namespace circ
 
         void make_fuzz(CtxRef & ctx) { set(fuzz_operands(*ctx.arch(), rinst())); }
 
-        template< typename ILIfterImpl >
-        void make_lifted(CtxRef &ctx) { set(ILifter< ILIfterImpl >(ctx).lift(*this)); }
+        template< typename ILifter >
+        void make_lifted(CtxRef &ctx) {
+            auto maybe_fn = ILifter(ctx).lift(*this);
+            check(maybe_fn);
+            set(*maybe_fn);
+        }
+
+        bool is_ready() const
+        {
+            check(_rinst && _enc) << "InstructionInfo is in inconsistent state!";
+            return has_shadow() && has_lifted();
+        }
     };
 
     struct InstructionBatch : has_ctx_ref
@@ -88,12 +97,12 @@ namespace circ
 
         self_t &fuzz();
 
-        template< typename ILifterImpl >
+        template< typename ILifter >
         self_t &lift()
         {
             for (auto &info : insts)
                 if (!info.has_lifted())
-                    info.make_lifted< ILifterImpl >(this->ctx);
+                    info.make_lifted< ILifter >(this->ctx);
             return *this;
         }
 
