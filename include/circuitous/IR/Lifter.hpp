@@ -353,6 +353,34 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     return lifted;
   }
 
+  llvm::Type *type_from_suffix(llvm::StringRef str, char delim)
+  {
+    auto [_, suffix] = llvm::StringRef(str).rsplit(delim);
+    return type_from_suffix(suffix);
+  }
+
+  llvm::Type *type_from_suffix(llvm::StringRef suffix)
+  {
+    check(suffix.size() != 0) << "Suffix cannot be empty.";
+    bool was_removed = suffix.consume_front("i");
+    check(was_removed) << "Was not able to consume 'i' in" << suffix.str();
+
+    uint32_t val;
+    auto was_converted = suffix.getAsInteger(10, val);
+    // `llvm::StringRef::getAsInteger` returns `true` when error occurred.
+    check(!was_converted) << "Failed conversion of" << suffix.str() << " to uint32_t.";
+    return llvm::IntegerType::get(*llvm_ctx, val);
+  }
+
+  llvm::Constant *get_zero_reg(llvm::StringRef name)
+  {
+    auto has_prefix = name.consume_front("__remill_zero");
+    if (!has_prefix)
+        return nullptr;
+
+    return llvm::ConstantInt::get(type_from_suffix(name, '_'), 0, false);
+  }
+
   // If register does not have a shadow we can procees the same way default lifter
   // does. However, if a shadow is present we need to do more complex decision
   // mostly in form of `selectN` with possible `undef` that represents that a register
@@ -378,7 +406,9 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
 
     llvm::IRBuilder<> ir(bb);
 
-    auto locate_reg = [&](auto &name) {
+    auto locate_reg = [&](auto &name) -> llvm::Value * {
+      if (auto artificial_zero = get_zero_reg(name))
+          return artificial_zero;
       return this->parent::LoadRegValue(bb, state_ptr, input_name(name));
     };
 
@@ -439,7 +469,9 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
     llvm::IRBuilder<> ir(block);
     auto zero = llvm::ConstantInt::get(word_type, 0, false);
 
-    auto locate_reg = [&](auto &name) {
+    auto locate_reg = [&](auto &name) -> llvm::Value * {
+      if (auto artificial_zero = get_zero_reg(name))
+          return artificial_zero;
       return this->parent::LoadWordRegValOrZero(block, state_ptr, input_name(name), zero);
     };
 
@@ -542,9 +574,8 @@ struct InstructionLifter : remill::InstructionLifter, WithShadow {
       remill::Instruction &rinst, llvm::BasicBlock *block, llvm::Value *state_ptr,
       llvm::Argument *arg, remill::Operand &r_op) override
   {
-    auto concrete = this->parent::LiftAddressOperand(rinst, block, state_ptr, arg, r_op);
     if (!CurrentShade().address) {
-      return concrete;
+      return this->parent::LiftAddressOperand(rinst, block, state_ptr, arg, r_op);
     }
     auto base_reg = LiftSReg< ifuzz::sel::base >(block, state_ptr, r_op);
     auto index_reg = LiftSReg< ifuzz::sel::index >(block, state_ptr, r_op);
