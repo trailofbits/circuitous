@@ -80,34 +80,16 @@ namespace gap {
 
     // TODO(lukas): I am not sold on names, `check` is kind of name I do not want
     //              to take. Keeping it uppercase for now to make transition easier.
-    [[ noreturn ]] static inline void NOT_IMPLEMENTED(
-            source_location loc = source_location::current())
-    {
-        TerminatingMessage(std::cerr, std::move(loc)).do_kill("not implemented");
-    }
-
     [[ noreturn ]] static inline void not_implemented(
             source_location loc = source_location::current())
     {
         TerminatingMessage(std::cerr, std::move(loc)).do_kill("not implemented");
     }
 
-    auto CHECK(auto &&condition, source_location loc = source_location::current())
-    -> CheckMessage
-    {
-        return { std::cerr, std::move( loc ), static_cast< bool >(condition) };
-    }
-
     auto check(auto &&condition, source_location loc = source_location::current())
     -> CheckMessage
     {
         return { std::cerr, std::move( loc ), static_cast< bool >(condition) };
-    }
-
-    static inline auto UNREACHABLE(source_location loc = source_location::current())
-    -> TerminatingMessage
-    {
-        return TerminatingMessage( std::cerr, std::move( loc ) );
     }
 
     static inline auto unreachable(source_location loc = source_location::current())
