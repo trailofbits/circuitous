@@ -22,21 +22,21 @@ namespace circ::eqsat {
 
     {
       auto expr = result(parser("(op_add ?x (op_mul 2 ?y))"));
-      CHECK(root(expr) == atom(operation("add")));
+      CHECK_EQ(root(expr), atom(operation("add")));
     }
 
     {
       auto expr = result(parser("(op_add (op_mul 1 ?x) 3)"));
-      CHECK(root(expr) == atom(operation("add")));
+      CHECK_EQ(root(expr), atom(operation("add")));
       auto ch = children(expr);
-      CHECK(std::get<atom>(ch[1]) == atom(constant(3)));
+      CHECK_EQ(std::get<atom>(ch[1]), atom(constant(3)));
 
       auto subexpr = ch[0];
-      CHECK(root(subexpr) == atom(operation("mul")));
+      CHECK_EQ(root(subexpr), atom(operation("mul")));
       auto subch = children(subexpr);
-      CHECK(std::get<atom>(subch[1]) == atom(place("x")));
+      CHECK_EQ(std::get<atom>(subch[1]), atom(place("x")));
 
-      CHECK(places(expr).size() == 1);
+      CHECK_EQ(places(expr).size(), 1);
     }
 
     // missing closing parenthesis
@@ -51,12 +51,12 @@ namespace circ::eqsat {
       return places(result(res)).size();
     };
 
-    CHECK(count_places("(?x)") == 1);
-    CHECK(count_places("(op_mul ?x ?y)") == 2);
-    CHECK(count_places("(op_mul ?x ?x)") == 1);
-    CHECK(count_places("(?x ?y ?z)") == 3);
-    CHECK(count_places("(op_add (op_mul 1 ?x) ?y)") == 2);
-    CHECK(count_places("(op_add (op_mul 1 ?x) ?x)") == 1);
+    CHECK_EQ(count_places("(?x)"), 1);
+    CHECK_EQ(count_places("(op_mul ?x ?y)"), 2);
+    CHECK_EQ(count_places("(op_mul ?x ?x)"), 1);
+    CHECK_EQ(count_places("(?x ?y ?z)"), 3);
+    CHECK_EQ(count_places("(op_add (op_mul 1 ?x) ?y)"), 2);
+    CHECK_EQ(count_places("(op_add (op_mul 1 ?x) ?x)"), 1);
   }
 
   TEST_CASE("Named Expr") {
@@ -64,7 +64,9 @@ namespace circ::eqsat {
 
     {
       auto p = parser("(let place (?x))");
-      CHECK(p && label_name(result(p).name) == "place" && root(result(p)) == atom(place("x")));
+      CHECK(p);
+      CHECK_EQ(label_name(result(p).name), "place");
+      CHECK_EQ(root(result(p)), atom(place("x")));
     }
   }
 
@@ -76,18 +78,21 @@ namespace circ::eqsat {
 
     {
       auto p = parser("((let place (?x)) ($place))");
-      CHECK(p && result(p).subexprs.size() == 1 && root(result(p)) == atom(unary_label("place")));
+      CHECK(p);
+      CHECK_EQ(result(p).subexprs.size(), 1);
+      CHECK_EQ(root(result(p)), atom(unary_label("place")));
     }
 
     {
       auto p = parser("((let X (?x)) (let Y (?y)) (op_add $X $Y))");
-      CHECK(p && result(p).subexprs.size() == 2);
+      CHECK(p);
+      CHECK_EQ(result(p).subexprs.size(), 2);
       auto res = result(p);
-      CHECK(root(res) == atom(operation("add")));
+      CHECK_EQ(root(res), atom(operation("add")));
 
       auto ch = children(res);
-      CHECK(std::get<atom>(ch[0]) == atom(unary_label("X")));
-      CHECK(std::get<atom>(ch[1]) == atom(unary_label("Y")));
+      CHECK_EQ(std::get<atom>(ch[0]), atom(unary_label("X")));
+      CHECK_EQ(std::get<atom>(ch[1]), atom(unary_label("Y")));
     }
   }
 
