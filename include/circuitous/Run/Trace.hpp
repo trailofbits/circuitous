@@ -90,20 +90,20 @@ namespace circ::run::trace {
     auto load_json(const std::string &path) {
         // Open JSON
         auto maybe_buff = llvm::MemoryBuffer::getFile(path);
-        CHECK(maybe_buff) << "Error while opening JSON at: " << path;
+        check(maybe_buff) << "Error while opening JSON at: " << path;
 
         // Parse JSON
         auto maybe_json = llvm::json::parse(maybe_buff.get()->getBuffer());
-        CHECK(maybe_json) << "Error while parsing JSON at: " << path;
+        check(maybe_json) << "Error while parsing JSON at: " << path;
 
         auto out = maybe_json.get().getAsObject();
-        CHECK(out) << "Invalid loaded JSON object from: " << path;
+        check(out) << "Invalid loaded JSON object from: " << path;
         return *out;
     }
 
     template<typename T>
     auto unwrap(const T &obj) {
-        CHECK(obj) << "Trying to unwrap invalid object!";
+        check(obj) << "Trying to unwrap invalid object!";
         return *obj;
     }
 

@@ -6,6 +6,7 @@
 
 #include <circuitous/Util/TypeList.hpp>
 #include <circuitous/IR/IR.h>
+#include <circuitous/Support/Check.hpp>
 
 namespace circ {
 
@@ -189,7 +190,7 @@ namespace circ {
     template<typename What>
     auto fetch_singular() {
       auto &all = this->Attr<What>();
-      CHECK(all.Size() == 1) << "Fetch singular did not return 1 element.";
+      check(all.Size() == 1) << "Fetch singular did not return 1 element.";
       return all[0];
     }
 
@@ -201,7 +202,7 @@ namespace circ {
         }
       }
       if constexpr (!allow_failure) {
-        CHECK(false) << "Register " << name << " not present";
+        check(false) << "Register " << name << " not present";
       }
       return nullptr;
     }

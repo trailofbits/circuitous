@@ -7,6 +7,7 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/IR/Intrinsics.hpp>
 #include <circuitous/Lifter/DependencyVisitor.hpp>
+#include <circuitous/Support/Check.hpp>
 
 
 #include <remill/BC/Util.h>
@@ -103,7 +104,7 @@ namespace circ {
     }
 
     auto inst_distance(llvm::Instruction *a, llvm::Instruction *b) {
-      CHECK(a->getParent() == b->getParent());
+      check(a->getParent() == b->getParent());
       using bb_it = llvm::BasicBlock::iterator;
       return std::distance(bb_it(a), bb_it(b));
     }
@@ -172,7 +173,7 @@ namespace circ {
         uint32_t dbits_size = static_cast< uint32_t >(nbits - obits);
         return irops::make< irops::Concat >(ir, {ir.getIntN(dbits_size, 0), selector});
 
-        UNREACHABLE() << "Cannot coerce selector:\n" << dbg_dump(selector)
+        unreachable() << "Cannot coerce selector:\n" << dbg_dump(selector)
                       << "\nof select:\n"
                       << dbg_dump(original)
                       << "\nWhere blueprint is:\n"
@@ -181,7 +182,7 @@ namespace circ {
 
       for (auto &[ctx_, selects] : ctx_to_selects) {
         auto ctx = llvm::dyn_cast<llvm::CallInst>(ctx_);
-        CHECK(ctx) << remill::LLVMThingToString(ctx_);
+        check(ctx) << remill::LLVMThingToString(ctx_);
 
         std::vector<llvm::Value *> ctx_args;
         std::unordered_map<blueprint_t, std::size_t> idxs;

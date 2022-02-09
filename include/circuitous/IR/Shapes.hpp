@@ -5,6 +5,7 @@
 #pragma once
 
 #include <circuitous/IR/Circuit.hpp>
+#include <circuitous/Support/Check.hpp>
 
 #include <deque>
 #include <sstream>
@@ -48,7 +49,7 @@ bool Is(Operation *op) {
 
 // Return number of HINT users that
 static inline std::size_t AdviceUsers(Operation *hint) {
-  CHECK(Is<Advice>(hint));
+  check(Is<Advice>(hint));
   std::size_t users = 0;
   for (auto user : hint->users) {
     if (!Is<AdviceConstraint>(user)) {
@@ -208,7 +209,7 @@ namespace collect {
     }
 
     void Update(Operation *node, Operation *user) {
-      CHECK(op_to_hash.count(node));
+      check(op_to_hash.count(node));
     }
   };
 
@@ -297,7 +298,7 @@ static inline Operation *GetContext(Operation *op) {
   collect::UpTree<VerifyInstruction> collector;
   collector.Run(op);
   auto &ctxs = collector.collected;
-  CHECK(ctxs.size() == 1);
+  check(ctxs.size() == 1);
   return *(ctxs.begin());
 }
 

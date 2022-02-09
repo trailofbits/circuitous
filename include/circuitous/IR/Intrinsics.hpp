@@ -4,6 +4,7 @@
 
  #pragma once
 
+#include <circuitous/Support/Check.hpp>
 #include <circuitous/Util/LLVMUtil.hpp>
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsign-conversion"
@@ -124,7 +125,7 @@ namespace circ::irops {
 
   template< typename I, typename ...Args >
     auto make(llvm::IRBuilder<> &ir, llvm::Value *c_arg, Args &&...args) {
-    CHECK(c_arg);
+    check(c_arg);
     return I::make(ir, {c_arg}, std::forward<Args>(args)...);
   }
 
@@ -181,7 +182,7 @@ namespace circ::irops {
 
   template< typename T >
   std::vector< llvm::CallInst * > collect(llvm::Value *from, llvm::Value *to) {
-    CHECK(llvm::isa< llvm::Instruction >(from) && llvm::isa< llvm::Instruction >(to));
+    check(llvm::isa< llvm::Instruction >(from) && llvm::isa< llvm::Instruction >(to));
     using bb_t = llvm::BasicBlock::iterator;
     auto begin = bb_t{ llvm::cast< llvm::Instruction >(from) };
     auto end = bb_t{ llvm::cast< llvm::Instruction >(to) };
@@ -210,7 +211,7 @@ namespace circ::irops {
     using Instance_< Memory >::Instance_;
 
     uint32_t id() {
-      CHECK(*this);
+      check(*this);
       return std::get< 0 >(Memory::parse_args< uint32_t >(fn));
     }
   };
@@ -221,11 +222,11 @@ namespace circ::irops {
 
     Instance(llvm::CallInst *call_) : Instance_(call_), call(call_) {}
 
-    llvm::Value *advice() { CHECK(*this); return call->getArgOperand(1); }
-    llvm::Value *dynamic() { CHECK(*this); return call->getArgOperand(0); }
+    llvm::Value *advice() { check(*this); return call->getArgOperand(1); }
+    llvm::Value *dynamic() { check(*this); return call->getArgOperand(0); }
 
     void set_dynamic(llvm::Value *v) {
-      CHECK(*this);
+      check(*this);
       call->setArgOperand(1, v);
     }
   };
@@ -237,7 +238,7 @@ namespace circ::irops {
     Instance(llvm::CallInst *call_) : Instance_(call_), call(call_) {}
 
     llvm::Value *selector() {
-      CHECK(*this);
+      check(*this);
       return call->getArgOperand(0);
     }
 

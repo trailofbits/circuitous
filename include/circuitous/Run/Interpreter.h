@@ -7,6 +7,8 @@
 #include <circuitous/Run/Base.hpp>
 #include <circuitous/Run/Spawn.hpp>
 
+#include <circuitous/Support/Check.hpp>
+
 namespace circ::run {
 
   struct BasicInterpreter : DBase<BasicInterpreter> {
@@ -45,7 +47,7 @@ namespace circ::run {
           Dispatch(op);
         }
         // Verification successful
-        CHECK(GetNodeVal(op));
+        check(GetNodeVal(op));
         if (GetNodeVal(op)->getBoolValue()) {
           return true;
         }
@@ -108,7 +110,7 @@ namespace circ::run {
 
     auto values() const {
       // TODO(lukas): This is dubious once we consider verify mode
-      CHECK(acceptor);
+      check(acceptor);
       return acceptor->values();
     }
 
@@ -153,7 +155,7 @@ namespace circ::run {
       if (successes.size() == 1) {
         acceptor = *successes.begin();
       }
-      CHECK(!(successes.size() > 1)) << "Multiple contexts satisfied." << successes.size();
+      check(!(successes.size() > 1)) << "Multiple contexts satisfied." << successes.size();
       return successes.size() == 1;
     }
   };

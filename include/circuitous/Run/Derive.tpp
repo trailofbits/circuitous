@@ -12,7 +12,7 @@ void Ctx_<S>::init() {
 
 template<typename S>
 void Ctx_<S>::derive_cond(Operation *op) {
-    CHECK(op->operands.size() == 2);
+    check(op->operands.size() == 2);
     auto ireg{op->operands[0]};
     auto oreg{op->operands[1]};
 
@@ -22,7 +22,7 @@ void Ctx_<S>::derive_cond(Operation *op) {
 
 template<typename S>
 void Ctx_<S>::verify_cond(Operation *op) {
-    CHECK(op->operands.size() == 2);
+    check(op->operands.size() == 2);
     // TODO(lukas): Until better system of undef handling is implemented
     //              if some value is undefined == no change happened.
     if (allows_undef(op) && (!this->get(op, 0) || !this->get(op, 1))) {
@@ -36,7 +36,7 @@ void Ctx_<S>::verify_cond(Operation *op) {
         auto name = op->operands[1]->Name();
         auto as_ref = llvm::StringRef(name);
         auto has_prefix = as_ref.consume_front("Out.register.");
-        CHECK(has_prefix);
+        check(has_prefix);
         auto in = this->circuit->template fetch_reg< InputRegister, false >(as_ref.str());
         self().SetNodeVal(op, this->BoolVal(this->get(in) == this->get(op, 1)));
         return;
@@ -48,13 +48,13 @@ void Ctx_<S>::verify_cond(Operation *op) {
 
 template<typename S>
 void IOSem<S>::Visit(InputRegister *op) {
-    CHECK(this->node_values.count(op)) << "Input register "
+    check(this->node_values.count(op)) << "Input register "
                                        << op->reg_name << " bits not set.";
 }
 
 template<typename S>
 void IOSem<S>::Visit(InputImmediate *op) {
-    CHECK(op->operands.Size() == 1)
+    check(op->operands.Size() == 1)
         << "Incorrect number of operands of InputImmediate:"
         << op->operands.Size() << "!= 1";
     self().SetNodeVal(op, self().GetNodeVal(op->operands[0]));
@@ -62,27 +62,27 @@ void IOSem<S>::Visit(InputImmediate *op) {
 
 template<typename S>
 void IOSem<S>::Visit(OutputRegister *op) {
-    UNREACHABLE() << "Output values should not be visited in derivation mode.";
+    unreachable() << "Output values should not be visited in derivation mode.";
 }
 
 template<typename S>
 void IOSem<S>::Visit(InputErrorFlag *op) {
-    CHECK(this->node_values.count(op)) << "InputErrorFlag bits not set.";
+    check(this->node_values.count(op)) << "InputErrorFlag bits not set.";
 }
 
 template<typename S>
 void IOSem<S>::Visit(OutputErrorFlag *op) {
-    UNREACHABLE() << "Output values should not be visited in derivation mode.";
+    unreachable() << "Output values should not be visited in derivation mode.";
 }
 
 template<typename S>
 void IOSem<S>::Visit(InputInstructionBits *op) {
-    CHECK(this->node_values.count(op)) << "Input instruction bits not set.";
+    check(this->node_values.count(op)) << "Input instruction bits not set.";
 }
 
 template<typename S>
 void IOSem<S>::Visit(Advice *op) {
-    UNREACHABLE() << "Output values should not be visited in derivation mode.";
+    unreachable() << "Output values should not be visited in derivation mode.";
 }
 
 /* Conditions */
@@ -107,7 +107,7 @@ void CSem<S>::Visit(ReadConstraint *op_)
 
         // Is hint supplied?
         if (this->supplied.count(op->hint_arg())) {
-            CHECK(this->has_value(op->hint_arg()));
+            check(this->has_value(op->hint_arg()));
             auto parsed = this->deconstruct(*this->get(op->hint_arg()));
 
             irops::memory::Parsed< llvm::APInt > args {
@@ -168,7 +168,7 @@ void CSem<S>::Visit(WriteConstraint *op_) {
 
         // Is hint supplied?
         if (this->supplied.count(op->hint_arg())) {
-            CHECK(this->has_value(op->hint_arg()));
+            check(this->has_value(op->hint_arg()));
             auto parsed = this->deconstruct(*this->get(op->hint_arg()));
 
             irops::memory::Parsed< llvm::APInt > args {

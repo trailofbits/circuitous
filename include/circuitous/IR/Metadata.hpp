@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <unordered_map>
 
+#include <circuitous/Support/Check.hpp>
 #include <circuitous/Util/LLVMUtil.hpp>
 
 #pragma clang diagnostic push
@@ -42,7 +43,7 @@ namespace circ {
     template< bool rewrite = false >
     void set_meta(key_t key, value_t val) {
       if constexpr (!rewrite) {
-        CHECK(!has_meta(key));
+        check(!has_meta(key));
       }
       meta.emplace(std::move(key), std::move(val));
     }
@@ -74,7 +75,7 @@ namespace circ {
   };
 
   static inline void annotate_llvm(llvm::Instruction *inst, auto key, auto value) {
-    CHECK(circir_llvm_meta::all.count(key));
+    check(circir_llvm_meta::all.count(key));
     AddMetadata(inst, std::move(key), std::move(value));
   }
 
@@ -83,7 +84,7 @@ namespace circ {
 
     for (const auto &kind : circir_llvm_meta::all) {
       if (auto node = inst->getMetadata(kind)) {
-        CHECK(node->getNumOperands() == 1);
+        check(node->getNumOperands() == 1);
         auto op = llvm::dyn_cast<llvm::MDString>(node->getOperand(0));
         out.emplace_back(kind, op->getString().str());
       }

@@ -66,8 +66,8 @@ namespace circ::shadowinst {
     bool is_ival(llvm::Value *val) const { return llvm::isa<llvm::IntegerType>(val->getType()); }
 
     llvm::Value *coerce(llvm::Value *val) {
-      CHECK(is_ptr(head) == is_ptr(val));
-      CHECK(is_ival(head) == is_ival(val));
+      check(is_ptr(head) == is_ptr(val));
+      check(is_ival(head) == is_ival(val));
 
       if (is_ival(head)) {
         return ir.CreateSExtOrTrunc(val, head->getType());
@@ -75,7 +75,7 @@ namespace circ::shadowinst {
       if (is_ptr(head)) {
         return ir.CreateBitCast(val, head->getType());
       }
-      UNREACHABLE() << "Unreachable";
+      unreachable() << "Unreachable";
     }
 
     llvm::Value *chain(llvm::Value *condition, llvm::Value *on_true) {
@@ -100,7 +100,7 @@ namespace circ::shadowinst {
   static inline auto make_APInt(
     const std::vector<bool> &bits, std::size_t from, std::size_t size)
   {
-    CHECK(bits.size() >= from + size) << bits.size() << " >= " << from + size;
+    check(bits.size() >= from + size) << bits.size() << " >= " << from + size;
 
     std::string span;
     for (uint64_t i = 0; i < size; ++i) {
@@ -140,7 +140,7 @@ namespace circ::shadowinst {
   static inline auto decoder_conditions(
     const Reg &s_reg, const Reg::reg_t &reg_name, llvm::IRBuilder<> &ir)
   {
-    CHECK(s_reg.translation_map.count(reg_name));
+    check(s_reg.translation_map.count(reg_name));
 
     std::vector<llvm::Value *> translation_checks;
     for (auto &mats : s_reg.translation_map.find(reg_name)->second) {
@@ -159,7 +159,7 @@ namespace circ::shadowinst {
         input_fragments.push_back(extract);
         current += size;
       }
-      CHECK(!input_fragments.empty());
+      check(!input_fragments.empty());
       // We need to match the order of the entry in `translation_map`
       std::reverse(input_fragments.begin(), input_fragments.end());
       auto full_input = irops::make< irops::Concat >(ir, input_fragments);
@@ -189,7 +189,7 @@ namespace circ::shadowinst {
   auto make_intrinsics_decoder(const Reg &s_reg, llvm::IRBuilder<> &ir, Getter &get_reg) {
     auto entries = s_reg.translation_entries_count();
     auto bits = s_reg.region_bitsize();
-    CHECK(entries <= (1 << bits))
+    check(entries <= (1 << bits))
         << "Translation entries count do not correspond to regions size "
         << entries << " > " << (1 << bits);
 
@@ -199,15 +199,15 @@ namespace circ::shadowinst {
     llvm::Type *type = nullptr;
     for (auto &[str, reg] : s_reg.translation_bytes_map()) {
       auto idx = llvm::APInt{static_cast<uint32_t>(bits), str, 2}.getLimitedValue();
-      CHECK(select_args.size() > idx + 1);
+      check(select_args.size() > idx + 1);
       select_args[idx + 1] = get_reg(ir, reg);
       if (!type) {
         type = select_args[idx + 1]->getType();
       }
-      CHECK(type == select_args[idx + 1]->getType());
+      check(type == select_args[idx + 1]->getType());
     }
 
-    CHECK(type);
+    check(type);
     std::vector<llvm::Value *> holes;
     for (std::size_t idx = 1; idx < select_args.size(); ++idx) {
       if (select_args[idx]) {
@@ -228,7 +228,7 @@ namespace circ::shadowinst {
 
     // We do not need to do any extra checking if we decoded something because
     // the select is "saturated" -- each possible return is a valid register
-    CHECK(select_args.size() > 1);
+    check(select_args.size() > 1);
     auto select = irops::make< irops::Select >(ir, select_args);
     return std::make_tuple(cond, select);
   }
@@ -240,7 +240,7 @@ namespace circ::shadowinst {
     auto selector = region_selector(ir, s_reg);
 
     auto it = s_reg.translation_map.find(reg);
-    CHECK(it != s_reg.translation_map.end());
+    check(it != s_reg.translation_map.end());
 
     llvm::Value *acc = ir.getFalse();
     for (auto &mat : it->second) {

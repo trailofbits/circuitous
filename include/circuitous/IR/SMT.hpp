@@ -363,7 +363,7 @@ namespace circ
       auto extractor = [&](auto thing, auto from, auto size) -> z3::expr {
         return thing.extract(from + size - 1, from);
       };
-      CHECK(memory.get_sort().bv_size() == irops::memory::size(ptr_size));
+      check(memory.get_sort().bv_size() == irops::memory::size(ptr_size));
       return irops::memory::parse< z3::expr >(memory, extractor, ptr_size);
     }
 
@@ -388,7 +388,7 @@ namespace circ
       auto ts =   parsed.timestamp() == Dispatch(op->ts_arg());
       return record(op, to_bv(used && mode && id && size & addr && ts));
     }
-    z3::expr Visit(UnusedConstraint *op) { NOT_IMPLEMENTED(); }
+    z3::expr Visit(UnusedConstraint *op) { not_implemented(); }
 
     z3::expr Visit(OnlyOneCondition *op)
     {

@@ -61,7 +61,7 @@ namespace circ::run {
     }
 
     void store(uint64_t addr, raw_value_type val) {
-      CHECK( val.getBitWidth() % 8 == 0 )
+      check( val.getBitWidth() % 8 == 0 )
           << "Cannot store val that has unalinged bw such as " << val.getBitWidth();
 
       for (auto i = 0u; i < val.getBitWidth(); i += 8) {
@@ -143,7 +143,7 @@ namespace circ::run {
     }
 
     value_type get(Operation *op, std::size_t idx) {
-      CHECK(op->operands.size() > idx);
+      check(op->operands.size() > idx);
       return get( ( *op )[ idx ] );
     }
 

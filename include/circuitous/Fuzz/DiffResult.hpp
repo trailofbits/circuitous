@@ -21,7 +21,7 @@ namespace circ::ifuzz::permutate
             case diff_result::unrelated: return "unrelated";
             case diff_result::exact:     return "exact";
             case diff_result::unknown:   return "unknown";
-            default: UNREACHABLE();
+            default: unreachable();
         }
     }
 
@@ -41,7 +41,7 @@ namespace circ::ifuzz::permutate
         if (a == diff_result::pure) return a;
         if (b == diff_result::pure) return b;
 
-        UNREACHABLE() << "Cannot join " << static_cast< uint32_t >(a) << " with "
+        unreachable() << "Cannot join " << static_cast< uint32_t >(a) << " with "
                       << static_cast< uint32_t >(b);
     }
 

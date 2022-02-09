@@ -30,6 +30,8 @@
 
 #include <circuitous/Transforms/EqSat/Graph.hpp>
 
+#include <circuitous/Support/Check.hpp>
+
 namespace circ::eqsat {
 
   template< typename Graph, typename ENode = typename Graph::Node >
@@ -69,7 +71,7 @@ namespace circ::eqsat {
 
     Id id(index idx) const
     {
-      CHECK(test(idx));
+      check(test(idx));
       return _mapping[idx];
     }
 
@@ -477,7 +479,7 @@ namespace circ::eqsat {
       matched_labels match{lhs.labels, std::move(product)};
 
       for (const auto &lab : rhs.labels) {
-        CHECK(!get_label_match(match, lab).has_value());
+        check(!get_label_match(match, lab).has_value());
         match.labels.push_back(lab);
       }
 
@@ -487,7 +489,7 @@ namespace circ::eqsat {
     // TODO(Heno): optimize copies of vectors and maps
     static inline Matches product_of_matches(const auto &matches)
     {
-      CHECK(matches.size() > 0);
+      check(matches.size() > 0);
       if (matches.size() == 1)
         return matches.front();
 

@@ -36,7 +36,7 @@ namespace circ::irops::memory {
   template< typename T >
   static T make(auto ptr_size_) {
     auto ptr_size = static_cast< uint32_t >(ptr_size_);
-    CHECK( ptr_size == 32 || ptr_size == 64 );
+    check( ptr_size == 32 || ptr_size == 64 );
     return T(ptr_size);
   }
 
@@ -52,7 +52,7 @@ namespace circ::irops::memory {
     {}
 
     // TODO(lukas): Move to debug
-    void validate() const { CHECK(vals.size() == e_num); }
+    void validate() const { check(vals.size() == e_num); }
 
     auto used()      const { validate(); return vals[ 0 ]; }
     auto mode()      const { validate(); return vals[ 1 ]; }
@@ -72,13 +72,13 @@ namespace circ::irops::memory {
 
     // TODO(lukas): Implement custom `std::get`
     auto as_tuple() const {
-      CHECK(e_num == vals.size());
+      check(e_num == vals.size());
       return as_tuple< e_num >();
     }
 
     template< typename F >
     void apply(F &&f) const {
-      CHECK(e_num == vals.size());
+      check(e_num == vals.size());
       for (std::size_t i = 0; i < e_num; ++i)
         f(this->defs[i], vals[i]);
     }
