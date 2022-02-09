@@ -21,6 +21,7 @@
 
 #include <circuitous/ADT/UnionFind.hpp>
 #include <circuitous/Util/Overloads.hpp>
+#include <circuitous/Support/Check.hpp>
 
 namespace circ::eqsat {
 
@@ -247,7 +248,7 @@ namespace circ::eqsat {
       }
 
       auto new_id = _unions.merge(a, b);
-      CHECK(new_id == a);
+      check(new_id == a);
 
       _pending.push_back(new_id);
 

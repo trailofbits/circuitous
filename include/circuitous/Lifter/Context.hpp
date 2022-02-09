@@ -8,6 +8,7 @@
 #include <memory>
 
 #include <circuitous/Lifter/Shadows.hpp>
+#include <circuitous/Support/Check.hpp>
 
 #include <remill/Arch/Arch.h>
 #include <remill/Arch/Name.h>
@@ -114,7 +115,7 @@ namespace circ {
       switch (ptr_size) {
         case 64: return allowed64.count(name) != 0;
         case 32: return allowed32.count(name) != 0;
-        default: UNREACHABLE() << "Unsupported ptr size";
+        default: unreachable() << "Unsupported ptr size";
       }
     }
 
@@ -175,7 +176,7 @@ namespace circ {
 
     // InstructionSelection is sane if all vectors have the same length.
     void AssertIntegrity() const {
-      CHECK(instructions.size() == encodings.size() &&
+      check(instructions.size() == encodings.size() &&
             instructions.size() == shadows.size() &&
             instructions.size() == lifted_fns.size());
     }

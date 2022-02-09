@@ -7,6 +7,7 @@
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Memory.hpp>
 #include <circuitous/IR/Visitors.hpp>
+#include <circuitous/Support/Check.hpp>
 
 #include <cmath>
 #include <deque>
@@ -86,7 +87,7 @@ namespace circ::print::verilog {
 
     std::string &give_name(Operation *op, std::string name) {
       auto [it, flag] = op_names.emplace(op, std::move(name));
-      CHECK(flag) << "\n" << dbg().str();
+      check(flag) << "\n" << dbg().str();
       return it->second;
     }
 
@@ -148,7 +149,7 @@ namespace circ::print::verilog {
         return out;
       };
 
-      CHECK(ops.size() != 0);
+      check(ops.size() != 0);
 
       std::stringstream ss;
       ss << get_(ops[0]);
@@ -209,7 +210,7 @@ namespace circ::print::verilog {
     // TODO(lukas): For dbg purposes.
     auto unary() {
       return [=](std::string str, const std::vector< Operation * > &ops) -> std::string {
-        CHECK(ops.size() == 1);
+        check(ops.size() == 1);
         std::stringstream ss;
         ss << str << " " << get(ops.front());
         return ss.str();
@@ -548,7 +549,7 @@ namespace circ::print::verilog {
       };
 
       std::string operator()(Operation *) {
-        CHECK(idx < avail.size());
+        check(idx < avail.size());
         return avail[idx++];
       }
     };
@@ -643,7 +644,7 @@ namespace circ::print::verilog {
   };
 
   static inline std::string get_module_name(Operation *op) {
-    CHECK(!is_of< LeafValue >(op));
+    check(!is_of< LeafValue >(op));
     switch (op->op_code) {
       case Circuit::kind: return "full_circuit";
       default : return op_code_str(op->op_code) + "_" + std::to_string(op->size);

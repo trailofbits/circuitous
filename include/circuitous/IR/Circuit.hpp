@@ -57,7 +57,7 @@ namespace circ
         if constexpr (sizeof...(Tail) != 0) {
             return runtime_find_< F, Tail ... >(rkind, f);
         } else {
-            UNREACHABLE() << "runtime find on: " << shatter_fragment_as_str(rkind) << " failed";
+            unreachable() << "runtime find on: " << shatter_fragment_as_str(rkind) << " failed";
         }
     }
 

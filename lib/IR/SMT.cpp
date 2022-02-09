@@ -36,7 +36,7 @@ namespace circ::smt
     if (name == "Circuit")
       return circuit;
 
-    CHECK(sort.is_bv());
+    check(sort.is_bv());
     auto bv = sort.bv_size();
 
     if (name.starts_with("Extract")) {
@@ -226,7 +226,7 @@ namespace circ::smt
       return op;
     }
 
-    UNREACHABLE() << "unknown expr " << e;
+    unreachable() << "unknown expr " << e;
   }
 
   std::unique_ptr<Circuit> deserialize(const std::string &path)
@@ -236,7 +236,7 @@ namespace circ::smt
 
     // TODO(lukas): Make configurable.
     auto circuit = std::make_unique< Circuit >(64u);
-    CHECK(exprs.size() == 1);
+    check(exprs.size() == 1);
 
     expr_cache seen(10, expr_hash, expr_equal);
     IdxCache idxs;

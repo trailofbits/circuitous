@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <circuitous/Support/Check.hpp>
+
 #include <vector>
 #include <span>
 
@@ -28,7 +30,7 @@ namespace circ::irops {
     // TODO(lukas): Remove once we have `std::span`.
     static inline std::optional< uint32_t > uniform_size(auto begin, auto end)
     {
-      CHECK(begin != end);
+      check(begin != end);
       std::optional< uint32_t > size;
       for (auto what : llvm::iterator_range(begin, end)) {
         auto what_size = what->getType()->getIntegerBitWidth();
@@ -144,7 +146,7 @@ namespace circ::irops {
 
       template< typename I = uint64_t >
       static auto parse_args(llvm::Function *fn) {
-        CHECK(N::is(fn))
+        check(N::is(fn))
           << "Cannot parse arguments of function: "
           << LLVMName(fn)
           << "that is not our intrinsic.";
@@ -355,7 +357,7 @@ namespace circ::irops {
       static auto make(llvm::IRBuilder<> &ir, const values_t &c_args) {
         auto selector_size = uniform_size(c_args.begin(), std::next(c_args.begin()));
         auto ret_size = uniform_size(std::next(c_args.begin()), c_args.end());
-        CHECK(selector_size && ret_size);
+        check(selector_size && ret_size);
         return N::make(ir, c_args, *selector_size, *ret_size);
       }
     };
@@ -384,7 +386,7 @@ namespace circ::irops {
 
       static auto name(auto idx, llvm::Type *type) {
         auto int_type = llvm::dyn_cast< llvm::IntegerType >(type);
-        CHECK(int_type);
+        check(int_type);
         auto size = int_type->getScalarSizeInBits();
         return N::name(static_cast< uint64_t >(idx), size);
       }
@@ -460,7 +462,7 @@ namespace circ::irops {
 
       static auto make(llvm::IRBuilder<> &ir, const values_t &c_args) {
         auto size = uniform_size(c_args.begin(), c_args.end());
-        CHECK(size) << "Operands are not of uniform size!\n" << dbg_dump(c_args);
+        check(size) << "Operands are not of uniform size!\n" << dbg_dump(c_args);
         return N::make(ir, c_args, *size);
       }
     };

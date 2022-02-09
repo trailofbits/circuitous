@@ -302,7 +302,7 @@ namespace circ {
             for (const auto &[_, in, out] : arg_map)
                 if (out == outreg)
                     return in;
-            UNREACHABLE() << "Cannot match input register to output reg: " << dbg_dump(outreg);
+            unreachable() << "Cannot match input register to output reg: " << dbg_dump(outreg);
         };
 
         auto replace = [&](llvm::Instruction *inst, llvm::Value *patch) {
@@ -315,7 +315,7 @@ namespace circ {
                     inst->setOperand(i,coerced);
                     return;
                 }
-            UNREACHABLE() << "Was not able to patch undef value";
+            unreachable() << "Was not able to patch undef value";
         };
 
         std::vector< llvm::Instruction * > undefs;
@@ -343,7 +343,7 @@ namespace circ {
                 // It is enough to replace only one as the `undef` source is exactly one.
                 replace(undef, patch);
             } else {
-                UNREACHABLE() << "verify depends on undef";
+                unreachable() << "verify depends on undef";
             }
         }
     }

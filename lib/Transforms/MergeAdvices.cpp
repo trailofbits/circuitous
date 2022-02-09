@@ -5,6 +5,8 @@
 #include <circuitous/IR/IR.h>
 #include <circuitous/Transforms.h>
 
+#include <circuitous/Support/Check.hpp>
+
 #include <algorithm>
 #include <numeric>
 #include <unordered_map>
@@ -119,7 +121,7 @@ bool MergeAdvices(Circuit *circuit) {
         }
       }
 
-      CHECK(extract != nullptr)
+      check(extract != nullptr)
           << "Failed to allocate " << hint->size << "-bit hint into "
           << max_size << "-bit wide hint";
     }

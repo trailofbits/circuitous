@@ -7,7 +7,7 @@ auto HasMemory::deconstruct(const llvm::APInt &value) -> Parsed
     auto extractor = [](auto thing, auto from, auto size) -> llvm::APInt {
         return thing.extractBits(size, from);
     };
-    CHECK(value.getBitWidth() == irops::memory::size(hint_size));
+    check(value.getBitWidth() == irops::memory::size(hint_size));
     return irops::memory::parse< llvm::APInt >(value, extractor, hint_size);
 }
 
@@ -15,7 +15,7 @@ llvm::APInt HasMemory::construct(const Parsed &parsed)
 {
     llvm::APInt out { irops::memory::size(hint_size), 0, false };
     auto inserter_ = [&](auto thing, auto from, auto size) {
-        CHECK(size == thing.getBitWidth());
+        check(size == thing.getBitWidth());
         out.insertBits(thing, from);
     };
     irops::memory::construct(parsed, inserter_);
@@ -35,7 +35,7 @@ template<typename S>
 auto Base_<S>::GetNodeVal(Operation *op) const -> value_type
 {
     auto iter{this->node_values.find(op)};
-    CHECK(iter != this->node_values.end()) << op->Name();
+    check(iter != this->node_values.end()) << op->Name();
     log_dbg() << "Retrieve:" << pretty_print< false >(op) << " =>> "
               << ((iter->second) ? iter->second->toString(16, false) : "( no value )");
     return iter->second;
@@ -44,7 +44,7 @@ auto Base_<S>::GetNodeVal(Operation *op) const -> value_type
 template<typename S>
 void Base_<S>::Visit(Operation *op)
 {
-    UNREACHABLE() << "Unhandled operation: " << op->Name() << " " << op->id();
+    unreachable() << "Unhandled operation: " << op->Name() << " " << op->id();
 }
 
 template<typename S>

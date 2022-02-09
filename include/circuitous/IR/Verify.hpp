@@ -11,6 +11,7 @@
 
 #include <circuitous/IR/IR.h>
 #include <circuitous/IR/Shapes.hpp>
+#include <circuitous/Support/Check.hpp>
 
 namespace circ {
 
@@ -53,7 +54,7 @@ struct Verifier {
 
 
   bool VerifyArity(Operation *op) {
-    CHECK(op);
+    check(op);
     switch (op->op_code) {
       case Constant::kind:
       case Undefined::kind:
@@ -109,11 +110,11 @@ struct Verifier {
           return Exactly(2, op);
       }
     }
-    UNREACHABLE() << "Cannot verify kind: " << to_string(op->op_code);
+    unreachable() << "Cannot verify kind: " << to_string(op->op_code);
   }
 
   bool Verify(Operation *op) {
-    CHECK(op);
+    check(op);
     status &= VerifyArity(op);
     for (auto o : op->operands) {
       status &= Verify(o);

@@ -13,6 +13,7 @@
 #include <circuitous/IR/Lifter.hpp>
 #include <circuitous/Util/Logging.hpp>
 #include <circuitous/Support/Log.hpp>
+#include <circuitous/Support/Check.hpp>
 
 #include <remill/Arch/Arch.h>
 #include <remill/BC/IntrinsicTable.h>
@@ -85,7 +86,7 @@ namespace circ
         void _make_body()
         {
             log_dbg() << "CircuitFunction::_make_body";
-            CHECK(circuit_fn && circuit_fn->isDeclaration());
+            check(circuit_fn && circuit_fn->isDeclaration());
 
             entry = llvm::BasicBlock::Create(*ctx.llvm_ctx(), "entry", circuit_fn);
             head = llvm::BasicBlock::Create(*ctx.llvm_ctx(), "", circuit_fn);
@@ -113,14 +114,14 @@ namespace circ
             for (auto &[reg, arg, _] : arg_map)
                 if (reg->name == ctx.arch()->ProgramCounterRegisterName())
                     return arg;
-            UNREACHABLE() << "Could not locate input pc register.";
+            unreachable() << "Could not locate input pc register.";
         }
 
         void inspect_corpse()
         {
             circuit_fn->print(llvm::errs());
             llvm::errs().flush();
-            UNREACHABLE() << "Corpse inspection";
+            unreachable() << "Corpse inspection";
         }
 
         using maybe_str = std::optional< std::string >;
@@ -137,7 +138,7 @@ namespace circ
                 if (enclosing_reg(ctx.arch(), name) == reg)
                     return of_interest;
             }
-            UNREACHABLE() << "Did not locate at Idx: " << Idx << " reg named: " << name;
+            unreachable() << "Did not locate at Idx: " << Idx << " reg named: " << name;
         }
 
         llvm::Value *locate_out_reg(const std::string &name) { return _locate_reg< 2 >(name); }

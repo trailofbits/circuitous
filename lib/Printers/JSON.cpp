@@ -11,7 +11,7 @@ namespace circ {
 
 void print_json(std::ostream &os, Circuit *circuit) {
   auto id = [](Operation *op) -> std::string {
-    CHECK(op);
+    check(op);
     std::stringstream ss;
     ss << "v" << std::hex << op->id() << "v";
     return ss.str();
@@ -21,7 +21,7 @@ void print_json(std::ostream &os, Circuit *circuit) {
   os << "{\n";
   auto sep = "";
   auto do_op = [&](circ::Operation *op) {
-    CHECK(op);
+    check(op);
     os << sep;
     os << "\"" << id(op) << "\":{";
     os << "\"op_name\":\"" << op->Name() << "\",";

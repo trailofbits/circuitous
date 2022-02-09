@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <circuitous/Support/Check.hpp>
 #include <circuitous/Lifter/Shadows.hpp>
 #include <circuitous/Lifter/ShadowMat.hpp>
 
@@ -52,7 +53,7 @@ namespace circ::shadowinst {
         auto big = orig->EnclosingRegister();
         return std::make_tuple(orig->size, big->size);
       }
-      UNREACHABLE() << "Cannot fetch info for reg that is not in arch.";
+      unreachable() << "Cannot fetch info for reg that is not in arch.";
     };
 
     for (auto &[reg, bits] : s_reg.translation_map) {
@@ -66,8 +67,8 @@ namespace circ::shadowinst {
         out[key].push_back(s_reg.make_bitstring(bstr));
     }
 
-    CHECK(defaulted.size() <= 1) << s_reg.to_string();
-    CHECK(!out.empty()) << s_reg.to_string();
+    check(defaulted.size() <= 1) << s_reg.to_string();
+    check(!out.empty()) << s_reg.to_string();
     // Check with extra dbg message
     if (out.size() != 1) {
       // Build dbg message
@@ -76,7 +77,7 @@ namespace circ::shadowinst {
         auto [x, y] = key;
         ss << "[ " << std::to_string(x) << " , " << std::to_string(y) << " ]";
       }
-      UNREACHABLE() << "out.size() != 1\n" << ss.str() << " in:\n" << s_reg.to_string();
+      unreachable() << "out.size() != 1\n" << ss.str() << " in:\n" << s_reg.to_string();
     }
 
     auto &[key, _] = *(out.begin());
@@ -93,7 +94,7 @@ namespace circ::shadowinst {
     auto [size, total_size] = mask_coerce_info(s_reg, arch);
     std::string mask_bits(size * 8, '1');
     llvm::APInt mask{ static_cast<uint32_t>(total_size * 8), mask_bits, 2};
-    CHECK(irb.getInt(mask)->getType() == what->getType());
+    check(irb.getInt(mask)->getType() == what->getType());
     return irb.CreateAnd(what, irb.getInt(mask));
   }
 
@@ -149,7 +150,7 @@ namespace circ::shadowinst {
       cond_to_glued[cond] = irops::make< irops::Concat >(irb, chunks);
     }
     // TODO(lukas): Generalize.
-    CHECK(cond_to_glued.size() <= 2 && cond_to_glued.size() >= 1);
+    check(cond_to_glued.size() <= 2 && cond_to_glued.size() >= 1);
 
     auto &front = *cond_to_glued.begin();
     llvm::Value *init_cond = std::get< 0 >(front);

@@ -67,7 +67,7 @@ struct Flattener {
   llvm::Value *GetCondition(llvm::BasicBlock *block, llvm::BasicBlock *pred_block,
                             llvm::IRBuilder<> &ir) {
     const auto pred_cond = reaching_cond[pred_block];
-    CHECK(pred_cond) << "Cycle in control-flow graphs are not handled";
+    check(pred_cond) << "Cycle in control-flow graphs are not handled";
 
     // Figure out the reaching condition for `block` coming through
     // `pred`.
@@ -82,7 +82,7 @@ struct Flattener {
       auto false_succ = pred_br->getSuccessor(1);
 
       // TODO(lukas): Probably just return `pred_cond`
-      CHECK(true_succ != false_succ)
+      check(true_succ != false_succ)
         << "TODO: Not sure how to handle when true_succ == false_succ";
       auto edge_cond = pred_br->getCondition();
       if (true_succ == block) {
@@ -92,7 +92,7 @@ struct Flattener {
     }
     if (auto pred_switch = llvm::dyn_cast<llvm::SwitchInst>(inst)) {
       auto edge_cond = SwitchTarget(pred_switch, ir)[block];
-      CHECK(edge_cond);
+      check(edge_cond);
       return ir.CreateAnd(pred_cond, edge_cond);
     }
     return pred_cond;
@@ -121,7 +121,7 @@ struct Flattener {
   }
 
   void HandleBBs() {
-    CHECK(new_block);
+    check(new_block);
 
     // We need to keep account of them as they are processed last
     std::unordered_map<llvm::ReturnInst *, llvm::Value *> ret_vals;
@@ -140,7 +140,7 @@ struct Flattener {
           llvm::IRBuilder<> ir(new_block);
 
           const auto num_preds = phi->getNumIncomingValues();
-          CHECK(0 < num_preds);
+          check(0 < num_preds);
 
           llvm::Value *sel_val = nullptr;
 
@@ -151,8 +151,8 @@ struct Flattener {
           } else if (2 == num_preds) {
             auto pred_block = phi->getIncomingBlock(0);
             auto val_cond = pred_conds[block][pred_block];
-            CHECK(val_cond) << "Missing reaching condition for value";
-            CHECK(val_cond != ir.getTrue());
+            check(val_cond) << "Missing reaching condition for value";
+            check(val_cond != ir.getTrue());
             auto true_val = phi->getIncomingValue(0);
             auto false_val = phi->getIncomingValue(1);
             sel_val = ir.CreateSelect(val_cond, true_val, false_val);
@@ -164,8 +164,8 @@ struct Flattener {
               auto pred_block = phi->getIncomingBlock(i);
               auto pred_val = phi->getIncomingValue(i);
               auto val_cond = pred_conds[block][pred_block];
-              CHECK(val_cond) << "Missing reaching condition for value";
-              CHECK(val_cond != ir.getTrue());
+              check(val_cond) << "Missing reaching condition for value";
+              check(val_cond != ir.getTrue());
               sel_val = ir.CreateSelect(val_cond, pred_val, sel_val);
             }
           }
@@ -203,7 +203,7 @@ struct Flattener {
         } else {
           // Here only Terminator instructions such as `br` or `switch` should fall through,
           // and we have already taken care of those.
-          CHECK(llvm::isa<llvm::BranchInst>(inst) || llvm::isa<llvm::SwitchInst>(inst));
+          check(llvm::isa<llvm::BranchInst>(inst) || llvm::isa<llvm::SwitchInst>(inst));
         }
       }
     }
@@ -211,7 +211,7 @@ struct Flattener {
   }
 
   void HandleReturns(const std::unordered_map<llvm::ReturnInst *, llvm::Value *> &ret_vals) {
-    CHECK(!ret_vals.empty());
+    check(!ret_vals.empty());
     if (1 == ret_vals.size()) {
       auto &[ret, _] = *ret_vals.begin();
       ret->removeFromParent();
@@ -230,7 +230,7 @@ struct Flattener {
 
     llvm::Value *sel_val = ir.CreateCall(error, args);
     for (auto [ret_inst, reaching_cond] : ret_vals) {
-      CHECK(reaching_cond != ir.getTrue());
+      check(reaching_cond != ir.getTrue());
       llvm::Value *ret_val = ret_inst->getReturnValue();
       sel_val = ir.CreateSelect(reaching_cond, ret_val, sel_val);
       ret_inst->eraseFromParent();

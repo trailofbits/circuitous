@@ -286,7 +286,7 @@ namespace circ::shadowinst
 
         void mark_dirty(const reg_t &reg)
         {
-            CHECK(translation_map.count(reg));
+            check(translation_map.count(reg));
             dirty.insert(reg);
         }
 
@@ -485,8 +485,8 @@ namespace circ::shadowinst
             if (!reg && !immediate && !shift && !address)
                 return false;
 
-            CHECK(!shift.has_value()) << "Cannot handle shift";
-            CHECK(  static_cast<uint8_t>(reg.has_value())
+            check(!shift.has_value()) << "Cannot handle shift";
+            check(  static_cast<uint8_t>(reg.has_value())
                   + static_cast<uint8_t>(immediate.has_value())
                   + static_cast<uint8_t>(address.has_value())
                   + static_cast<uint8_t>(shift.has_value())
@@ -595,7 +595,7 @@ namespace circ::shadowinst
                     return operands[idx];
                 }
                 default :
-                    UNREACHABLE()
+                    unreachable()
                         << "Cannot replace shadow operand with"
                         << "type that is neither reg, addr nor imm.";
             }

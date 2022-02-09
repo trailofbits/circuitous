@@ -125,7 +125,7 @@ namespace circ::eqsat {
     OpTemplate Visit(Or *op)  { return opcode(op); }
     OpTemplate Visit(And *op) { return opcode(op); }
 
-    OpTemplate Visit(Circuit *) { UNREACHABLE() << "Unexpected case encountered in Visit."; }
+    OpTemplate Visit(Circuit *) { unreachable() << "Unexpected case encountered in Visit."; }
   };
 
   struct EGraphBuilder
@@ -175,7 +175,7 @@ namespace circ::eqsat {
 
     OpTemplate make_constant_template(const constant &con) const
     {
-      UNREACHABLE() << "not implemented";
+      unreachable() << "not implemented";
     }
 
     OpTemplate make_operation_template(const operation &op) const
@@ -303,7 +303,7 @@ namespace circ::eqsat {
             node.children().push_back( synth(child) );
           return graph.add(std::move(node)).first;
         },
-        [&] (const auto&)         -> Id { UNREACHABLE() << "unsupported node"; },
+        [&] (const auto&)         -> Id { unreachable() << "unsupported node"; },
       }, root(e));
     }
 
@@ -653,7 +653,7 @@ namespace circ::eqsat {
       }, op);
 
       if ( !value )
-        UNREACHABLE() << "unhadled opcode " << to_string(op);
+        unreachable() << "unhadled opcode " << to_string(op);
       return value;
     }
 

@@ -106,7 +106,7 @@ struct Value {
 
   void RemoveUser(T *user) {
     auto it = std::find(users.begin(), users.end(), user);
-    CHECK(it != users.end()) << "Trying to remove user that is not part of the list.";
+    check(it != users.end()) << "Trying to remove user that is not part of the list.";
     std::swap(users.back(), *it);
     users.pop_back();
   }
@@ -132,7 +132,7 @@ struct Node : Value<T>, User<T> {
   }
 
   void ReplaceUse(T *other, std::size_t at) {
-    CHECK(this->operands.size() > at);
+    check(this->operands.size() > at);
     this->operands[at]->RemoveUser(Raw());
 
     this->operands[at] = other;
@@ -141,7 +141,7 @@ struct Node : Value<T>, User<T> {
 
 
   void ReplaceAllUsesWith(T *other) {
-    CHECK(other != this) << "Trying to replace all uses of X with X, probably error.";
+    check(other != this) << "Trying to replace all uses of X with X, probably error.";
 
     auto fetch = [&](const auto &where){
       for (std::size_t i = 0; i < where.size(); ++i) {
@@ -149,7 +149,7 @@ struct Node : Value<T>, User<T> {
           return i;
         }
       }
-      UNREACHABLE() << "User and uses are out of sync.";
+      unreachable() << "User and uses are out of sync.";
     };
 
     for (auto user : this->users) {
