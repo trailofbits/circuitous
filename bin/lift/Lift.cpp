@@ -203,6 +203,13 @@ auto parse_and_validate_cli(int argc, char *argv[])
     return parsed;
 }
 
+void reload_test(const circ::CircuitPtr &circuit)
+{
+    circuit->serialize("reload_test.circir");
+    auto reload = circ::Circuit::deserialize("reload_test.circir");
+    VerifyCircuit(reload.get());
+}
+
 int main(int argc, char *argv[]) {
     using parser_t = circ::CmdParser<
         cli::Arch, cli::OS, cli::Dbg,
