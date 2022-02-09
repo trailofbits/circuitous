@@ -58,28 +58,29 @@ namespace cli = circ::cli;
 
 namespace
 {
-    std::vector< std::string > load_seed_dbg(const std::string &fname) {
-      std::vector< std::string > out;
+    std::vector< std::string > load_seed_dbg(const std::string &fname)
+    {
+        std::vector< std::string > out;
 
-      auto process = [](std::string line) {
-        auto [bytes, _] = llvm::StringRef(line).split(' ');
-        return bytes.str();
-      };
+        auto process = [](std::string line) {
+            auto [bytes, _] = llvm::StringRef(line).split(' ');
+            return bytes.str();
+        };
 
-      std::ifstream in(fname);
-      for (std::string line; std::getline(in, line);)
-        out.push_back(process(std::move(line)));
-      return out;
+        std::ifstream in(fname);
+        for (std::string line; std::getline(in, line);)
+            out.push_back(process(std::move(line)));
+        return out;
     }
 
     void add_to_buffer(std::vector< uint8_t > &buf, const std::string &str)
     {
-      CHECK(str.size() % 2 == 0);
-      for (std::size_t i = 0; i < str.size(); i += 2) {
-        std::string aux = {str[i], str[i + 1]};
-        auto casted = static_cast< uint8_t >(std::strtoul(aux.data(), nullptr, 16));
-        buf.push_back(casted);
-      }
+        CHECK(str.size() % 2 == 0);
+        for (std::size_t i = 0; i < str.size(); i += 2) {
+            std::string aux = {str[i], str[i + 1]};
+            auto casted = static_cast< uint8_t >(std::strtoul(aux.data(), nullptr, 16));
+            buf.push_back(casted);
+        }
     }
 
     std::string_view as_string_view(std::vector< uint8_t > &buf)
