@@ -36,11 +36,11 @@ namespace circ
         CircuitSmithy(Ctx ctx_);
 
         self_t &smelt(const std::vector< InstBytes > &insts);
-        self_t &smelt(const std::string &raw_bytes);
+        self_t &smelt(std::string_view raw_bytes);
         self_t &smelt(std::vector< remill::Instruction > &&rinsts);
-        // TODO(lukas): Return circuit_ptr_t here
-        self_t &forge();
 
-        circuit_ptr_t take() { return std::move(circuit); }
+        // Returns circuit created from all data provided by `smelt`. Will return owning
+        // pointer to circuit and resets internal state of `this`.
+        circuit_ptr_t forge();
     };
 }  // namespace circ
