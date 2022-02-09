@@ -2,16 +2,6 @@
  * Copyright (c) 2021 Trail of Bits, Inc.
  */
 
-#include <circuitous/Lifter/BaseLifter.hpp>
-#include <circuitous/IR/Intrinsics.hpp>
-
-#include <remill/BC/Compat/CallSite.h>
-#include <remill/BC/Util.h>
-#include <remill/BC/Optimizer.h>
-
-#include <circuitous/Lifter/Flatten.hpp>
-#include <circuitous/Fuzz/InstructionFuzzer.hpp>
-
 #include <circuitous/Util/Logging.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
@@ -22,7 +12,10 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Lifter.hpp>
 
+#include <circuitous/Lifter/BaseLifter.hpp>
+#include <circuitous/Lifter/CircuitBuilder.hpp>
 #include <circuitous/Lifter/CircuitSmithy.hpp>
+#include <circuitous/Lifter/LLVMToCircIR.hpp>
 
 namespace circ
 {
@@ -46,7 +39,7 @@ namespace circ
         return smelt(std::move(rinsts));
     }
 
-    auto CircuitSmithy::smelt(const std::string &raw_bytes) -> self_t &
+    auto CircuitSmithy::smelt(std::string_view raw_bytes) -> self_t &
     {
         return smelt(Decoder(ctx).decode_all(raw_bytes));
     }
@@ -57,10 +50,10 @@ namespace circ
         return *this;
     }
 
-    auto CircuitSmithy::forge() -> self_t &
+    auto CircuitSmithy::forge() -> circuit_ptr_t
     {
         batch.fuzz();
-        batch.lift< InstructionLifter >();
-        return *this;
+        batch.lift< ILifter< InstructionLifter > >();
+        return lower_fn(CircuitMaker(ctx).make_from(std::move(batch)), ctx);
     }
 } // namespace circ
