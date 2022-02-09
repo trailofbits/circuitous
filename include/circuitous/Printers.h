@@ -31,7 +31,7 @@ namespace circ {
     template< typename Printer, typename ... Args >
     void print_circuit(std::string_view filename, Printer printer, Args &&... args  )
     {
-        std::ofstream file(filename);
+        std::ofstream file(std::string{filename});
         check(file);
         printer(file, std::forward< Args >(args) ...);
         file.flush();
