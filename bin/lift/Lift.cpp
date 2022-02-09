@@ -210,7 +210,8 @@ int main(int argc, char *argv[]) {
         cli::SMTOut, cli::JsonOut, cli::BitBlastSmtOut, cli::VerilogOut,
         cli::IROut, cli::DotOut,
         cli::BitBlastStats,
-        cli::LogToStderr, cli::LogDir >;
+        cli::LogToStderr, cli::LogDir,
+        cli::EqSat >;
 
     auto parsed_cli = parse_and_validate_cli< parser_t >(argc, argv);
     if (!parsed_cli)
