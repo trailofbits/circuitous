@@ -224,7 +224,14 @@ int main(int argc, char *argv[]) {
     google::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
+    // TODO(lukas): Eventually remove.
     std::cout << parsed_cli.dbg_str();
+
+    // TODO(lukas): Allow filename as option? And maybe same for other logging
+    //              sinks?
+    if (parsed_cli.present< cli::Dbg >())
+        circ::add_sink< circ::severity::dbg >(std::cout);
+
     auto circuit = get_input_circuit(parsed_cli);
     if (!circuit)
     {
