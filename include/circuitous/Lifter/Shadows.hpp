@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cstdint>
+#include <cmath>
 #include <deque>
 #include <iostream>
 #include <map>
