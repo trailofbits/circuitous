@@ -17,14 +17,6 @@ namespace circ
 
         using circuit_ptr_t = std::unique_ptr<Circuit>;
 
-        static circuit_ptr_t make_circuit(std::string_view arch_name,
-                                          std::string_view os_name,
-                                          const llvm::StringRef &bytes);
-
-        static circuit_ptr_t make_circuit(std::string_view arch_name,
-                                          std::string_view os_name,
-                                          std::string_view bytes);
-
         void serialize(std::ostream &os);
         void serialize(std::string_view filename);
 
