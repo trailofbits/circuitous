@@ -626,7 +626,7 @@ namespace circ
             auto process = [&](maybe_rinst_t nrinst, const idxs_t idxs, std::string errs)
             {
                 if (!nrinst) {
-                    log_error() << errs;
+                    // TODO(lukas): This is not a hard error, figure out a way to log this.
                     return;
                 }
 
