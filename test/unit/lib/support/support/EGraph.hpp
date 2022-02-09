@@ -11,6 +11,7 @@
 #include <circuitous/Transforms/Pattern.hpp>
 #include <circuitous/Util/Overloads.hpp>
 #include <circuitous/Util/Logging.hpp>
+#include <circuitous/Support/Check.hpp>
 
 #include <fstream>
 #include <string>
@@ -146,7 +147,7 @@ namespace circ::eqsat {
         [&] (const place &plc)    -> Id { return subs.id(places.at(plc)); },
         [&] (const operation &op) -> Id { return _graph->make_node(op.name, args); },
         [&] (const label &lab)    -> Id { return synth(subexprs.at(label_name(lab))); },
-        [&] (const auto&)         -> Id { LOG(FATAL) << "unsupported node"; },
+        [&] (const auto&)         -> Id { unreachable() << "unsupported node"; },
       }, root(e));
 
       return node;
