@@ -323,7 +323,8 @@ namespace circ::shadowinst
             if (!std::string_view(key).starts_with("__remill_zero_i"))
                 return false;
 
-            return encodings.size() == std::pow(2, this->region_bitsize());
+            return encodings.size() ==
+                   static_cast< std::size_t >(std::pow(2, this->region_bitsize()));
         }
     };
 
