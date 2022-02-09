@@ -475,7 +475,7 @@ void Circuit::serialize(std::ostream &os)
 
 void Circuit::serialize(std::string_view filename)
 {
-    std::ofstream file(filename, std::ios::binary | std::ios::trunc);
+    std::ofstream file(std::string(filename), std::ios::binary | std::ios::trunc);
     return serialize(file);
 }
 
@@ -496,7 +496,7 @@ auto Circuit::deserialize(std::istream &is) -> circuit_ptr_t
 
 auto Circuit::deserialize(std::string_view filename) -> circuit_ptr_t
 {
-    std::ifstream file(filename, std::ios::binary);
+    std::ifstream file(std::string(filename), std::ios::binary);
     return deserialize(file);
 }
 
