@@ -366,13 +366,14 @@ namespace circ
             return lifted;
         }
 
-        llvm::Type *type_from_suffix(llvm::StringRef str, char delim)
+        uint32_t size_from_suffix(llvm::StringRef str, char delim)
         {
             auto [_, suffix] = llvm::StringRef(str).rsplit(delim);
-            return type_from_suffix(suffix);
+            return size_from_suffix(suffix);
         }
 
-        llvm::Type *type_from_suffix(llvm::StringRef suffix)
+
+        uint32_t size_from_suffix(llvm::StringRef suffix)
         {
             check(suffix.size() != 0) << "Suffix cannot be empty.";
             bool was_removed = suffix.consume_front("i");
@@ -381,18 +382,23 @@ namespace circ
             uint32_t val;
             auto was_converted = suffix.getAsInteger(10, val);
             // `llvm::StringRef::getAsInteger` returns `true` when error occurred.
+            // This should never fail, therefore no reason to return optional type.
             check(!was_converted) << "Failed conversion of" << suffix.str() << " to uint32_t.";
-            return llvm::IntegerType::get(*llvm_ctx, val);
+            return val;
         }
 
-        llvm::Constant *get_zero_reg(llvm::StringRef name)
+        llvm::Constant *get_zero_reg(llvm::StringRef name,
+                                     std::optional< uint32_t > min_size = {})
         {
             auto has_prefix = name.consume_front("__remill_zero");
             if (!has_prefix)
                 return nullptr;
 
-            log_info() << "Getting zero reg from string:" << name.str();
-            return llvm::ConstantInt::get(type_from_suffix(name, '_'), 0, false);
+            auto size = size_from_suffix(name, '_');
+            if (min_size)
+                size = std::max(*min_size, size);
+            auto ty = llvm::IntegerType::get(*llvm_ctx, size);
+            return llvm::ConstantInt::get(ty, 0, false);
         }
 
         // If register does not have a shadow we can procees the same way default lifter
@@ -486,7 +492,9 @@ namespace circ
             auto zero = llvm::ConstantInt::get(word_type, 0, false);
 
             auto locate_reg = [&](auto &name) -> llvm::Value * {
-                if (auto artificial_zero = get_zero_reg(name))
+                // TODO(lukas): There should not be a limitation for min size.
+                //              Same goes for the else branch.
+                if (auto artificial_zero = get_zero_reg(name, { word_size }))
                     return artificial_zero;
                 return this->parent::LoadWordRegValOrZero(block, state_ptr,
                                                           input_name(name), zero);
