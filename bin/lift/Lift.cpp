@@ -246,6 +246,13 @@ int main(int argc, char *argv[]) {
     else
         circuit = optimize< circ::DefaultOptimizer >(std::move(circuit), parsed_cli);
 
+
+    if (parsed_cli.present< cli::Dbg >())
+    {
+        circ::log_dbg() << "Stats of final circuit:\n";
+        circ::log_dbg() << circ::GetStats(circuit.get());
+    }
+
     circ::log_info() << "Storing circuit.";
     store_outputs(parsed_cli, circuit);
 
