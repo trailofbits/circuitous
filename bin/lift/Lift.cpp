@@ -51,7 +51,7 @@ DEFINE_string(bitblast_smt_out, "", "Path to the output smt2 file.");
 DEFINE_bool(bitblast_stats, false, "Print smt bitblast statistics.");
 
 DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
-DEFINE_string(cif, "", "Load input from circuitous-seed --dbg produced file");
+DEFINE_string(ciff_in, "", "Load input from circuitous-seed --dbg produced file");
 
 
 DEFINE_bool(eqsat, false, "Enable equality saturation based optimizations.");
@@ -61,31 +61,6 @@ namespace cli = circ::cli;
 
 namespace
 {
-    std::vector< std::string > load_seed_dbg(const std::string &fname)
-    {
-        std::vector< std::string > out;
-
-        auto process = [](std::string line) {
-            auto [bytes, _] = llvm::StringRef(line).split(' ');
-            return bytes.str();
-        };
-
-        std::ifstream in(fname);
-        for (std::string line; std::getline(in, line);)
-            out.push_back(process(std::move(line)));
-        return out;
-    }
-
-    void add_to_buffer(std::vector< uint8_t > &buf, const std::string &str)
-    {
-        CHECK(str.size() % 2 == 0);
-        for (std::size_t i = 0; i < str.size(); i += 2) {
-            std::string aux = {str[i], str[i + 1]};
-            auto casted = static_cast< uint8_t >(std::strtoul(aux.data(), nullptr, 16));
-            buf.push_back(casted);
-        }
-    }
-
     std::string_view as_string_view(std::vector< uint8_t > &buf)
     {
         return std::string_view( reinterpret_cast<char *>(buf.data()), buf.size());
@@ -130,7 +105,7 @@ std::string status(const Parser &parser, std::tuple< Ts ... >)
 
 circ::CircuitPtr get_input_circuit(auto &cli)
 {
-    using in_opts = std::tuple< cli::CifIn, cli::IRIn, cli::SMTIn, cli::BytesIn >;
+    using in_opts = std::tuple< cli::CiffIn, cli::IRIn, cli::SMTIn, cli::BytesIn >;
     if (!cli.exactly_one_present(in_opts{}))
     {
         std::cerr << "Multiple options to produce circuit specified, do not know how to "
@@ -153,13 +128,8 @@ circ::CircuitPtr get_input_circuit(auto &cli)
     if (auto smt_file = cli.template get< cli::SMTIn >())
         return circ::smt::deserialize(*smt_file);
 
-    if (auto cif = cli.template get< cli::CIF >())
-    {
-        std::vector< uint8_t > buf;
-        for (const auto &bytes : load_seed_dbg(*cif))
-            add_to_buffer(buf, bytes);
-        return make_circuit(as_string_view(buf));
-    }
+    if (auto cif = cli.template get< cli::CiffIn >())
+        return make_circuit(circ::CIFFReader().read(*cif).take_bytes());
     return {};
 }
 
@@ -213,7 +183,7 @@ void reload_test(const circ::CircuitPtr &circuit)
 int main(int argc, char *argv[]) {
     using parser_t = circ::CmdParser<
         cli::Arch, cli::OS, cli::Dbg,
-        cli::IRIn, cli::SMTIn, cli::BytesIn, cli::CifIn,
+        cli::IRIn, cli::SMTIn, cli::BytesIn, cli::CiffIn,
         cli::SMTOut, cli::JsonOut, cli::BitBlastSmtOut, cli::VerilogOut,
         cli::IROut, cli::DotOut,
         cli::BitBlastStats,
