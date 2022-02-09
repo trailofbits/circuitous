@@ -1,0 +1,2 @@
+iverilog -gstrict-expr-width -t null out.v
+sv-stat --top $(TOP_MODULE) out.v
