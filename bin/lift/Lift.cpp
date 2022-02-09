@@ -13,6 +13,7 @@
 #include <circuitous/Util/Logging.hpp>
 #include <circuitous/Util/CmdParser.hpp>
 
+#include <circuitous/Support/Ciff.hpp>
 #include <circuitous/Support/CLIArgs.hpp>
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
@@ -50,7 +51,7 @@ DEFINE_string(bitblast_smt_out, "", "Path to the output smt2 file.");
 DEFINE_bool(bitblast_stats, false, "Print smt bitblast statistics.");
 
 DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
-DEFINE_string(seed_dbg_in, "", "Load input from circuitous-seed --dbg produced file");
+DEFINE_string(cif, "", "Load input from circuitous-seed --dbg produced file");
 
 
 DEFINE_bool(eqsat, false, "Enable equality saturation based optimizations.");
@@ -129,7 +130,7 @@ std::string status(const Parser &parser, std::tuple< Ts ... >)
 
 circ::CircuitPtr get_input_circuit(auto &cli)
 {
-    using in_opts = std::tuple< cli::SeedDbgIn, cli::IRIn, cli::SMTIn, cli::BytesIn >;
+    using in_opts = std::tuple< cli::CifIn, cli::IRIn, cli::SMTIn, cli::BytesIn >;
     if (!cli.exactly_one_present(in_opts{}))
     {
         std::cerr << "Multiple options to produce circuit specified, do not know how to "
@@ -152,10 +153,10 @@ circ::CircuitPtr get_input_circuit(auto &cli)
     if (auto smt_file = cli.template get< cli::SMTIn >())
         return circ::smt::deserialize(*smt_file);
 
-    if (auto seed_dbg_file = cli.template get< cli::SeedDbgIn >())
+    if (auto cif = cli.template get< cli::CIF >())
     {
         std::vector< uint8_t > buf;
-        for (const auto &bytes : load_seed_dbg(*seed_dbg_file))
+        for (const auto &bytes : load_seed_dbg(*cif))
             add_to_buffer(buf, bytes);
         return make_circuit(as_string_view(buf));
     }
@@ -205,7 +206,7 @@ auto parse_and_validate_cli(int argc, char *argv[])
 int main(int argc, char *argv[]) {
     using parser_t = circ::CmdParser<
         cli::Arch, cli::OS, cli::Dbg,
-        cli::IRIn, cli::SMTIn, cli::BytesIn, cli::SeedDbgIn,
+        cli::IRIn, cli::SMTIn, cli::BytesIn, cli::CifIn,
         cli::SMTOut, cli::JsonOut, cli::BitBlastSmtOut, cli::VerilogOut,
         cli::IROut, cli::DotOut,
         cli::BitBlastStats,
