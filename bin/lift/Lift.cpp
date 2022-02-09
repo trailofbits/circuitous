@@ -17,6 +17,8 @@
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
 
+#include <circuitous/Lifter/CircuitSmithy.hpp>
+
 CIRCUITOUS_RELAX_WARNINGS
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -138,9 +140,8 @@ circ::CircuitPtr get_input_circuit(auto &cli)
 
     auto make_circuit = [&](auto buf) {
         circ::log_info() << "Going to make circuit";
-        return circ::Circuit::make_circuit(*cli.template get< cli::Arch >(),
-                                           *cli.template get< cli::OS >(),
-                                           buf);
+        circ::Ctx ctx{ *cli.template get< cli::OS >(), *cli.template get< cli::Arch >() };
+        return circ::CircuitSmithy(std::move(ctx)).smelt(buf).forge();
     };
 
     if (auto bytes = cli.template get< cli::BytesIn >())
