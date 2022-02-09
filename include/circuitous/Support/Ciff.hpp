@@ -65,6 +65,14 @@ namespace circ
         CIF  take() { return std::move(cif); }
         CIF &get_ref() { return cif; }
 
+        std::vector< InstBytes > take_bytes()
+        {
+            std::vector< InstBytes > out;
+            for (auto &&[byte, _] : cif)
+                out.push_back(std::move(byte));
+            return out;
+        }
+
       private:
         InstBytes convert(llvm::StringRef text)
         {
