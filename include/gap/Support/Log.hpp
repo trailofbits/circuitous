@@ -9,6 +9,7 @@
 #include <string>
 #include <filesystem>
 #include <unordered_map>
+#include <vector>
 
 #include <gap/Support/SourceLocation.hpp>
 
