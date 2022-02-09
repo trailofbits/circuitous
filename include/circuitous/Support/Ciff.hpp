@@ -17,15 +17,15 @@ CIRCUITOUS_UNRELAX_WARNINGS
 namespace circ
 {
     // CIF(F) - circuitous input file (format)
-    struct CIFWriter
+    struct CIFFWriter
     {
-        using self_t = CIFWriter;
+        using self_t = CIFFWriter;
 
       private:
         std::ofstream out;
 
       public:
-        CIFWriter(const std::string &filepath) : out(filepath) {}
+        CIFFWriter(const std::string &filepath) : out(filepath) {}
 
         explicit operator bool() const { return static_cast< bool >(out); }
 
@@ -42,9 +42,9 @@ namespace circ
     using bytes_and_iform_t = std::tuple< InstBytes, std::string >;
     using CIF = std::vector< bytes_and_iform_t >;
 
-    struct CIFReader
+    struct CIFFReader
     {
-        using self_t = CIFReader;
+        using self_t = CIFFReader;
 
       private:
         CIF cif;
@@ -79,5 +79,6 @@ namespace circ
             return out;
         }
     };
+
 
 } // namespace circ

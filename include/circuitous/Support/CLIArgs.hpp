@@ -93,9 +93,9 @@ namespace circ::cli
         }
     };
 
-    struct SeedDbgIn : circ::DefaultCmdOpt, PathArg
+    struct CiffIn : circ::DefaultCmdOpt, PathArg
     {
-        static inline const auto opt = circ::CmdOpt("--seed-dbg-in", false);
+        static inline const auto opt = circ::CmdOpt("--ciff-in", false);
     };
 
     struct LogToStderr : circ::DefaultCmdOpt, Arity< 0 >
@@ -207,5 +207,6 @@ namespace circ::cli
     {
         static inline const auto opt = circ::CmdOpt("--eqsat", false);
     };
+
 } // namespace circ::cli
 
