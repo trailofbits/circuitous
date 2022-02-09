@@ -16,6 +16,7 @@
 #include <circuitous/Util/Logging.hpp>
 #include <circuitous/Lifter/Shadows.hpp>
 #include <circuitous/Fuzz/InstructionFuzzer.hpp>
+#include <circuitous/Support/Ciff.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/Support/MemoryBuffer.h>
@@ -42,7 +43,7 @@ DEFINE_string(prune_in, "", "Path to dbg format to be prunned.");
 DEFINE_string(config, "", "Path to config file");
 DEFINE_string(file, "", "Binary file to load from (separated by ,");
 DEFINE_string(out, "", "File to store plain bytes to.");
-DEFINE_string(dbg, "", "File to store dbg format to.");
+DEFINE_string(cif, "", "File to store dbg format to.");
 DEFINE_string(filter, "", "File that contains allowed opcodes.");
 
 // TODO(lukas): Filter by instruction.
@@ -200,11 +201,11 @@ namespace prune
     {
         CHECK(!FLAGS_prune_spec.empty());
         CHECK(!FLAGS_prune_in.empty());
-        CHECK(!FLAGS_dbg.empty());
+        CHECK(!FLAGS_cif.empty());
 
         auto entries = parse_dbg(FLAGS_prune_in);
         auto out = Exec< X86Prefixes >(Spec::load(FLAGS_prune_spec)).filter(entries);
-        store(out, FLAGS_dbg);
+        store(out, FLAGS_cif);
 
         return 0;
     }
@@ -275,7 +276,8 @@ struct Acceptor
         CHECK(!allowed.empty());
     }
 
-    std::string get_iclass(const std::string &iform) {
+    std::string get_iclass(const std::string &iform)
+    {
         llvm::StringRef sref{iform};
 
         sref.consume_front("REPNE_");
@@ -285,7 +287,8 @@ struct Acceptor
         return prefix.str();
     }
 
-    bool allowed_iform(const std::string &iform) {
+    bool allowed_iform(const std::string &iform)
+    {
         return allowed.count(get_iclass(iform));
     }
 
@@ -334,7 +337,8 @@ struct Acceptor
 };
 
 template< typename H >
-struct Parsed_ {
+struct Parsed_
+{
     using self_t = Parsed_< H >;
     using rinst_t = remill::Instruction;
     using storage_t = std::multiset< rinst_t, H >;
@@ -349,29 +353,33 @@ struct Parsed_ {
     const auto &get() const { return storage; }
     storage_t take() { return std::move(storage); }
 
-    void emplace(rinst_t inst) {
+    void emplace(rinst_t inst)
+    {
         storage.emplace(std::move(inst));
     }
 
     template< typename OStream >
-        void write_bytes_into(OStream &os) {
-            for (const auto x : storage)
-                os << dbg_dump_bytes(x.bytes);
-            os << std::endl;
-        }
+    void write_bytes_into(OStream &os)
+    {
+        for (const auto x : storage)
+            os << dbg_dump_bytes(x.bytes);
+        os << std::endl;
+    }
 
     template< typename OStream >
-        void write_all(OStream &os) {
-            for (const auto &inst : storage)
-                os << dbg_dump_bytes(inst.bytes) << " " << inst.function << std::endl;
-        }
+    void write_all(OStream &os)
+    {
+        for (const auto &inst : storage)
+            os << dbg_dump_bytes(inst.bytes) << " " << inst.function << std::endl;
+    }
 };
 
 using Parsed = Parsed_< rinst_fn_comparator >;
 
 
 template< typename R >
-struct Parser {
+struct Parser
+{
     using self_t = Parser &;
     using rinst_t = remill::Instruction;
     using rctx_t = const remill::Arch;
@@ -385,13 +393,16 @@ struct Parser {
 
     Parser(rctx_t &rctx_, Acceptor &acc_) : rctx(rctx_), acceptor(acc_) {}
 
-    self_t &provide(llvm::StringRef what) {
+    self_t &provide(llvm::StringRef what)
+    {
         buffer = std::move(what);
         return *this;
     }
+
     R take() { return std::move(parsed); }
 
-    self_t &run() {
+    self_t &run()
+    {
         while (!buffer.empty()) {
             rinst_t inst;
             if (rctx.DecodeInstruction(0, buffer.substr(0, 0x20), inst))
@@ -403,7 +414,8 @@ struct Parser {
     }
 };
 
-std::string dbg_dump(const Parsed &parsed) {
+std::string dbg_dump(const Parsed &parsed)
+{
     std::stringstream ss;
     for (const auto &a : parsed.get())
         ss << dbg_dump_bytes(a.bytes)
@@ -439,10 +451,10 @@ int main(int argc, char *argv[])
 
     CHECK(FLAGS_file.empty() != FLAGS_config.empty());
     CHECK(!FLAGS_out.empty());
-    CHECK(!FLAGS_dbg.empty());
+    CHECK(!FLAGS_cif.empty());
 
     std::ofstream out(FLAGS_out);
-    std::ofstream dbg(FLAGS_dbg);
+    std::ofstream dbg(FLAGS_cif);
 
     auto input_list = [&]() -> std::vector< std::string > {
         if (!FLAGS_file.empty())
