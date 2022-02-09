@@ -2,12 +2,15 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
+#include <circuitous/Lifter/LLVMToCircIR.hpp>
+
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Memory.hpp>
 #include <circuitous/IR/Lifter.hpp>
 #include <circuitous/IR/Verify.hpp>
 
 #include <circuitous/Lifter/CircuitBuilder.hpp>
+#include <circuitous/Lifter/CircuitSmithy.hpp>
 
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/Support/Log.hpp>
@@ -697,33 +700,13 @@ void clear_names(llvm::Function *fn)
 }  // namespace
 
 
-auto Circuit::make_circuit(
-    std::string_view arch_name, std::string_view os_name,
-    std::string_view bytes)
--> circuit_ptr_t
+Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func, Ctx &ctx)
 {
-    return make_circuit(arch_name, os_name, llvm::StringRef{bytes.data(),bytes.size()});
-}
-
-auto Circuit::make_circuit(
-    std::string_view arch_name, std::string_view os_name,
-    const llvm::StringRef &buff)
--> circuit_ptr_t
-{
-    // TODO(lukas): Make configurable.
-    circ::Ctx ctx{ std::string(os_name), std::string(arch_name) };
-    circ::CircuitMaker builder(ctx);
-
-    const auto arch = builder.ctx.arch();
-    const auto circuit_func = builder.make(buff);
-
+    const auto &arch = ctx.arch();
     clear_names(circuit_func);
 
     const auto module = circuit_func->getParent();
     const auto &dl = module->getDataLayout();
-
-    circuit_func->print(llvm::errs());
-    llvm::errs().flush();
 
     log_info() << "IRImpoter starting.";
     auto impl = std::make_unique<Circuit>(ctx.ptr_size);
