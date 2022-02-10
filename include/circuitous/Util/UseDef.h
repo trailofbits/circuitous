@@ -105,10 +105,8 @@ struct Value {
   UseList<T> users;
 
   void RemoveUser(T *user) {
-    auto it = std::find(users.begin(), users.end(), user);
-    check(it != users.end()) << "Trying to remove user that is not part of the list.";
-    std::swap(users.back(), *it);
-    users.pop_back();
+    auto num = std::erase(users, user);
+    check(num == 1) << "Trying to remove user that is not part of the list.";
   }
 
 };
@@ -119,10 +117,8 @@ struct User {
   UseList<T> operands;
 
   void RemoveOperand(T *op) {
-    auto it = std::find(operands.begin(), operands.end(), op);
-    check(it != operands.end()) << "Trying to remove operand that is not part of the list.";
-    std::swap(operands.back(), *it);
-    operands.pop_back();
+    auto num = std::erase(operands, op);
+    check(num == 1) << "Trying to remove operand that is not part of the list.";
   }
 };
 
