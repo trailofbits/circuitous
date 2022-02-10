@@ -110,12 +110,20 @@ struct Value {
     std::swap(users.back(), *it);
     users.pop_back();
   }
+
 };
 
 // add(x, y) -> `add` node uses `x` and `y`.
 template<typename T>
 struct User {
   UseList<T> operands;
+
+  void RemoveOperand(T *op) {
+    auto it = std::find(operands.begin(), operands.end(), op);
+    check(it != operands.end()) << "Trying to remove operand that is not part of the list.";
+    std::swap(operands.back(), *it);
+    operands.pop_back();
+  }
 };
 
 // The node can be both user and value.
@@ -129,6 +137,11 @@ struct Node : Value<T>, User<T> {
   void AddUse(T *other) {
     this->operands.push_back(other);
     other->users.push_back(Raw());
+  }
+
+  void RemoveUse(T *parent) {
+    parent->RemoveOperand(Raw());
+    this->RemoveUser(parent);
   }
 
   void ReplaceUse(T *other, std::size_t at) {
