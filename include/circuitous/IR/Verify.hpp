@@ -181,8 +181,8 @@ struct Verifier {
     return out;
   }
 
-  using hint_users_t = std::unordered_map<Operation *, std::unordered_set<Operation *>>;
-  void CollectAdviceUsers(Operation *op, hint_users_t &collected ) {
+  using advice_users_t = std::unordered_map<Operation *, std::unordered_set<Operation *>>;
+  static void CollectAdviceUsers(Operation *op, advice_users_t &collected ) {
     for (auto child : op->operands) {
       if (child->op_code == Advice::kind) {
         collected[child].insert(op);
@@ -193,7 +193,7 @@ struct Verifier {
   }
 
   bool VerifyAdviceUsers(Operation *circuit) {
-    hint_users_t collected;
+    advice_users_t collected;
     CollectAdviceUsers(circuit, collected);
 
     auto advice_to_str = [](auto op) {

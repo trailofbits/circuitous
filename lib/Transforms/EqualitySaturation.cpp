@@ -3,31 +3,30 @@
  */
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/Printers.h>
 #include <circuitous/Transforms.h>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringSwitch.h>
 
 #include <algorithm>
 #include <circuitous/ADT/EGraph.hpp>
-
 #include <circuitous/IR/Memory.hpp>
-
-#include <circuitous/Transforms/Pattern.hpp>
+#include <circuitous/IR/Verify.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
-
+#include <circuitous/Transforms/Pattern.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
 #include <functional>
 #include <iostream>
-#include <fstream>
 #include <memory>
 #include <numeric>
 #include <optional>
+#include <queue>
+#include <span>
 #include <string>
 #include <variant>
 #include <vector>
-#include <queue>
-#include <span>
 
 namespace circ::eqsat {
 
@@ -742,6 +741,32 @@ namespace circ::eqsat {
     const OptimalGraphView &graph;
   };
 
+  Operation *getSingleAdviceContraint(Operation *advice, const auto &users) {
+    if (users.size() == 1) {
+      auto user = *(users.begin());
+      if (user->op_code == AdviceConstraint::kind) {
+        return user;
+      }
+    }
+    return nullptr;
+  }
+
+  CircuitPtr postprocess(CircuitPtr &&circuit) {
+    Verifier::advice_users_t collected;
+    Verifier::CollectAdviceUsers(circuit.get(), collected);
+
+    for (auto &[advice, users] : collected) {
+      if (auto aconstraint = getSingleAdviceContraint(advice, users)) {
+        for (auto ctx : GetContexts(aconstraint)) {
+          aconstraint->RemoveUser(ctx);
+        }
+      }
+    }
+
+    circuit->RemoveUnused();
+    return std::move(circuit);
+  }
+
   CircuitPtr EqualitySaturation(const CircuitPtr &circuit)
   {
     using Runner = eqsat::DefaultRunner;
@@ -805,6 +830,8 @@ namespace circ::eqsat {
 
     runner.run(bond_arithmetic);
 
+    std::ofstream outb("egraph-not-lowered.dot");
+    to_dot(runner.egraph(), outb);
     lower_advices(runner.egraph(), runner.builder());
     log_info() << "Equality saturation stopped";
 
@@ -826,7 +853,8 @@ namespace circ::eqsat {
     auto optimal = costgraph.optimal();
 
     eqsat::CircuitExtractor extractor(optimal);
-    return extractor.run(runner.node(circuit.get()), circuit->ptr_size);
+    return postprocess(
+        extractor.run(runner.node(circuit.get()), circuit->ptr_size));
   }
 
 } // namespace circ::eqsat
