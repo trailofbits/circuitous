@@ -755,12 +755,17 @@ namespace circ::eqsat {
     Verifier::advice_users_t collected;
     Verifier::CollectAdviceUsers(circuit.get(), collected);
 
+    std::vector<std::pair<Operation *, Operation *>> remove;
     for (auto &[advice, users] : collected) {
       if (auto aconstraint = getSingleAdviceContraint(advice, users)) {
         for (auto ctx : GetContexts(aconstraint)) {
-          aconstraint->RemoveUser(ctx);
+          remove.emplace_back(aconstraint, ctx);
         }
       }
+    }
+
+    for (auto [aconstraint, ctx] : remove) {
+      aconstraint->RemoveUse(ctx);
     }
 
     circuit->RemoveUnused();
