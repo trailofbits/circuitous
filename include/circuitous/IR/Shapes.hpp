@@ -47,18 +47,6 @@ bool Is(Operation *op) {
   return op->op_code == T::kind;
 }
 
-// Return number of HINT users that
-static inline std::size_t AdviceUsers(Operation *hint) {
-  check(Is<Advice>(hint));
-  std::size_t users = 0;
-  for (auto user : hint->users) {
-    if (!Is<AdviceConstraint>(user)) {
-      ++users;
-    }
-  }
-  return users;
-}
-
 using operation_set_t = std::unordered_set<Operation *>;
 
 template<typename T>
