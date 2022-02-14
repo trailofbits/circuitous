@@ -15,8 +15,14 @@
 #include <circuitous/Util/Logging.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
+#include <llvm/IR/LegacyPassManager.h>
+#include <llvm/Transforms/IPO/PassManagerBuilder.h>
+#include <llvm/Transforms/IPO.h>
+
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/CodeGen/IntrinsicLowering.h>
+
+#include <remill/BC/Compat/TargetLibraryInfo.h>
 CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ {
@@ -200,23 +206,34 @@ namespace circ {
     void optimize_silently(const remill::Arch *arch, llvm::Module *module,
                            const std::vector<llvm::Function *> &fns)
     {
-        // `remill::OptimizeModule` calls some transformation that pollute
-        // output with some info, so we need to mute it.
-        auto saved_threshold = module->getContext().getDiagnosticsHotnessThreshold();
-        module->getContext().setDiagnosticsHotnessThreshold(1);
-        remill::OptimizeModule(arch, module, fns);
+        llvm::legacy::FunctionPassManager func_manager(module);
+        auto TLI = new llvm::TargetLibraryInfoImpl(llvm::Triple(module->getTargetTriple()));
+        TLI->disableAllFunctions(); // `-fno-builtin`
 
-        // Set the logging back to the original values.
-        module->getContext().setDiagnosticsHotnessThreshold(saved_threshold);
+        llvm::PassManagerBuilder builder;
+        builder.OptLevel = 3;
+        builder.SizeLevel = 0;
+        builder.Inliner = llvm::createFunctionInliningPass(250);
+        builder.LibraryInfo = TLI;
+        builder.DisableUnrollLoops = false;
+        builder.RerollLoops = false;
+        builder.SLPVectorize = false;
+        builder.LoopVectorize = false;
 
-        // Handle intrinsic which can be lowered && we do not have intrinsic for
-        // them.
+        builder.VerifyOutput = true;
+        builder.VerifyInput = false;
+
+        builder.MergeFunctions = false;
+
+        builder.populateFunctionPassManager(func_manager);
+        func_manager.doInitialization();
+        for (auto fn : fns)
+            func_manager.run(*fn);
+
+        func_manager.doFinalization();
+
         InstrinsicHandler().lower(fns);
-
-        // Verify we did not broke anything
-        remill::VerifyModule(module);
     }
-
 
     // Flatten all control flow into pure data-flow inside of a function.
     void flatten_cfg(llvm::Function *func, const remill::IntrinsicTable &intrinsics)
