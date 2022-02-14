@@ -63,7 +63,10 @@ namespace circ
     static inline void EraseFn(llvm::Module *module, const std::string &fn_name)
     {
         if (auto fn = module->getFunction(fn_name))
+        {
+            fn->replaceAllUsesWith(llvm::UndefValue::get(fn->getType()));
             fn->eraseFromParent();
+        }
     }
 
     static inline void EraseFns(llvm::Module *module, const std::vector< std::string > &fns)
@@ -72,6 +75,20 @@ namespace circ
             EraseFn(module, fn);
     }
 
+    template< typename LLVM > requires std::is_base_of_v< llvm::Value, LLVM >
+    static inline void safe_erase_from_parent(LLVM *what)
+    {
+        what->replaceAllUsesWith(llvm::UndefValue::get(what->getType()));
+        what->eraseFromParent();
+    }
+
+    template< typename LLVM > requires std::is_base_of_v< llvm::Value, LLVM >
+    static inline void safe_erase_from_parent(std::vector< LLVM * > &&ts)
+    {
+        for (auto &t : ts)
+            safe_erase_from_parent(t);
+
+    }
     static inline std::string LLVMName(llvm::Value *val,
                                        const std::string &def = "(name not set)")
     {
