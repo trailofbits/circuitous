@@ -16,657 +16,720 @@
 #include <unordered_map>
 #include <unordered_set>
 
-namespace circ::print::verilog {
+namespace circ::print::verilog
+{
 
-  namespace impl {
-    template< typename I > requires std::is_integral_v< I >
-    std::string wire_size(I size) {
-      std::stringstream ss;
-      ss << "[" << size - 1 << ":0]";
-      return ss.str();
-    }
-
-    template< typename I > requires std::is_integral_v< I >
-    std::string get_bit(const std::string &op, I idx) {
-      std::stringstream ss;
-      ss << op << "[" << idx << ":" << idx << "]";
-      return ss.str();
-    }
-
-    static inline std::string to_verilog(auto size, auto value) {
-      std::stringstream ss;
-      ss << size << "'d" << value;
-      return ss.str();
-    }
-
-    static inline std::string bin_zero(auto size) {
-      return std::to_string(size) + "'b" + std::string(size, '0');
-    }
-
-    static inline std::string bin_one(auto size) {
-      return std::to_string(size) + "'b" + std::string(size, '1');
-    }
-
-    static inline std::string true_val() { return "1'b1"; }
-    static inline std::string false_val() { return "1'b0"; }
-
-    static inline std::string wire_name(Operation *op) {
-      std::stringstream ss;
-      ss << std::hex << "v" << op->id();
-      return ss.str();
-    }
-
-    static inline std::string wire_decl(const std::string &name, std::string lhs, auto size) {
-      std::stringstream ss;
-      ss << "wire ";
-      if (size != 1)
-        ss << impl::wire_size(size) << " ";
-      ss << name + " = " + lhs + ";\n";
-      return ss.str();
-    }
-
-    static inline std::string to_signed(const std::string &what) {
-      return "$signed(" + what + ")";
-    }
-
-  } // namespace impl
-
-  struct dbg_verbose {
-    std::stringstream _dbg;
-  };
-
-  struct ToStream : dbg_verbose {
-    std::ostream &_os;
-    Circuit *circuit;
-    std::unordered_map< Operation *, std::string > op_names;
-
-    ToStream(std::ostream &os_, Circuit *circuit_) : _os(os_), circuit(circuit_) {}
-
-    auto &os() { return _os; }
-    auto &dbg() { return _dbg; }
-
-    std::string &give_name(Operation *op, std::string name) {
-      auto [it, flag] = op_names.emplace(op, std::move(name));
-      check(flag) << "\n" << dbg().str();
-      return it->second;
-    }
-
-    bool has_name(Operation *op) { return op_names.count(op); }
-
-    std::optional< std::string > get_name(Operation *op) {
-      auto it = op_names.find(op);
-      if (it != op_names.end())
-        return { it->second };
-      return {};
-    }
-
-  };
-
-  template< typename Ctx >
-  struct OpFmt : Visitor< OpFmt< Ctx > >
-  {
-    Ctx &ctx;
-
-    OpFmt(Ctx &ctx_) : ctx(ctx_) {}
-
-    std::string get(Operation *op) {
-      if (auto name = ctx.get_name(op))
-        return *name;
-      // `op` does not have a name -> create it and name it
-      return ctx.give_name(op, this->Dispatch(op));
-    }
-
-    template< typename I > requires std::is_integral_v< I >
-    std::string get_bit(Operation * op, I idx) {
-      return impl::get_bit(get(op), idx);
-    }
-
-    std::string make_wire(const std::string name, std::string lhs, auto size) {
-      ctx.os() << impl::wire_decl(name, std::move(lhs), size);
-      return name;
-    }
-
-    std::string make_wire(Operation *op, std::string lhs) {
-      return make_wire(impl::wire_name(op), std::move(lhs), op->size);
-    }
-
-    std::string concat(const std::vector< std::string > &ops) {
-      std::stringstream ss;
-      ss << "{ " << ops[0];
-      for (std::size_t i = 1; i < ops.size(); ++i)
-        ss << ", " << ops[i];
-      ss << " }";
-      return ss.str();
-    }
-
-    std::string bin_apply(std::string f, const std::vector< Operation * > &ops,
-                          bool signed_op=false)
+    namespace impl
     {
-      auto get_ = [&](auto op) {
-        auto out = get(op);
-        if (signed_op)
-          return impl::to_signed(out);
-        return out;
-      };
-
-      check(ops.size() != 0);
-
-      std::stringstream ss;
-      ss << get_(ops[0]);
-      for (std::size_t i = 1; i < ops.size(); ++i)
-        ss << " " << f << " " << get_(ops[i]);
-      return ss.str();
-    }
-
-    std::string ternary_stmt(Operation *cond, Operation *true_v, Operation *false_v) {
-      std::stringstream ss;
-      ss << get(cond) << " ? " << get(true_v) << " : " << get(false_v);
-      return ss.str();
-    }
-
-    std::string ternary(BSelect *op) {
-      auto lhs = ternary_stmt(op->operands[0], op->operands[1], op->operands[2]);
-      return make_wire(op, std::move(lhs));
-    }
-
-    std::string mux(Select *op) {
-      auto selector = get(op->selector());
-      auto name = impl::wire_name(op);
-
-      std::stringstream ss;
-      // `next` is a recursion call - unfortunately in c++ lambda itself
-      // cannot be invoked inside its body, so it needs to be passed as
-      // extra argument.
-      auto make_case = [&](std::size_t idx, auto next) -> void {
-        ss << "( " << selector << " == "
-           << op->selector()->size << "'d" << idx - 1
-           << ") ? "
-           << get(op->operands[idx]) << " : ";
-        if (idx == op->operands.size() - 2)
-          ss << get(op->operands.back());
-        else {
-          ss << std::endl << "\t";
-          next(idx + 1, next);
+        template< typename I > requires std::is_integral_v< I >
+        std::string wire_size(I size)
+        {
+            std::stringstream ss;
+            ss << "[" << size - 1 << ":0]";
+            return ss.str();
         }
-      };
 
-      make_case(1, make_case);
+        template< typename I > requires std::is_integral_v< I >
+        std::string get_bit(const std::string &op, I idx)
+        {
+            std::stringstream ss;
+            ss << op << "[" << idx << ":" << idx << "]";
+            return ss.str();
+        }
 
-      return make_wire(op, ss.str());
-    }
+        static inline std::string to_verilog(auto size, auto value)
+        {
+            std::stringstream ss;
+            ss << size << "'d" << value;
+            return ss.str();
+        }
 
-    auto zip() {
-      return [=](auto &&... args) -> std::string {
-        return this->bin_apply(std::forward<decltype(args)>(args)...);
-      };
-    }
+        static inline std::string bin_zero(auto size)
+        {
+            return std::to_string(size) + "'b" + std::string(size, '0');
+        }
 
-    auto szip() {
-      return [=](auto &&... args) -> std::string {
-        return this->bin_apply(std::forward<decltype(args)>(args)..., true);
-      };
-    }
+        static inline std::string bin_one(auto size)
+        {
+            return std::to_string(size) + "'b" + std::string(size, '1');
+        }
 
-    // TODO(lukas): For dbg purposes.
-    auto unary() {
-      return [=](std::string str, const std::vector< Operation * > &ops) -> std::string {
-        check(ops.size() == 1);
-        std::stringstream ss;
-        ss << str << " " << get(ops.front());
-        return ss.str();
-      };
-    }
+        static inline std::string true_val() { return "1'b1"; }
+        static inline std::string false_val() { return "1'b0"; }
 
-    auto wrap_zip(auto begin, auto end) {
-      return [=](auto &&... args) -> std::string {
-        std::stringstream ss;
-        ss << begin;
-        ss << zip()(std::forward< decltype(args) >(args)...);
-        ss << end;
-        return ss.str();
-      };
-    }
+        static inline std::string wire_name(Operation *op)
+        {
+            std::stringstream ss;
+            ss << std::hex << "v" << op->id();
+            return ss.str();
+        }
 
-    std::string rmake(auto F, Operation *op) {
-      std::vector< Operation * > ops;
-      std::reverse_copy(op->operands.begin(), op->operands.end(),
-                        std::back_inserter(ops));
+        static inline std::string wire_decl(const std::string &name, std::string lhs, auto size)
+        {
+            std::stringstream ss;
+            ss << "wire ";
+            if (size != 1)
+                ss << impl::wire_size(size) << " ";
+            ss << name + " = " + lhs + ";\n";
+            return ss.str();
+        }
 
-      return make_wire(op, F(get_symbol(op), ops));
-    }
+        static inline std::string to_signed(const std::string &what)
+        {
+            return "$signed(" + what + ")";
+        }
 
-    std::string make(auto F, Operation *op) {
-      return make_wire(op, F(get_symbol(op), op->operands));
-    }
+    } // namespace impl
 
-    std::string make(auto F, Operation *op, std::string f) {
-      return make_wire(op, F(f, op->operands));
-    }
-
-    /* Operation mapping to symbols */
-    std::string get_symbol(Operation *op) {
-      switch (op->op_code) {
-        case AdviceConstraint::kind:
-        case RegConstraint::kind:
-        case PreservedConstraint::kind:
-        case CopyConstraint::kind:
-        case DecodeCondition::kind:
-          return "==";
-        case Add::kind: return "+";
-        case Sub::kind: return "-";
-        case Mul::kind: return "*";
-        // TODO(lukas): Verify this is correct.
-        case SDiv::kind: return "/";
-        case UDiv::kind: return "/";
-
-        case Shl::kind: return "<<";
-        case LShr::kind: return ">>";
-        case AShr::kind: return ">>>";
-
-        case Icmp_eq::kind:  return "==";
-        case Icmp_ne::kind:  return "!=";
-        case Icmp_uge::kind: return ">=";
-        case Icmp_sge::kind: return ">=";
-        case Icmp_ugt::kind: return ">";
-        case Icmp_sgt::kind: return ">";
-        case Icmp_slt::kind: return "<";
-        case Icmp_ult::kind: return "<";
-        case Icmp_ule::kind: return "<=";
-        case Icmp_sle::kind: return "<=";
-
-        case COr::kind:
-        case Or::kind:
-          return "|";
-        case CAnd::kind:
-        case VerifyInstruction::kind:
-        case And::kind:
-          return "&";
-        case CXor::kind: return "^";
-        case Concat::kind:
-          return ",";
-        default:
-          log_kill() << "Unsupported op_code: " << pretty_print(op);
-      }
-    }
-
-    std::string Visit(Operation *op) {
-      log_kill() << "Cannot print in verilog: " << pretty_print< true >(op)
-                 << "\n" << ctx.dbg().str();
-    }
-
-    // Each extra operand V(n + 1) introduces
-    // R(n) - result of computation - true if at least one `1` is present
-    // O(n) - result of overflow flag - true if at least two `1` were present
-    // check_overflow(O, R, V) : O || (R && V)
-    //   overflow is saturared and it is raised if both current value and previous
-    //   are set to `1` (i.e. there are at least two `1`s in inputs)
-    // R(n + 1) := R(n) || V(n + 1)
-    // O(n + 1) := check_overflow(O(n), R(n), V(n + 1))
-    // Final value is then computed as
-    // !O(m) && R(m)
-    //   i.e. overflow did not happen, and at least one `1` was found.
-    std::string Visit(OnlyOneCondition *op)  {
-      auto base = [&](std::string s) { return s + "nx" + std::to_string(op->id()); };
-      auto rn = [&](auto i) { return base("r") + "x" + std::to_string(i); };
-      auto on = [&](auto i) { return base("o") + "x" + std::to_string(i); };
-
-      // `( rn, on )`.
-      using step_t = std::tuple< std::string, std::string >;
-      std::vector< step_t > steps = { { impl::false_val(), impl::false_val() } };
-
-      for (std::size_t i = 0; i < op->operands.size(); ++i) {
-        const auto &[prev_rn, prev_on] = steps.back();
-        auto rn_next = prev_rn + " || " + get(op->operands[i]);
-        auto on_next = prev_on + " || ( " + prev_rn + " && " + get(op->operands[i]) + ")";
-        steps.emplace_back(make_wire(rn(i), rn_next, 1), make_wire(on(i), on_next, 1));
-      }
-
-      const auto &[last_rn, last_on] = steps.back();
-      std::stringstream ss;
-      ss << "(!" << last_on << ") && " << last_rn;
-      return make_wire(op, ss.str());
-    }
-    std::string Visit(VerifyInstruction *op) { return make(zip(), op); }
-
-    /* Constraints */
-
-    std::string Visit(AdviceConstraint *op)    { return make(zip(), op); }
-    std::string Visit(RegConstraint *op)       { return make(zip(), op); }
-    std::string Visit(PreservedConstraint *op) { return make(zip(), op); }
-    std::string Visit(CopyConstraint *op)      { return make(zip(), op); }
-
-    std::string make_extract(const std::string &from, uint64_t high_inc, uint64_t low_inc)
+    struct dbg_verbose
     {
-      std::stringstream ss;
-      ss << from << "[" << high_inc << ": " << low_inc << "]";
-      return ss.str();
-    }
-
-    using parsed_mem_t = irops::memory::Parsed< std::string >;
-    parsed_mem_t parse_mem(Operation *op) {
-      auto extract = [&](auto from, auto current, auto size) {
-        return make_extract(from, current + size - 1, current);
-      };
-      return irops::memory::parse(get(op), extract, ctx.circuit->ptr_size);
-    }
-
-    std::string make_memory_constraint(MemoryConstraint *op, bool is_write)
-    {
-      auto hint = parse_mem(op->hint_arg());
-
-      std::stringstream ss;
-      auto apply = [&](const std::string &lhs, const std::string &rhs, std::string prefix="") {
-        ss << prefix << " " << lhs << " == " << rhs;
-      };
-
-      auto add = [&](auto &&... args) { return apply(args ..., " &&"); };
-
-      // TODO(lukas): It would be maybe better to instead concat the right side
-      //              and compare with whole hint?
-      std::string mode = (is_write) ? "1" : "0";
-
-      apply(get(op->size_arg())    , hint.size());
-      add(  get(op->addr_arg())    , hint.addr());
-      add(  get(op->ts_arg())      , hint.timestamp());
-      // In reads `val_arg()` is not present
-      if (is_write)
-        add(  get(op->val_arg())   , hint.value());
-      add(  impl::to_verilog(4, op->mem_idx()) , hint.id());
-      add(  "1'b1"                 , hint.used());
-      add(  impl::bin_zero(6u)     , hint.reserved());
-      add(  "1'b" + mode           , hint.mode());
-      return make_wire(op, ss.str());
-    }
-    std::string Visit(ReadConstraint *op) { return make_memory_constraint(op, false); }
-    std::string Visit(WriteConstraint *op) { return make_memory_constraint(op, true); }
-
-    /* Decode condition */
-    std::string Visit(DecodeCondition *op) { return make(zip(), op); }
-
-    /* Mux */
-    std::string Visit(Select *op) { return mux(op); }
-
-    /* BitManip */
-    std::string Visit(Concat *op) {
-      return rmake(wrap_zip("{ ", " }"), op);
-    }
-
-    std::string Visit(Extract *op) {
-      auto from = get(op->operands[0]);
-      return make_wire(op, make_extract(from, op->high_bit_exc - 1, op->low_bit_inc));
-    }
-
-    /* Helpers */
-    // TOOD(lukas): Double check.
-    std::string Visit(InputImmediate *op) { return get(op->operands[0]); }
-
-    /* Nary helpers */
-    std::string Visit(And *op) { return make(zip(), op); }
-    std::string Visit(Or *op)  { return make(zip(), op); }
-
-    /* LLVM ops */
-    std::string Visit(Add *op) { return make(zip(), op); }
-    std::string Visit(Sub *op) { return make(zip(), op); }
-    std::string Visit(Mul *op) { return make(zip(), op); }
-
-    std::string Visit(UDiv *op) { return make(zip(), op); }
-    std::string Visit(SDiv *op) { return make(szip(), op); }
-
-    std::string Visit(Shl *op)  { return make(zip(), op); }
-    std::string Visit(LShr *op) { return make(zip(), op); }
-    std::string Visit(AShr *op) { return make(zip(), op); }
-
-    std::string Visit(Trunc *op) {
-      auto trg_size = op->size - 1;
-      std::stringstream ss;
-      ss << get(op->operands[0]) << "[" << trg_size << ":0]";
-      return make_wire(op, ss.str());
-    }
-    std::string Visit(ZExt *op)  {
-      auto prefix = impl::bin_zero(op->size - op->operands[0]->size);
-      return make_wire(op, concat({prefix, get(op->operands[0])}));
-    }
-
-    std::string Visit(SExt *op) {
-      auto pos_prefix = impl::bin_zero(op->size - op->operands[0]->size);
-      auto neg_prefix = impl::bin_one(op->size - op->operands[0]->size);
-
-      std::stringstream selector_ss;
-      auto operand = op->operands[0];
-      auto last = operand->size - 1;
-      selector_ss << "(" << get(operand) << "[" << last << ":" << last << "] == "
-                  << impl::bin_one(1u)
-                  << ") ?" << neg_prefix << " : " << pos_prefix;
-      auto padding = make_wire("pad_" + std::to_string(op->id()), selector_ss.str(), last + 1);
-      return make_wire(op, concat({padding, get(op->operands[0])}));
-    }
-
-    std::string Visit(Icmp_ult *op) { return make(zip(), op); }
-    std::string Visit(Icmp_slt *op) { return make(szip(), op); }
-    std::string Visit(Icmp_ugt *op) { return make(zip(), op); }
-    std::string Visit(Icmp_eq  *op) { return make(zip(), op); }
-    std::string Visit(Icmp_ne  *op) { return make(zip(), op); }
-    std::string Visit(Icmp_uge *op) { return make(zip(), op); }
-    std::string Visit(Icmp_ule *op) { return make(zip(), op); }
-    std::string Visit(Icmp_sgt *op) { return make(szip(), op); }
-    std::string Visit(Icmp_sge *op) { return make(szip(), op); }
-    std::string Visit(Icmp_sle *op) { return make(szip(), op); }
-
-    std::string Visit(BSelect *op) { return ternary(op); }
-
-    std::string Visit(CAnd *op) { return make(zip(), op); }
-    std::string Visit(COr *op)  { return make(zip(), op); }
-    std::string Visit(CXor *op) { return make(zip(), op); }
-
-    /* Leaves */
-    std::string Visit(Constant *op) {
-      return make_wire(op, std::to_string(op->size) + "'b" + op->bits);
-    }
-
-    std::string Visit(Undefined *op) {
-      return make_wire(op, impl::bin_zero(op->size));
-    }
-
-    /* High level */
-    std::string Visit(PopulationCount *op) {
-      uint32_t operand_size = op->operands[0]->size;
-      uint32_t rsize = static_cast< uint32_t >(std::ceil(std::log2(operand_size)));
-      uint32_t pad_size = operand_size - rsize;
-
-      std::stringstream ss;
-      auto from = get(op->operands[0]);
-      for (std::size_t i = 0; i < operand_size; ++i) {
-        ss << from << "[" << i << "]";
-        if (i != operand_size - 1)
-          ss << " + ";
-      }
-      auto name = impl::wire_name(op);
-      auto aux = name + "_aux";
-
-      ctx.os() << "wire " << impl::wire_size(rsize) << " " << aux << " = "
-                << ss.str() << ";\n";
-      ctx.os() << "wire " << name << " = " << concat({impl::bin_zero(pad_size), aux}) << ";\n";
-      return name;
-    }
-
-    std::string Visit(CountLeadingZeroes *op) {
-      auto get_bit_ = [&](auto op, auto i) {
-        return this->get_bit(op, op->size - i - 1);
-      };
-      return count_zeroes(op, get_bit_);
-    }
-    std::string Visit(CountTrailingZeroes *op) {
-      return count_zeroes(op, [&](auto op, auto i){ return this->get_bit(op, i); });
-    }
-
-    std::string count_zeroes(Operation *op, auto next_bit) {
-      auto base = [&](std::string s) { return s + "nx" + std::to_string(op->id()); };
-      auto fn = [&](auto i) { return base("f") + "x" + std::to_string(i); };
-      auto tn = [&](auto i) { return base("t") + "x" + std::to_string(i); };
-
-      uint32_t operand_size = op->operands[0]->size;
-      auto operand = op->operands[0];
-      uint32_t rsize = static_cast< uint32_t >(std::ceil(std::log2(operand_size)));
-      auto padding = impl::bin_zero(operand_size - rsize);
-
-      // `( fn, tn )`.
-      using step_t = std::tuple< std::string, std::string >;
-      std::vector< step_t > steps = { { impl::true_val(), impl::bin_zero(rsize) } };
-
-      for (std::size_t i = 0; i < operand->size; ++i) {
-        const auto &[prev_fn, prev_tn] = steps.back();
-        auto fn_next = prev_fn + " && (!" + next_bit(operand, i) + ")";
-        auto tn_next = prev_tn + " + { " + impl::bin_zero(rsize - 1) + ", " + fn_next + "}";
-        steps.emplace_back(make_wire(fn(i), fn_next, 1), make_wire(tn(i), tn_next, rsize));
-      }
-
-      const auto &[_, last_tn] = steps.back();
-      return make_wire(op, concat({padding, last_tn}));
-    }
-
-    std::string Visit(Circuit *op) { return get(op->operands[0]); }
-
-    std::string write(Operation *op) { return get(op); }
-  };
-
-  namespace iarg_fmt {
-    struct UseName {
-      std::string operator()(Operation *op) {
-        // `.` is not a valid character in token name in verilog
-        std::string out = "";
-        for (auto c : op->Name())
-          out += (c == '.') ? '_' : c;
-        return out;
-      }
+        std::stringstream _dbg;
     };
 
-    struct Simple {
-      uint32_t idx = 0;
+    struct ToStream : dbg_verbose
+    {
+        std::ostream &_os;
+        Circuit *circuit;
+        std::unordered_map< Operation *, std::string > op_names;
 
-      static inline std::vector< std::string > avail =
-      {
-        "A", "B", "C", "D", "E", "F", "G", "H"
-      };
+        ToStream(std::ostream &os_, Circuit *circuit_) : _os(os_), circuit(circuit_) {}
 
-      std::string operator()(Operation *) {
-        check(idx < avail.size());
-        return avail[idx++];
-      }
+        auto &os() { return _os; }
+        auto &dbg() { return _dbg; }
+
+        std::string &give_name(Operation *op, std::string name)
+        {
+            auto [it, flag] = op_names.emplace(op, std::move(name));
+            check(flag) << "\n" << dbg().str();
+            return it->second;
+        }
+
+        bool has_name(Operation *op) { return op_names.count(op); }
+
+        std::optional< std::string > get_name(Operation *op)
+        {
+            auto it = op_names.find(op);
+            if (it != op_names.end())
+                return { it->second };
+            return {};
+        }
     };
-  } // iarg_fmt
 
-  template< typename IArgFmt, typename Ctx >
-  struct ModuleDecl
-  {
-
-    Ctx &ctx;
-
-    std::string result_arg;
-    std::unordered_map< Operation *, std::string > args;
-    IArgFmt iarg_fmt;
-
-    ModuleDecl(Ctx &ctx_) : ctx(ctx_) {}
-
-    void declare_module(const std::string &name, Operation *op)
+    template< typename Ctx >
+    struct OpFmt : Visitor< OpFmt< Ctx > >
     {
-      ctx.os() << "module " << name << "(" << std::endl;
-      this->declare_in_args(op);
-      ctx.os() << std::endl;
-      this->declare_out_arg();
-      ctx.os() << ");\n";
-    }
+        Ctx &ctx;
 
-    void end_module() { ctx.os() << "endmodule" << std::endl; }
+        OpFmt(Ctx &ctx_) : ctx(ctx_) {}
 
-    template< typename Fmt >
-    void declare_in_arg(Operation *op, Fmt &&fmt)
+        std::string get(Operation *op)
+        {
+            if (auto name = ctx.get_name(op))
+                return *name;
+            // `op` does not have a name -> create it and name it
+            return ctx.give_name(op, this->Dispatch(op));
+        }
+
+        template< typename I > requires std::is_integral_v< I >
+        std::string get_bit(Operation * op, I idx)
+        {
+            return impl::get_bit(get(op), idx);
+        }
+
+        std::string make_wire(const std::string name, std::string lhs, auto size)
+        {
+            ctx.os() << impl::wire_decl(name, std::move(lhs), size);
+            return name;
+        }
+
+        std::string make_wire(Operation *op, std::string lhs)
+        {
+            return make_wire(impl::wire_name(op), std::move(lhs), op->size);
+        }
+
+        std::string concat(const std::vector< std::string > &ops)
+        {
+            std::stringstream ss;
+            ss << "{ " << ops[0];
+            for (std::size_t i = 1; i < ops.size(); ++i)
+                ss << ", " << ops[i];
+            ss << " }";
+            return ss.str();
+        }
+
+        std::string bin_apply(std::string f, const std::vector< Operation * > &ops,
+                              bool signed_op=false)
+        {
+            auto get_ = [&](auto op) {
+                auto out = get(op);
+                if (signed_op)
+                    return impl::to_signed(out);
+                return out;
+            };
+
+            check(ops.size() != 0);
+
+            std::stringstream ss;
+            ss << get_(ops[0]);
+            for (std::size_t i = 1; i < ops.size(); ++i)
+                ss << " " << f << " " << get_(ops[i]);
+            return ss.str();
+        }
+
+        std::string ternary_stmt(Operation *cond, Operation *true_v, Operation *false_v)
+        {
+            std::stringstream ss;
+            ss << get(cond) << " ? " << get(true_v) << " : " << get(false_v);
+            return ss.str();
+        }
+
+        std::string ternary(BSelect *op)
+        {
+            auto lhs = ternary_stmt(op->operands[0], op->operands[1], op->operands[2]);
+            return make_wire(op, std::move(lhs));
+        }
+
+        std::string mux(Select *op)
+        {
+            auto selector = get(op->selector());
+            auto name = impl::wire_name(op);
+
+            std::stringstream ss;
+            // `next` is a recursion call - unfortunately in c++ lambda itself
+            // cannot be invoked inside its body, so it needs to be passed as
+            // extra argument.
+            auto make_case = [&](std::size_t idx, auto next) -> void {
+                ss << "( " << selector << " == "
+                   << op->selector()->size << "'d" << idx - 1
+                   << ") ? "
+                   << get(op->operands[idx]) << " : ";
+                if (idx == op->operands.size() - 2)
+                    ss << get(op->operands.back());
+                else {
+                    ss << std::endl << "\t";
+                    next(idx + 1, next);
+                }
+            };
+
+            make_case(1, make_case);
+
+            return make_wire(op, ss.str());
+        }
+
+        auto zip()
+        {
+            return [=](auto &&... args) -> std::string {
+                return this->bin_apply(std::forward<decltype(args)>(args)...);
+            };
+        }
+
+        auto szip()
+        {
+            return [=](auto &&... args) -> std::string {
+                return this->bin_apply(std::forward<decltype(args)>(args)..., true);
+            };
+        }
+
+        // TODO(lukas): For dbg purposes.
+        auto unary()
+        {
+            return [=](std::string str, const std::vector< Operation * > &ops) -> std::string {
+                check(ops.size() == 1);
+                std::stringstream ss;
+                ss << str << " " << get(ops.front());
+                return ss.str();
+            };
+        }
+
+        auto wrap_zip(auto begin, auto end)
+        {
+            return [=](auto &&... args) -> std::string {
+                std::stringstream ss;
+                ss << begin;
+                ss << zip()(std::forward< decltype(args) >(args)...);
+                ss << end;
+                return ss.str();
+            };
+        }
+
+        std::string rmake(auto F, Operation *op)
+        {
+            std::vector< Operation * > ops;
+            std::reverse_copy(op->operands.begin(), op->operands.end(),
+                              std::back_inserter(ops));
+
+            return make_wire(op, F(get_symbol(op), ops));
+        }
+
+        std::string make(auto F, Operation *op)
+        {
+            return make_wire(op, F(get_symbol(op), op->operands));
+        }
+
+        std::string make(auto F, Operation *op, std::string f)
+        {
+            return make_wire(op, F(f, op->operands));
+        }
+
+        /* Operation mapping to symbols */
+        std::string get_symbol(Operation *op)
+        {
+            switch (op->op_code) {
+                case AdviceConstraint::kind:
+                case RegConstraint::kind:
+                case PreservedConstraint::kind:
+                case CopyConstraint::kind:
+                case DecodeCondition::kind:
+                    return "==";
+                case Add::kind: return "+";
+                case Sub::kind: return "-";
+                case Mul::kind: return "*";
+                // TODO(lukas): Verify this is correct.
+                case SDiv::kind: return "/";
+                case UDiv::kind: return "/";
+
+                case Shl::kind: return "<<";
+                case LShr::kind: return ">>";
+                case AShr::kind: return ">>>";
+
+                case Icmp_eq::kind:  return "==";
+                case Icmp_ne::kind:  return "!=";
+                case Icmp_uge::kind: return ">=";
+                case Icmp_sge::kind: return ">=";
+                case Icmp_ugt::kind: return ">";
+                case Icmp_sgt::kind: return ">";
+                case Icmp_slt::kind: return "<";
+                case Icmp_ult::kind: return "<";
+                case Icmp_ule::kind: return "<=";
+                case Icmp_sle::kind: return "<=";
+
+                case COr::kind:
+                case Or::kind:
+                    return "|";
+                case CAnd::kind:
+                case VerifyInstruction::kind:
+                case And::kind:
+                    return "&";
+                case CXor::kind: return "^";
+                case Concat::kind:
+                    return ",";
+                default:
+                    log_kill() << "Unsupported op_code: " << pretty_print(op);
+            }
+        }
+
+        std::string Visit(Operation *op)
+        {
+            log_kill() << "Cannot print in verilog: " << pretty_print< true >(op)
+                       << "\n" << ctx.dbg().str();
+        }
+
+        // Each extra operand V(n + 1) introduces
+        // R(n) - result of computation - true if at least one `1` is present
+        // O(n) - result of overflow flag - true if at least two `1` were present
+        // check_overflow(O, R, V) : O || (R && V)
+        //   overflow is saturared and it is raised if both current value and previous
+        //   are set to `1` (i.e. there are at least two `1`s in inputs)
+        // R(n + 1) := R(n) || V(n + 1)
+        // O(n + 1) := check_overflow(O(n), R(n), V(n + 1))
+        // Final value is then computed as
+        // !O(m) && R(m)
+        //   i.e. overflow did not happen, and at least one `1` was found.
+        std::string Visit(OnlyOneCondition *op)
+        {
+            auto base = [&](std::string s) { return s + "nx" + std::to_string(op->id()); };
+            auto rn = [&](auto i) { return base("r") + "x" + std::to_string(i); };
+            auto on = [&](auto i) { return base("o") + "x" + std::to_string(i); };
+
+            // `( rn, on )`.
+            using step_t = std::tuple< std::string, std::string >;
+            std::vector< step_t > steps = { { impl::false_val(), impl::false_val() } };
+
+            for (std::size_t i = 0; i < op->operands.size(); ++i)
+            {
+                const auto &[prev_rn, prev_on] = steps.back();
+                auto rn_next = prev_rn + " || " + get(op->operands[i]);
+                auto on_next = prev_on + " || ( " + prev_rn + " && "
+                                       + get(op->operands[i]) + ")";
+                steps.emplace_back(make_wire(rn(i), rn_next, 1), make_wire(on(i), on_next, 1));
+            }
+
+            const auto &[last_rn, last_on] = steps.back();
+            std::stringstream ss;
+            ss << "(!" << last_on << ") && " << last_rn;
+            return make_wire(op, ss.str());
+        }
+
+        std::string Visit(VerifyInstruction *op) { return make(zip(), op); }
+
+        /* Constraints */
+
+        std::string Visit(AdviceConstraint *op)    { return make(zip(), op); }
+        std::string Visit(RegConstraint *op)       { return make(zip(), op); }
+        std::string Visit(PreservedConstraint *op) { return make(zip(), op); }
+        std::string Visit(CopyConstraint *op)      { return make(zip(), op); }
+
+        std::string make_extract(const std::string &from, uint64_t high_inc, uint64_t low_inc)
+        {
+            std::stringstream ss;
+            ss << from << "[" << high_inc << ": " << low_inc << "]";
+            return ss.str();
+        }
+
+        using parsed_mem_t = irops::memory::Parsed< std::string >;
+        parsed_mem_t parse_mem(Operation *op)
+        {
+            auto extract = [&](auto from, auto current, auto size) {
+                return make_extract(from, current + size - 1, current);
+            };
+            return irops::memory::parse(get(op), extract, ctx.circuit->ptr_size);
+        }
+
+        std::string make_memory_constraint(MemoryConstraint *op, bool is_write)
+        {
+            auto hint = parse_mem(op->hint_arg());
+
+            std::stringstream ss;
+            auto apply = [&](const std::string &lhs, const std::string &rhs,
+                             std::string prefix="")
+            {
+                ss << prefix << " " << lhs << " == " << rhs;
+            };
+
+            auto add = [&](auto &&... args) { return apply(args ..., " &&"); };
+
+            // TODO(lukas): It would be maybe better to instead concat the right side
+            //              and compare with whole hint?
+            std::string mode = (is_write) ? "1" : "0";
+
+            apply(get(op->size_arg())    , hint.size());
+            add(  get(op->addr_arg())    , hint.addr());
+            add(  get(op->ts_arg())      , hint.timestamp());
+            // In reads `val_arg()` is not present
+            if (is_write)
+                add(  get(op->val_arg()) , hint.value());
+            add(  impl::to_verilog(4, op->mem_idx()) , hint.id());
+            add(  "1'b1"                 , hint.used());
+            add(  impl::bin_zero(6u)     , hint.reserved());
+            add(  "1'b" + mode           , hint.mode());
+            return make_wire(op, ss.str());
+        }
+        std::string Visit(ReadConstraint *op) { return make_memory_constraint(op, false); }
+        std::string Visit(WriteConstraint *op) { return make_memory_constraint(op, true); }
+
+        /* Decode condition */
+        std::string Visit(DecodeCondition *op) { return make(zip(), op); }
+
+        /* Mux */
+        std::string Visit(Select *op) { return mux(op); }
+
+        /* BitManip */
+        std::string Visit(Concat *op)
+        {
+            return rmake(wrap_zip("{ ", " }"), op);
+        }
+
+        std::string Visit(Extract *op)
+        {
+            auto from = get(op->operands[0]);
+            return make_wire(op, make_extract(from, op->high_bit_exc - 1, op->low_bit_inc));
+        }
+
+        /* Helpers */
+        // TOOD(lukas): Double check.
+        std::string Visit(InputImmediate *op) { return get(op->operands[0]); }
+
+        /* Nary helpers */
+        std::string Visit(And *op) { return make(zip(), op); }
+        std::string Visit(Or *op)  { return make(zip(), op); }
+
+        /* LLVM ops */
+        std::string Visit(Add *op) { return make(zip(), op); }
+        std::string Visit(Sub *op) { return make(zip(), op); }
+        std::string Visit(Mul *op) { return make(zip(), op); }
+
+        std::string Visit(UDiv *op) { return make(zip(), op); }
+        std::string Visit(SDiv *op) { return make(szip(), op); }
+
+        std::string Visit(Shl *op)  { return make(zip(), op); }
+        std::string Visit(LShr *op) { return make(zip(), op); }
+        std::string Visit(AShr *op) { return make(zip(), op); }
+
+        std::string Visit(Trunc *op)
+        {
+            auto trg_size = op->size - 1;
+            std::stringstream ss;
+            ss << get(op->operands[0]) << "[" << trg_size << ":0]";
+            return make_wire(op, ss.str());
+        }
+
+        std::string Visit(ZExt *op)
+        {
+            auto prefix = impl::bin_zero(op->size - op->operands[0]->size);
+            return make_wire(op, concat({prefix, get(op->operands[0])}));
+        }
+
+        std::string Visit(SExt *op)
+        {
+            auto pos_prefix = impl::bin_zero(op->size - op->operands[0]->size);
+            auto neg_prefix = impl::bin_one(op->size - op->operands[0]->size);
+
+            std::stringstream selector_ss;
+            auto operand = op->operands[0];
+            auto last = operand->size - 1;
+            selector_ss << "(" << get(operand) << "[" << last << ":" << last << "] == "
+                        << impl::bin_one(1u)
+                        << ") ?" << neg_prefix << " : " << pos_prefix;
+            auto padding =
+                make_wire("pad_" + std::to_string(op->id()), selector_ss.str(), last + 1);
+            return make_wire(op, concat({padding, get(op->operands[0])}));
+        }
+
+        std::string Visit(Icmp_ult *op) { return make(zip(), op); }
+        std::string Visit(Icmp_slt *op) { return make(szip(), op); }
+        std::string Visit(Icmp_ugt *op) { return make(zip(), op); }
+        std::string Visit(Icmp_eq  *op) { return make(zip(), op); }
+        std::string Visit(Icmp_ne  *op) { return make(zip(), op); }
+        std::string Visit(Icmp_uge *op) { return make(zip(), op); }
+        std::string Visit(Icmp_ule *op) { return make(zip(), op); }
+        std::string Visit(Icmp_sgt *op) { return make(szip(), op); }
+        std::string Visit(Icmp_sge *op) { return make(szip(), op); }
+        std::string Visit(Icmp_sle *op) { return make(szip(), op); }
+
+        std::string Visit(BSelect *op) { return ternary(op); }
+
+        std::string Visit(CAnd *op) { return make(zip(), op); }
+        std::string Visit(COr *op)  { return make(zip(), op); }
+        std::string Visit(CXor *op) { return make(zip(), op); }
+
+        /* Leaves */
+        std::string Visit(Constant *op)
+        {
+            return make_wire(op, std::to_string(op->size) + "'b" + op->bits);
+        }
+
+        std::string Visit(Undefined *op)
+        {
+            return make_wire(op, impl::bin_zero(op->size));
+        }
+
+        /* High level */
+        std::string Visit(PopulationCount *op)
+        {
+            uint32_t operand_size = op->operands[0]->size;
+            uint32_t rsize = static_cast< uint32_t >(std::ceil(std::log2(operand_size)));
+            uint32_t pad_size = operand_size - rsize;
+
+            std::stringstream ss;
+            auto from = get(op->operands[0]);
+            for (std::size_t i = 0; i < operand_size; ++i) {
+                ss << from << "[" << i << "]";
+                if (i != operand_size - 1)
+                    ss << " + ";
+            }
+            auto name = impl::wire_name(op);
+            auto aux = name + "_aux";
+
+            ctx.os() << "wire " << impl::wire_size(rsize) << " " << aux << " = "
+                     << ss.str() << ";\n";
+            ctx.os() << "wire " << name << " = "
+                     << concat({impl::bin_zero(pad_size), aux}) << ";\n";
+            return name;
+        }
+
+        std::string Visit(CountLeadingZeroes *op)
+        {
+            auto get_bit_ = [&](auto op, auto i) {
+                return this->get_bit(op, op->size - i - 1);
+            };
+            return count_zeroes(op, get_bit_);
+        }
+        std::string Visit(CountTrailingZeroes *op)
+        {
+            return count_zeroes(op, [&](auto op, auto i){ return this->get_bit(op, i); });
+        }
+
+        std::string count_zeroes(Operation *op, auto next_bit)
+        {
+            auto base = [&](std::string s) { return s + "nx" + std::to_string(op->id()); };
+            auto fn = [&](auto i) { return base("f") + "x" + std::to_string(i); };
+            auto tn = [&](auto i) { return base("t") + "x" + std::to_string(i); };
+
+            uint32_t operand_size = op->operands[0]->size;
+            auto operand = op->operands[0];
+            uint32_t rsize = static_cast< uint32_t >(std::ceil(std::log2(operand_size)));
+            auto padding = impl::bin_zero(operand_size - rsize);
+
+            // `( fn, tn )`.
+            using step_t = std::tuple< std::string, std::string >;
+            std::vector< step_t > steps = { { impl::true_val(), impl::bin_zero(rsize) } };
+
+            for (std::size_t i = 0; i < operand->size; ++i)
+            {
+                const auto &[prev_fn, prev_tn] = steps.back();
+                auto fn_next = prev_fn + " && (!" + next_bit(operand, i) + ")";
+                auto tn_next = prev_tn + " + { " + impl::bin_zero(rsize - 1)
+                                       + ", " + fn_next + "}";
+                steps.emplace_back(make_wire(fn(i), fn_next, 1), make_wire(tn(i),
+                                   tn_next, rsize));
+            }
+
+            const auto &[_, last_tn] = steps.back();
+            return make_wire(op, concat({padding, last_tn}));
+        }
+
+        std::string Visit(Circuit *op) { return get(op->operands[0]); }
+
+        std::string write(Operation *op) { return get(op); }
+    };
+
+    namespace iarg_fmt
     {
-      auto get_name = [&](auto op) -> std::string {
-        if (auto name = ctx.get_name(op))
-          return *name;
-        // fmt may be stateful, so extra invocation is not desired.
-        return ctx.give_name(op, fmt(op));
-      };
-      // Appending `,` since this cannot be last one - output argument is expected
-      // to be last
-      ctx.os() << "input " << impl::wire_size(op->size) << " "
-               << get_name(op) << "," << std::endl;
+        struct UseName
+        {
+            std::string operator()(Operation *op) {
+                // `.` is not a valid character in token name in verilog
+                std::string out = "";
+                for (auto c : op->Name())
+                    out += (c == '.') ? '_' : c;
+                return out;
+            }
+        };
+
+        struct Simple
+        {
+            uint32_t idx = 0;
+
+            static inline std::vector< std::string > avail =
+            {
+                "A", "B", "C", "D", "E", "F", "G", "H"
+            };
+
+            std::string operator()(Operation *)
+            {
+                check(idx < avail.size());
+                return avail[idx++];
+            }
+        };
+    } // namespace iarg_fmt
+
+    template< typename IArgFmt, typename Ctx >
+    struct ModuleDecl
+    {
+        Ctx &ctx;
+
+        std::string result_arg;
+        std::unordered_map< Operation *, std::string > args;
+        IArgFmt iarg_fmt;
+
+        ModuleDecl(Ctx &ctx_) : ctx(ctx_) {}
+
+        void declare_module(const std::string &name, Operation *op)
+        {
+            ctx.os() << "module " << name << "(" << std::endl;
+            this->declare_in_args(op);
+            ctx.os() << std::endl;
+            this->declare_out_arg();
+            ctx.os() << ");\n";
+        }
+
+        void end_module() { ctx.os() << "endmodule" << std::endl; }
+
+        template< typename Fmt >
+        void declare_in_arg(Operation *op, Fmt &&fmt)
+        {
+            auto get_name = [&](auto op) -> std::string {
+                if (auto name = ctx.get_name(op))
+                    return *name;
+                // fmt may be stateful, so extra invocation is not desired.
+                return ctx.give_name(op, fmt(op));
+            };
+            // Appending `,` since this cannot be last one - output argument is expected
+            // to be last
+            ctx.os() << "input " << impl::wire_size(op->size) << " "
+                     << get_name(op) << "," << std::endl;
+        }
+
+        template< typename O, typename ... Ts, typename Fmt >
+        void declare_in_args(Fmt &&fmt)
+        {
+            for (auto op : ctx.circuit->template Attr< O >())
+                declare_in_arg(op, fmt);
+
+            if constexpr (sizeof...(Ts) != 0)
+                return declare_in_args< Ts ... >(std::forward< Fmt >(fmt));
+            else
+                return;
+        }
+
+
+        void declare_in_args(Operation *op)
+        {
+            if (is_of< Circuit >(op))
+            {
+                declare_in_args< OutputRegister, InputRegister,
+                                  InputErrorFlag, OutputErrorFlag,
+                                  InputTimestamp, OutputTimestamp,
+                                  Memory,
+                                  InputInstructionBits,
+                                  Advice >( iarg_fmt );
+            } else {
+                for (auto operand : op->operands)
+                    declare_in_arg(operand, iarg_fmt );
+            }
+        }
+
+        void declare_out_arg()
+        {
+            ctx.os() << "output [0:0] result" << std::endl;
+            result_arg = "result";
+        }
+
+        void assign_out_arg(const std::string &name, const std::string &what)
+        {
+            ctx.os() << "assign " << name << " = " << what << ";\n";
+        }
+
+        template< typename Fmt >
+        std::string write_body(Operation *op)
+        {
+            return Fmt(ctx).write(op);
+        }
+
+        void define_module(const std::string &name, Operation *op)
+        {
+            declare_module(name, op);
+            assign_out_arg("result", write_body< OpFmt< Ctx > >(op));
+            end_module();
+        }
+    };
+
+    static inline std::string get_module_name(Operation *op)
+    {
+        check(!is_of< LeafValue >(op));
+        switch (op->op_code) {
+            case Circuit::kind: return "full_circuit";
+            default : return op_code_str(op->op_code) + "_" + std::to_string(op->size);
+        }
     }
 
-    template< typename O, typename ... Ts, typename Fmt >
-    void declare_in_args(Fmt &&fmt) {
-      for (auto op : ctx.circuit->template Attr< O >())
-        declare_in_arg(op, fmt);
-
-      if constexpr (sizeof...(Ts) != 0)
-        return declare_in_args< Ts ... >(std::forward< Fmt >(fmt));
-      else
-        return;
+    static inline void print[[maybe_unused]](
+        std::ostream &os, const std::string &module_name, Circuit *c)
+    {
+        ToStream ctx{os, c};
+        ModuleDecl< iarg_fmt::UseName, ToStream >(ctx).define_module(module_name, c);
     }
 
-
-    void declare_in_args(Operation *op) {
-      if (is_of< Circuit >(op))
-      {
-        declare_in_args< OutputRegister, InputRegister,
-                          InputErrorFlag, OutputErrorFlag,
-                          InputTimestamp, OutputTimestamp,
-                          Memory,
-                          InputInstructionBits,
-                          Advice >( iarg_fmt );
-      } else {
-        for (auto operand : op->operands)
-          declare_in_arg(operand, iarg_fmt );
-
-      }
+    static inline void print_solo[[maybe_unused]](
+        std::ostream &os, const std::string &module_name, Circuit *c, Operation *op)
+    {
+        ToStream ctx{os, c};
+        ModuleDecl< iarg_fmt::Simple, ToStream >(ctx).define_module(module_name, op);
     }
 
-    void declare_out_arg() {
-      ctx.os() << "output [0:0] result" << std::endl;
-      result_arg = "result";
+    static inline void print_solo[[maybe_unused]](std::ostream &os, Circuit *c, Operation *op)
+    {
+        return print_solo(os, get_module_name(op), c, op);
     }
 
-    void assign_out_arg(const std::string &name, const std::string &what) {
-      ctx.os() << "assign " << name << " = " << what << ";\n";
-    }
-
-    template< typename Fmt >
-    std::string write_body(Operation *op) {
-      return Fmt(ctx).write(op);
-    }
-
-    void define_module(const std::string &name, Operation *op) {
-      declare_module(name, op);
-      assign_out_arg("result", write_body< OpFmt< Ctx > >(op));
-      end_module();
-    }
-
-  };
-
-  static inline std::string get_module_name(Operation *op) {
-    check(!is_of< LeafValue >(op));
-    switch (op->op_code) {
-      case Circuit::kind: return "full_circuit";
-      default : return op_code_str(op->op_code) + "_" + std::to_string(op->size);
-    }
-  }
-
-  static inline void print[[maybe_unused]](
-      std::ostream &os, const std::string &module_name, Circuit *c)
-  {
-    ToStream ctx{os, c};
-    ModuleDecl< iarg_fmt::UseName, ToStream >(ctx).define_module(module_name, c);
-  }
-
-  static inline void print_solo[[maybe_unused]](
-      std::ostream &os, const std::string &module_name, Circuit *c, Operation *op)
-  {
-    ToStream ctx{os, c};
-    ModuleDecl< iarg_fmt::Simple, ToStream >(ctx).define_module(module_name, op);
-  }
-
-  static inline void print_solo[[maybe_unused]](std::ostream &os, Circuit *c, Operation *op)
-  {
-    return print_solo(os, get_module_name(op), c, op);
-  }
 } // namespace circ::print::verilog
