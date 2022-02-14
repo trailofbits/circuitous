@@ -86,6 +86,16 @@ namespace gap {
         TerminatingMessage(std::cerr, std::move(loc)).do_kill("not implemented");
     }
 
+    void check(auto &&condition, auto msg_gen, source_location loc = source_location::current())
+    {
+        if (!condition)
+        {
+            CheckMessage(std::cerr, std::move(loc), static_cast< bool >(condition))
+                    << msg_gen();
+        }
+
+    }
+
     auto check(auto &&condition, source_location loc = source_location::current())
     -> CheckMessage
     {
