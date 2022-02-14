@@ -66,17 +66,16 @@ namespace circ
 
             auto has_error = verify_function(*fn);
             check(!has_error) << "Trying to post-process invalid function.\n" << *has_error;
-
-            remill::VerifyModule(ctx.module());
             optimize_silently(ctx.arch(), ctx.module(), { fn });
 
             if (fn->size() == 1)
                 return fn;
-
+            disable_opts(fn);
 
             remill::IntrinsicTable intrinsics(ctx.module());
             flatten_cfg(fn, intrinsics);
 
+            disable_opts(fn);
             check_unsupported_intrinsics({ fn });
             // TOOD(lukas): Inline into the loop once the `optimize_silently` does
             //              only function verification (now does module).
@@ -86,34 +85,6 @@ namespace circ
             // and elimination.
             enable_opts(fn);
             return fn;
-        }
-
-        void after_lift_opts(std::vector< llvm::Function * > &inst_funcs)
-        {
-            disable_opts(inst_funcs);
-
-            remill::VerifyModule(ctx.module());
-            optimize_silently(ctx.arch(), ctx.module(), inst_funcs);
-
-            std::vector<llvm::Function *> reopt_funcs;
-            for (auto func : inst_funcs)
-            {
-                if (func->size() == 1)
-                    continue;  // Pure data-flow; doesn't need to be re-optimized.
-
-                reopt_funcs.push_back(func);
-
-                remill::IntrinsicTable intrinsics(ctx.module());
-                flatten_cfg(func, intrinsics);
-            }
-            check_unsupported_intrinsics(inst_funcs);
-            // TOOD(lukas): Inline into the loop once the `optimize_silently` does
-            //              only function verification (now does module).
-            optimize_silently(ctx.arch(), ctx.module(), reopt_funcs);
-
-            // We're done; make the instruction functions more amenable for inlining
-            // and elimination.
-            enable_opts(inst_funcs);
         }
 
         static std::string lifted_name(const std::string &bytes)
@@ -207,44 +178,6 @@ namespace circ
                               << inst.Serialize();
 
             return false;
-        }
-
-        void lift(std::vector< InstructionSelection > &isels)
-        {
-            std::vector<llvm::Function *> inst_funcs;
-
-            auto unique_id = 0;
-            for (auto &group : isels) {
-                for (auto i = 0ull; i < group.instructions.size(); ++i) {
-                    auto &inst = group.instructions[i];
-                    auto name = lifted_name(inst.bytes) + std::to_string(++unique_id);
-                    CHECK(!ctx.module()->getFunction(name));
-
-                    auto func = ctx.arch()->DeclareLiftedFunction(name, ctx.module());
-                    ctx.arch()->InitializeEmptyLiftedFunction(func);
-                    group.lifted_fns[i] = func;
-
-                    log_dbg() << inst.Serialize();
-                    log_dbg() << group.shadows[i].to_string();
-                    auto block = &func->getEntryBlock();
-
-                    Impl lifter(ctx.arch(), ctx.module());
-                    lifter.SupplyShadow(&group.shadows[i]);
-                    CHECK(func->size() == 1);
-                    auto status = lifter.LiftIntoBlock(inst, block, false);
-
-                    if (!was_lifted_correctly(status, inst)) {
-                      func->eraseFromParent();
-                      continue;
-                    }
-
-                    llvm::ReturnInst::Create(*ctx.llvm_ctx(),
-                                             remill::LoadMemoryPointer(block), block);
-                    inst_funcs.push_back(func);
-                }
-            }
-            check_unsupported_intrinsics(inst_funcs);
-            after_lift_opts(inst_funcs);
         }
 
         std::string lifted_name(const InstBytes &bytes, const std::string &suffix="")
