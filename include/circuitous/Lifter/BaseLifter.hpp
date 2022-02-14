@@ -31,6 +31,7 @@
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/Module.h>
+#include <remill/BC/Annotate.h>
 CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ
@@ -43,6 +44,13 @@ namespace circ
     // Flatten all control flow into pure data-flow inside of a function.
     // TODO(lukas): Write down what are guarantees w.r.t. to metadata.
     void flatten_cfg(llvm::Function *func, const remill::IntrinsicTable &intrinsics);
+
+    struct ExaltedFunctionMeta
+    {
+        // Needs to be this way to be able to use API from `remill/BC/Annotate.h`
+        static const inline std::string metadata_kind = "circ.exaltedfn";
+        static const inline std::string metadata_value = "Function exalted by circuitous";
+    };
 
     // Should remain stateless and cheap to construct.
     template< typename Impl >
@@ -280,7 +288,9 @@ namespace circ
             //              in future we can propage it up.
             check(!report) << "Unsupported intrinsics call, dumping report.\n" << *report;
 
-            return { post_process(fn) };
+            auto post_fn = post_process(fn);
+            remill::Annotate< ExaltedFunctionMeta >( post_fn );
+            return { post_fn };
         }
     };
 } // namespace circ
