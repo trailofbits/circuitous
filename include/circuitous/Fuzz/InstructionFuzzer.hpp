@@ -410,7 +410,7 @@ namespace circ
             return [=, &todo](maybe_rinst_t nrinst, const idxs_t idxs, std::string errs)
             {
                 if (!nrinst) {
-                    log_error() << errs;
+                    // TODO(lukas): Should report some error?
                     return;
                 }
 
