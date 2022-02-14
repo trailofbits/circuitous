@@ -462,7 +462,7 @@ namespace circ::irops {
 
       static auto make(llvm::IRBuilder<> &ir, const values_t &c_args) {
         auto size = uniform_size(c_args.begin(), c_args.end());
-        check(size) << "Operands are not of uniform size!\n" << dbg_dump(c_args);
+        check(size, [&](){ return "Operands are not of uniform size\n" + dbg_dump(c_args); });
         return N::make(ir, c_args, *size);
       }
     };
