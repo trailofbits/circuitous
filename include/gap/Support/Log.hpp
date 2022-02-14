@@ -126,21 +126,22 @@ namespace gap::log {
         template< typename Derived >
         struct Message
         {
-            using underlying_stream_t = std::stringstream;
+            using underlying_stream_t = std::ostringstream;
             underlying_stream_t ss;
             bool fst = true;
 
-            std::stringstream &emit_delim()
+            Derived &emit_delim()
             {
                 if (!fst) ss << " ";
                 fst = false;
-                return ss;
+                return static_cast< Derived & >( *this );
             }
 
             template< typename T >
             Derived &operator<<( T &&t )
             {
-                emit_delim() << std::forward< T >(t);
+                emit_delim();
+                ss << std::forward< T >(t);
                 return static_cast< Derived & >( *this );
             }
 
