@@ -52,7 +52,7 @@ namespace circ
         auto ImmediateOperand(llvm::Module *module, const shadowinst::Immediate &s_imm)
         {
             auto &current = s_imm;
-            CHECK(current.size() >= 1);
+            check(current.size() >= 1);
 
             std::vector<llvm::Function *> out;
             for (auto [from, to] : current)
@@ -63,8 +63,8 @@ namespace circ
         auto RegisterOperand(llvm::Module *module)
         {
             auto &current = CurrentShade();
-            CHECK(current.reg);
-            CHECK(current.reg->regions.size() == 1);
+            check(current.reg);
+            check(current.reg->regions.size() == 1);
         }
     };
 
@@ -98,7 +98,7 @@ namespace circ
 
         void SupplyShadow(shadowinst::Instruction *shadow_)
         {
-            CHECK(!shadow) << "Shadow is already set, possible error";
+            check(!shadow) << "Shadow is already set, possible error";
             shadow = shadow_;
         }
 
@@ -119,7 +119,7 @@ namespace circ
                 if (auto call = llvm::dyn_cast<llvm::CallInst>(&inst);
                     call && possible_isel(call))
                 {
-                    CHECK(!out) << dbg_dump(block->getParent());
+                    check(!out) << dbg_dump(block->getParent());
                     out = call;
                 }
             }
@@ -180,7 +180,7 @@ namespace circ
                         if (store->getPointerOperand() == val)
                             writes.push_back(store);
 
-            CHECK(writes.size() == 1);
+            check(writes.size() == 1);
 
             // Continuing from the write into dst, collect all loads from the `State`
             // TODO(lukas): What about loads?
@@ -190,14 +190,14 @@ namespace circ
                 if (auto load = llvm::dyn_cast< llvm::LoadInst >(&inst))
                     if (auto gep = loads_from_state(load))
                     {
-                        CHECK(*gep != nullptr);
+                        check(*gep != nullptr);
                         loads.emplace_back(load, *gep);
                     }
 
             for (auto [load, gep] : loads)
             {
                 auto enclosed = coerce_reg(load, reg_from_gep(gep, arch));
-                CHECK(enclosed);
+                check(enclosed);
 
                 auto name = enclosed->name;
                 if (!s_reg->translation_map.count(name))
@@ -227,7 +227,7 @@ namespace circ
                 remill::NthArgument(block->getParent(), remill::kStatePointerArgNum);
 
             auto call = fetch_sem_call(block);
-            CHECK(call);
+            check(call);
             consolidate_isel(call->getCalledFunction());
 
             // We need to actually store the new value of instruction pointer
@@ -243,7 +243,7 @@ namespace circ
 
         llvm::Function *ChooseImm(uint64_t arch_op_size, const functions_t &funcs)
         {
-            CHECK(funcs.size());
+            check(funcs.size());
             if (funcs.size() == 1)
                 return funcs[0];
 
@@ -254,7 +254,7 @@ namespace circ
             //              Ideally we would want to have some ranking, but currently I have
             //              no idea how such thing could look like.
             auto set_candidate = [&](auto fn) {
-                CHECK(!canditate);
+                check(!canditate);
                 canditate = fn;
             };
 
@@ -272,7 +272,7 @@ namespace circ
         llvm::Value *HideValue(llvm::Value *val, llvm::BasicBlock *bb, uint64_t size)
         {
             llvm::IRBuilder<> ir(bb);
-            CHECK(size == val->getType()->getIntegerBitWidth());
+            check(size == val->getType()->getIntegerBitWidth());
             return irops::make< irops::InputImmediate >(ir, val);
         }
 
@@ -444,7 +444,7 @@ namespace circ
                     ir.CreateStore(what, dst);
                     return ir.CreateBitCast(dst, concrete->getType());
                 }
-                CHECK(what->getType()->isIntOrIntVectorTy() &&
+                check(what->getType()->isIntOrIntVectorTy() &&
                       concrete->getType()->isIntOrIntVectorTy());
                 return ir.CreateSExtOrTrunc(what, concrete->getType());
             };
@@ -517,11 +517,11 @@ namespace circ
             auto val_type = llvm::dyn_cast_or_null<llvm::IntegerType>(val->getType());
             auto word_type = llvm::cast<llvm::IntegerType>(zero->getType());
 
-            CHECK(val_type) << "Register " << reg_name << " expected to be an integer.";
+            check(val_type) << "Register " << reg_name << " expected to be an integer.";
 
             auto val_size = val_type->getBitWidth();
             auto word_size = word_type->getBitWidth();
-            CHECK(val_size <= word_size)
+            check(val_size <= word_size)
                 << "Register " << reg_name << " expected to be no larger than the "
                 << "machine word size (" << word_type->getBitWidth() << " bits).";
 
@@ -550,10 +550,10 @@ namespace circ
                 if (s_reg->translation_map.size() == 0)
                     return LoadWordRegValOrZero_(block, state_ptr, r_reg.name, zero);
 
-                CHECK(s_reg->translation_map.size() == 1);
+                check(s_reg->translation_map.size() == 1);
                 auto &entry = *s_reg->translation_map.begin();
-                CHECK(entry.second.size() == 1);
-                CHECK(entry.second.begin()->empty());
+                check(entry.second.size() == 1);
+                check(entry.second.begin()->empty());
                 return LoadWordRegValOrZero_(block, state_ptr, entry.first, zero);
             }
             return LiftSReg(block, state_ptr, *s_reg);
@@ -613,7 +613,7 @@ namespace circ
                 if (CurrentShade().address->scale->empty() &&
                     !CurrentShade().address->index_reg->empty())
                 {
-                    CHECK(CurrentShade().address->index_reg->regions ==
+                    check(CurrentShade().address->index_reg->regions ==
                           CurrentShade().address->base_reg->regions);
                     if (r_op.addr.scale != 1)
                         log_error() << "Overriding scale to 1 based on shadow info.";
@@ -623,7 +623,7 @@ namespace circ
             }();
 
             auto scale = LiftSImmediate(block, CurrentShade().address->scale, concrete_scale);
-            CHECK(scale);
+            check(scale);
             auto displacement = LiftSImmediate(block, CurrentShade().address->displacement,
                                                r_op.addr.displacement);
 
