@@ -803,6 +803,18 @@ namespace circ {
         mute_state_escape("__remill_function_return");
         mute_state_escape("__remill_error");
         mute_state_escape("__remill_missing_block");
+
+        std::vector< llvm::Function * > to_remove;
+
+        for (auto &fn : *ctx.module())
+        {
+            if (!remill::HasOriginType< remill::Semantics >(&fn))
+                continue;
+            if (fn.isDeclaration())
+                continue;
+            to_remove.push_back(&fn);
+        }
+        safe_erase_from_parent(std::move(to_remove));
     }
 
     llvm::Function * CircuitMaker::make_from(const InstructionBatch &batch)
