@@ -182,7 +182,7 @@ namespace circ
 
         std::string lifted_name(const InstBytes &bytes, const std::string &suffix="")
         {
-            return "lifted_inst_" + bytes.as_hex_str() + suffix;
+            return "lifted_inst_" + bytes.as_hex_str() + "." + suffix;
         }
 
         std::string craft_lifted_name(const std::string &raw_bytes, uint32_t repetitions = 0)
