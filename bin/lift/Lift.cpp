@@ -188,7 +188,8 @@ int main(int argc, char *argv[]) {
         cli::IROut, cli::DotOut,
         cli::BitBlastStats,
         cli::LogToStderr, cli::LogDir,
-        cli::EqSat >;
+        cli::EqSat,
+        cli::Help >;
 
     auto parsed_cli = parse_and_validate_cli< parser_t >(argc, argv);
     if (!parsed_cli)
