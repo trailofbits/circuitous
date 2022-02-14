@@ -51,7 +51,7 @@ namespace circ::component {
         llvm::BasicBlock *bb = nullptr;
         llvm::Instruction *current = nullptr;
         // To eliminate duplicate calls
-        std::set< llvm::Value * > operands;
+        std::unordered_set< llvm::Value * > operands;
 
         template< typename ... Args >
         Context(llvm::BasicBlock *bb_, Args && ... args)
