@@ -152,6 +152,12 @@ namespace circ::cli
         static std::string help() { return "Enable various debug prints.\n"; }
     };
 
+    struct Help : circ::DefaultCmdOpt, derive_short_help< Help >, Arity< 0 >
+    {
+        static inline const auto opt = circ::CmdOpt("--help", false);
+        static std::string help() { return "Print help messages.\n"; }
+    };
+
     struct Arch : circ::DefaultCmdOpt, Arity< 1 >, circ::HasAllowed< Arch >
     {
         static inline const auto opt = circ::CmdOpt("--arch", true);
