@@ -240,7 +240,6 @@ struct Flattener {
   }
 
   void Run() {
-    auto module = func->getParent();
     auto &context = func->getContext();
 
     auto entry_block = &(func->getEntryBlock());
@@ -256,7 +255,7 @@ struct Flattener {
     for (auto block : orig_blocks) {
       block->eraseFromParent();
     }
-    remill::VerifyModule(module);
+    verify_function(*func);
   }
 }; // struct Flattener
 
