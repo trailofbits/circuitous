@@ -259,19 +259,19 @@ namespace circ
             check(info.has_shadow()) << "Cannot lift from InstructionInfo that has no shadow!";
             auto &rinst = info.rinst();
             auto name = craft_lifted_name(rinst.bytes);
+
             auto fn = ctx.arch()->DeclareLiftedFunction(name, ctx.module());
             ctx.arch()->InitializeEmptyLiftedFunction(fn);
 
             Impl lifter(ctx.arch(), ctx.module());
             lifter.SupplyShadow(&info.shadow());
             check(fn->size() == 1);
+
             auto block = &fn->getEntryBlock();
             auto status = lifter.LiftIntoBlock(rinst, block, false);
 
             if (!was_lifted_correctly(status, rinst))
                 return {};
-
-            llvm::ReturnInst::Create(*ctx.llvm_ctx(), remill::LoadMemoryPointer(block), block);
 
             // Check if unsupported intrinsics are present (some wild intrinsic can appear
             // when lifting new isels or llvm versions are changed).

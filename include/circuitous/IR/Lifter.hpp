@@ -238,6 +238,14 @@ namespace circ
             auto pc_ref = LoadRegAddress(block, state_ptr, remill::kPCVariableName);
             auto next_pc_ref = LoadRegAddress(block, state_ptr, remill::kNextPCVariableName);
             ir.CreateStore(ir.CreateLoad(next_pc_ref), pc_ref);
+            auto return_val = remill::LoadMemoryPointer(block);
+            ir.CreateRet(return_val);
+
+            // Inline
+            llvm::InlineFunctionInfo info;
+            auto was_inlined = llvm::InlineFunction(*call, info);
+            check(was_inlined.isSuccess());
+
             return lift_status;
         }
 
