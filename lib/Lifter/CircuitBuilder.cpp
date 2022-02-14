@@ -84,7 +84,7 @@ namespace circ {
               todo.push_back(x);
         }
         // Just a sanity check
-        CHECK(std::unordered_set<reg_ptr_t>(out.begin(), out.end()).size() == out.size());
+        check(std::unordered_set<reg_ptr_t>(out.begin(), out.end()).size() == out.size());
         return out;
     }
 
@@ -140,11 +140,11 @@ namespace circ {
                     rets.push_back(ret);
 
         // There should always be one return
-        CHECK(rets.size() == 1);
+        check(rets.size() == 1);
         auto returned = rets[0]->getOperand(0u);
 
         auto call = llvm::dyn_cast< llvm::CallInst >(returned);
-        CHECK(returned && irops::Xor::is(call->getCalledFunction()));
+        check(returned && irops::Xor::is(call->getCalledFunction()));
 
         // Eliminate all duplicates
         std::unordered_set<llvm::Value *> verifies;
@@ -225,7 +225,7 @@ namespace circ {
         auto fn = llvm::Function::Create(fn_t, linkage, name, ctx.module());
         fn->addFnAttr(llvm::Attribute::ReadNone);
 
-        CHECK(fn->arg_size() % 2 == 0 && fn->arg_size() == ctx.regs().size() * 2);
+        check(fn->arg_size() % 2 == 0 && fn->arg_size() == ctx.regs().size() * 2);
         for (uint32_t i = 0; i < fn->arg_size(); i += 2) {
             const auto &name = ctx.regs()[ i / 2 ]->name;
             remill::NthArgument(fn, i)->setName(name + ".in");
@@ -239,7 +239,7 @@ namespace circ {
 
     auto CircuitFunction::is_output_reg(llvm::Argument *arg) -> maybe_str
     {
-        CHECK(arg->hasName());
+        check(arg->hasName());
         if (!arg->getName().endswith(".out"))
             return std::nullopt;
 
@@ -249,7 +249,7 @@ namespace circ {
 
     auto CircuitFunction::is_input_reg(llvm::Argument *arg) -> maybe_str
     {
-        CHECK(arg->hasName());
+        check(arg->hasName());
         if (!arg->getName().endswith(".in"))
             return std::nullopt;
 
@@ -275,7 +275,7 @@ namespace circ {
         auto fn = ctx.module()->getFunction(name);
         // TODO(lukas): For now be defensive and demand that each intrinsic is
         //              at least declared.
-        CHECK(fn);
+        check(fn);
         std::vector< llvm::CallInst * > to_replace;
         for (auto user : fn->users())
             if (auto call = llvm::dyn_cast< llvm::CallInst >(user))
@@ -294,7 +294,7 @@ namespace circ {
     void circuit_builder::propagate_undefs()
     {
         auto whose_rc = [&](llvm::CallInst *rc) {
-            CHECK(rc->getNumArgOperands() == 2);
+            check(rc->getNumArgOperands() == 2);
             return rc->getArgOperand(1);
         };
 
@@ -336,10 +336,10 @@ namespace circ {
 
             if (auto rcs = UndefReachability().run(undef))
             {
-                CHECK(rcs->size() != 0);
+                check(rcs->size() != 0);
                 auto patch = get_in_twin(whose_rc(*rcs->begin()));
                 for (auto rc : *rcs)
-                    CHECK(patch == get_in_twin(whose_rc(rc)));
+                    check(patch == get_in_twin(whose_rc(rc)));
                 // It is enough to replace only one as the `undef` source is exactly one.
                 replace(undef, patch);
             } else {
@@ -395,8 +395,7 @@ namespace circ {
 
     void circuit_builder::inject_semantic_modular(ISEL_view isel)
     {
-        CHECK(isel.lifted);
-        log_info() << "Lifting: " << isel.instruction.Serialize();
+        check(isel.lifted);
 
         State state { this->head, ctx.state_ptr_type()->getElementType() };
         auto state_ptr = state.raw();
@@ -479,7 +478,7 @@ namespace circ {
                     stores.push_back(store);
                 if (auto bc = llvm::dyn_cast< llvm::BitCastInst >(user))
                     next(bc, next);
-                CHECK(!llvm::isa< llvm::PtrToIntInst >(user) &&
+                check(!llvm::isa< llvm::PtrToIntInst >(user) &&
                       !llvm::isa< llvm::GetElementPtrInst >(user));
             }
         };
@@ -488,7 +487,7 @@ namespace circ {
         // NOTE(lukas): It is expected that if there are multiple stores,
         //              Flattener component will make sure they are properly guarded
         //              wrt path condition.
-        CHECK(stores.size() >= 1) << dbg_dump(stores);
+        check(stores.size() >= 1) << dbg_dump(stores);
 
         // Next they are being ordered to determine which is last, therefore
         // they need to be in the same basic block
@@ -521,12 +520,12 @@ namespace circ {
                                             ISEL_view isel, State &state)
     -> cond_val_tuple
     {
-        CHECK(dst_regs.size() < 3) << "TODO(lukas): Implement more general case.";
+        check(dst_regs.size() < 3) << "TODO(lukas): Implement more general case.";
 
         std::vector< cond_val_tuple > partials;
         for (std::size_t i = 0; i < dst_regs.size(); ++i) {
             auto s_reg = get_written(i, isel);
-            CHECK(s_reg);
+            check(s_reg);
             partials.push_back(handle_dst_reg(dst_regs[i], *s_reg, state));
         }
 
@@ -568,7 +567,7 @@ namespace circ {
 
         auto current_value = [&](const auto &reg, auto reg_in) {
             // TODO(lukas): May require different behaviour for dirty regs.
-            CHECK(!dirty.count(reg->name));
+            check(!dirty.count(reg->name));
             return state.load(ir, reg);
         };
 
@@ -667,7 +666,7 @@ namespace circ {
                         shadowinst::decoder_conditions(*s_op.reg, reg_part->name, ir);
 
                     // Check if everything is still valid.
-                    CHECK(proccessed - 1 < dst_regs.size()) << proccessed - 1
+                    check(proccessed - 1 < dst_regs.size()) << proccessed - 1
                                                             << " >= " << dst_regs.size();
                     auto eq = irops::make< irops::Xor >(ir, reg_checks);
                     auto dst_load = ir.CreateLoad(dst_regs[proccessed - 1]);
@@ -681,9 +680,9 @@ namespace circ {
                     reg_val = ir.CreateSelect(eq, full_val, reg_val);
                 }
             }
-            CHECK(current_ebit);
-            CHECK(input_reg);
-            CHECK(reg_val);
+            check(current_ebit);
+            check(input_reg);
+            check(reg_val);
             // If error bit is raised we are not moving anywhere
             auto guard = ir.CreateSelect(current_ebit, input_reg, reg_val);
             params.push_back(irops::make< irops::OutputCheck >(ir, {guard, expected_reg_val}));
@@ -697,7 +696,7 @@ namespace circ {
 
         for (auto dst : dsts) {
             auto p_type = llvm::dyn_cast< llvm::PointerType >(dst->getType());
-            CHECK(p_type) << "Dst reg type before lowering is not pointer";
+            check(p_type) << "Dst reg type before lowering is not pointer";
 
             llvm::IRBuilder<> ir(llvm::cast< llvm::Instruction >(dst));
             out.push_back(ir.CreateAlloca(p_type->getPointerElementType(), nullptr, "DSTA_"));
@@ -765,7 +764,7 @@ namespace circ {
         std::string expected = generate_raw_bytes(encoding, from, to);
 
         auto size = static_cast< uint32_t >(expected.size());
-        CHECK(size == to - from) << size << " != " << to - from;
+        check(size == to - from) << size << " != " << to - from;
 
         auto expected_v = ir.getInt(llvm::APInt(size, expected, 2));
         auto extracted = irops::make_leaf< irops::ExtractRaw >(ir, from, to - from);
