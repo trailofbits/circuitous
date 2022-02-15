@@ -440,36 +440,36 @@ namespace circ
         cls(unsigned size_) : Operation(size_, kind) {} \
         static std::string op_code_str() { return #cls; } \
         std::string Name() const override { return #cls; } \
-    };
+    }
 
-    declare_llvm_op(Add, 0)
-    declare_llvm_op(Sub, 1)
-    declare_llvm_op(Mul, 2)
+    declare_llvm_op(Add, 0);
+    declare_llvm_op(Sub, 1);
+    declare_llvm_op(Mul, 2);
 
-    declare_llvm_op(UDiv, 3)
-    declare_llvm_op(SDiv, 4)
+    declare_llvm_op(UDiv, 3);
+    declare_llvm_op(SDiv, 4);
 
-    declare_llvm_op(Shl, 5)
-    declare_llvm_op(LShr, 6)
-    declare_llvm_op(AShr, 7)
+    declare_llvm_op(Shl, 5);
+    declare_llvm_op(LShr, 6);
+    declare_llvm_op(AShr, 7);
 
-    declare_llvm_op(Trunc, 8)
-    declare_llvm_op(ZExt, 9)
-    declare_llvm_op(SExt, 10)
+    declare_llvm_op(Trunc, 8);
+    declare_llvm_op(ZExt, 9);
+    declare_llvm_op(SExt, 10);
 
-    declare_llvm_op(Icmp_ult, 11)
-    declare_llvm_op(Icmp_slt, 12)
-    declare_llvm_op(Icmp_ugt, 13)
-    declare_llvm_op(Icmp_eq, 14)
-    declare_llvm_op(Icmp_ne, 15)
-    declare_llvm_op(Icmp_uge, 16)
-    declare_llvm_op(Icmp_ule, 17)
-    declare_llvm_op(Icmp_sgt, 18)
-    declare_llvm_op(Icmp_sge, 19)
-    declare_llvm_op(Icmp_sle, 20)
+    declare_llvm_op(Icmp_ult, 11);
+    declare_llvm_op(Icmp_slt, 12);
+    declare_llvm_op(Icmp_ugt, 13);
+    declare_llvm_op(Icmp_eq, 14);
+    declare_llvm_op(Icmp_ne, 15);
+    declare_llvm_op(Icmp_uge, 16);
+    declare_llvm_op(Icmp_ule, 17);
+    declare_llvm_op(Icmp_sgt, 18);
+    declare_llvm_op(Icmp_sge, 19);
+    declare_llvm_op(Icmp_sle, 20);
 
-    declare_llvm_op(SRem, 21)
-    declare_llvm_op(URem, 22)
+    declare_llvm_op(SRem, 21);
+    declare_llvm_op(URem, 22);
 
     struct BSelect final : Operation, make_kind< Computational, tag_fragment< 21 > >
     {
@@ -620,13 +620,13 @@ namespace circ
       cls() : Operation(this->bool_size, kind) {} \
       static std::string op_code_str() { return #cls; } \
       std::string Name() const override { return #cls; } \
-    };
+    }
 
-    make_bool_op(DecodeCondition, 0)
-    make_bool_op(VerifyInstruction, 1)
-    make_bool_op(Or, 2)
-    make_bool_op(OnlyOneCondition, 3)
-    make_bool_op(And, 4)
+    make_bool_op(DecodeCondition, 0);
+    make_bool_op(VerifyInstruction, 1);
+    make_bool_op(Or, 2);
+    make_bool_op(OnlyOneCondition, 3);
+    make_bool_op(And, 4);
 
     #undef make_bool_op
 
