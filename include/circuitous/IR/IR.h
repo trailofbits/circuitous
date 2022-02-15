@@ -468,6 +468,9 @@ namespace circ
     declare_llvm_op(Icmp_sge, 19)
     declare_llvm_op(Icmp_sle, 20)
 
+    declare_llvm_op(SRem, 21)
+    declare_llvm_op(URem, 22)
+
     struct BSelect final : Operation, make_kind< Computational, tag_fragment< 21 > >
     {
         static constexpr uint32_t kind = apply(Operation::kind);
