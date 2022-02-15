@@ -72,6 +72,7 @@ namespace circ
                 vis.Dispatch(op);
         }
 
+      protected:
         // Please note, that id is not set.
         explicit Operation(unsigned size_, unsigned op_code_)
             : size(size_), op_code(op_code_)
