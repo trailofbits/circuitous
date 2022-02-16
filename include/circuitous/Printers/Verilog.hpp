@@ -288,6 +288,9 @@ namespace circ::print::verilog
                 case SDiv::kind: return "/";
                 case UDiv::kind: return "/";
 
+                case URem::kind: return "%";
+                case SRem::kind: return "%";
+
                 case Shl::kind: return "<<";
                 case LShr::kind: return ">>";
                 case AShr::kind: return ">>>";
@@ -450,6 +453,9 @@ namespace circ::print::verilog
 
         std::string Visit(UDiv *op) { return make(zip(), op); }
         std::string Visit(SDiv *op) { return make(szip(), op); }
+
+        std::string Visit(URem *op) { return make(zip(), op); }
+        std::string Visit(SRem *op) { return make(szip(), op); }
 
         std::string Visit(Shl *op)  { return make(zip(), op); }
         std::string Visit(LShr *op) { return make(zip(), op); }
