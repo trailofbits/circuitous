@@ -155,7 +155,7 @@ namespace circ::run
         {
             auto dbg_info = [](auto from, auto to) {
                 log_dbg() << pretty_print< false >(from) << " -- notifies -> "
-                           << pretty_print(to);
+                          << pretty_print< false >(to);
             };
             return notify(from, to, dbg_info);
         }
@@ -238,11 +238,14 @@ namespace circ::run
                        << " ]";
                     return ss.str();
                 };
-                check(this->get(op) == val)
-                    << pretty_print(op) << " already has value "
-                    << fmt(this->get(op))
-                    << " yet we try to set "
-                    << fmt(val);
+                check(this->get(op) == val, [&](){
+                    std::stringstream ss;
+                    ss << pretty_print(op) << " already has value "
+                       << fmt(this->get(op))
+                       << " yet we try to set "
+                       << fmt(val);
+                       return ss.str();
+                });
                 log_dbg() << "Assign:" << pretty_print< false >(op)
                           << "value was already set.";
                 return;
