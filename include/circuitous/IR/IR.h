@@ -18,22 +18,8 @@
 #include <unordered_map>
 #include <vector>
 
-namespace remill
-{
-    class Arch;
-}  // namespace remill
-
-namespace llvm
-{
-    class Constant;
-    class Function;
-    class Instruction;
-    class StringRef;
-}  // namespace llvm
-
 namespace circ
 {
-
     // A general instruction.
     struct Operation : public Node< Operation >, HasStringMeta
     {
