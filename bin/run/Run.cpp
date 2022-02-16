@@ -53,6 +53,8 @@ DEFINE_bool(sim, false, "Interactive");
 
 DEFINE_bool(die, false, "DBG: Artificially kill program and dump state of all runners.");
 
+DEFINE_bool(dbg, false, "PLACEHOLDER.");
+
 // `circuitous-run` specific command line flags.
 namespace circ::cli::run
 {
@@ -286,6 +288,9 @@ int main(int argc, char *argv[])
     circ::add_sink< circ::severity::info >(std::cout);
 
     auto cli = parse_cmd(argc, argv);
+
+    if (cli.present< circ::cli::Dbg >())
+        circ::add_sink< circ::severity::dbg >(std::cout);
 
     google::InitGoogleLogging(argv[0]);
     //google::InstallFailureSignalHandler();
