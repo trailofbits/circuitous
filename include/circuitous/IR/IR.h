@@ -480,7 +480,8 @@ namespace circ
         Icmp_ult, Icmp_slt, Icmp_ugt, Icmp_eq, Icmp_ne, Icmp_uge, Icmp_ule,
         Icmp_sgt, Icmp_sge, Icmp_sle,
         BSelect,
-        CAnd, COr, CXor
+        CAnd, COr, CXor,
+        SRem, URem
     >;
 
     /* Hidden */
