@@ -10,6 +10,7 @@
 #include <unordered_set>
 
 #include <circuitous/IR/IR.h>
+#include <circuitous/IR/Metadata.hpp>
 #include <circuitous/IR/Shapes.hpp>
 #include <circuitous/Support/Check.hpp>
 
@@ -26,10 +27,30 @@ namespace circ
 
         std::string Report() { return ss.str(); }
 
-        bool LogError(Operation *op)
+        void log_src_dump(Operation *op, const std::string &gprefix = "")
+        {
+            auto print_op = [&](auto root, const auto &prefix)
+            {
+                ss << prefix;
+                if (auto src = op->get_meta(circir_llvm_meta::llvm_source_dump))
+                    ss << *src;
+                else
+                    ss << "( no source meta )";
+                ss << std::endl;
+            };
+
+            print_op(op, gprefix);
+
+            for (auto c : op->operands)
+                print_op(c, gprefix + " |- ");
+        }
+
+        bool log_operand_mismatch(Operation *op)
         {
             ss << to_string(op->op_code) << " has "
                << op->operands.Size() << " operands which is invalid.\n";
+            log_src_dump(op, "\t");
+            ss << "Error entry end.\n";
             return false;
         }
 
@@ -40,26 +61,26 @@ namespace circ
         }
 
         template< typename Fn >
-        bool Verify(uint64_t count, Operation *op, Fn fn)
+        bool verify_op_count(uint64_t count, Operation *op, Fn fn)
         {
             if (!fn(count, op->operands.Size()))
-                return LogError(op);
+                return log_operand_mismatch(op);
             return true;
         }
 
-        bool Exactly(uint64_t count, Operation *op)
+        bool exactly(uint64_t count, Operation *op)
         {
-            return Verify(count, op, [](auto ex, auto ac){ return  ex == ac; });
+            return verify_op_count(count, op, [](auto ex, auto ac){ return  ex == ac; });
         }
 
-        bool Not(uint64_t count, Operation *op)
+        bool not_exactly(uint64_t count, Operation *op)
         {
-            return Verify(count, op, [](auto ex, auto ac){ return  ex != ac; });
+            return verify_op_count(count, op, [](auto ex, auto ac){ return  ex != ac; });
         }
 
-        bool MoreThan(uint64_t count, Operation *op)
+        bool more_than(uint64_t count, Operation *op)
         {
-            return Verify(count, op, [](auto ex, auto ac){ return  ex <= ac; });
+            return verify_op_count(count, op, [](auto ex, auto ac){ return  ex <= ac; });
         }
 
 
@@ -75,7 +96,7 @@ namespace circ
                 case Advice::kind:
                 case InputErrorFlag::kind:
                 case OutputErrorFlag::kind:
-                    return Exactly(0, op);
+                    return exactly(0, op);
                 case InputImmediate::kind:
                 case Not::kind:
                 case PopulationCount::kind:
@@ -84,42 +105,42 @@ namespace circ
                 case CountTrailingZeroes::kind:
                 case Extract::kind:
                 case UnusedConstraint::kind:
-                    return Exactly(1, op);
+                    return exactly(1, op);
                 case RegConstraint::kind:
                 case PreservedConstraint::kind:
                 case CopyConstraint::kind:
                 case DecodeCondition::kind:
                 case AdviceConstraint::kind:
-                    return Exactly(2, op);
+                    return exactly(2, op);
                 case ReadConstraint::kind:
-                    return Exactly(4, op);
+                    return exactly(4, op);
                 case WriteConstraint::kind:
-                    return Exactly(5, op);
+                    return exactly(5, op);
                 case Select::kind:
-                    return Exactly((1 << op->operands[0]->size) + 1, op);
+                    return exactly((1 << op->operands[0]->size) + 1, op);
                 case Concat::kind:
-                    return MoreThan(1, op);
+                    return more_than(1, op);
                 case VerifyInstruction::kind:
                 case OnlyOneCondition::kind:
                 case Circuit::kind:
                 case Or::kind:
                 case And::kind:
-                    return Not(0, op);
+                    return not_exactly(0, op);
             }
 
             if (is_specialization<LeafValue>(op->op_code))
-                return Exactly(0, op);
+                return exactly(0, op);
 
             if (is_specialization<Computational>(op->op_code)) {
                 switch (op->op_code) {
                     case Trunc::kind:
                     case ZExt::kind:
                     case SExt::kind:
-                        return Exactly(1, op);
+                        return exactly(1, op);
                     case BSelect::kind:
-                        return Exactly(3, op);
+                        return exactly(3, op);
                     default:
-                        return Exactly(2, op);
+                        return exactly(2, op);
                 }
             }
             unreachable() << "Cannot verify kind: " << to_string(op->op_code);
