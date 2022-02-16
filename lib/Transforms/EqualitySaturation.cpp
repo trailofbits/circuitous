@@ -76,6 +76,9 @@ namespace circ::eqsat {
     OpTemplate Visit(UDiv *op) { return sized(op); }
     OpTemplate Visit(SDiv *op) { return sized(op); }
 
+    OpTemplate Visit(SRem *op) { return sized(op); }
+    OpTemplate Visit(URem *op) { return sized(op); }
+
     OpTemplate Visit(Shl *op)  { return sized(op); }
     OpTemplate Visit(LShr *op) { return sized(op); }
     OpTemplate Visit(AShr *op) { return sized(op); }
