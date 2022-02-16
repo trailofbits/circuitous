@@ -242,7 +242,7 @@ namespace circ::run
                     << pretty_print(op) << " already has value "
                     << fmt(this->get(op))
                     << " yet we try to set "
-                    << val->toString(16, false) << " " << val->getBitWidth();
+                    << fmt(val);
                 log_dbg() << "Assign:" << pretty_print< false >(op)
                           << "value was already set.";
                 return;
