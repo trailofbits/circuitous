@@ -457,7 +457,7 @@ namespace circ
     declare_llvm_op(SRem, 21);
     declare_llvm_op(URem, 22);
 
-    struct BSelect final : Operation, make_kind< Computational, tag_fragment< 21 > >
+    struct BSelect final : Operation, make_kind< Computational, tag_fragment< 23 > >
     {
         static constexpr uint32_t kind = apply(Operation::kind);
         BSelect(unsigned size_) : Operation(size_, kind) {}
@@ -469,9 +469,9 @@ namespace circ
         Operation *false_v() { return operands[2]; }
     };
 
-    declare_llvm_op(CAnd, 22);
-    declare_llvm_op(COr, 23);
-    declare_llvm_op(CXor, 24);
+    declare_llvm_op(CAnd, 301);
+    declare_llvm_op(COr, 302);
+    declare_llvm_op(CXor, 303);
 
     #undef declare_llvm_op
 
