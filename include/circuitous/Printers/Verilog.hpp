@@ -639,11 +639,17 @@ namespace circ::print::verilog
         ModuleHeaderBase(Ctx &ctx_) : ctx(ctx_) {}
 
 
-
-        void declare_out_args()
+        void declare_out_arg(const std::string &name, uint32_t size)
         {
-            ctx.os() << "output [0:0] result" << std::endl;
-            result_args.emplace("result", false);
+            ctx.os() << "output " << impl::wire_size(size) << " " << name << std::endl;
+            result_args.emplace(name, false);
+        }
+
+        void declare_in_arg(const std::string &name, uint32_t size)
+        {
+            // Appending `,` since this cannot be last one - output argument is expected
+            // to be last
+            ctx.os() << "input " << impl::wire_size(size) << " " << name << "," << std::endl;
         }
 
         void assign_out_arg(const std::string &name, const std::string &what)
@@ -658,6 +664,7 @@ namespace circ::print::verilog
             ctx.os() << "assign " << name << " = " << what << ";\n";
         }
 
+        void finalize(Operation *) {}
     };
 
 
@@ -680,10 +687,8 @@ namespace circ::print::verilog
                 // fmt may be stateful, so extra invocation is not desired.
                 return this->ctx.give_name(op, fmt(op));
             };
-            // Appending `,` since this cannot be last one - output argument is expected
-            // to be last
-            this->ctx.os() << "input " << impl::wire_size(op->size) << " "
-                           << get_name(op) << "," << std::endl;
+            auto name = get_name(op);
+            this->parent_t::declare_in_arg(name, op->size);
         }
 
         template< typename O, typename ... Ts, typename Fmt >
@@ -714,7 +719,10 @@ namespace circ::print::verilog
                     declare_in_arg(operand, iarg_fmt );
             }
         }
+
+        void declare_out_args() { this->declare_out_arg("result", 1); }
     };
+
 
     template< typename Impl >
     struct ModuleHeader : Impl
@@ -728,6 +736,8 @@ namespace circ::print::verilog
             this->ctx.os() << std::endl;
             this->declare_out_args();
             this->ctx.os() << ");\n";
+
+            this->finalize(op);
         }
 
         void end_module() { this->ctx.os() << "endmodule" << std::endl; }
