@@ -21,39 +21,10 @@
 #include <unordered_map>
 
 CIRCUITOUS_RELAX_WARNINGS
-#include <gflags/gflags.h>
-#include <glog/logging.h>
-
 #include <llvm/Support/JSON.h>
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/MemoryBuffer.h>
 CIRCUITOUS_UNRELAX_WARNINGS
-
-
-DEFINE_string(ir_in, "", "Path to a serialized circuitous IR file.");
-DEFINE_string(json_in, "", "Path to an input state JSON file.");
-DEFINE_string(json_out, "", "Path to an output state JSON file.");
-DEFINE_string(dot_out, "", "Path to dump annotated dot file.");
-
-DEFINE_string(singular_current, "", "Path to current entry in a singular form.");
-DEFINE_string(singular_next, "", "Path to next entry in a singular form.");
-
-DEFINE_string(export_derived, "", "Path to store derived values into.");
-
-DEFINE_string(traces, "", "Path to traces");
-DEFINE_string(memory, "", "addr,hex_val");
-
-
-DEFINE_bool(derive, false, "Derive mode");
-DEFINE_bool(verify, false, "Verify mode");
-DEFINE_bool(interactive, false, "Interactive mode");
-DEFINE_string(inspect, "", "Inspect failing test case");
-
-DEFINE_bool(sim, false, "Interactive");
-
-DEFINE_bool(die, false, "DBG: Artificially kill program and dump state of all runners.");
-
-DEFINE_bool(dbg, false, "PLACEHOLDER.");
 
 // `circuitous-run` specific command line flags.
 namespace circ::cli::run
@@ -132,41 +103,40 @@ namespace circ::cli::run
 
 } // namespace circ::cli::run
 
-auto load_circ(const std::string &path) {
+auto load_circ(const std::string &file)
+{
     // Read input circuit file
-    std::ifstream ir(FLAGS_ir_in, std::ios::binary);
-    if (!ir) {
-        LOG(FATAL) << "Error while opening input IR file: " << std::strerror(errno);
-    }
+    std::ifstream ir(file, std::ios::binary);
+    circ::check(ir, []() { return std::strerror(errno); });
 
     // Deserialize circuit from binary IR file
     auto circuit = circ::Circuit::deserialize(ir);
 
     const auto &[status, msg, warnings] = circ::VerifyCircuit(circuit.get());
-    if (!status) {
-        LOG(FATAL) << "Loaded IR is not valid -- Aborting.\n" << msg;
-    }
-    if (!warnings.empty()) {
-        LOG(WARNING) << "Warnings produced while loading IR.";
-        LOG(WARNING) << warnings;
-    }
+    circ::check(status,
+                [msg_ = msg](){ return "Loaded IR is not valid -- Aborting.\n" + msg_; });
+    if (!warnings.empty())
+        circ::log_info() << "Warnings produced while loading IR.\n"
+                         << warnings;
 
     return circuit;
 }
 
-auto load_singular(const std::string &path) -> std::optional<circ::run::trace::Entry> {
-    if (path.empty()) {
+auto load_singular(const std::string &path) -> std::optional< circ::run::trace::Entry >
+{
+    if (path.empty())
         return {};
-    }
+
     using namespace circ::run::trace;
     return std::make_optional(get_entry(0ul, load_json(path)));
 }
 
-template<typename I>
-void export_derived(I inspect) {
+template< typename I >
+void export_derived(I inspect, const std::string &export_derived_to)
+{
     // Open output file
     std::error_code ec;
-    llvm::raw_fd_ostream output(FLAGS_export_derived, ec, llvm::sys::fs::F_Text);
+    llvm::raw_fd_ostream output(export_derived_to, ec, llvm::sys::fs::F_Text);
     circ::check(!ec) << "Error while opening output state JSON file: " << ec.message();
 
     // Dump output register values to JSON
@@ -221,44 +191,53 @@ void print_dot() {
 }
 
 template< typename Runner, typename CLI >
-void run(const CLI &cli) {
-
-    auto circuit = load_circ(FLAGS_ir_in);
+void run(const CLI &parsed_cli)
+{
+    auto circuit = load_circ(*parsed_cli.template get< circ::cli::run::IRIn >());
     Runner run(circuit.get());
 
-    if (auto current_trace = load_singular(FLAGS_singular_current)) {
+    if (auto singular_current = parsed_cli.template get< circ::cli::run::SingularCurrent >())
+    {
+        auto current_trace = load_singular(*singular_current);
+        circ::check(current_trace);
         run.set_input_state(*current_trace);
-        for (auto [addr, data] : current_trace->initial_memory) {
+        for (auto [addr, data] : current_trace->initial_memory)
             run.set_memory(addr, data);
-        }
     }
-    if (auto next_trace = load_singular(FLAGS_singular_next)) {
+
+    if (auto singular_next = parsed_cli.template get< circ::cli::run::SingularNext >())
+    {
+        auto next_trace = load_singular(*singular_next);
+        circ::check(next_trace);
         run.set_output_state(*next_trace);
     }
 
-    if (!FLAGS_memory.empty()) {
-        llvm::StringRef s_ref(FLAGS_memory);
+    if (auto memory = parsed_cli.template get< circ::cli::run::Memory >())
+    {
+        // TODO(lukas): Simplify.
+        llvm::StringRef s_ref(*memory);
         auto [addr, val] = s_ref.split(',');
         run.set_memory(std::strtoull(addr.data(), nullptr, 16), val.str());
     }
 
     run.Run();
-    if (FLAGS_die) {
-        // NOTE(lukas): `LOG` has problems with huge buffers. Possibly confugrable.
-        std::cerr << run.dump_runners();
-        LOG(FATAL) << "FLAGS_die induced death.";
+
+    if (parsed_cli.template present< circ::cli::run::Die >())
+    {
+        std::cout << run.dump_runners();
+        circ::log_kill() << "FLAGS_die induced death.";
     }
 
-    if (!FLAGS_export_derived.empty()) {
-        export_derived(circ::run::Inspector<Runner>(&run));
-    }
+    if (auto export_derived_to = parsed_cli.template get< circ::cli::run::ExportDerived >())
+        export_derived(circ::run::Inspector<Runner>(&run), *export_derived_to);
 
-    if (!FLAGS_dot_out.empty() && run.acceptor) {
+    if (auto dot_out = parsed_cli.template get< circ::cli::DotOut >(); dot_out && run.acceptor)
+    {
         std::unordered_map<circ::Operation *, std::string> values;
         for (auto &[op, val] : run.values()) {
             values[op] = (val) ? val->toString(16, false) : std::string("{ undef }");
         }
-        std::ofstream os(FLAGS_dot_out);
+        std::ofstream os(*dot_out);
         circ::print_dot(os, circuit.get(), values);
     }
 }
@@ -291,10 +270,6 @@ int main(int argc, char *argv[])
 
     if (cli.present< circ::cli::Dbg >())
         circ::add_sink< circ::severity::dbg >(std::cout);
-
-    google::InitGoogleLogging(argv[0]);
-    //google::InstallFailureSignalHandler();
-    google::ParseCommandLineFlags(&argc, &argv, true);
 
     using run_modes_t = std::tuple< circ::cli::run::Derive, circ::cli::run::Verify >;
     if (!cli.exactly_one_present(run_modes_t{}))
