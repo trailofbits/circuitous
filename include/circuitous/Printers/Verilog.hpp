@@ -619,15 +619,25 @@ namespace circ::print::verilog
         };
     } // namespace iarg_fmt
 
+    template< typename Next >
+    struct WithNames : Next
+    {
+        using Next::Next;
+        std::unordered_map< Operation *, std::string > args;
+    };
+
+    using ctx_t = WithNames< ToStream >;
+
     template< typename IArgFmt, typename Ctx >
-    struct ModuleDecl
+    struct ModuleHeader
     {
         Ctx &ctx;
 
+        // We expect to default construct these.
         std::string result_arg;
         IArgFmt iarg_fmt;
 
-        ModuleDecl(Ctx &ctx_) : ctx(ctx_) {}
+        ModuleHeader(Ctx &ctx_) : ctx(ctx_) {}
 
         void declare_module(const std::string &name, Operation *op)
         {
@@ -695,18 +705,6 @@ namespace circ::print::verilog
             ctx.os() << "assign " << name << " = " << what << ";\n";
         }
 
-        template< typename Fmt >
-        std::string write_body(Operation *op)
-        {
-            return Fmt(ctx).write(op);
-        }
-
-        void define_module(const std::string &name, Operation *op)
-        {
-            declare_module(name, op);
-            assign_out_arg("result", write_body< OpFmt< Ctx > >(op));
-            end_module();
-        }
     };
 
     static inline std::string get_module_name(Operation *op)
@@ -718,23 +716,15 @@ namespace circ::print::verilog
         }
     }
 
-    static inline void print[[maybe_unused]](
-        std::ostream &os, const std::string &module_name, Circuit *c)
+    static inline void print(std::ostream &os, const std::string &module_name, Circuit *c)
     {
-        ToStream ctx{os, c};
-        ModuleDecl< iarg_fmt::UseName, ToStream >(ctx).define_module(module_name, c);
-    }
+        ctx_t ctx{ os, c };
+        ModuleHeader< iarg_fmt::UseName, ctx_t > header(ctx);
 
-    static inline void print_solo[[maybe_unused]](
-        std::ostream &os, const std::string &module_name, Circuit *c, Operation *op)
-    {
-        ToStream ctx{os, c};
-        ModuleDecl< iarg_fmt::Simple, ToStream >(ctx).define_module(module_name, op);
-    }
-
-    static inline void print_solo[[maybe_unused]](std::ostream &os, Circuit *c, Operation *op)
-    {
-        return print_solo(os, get_module_name(op), c, op);
+        header.declare_module(module_name, c);
+        auto ret = OpFmt< ctx_t >(ctx).write(c);
+        header.assign_out_arg("result", ret);
+        header.end_module();
     }
 
 } // namespace circ::print::verilog
