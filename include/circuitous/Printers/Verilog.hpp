@@ -628,47 +628,68 @@ namespace circ::print::verilog
 
     using ctx_t = WithNames< ToStream >;
 
-    template< typename IArgFmt, typename Ctx >
-    struct ModuleHeader
+    template< typename Ctx >
+    struct ModuleHeaderBase
     {
         Ctx &ctx;
 
-        // We expect to default construct these.
-        std::string result_arg;
-        IArgFmt iarg_fmt;
+        // name -> whether something was stored to it.
+        std::map< std::string, bool > result_args;
 
-        ModuleHeader(Ctx &ctx_) : ctx(ctx_) {}
+        ModuleHeaderBase(Ctx &ctx_) : ctx(ctx_) {}
 
-        void declare_module(const std::string &name, Operation *op)
+
+
+        void declare_out_args()
         {
-            ctx.os() << "module " << name << "(" << std::endl;
-            this->declare_in_args(op);
-            ctx.os() << std::endl;
-            this->declare_out_arg();
-            ctx.os() << ");\n";
+            ctx.os() << "output [0:0] result" << std::endl;
+            result_args.emplace("result", false);
         }
 
-        void end_module() { ctx.os() << "endmodule" << std::endl; }
+        void assign_out_arg(const std::string &name, const std::string &what)
+        {
+            auto it = result_args.find(name);
+            // For now we cannot recover from this.
+            check(it != result_args.end())
+                << "Trying to use output wire that is not present:" << name;
+
+            check(!it->second) << "Output wire" << name << "was already assigned!";
+            it->second = true;
+            ctx.os() << "assign " << name << " = " << what << ";\n";
+        }
+
+    };
+
+
+    template< typename IArgFmt, typename Ctx >
+    struct CoreModuleHeader : ModuleHeaderBase< Ctx >
+    {
+        using parent_t = ModuleHeaderBase< Ctx >;
+
+        // Expects to be default constructed.
+        IArgFmt iarg_fmt;
+
+        using parent_t::parent_t;
 
         template< typename Fmt >
         void declare_in_arg(Operation *op, Fmt &&fmt)
         {
             auto get_name = [&](auto op) -> std::string {
-                if (auto name = ctx.get_name(op))
+                if (auto name = this->ctx.get_name(op))
                     return *name;
                 // fmt may be stateful, so extra invocation is not desired.
-                return ctx.give_name(op, fmt(op));
+                return this->ctx.give_name(op, fmt(op));
             };
             // Appending `,` since this cannot be last one - output argument is expected
             // to be last
-            ctx.os() << "input " << impl::wire_size(op->size) << " "
-                     << get_name(op) << "," << std::endl;
+            this->ctx.os() << "input " << impl::wire_size(op->size) << " "
+                           << get_name(op) << "," << std::endl;
         }
 
         template< typename O, typename ... Ts, typename Fmt >
         void declare_in_args(Fmt &&fmt)
         {
-            for (auto op : ctx.circuit->template Attr< O >())
+            for (auto op : this->ctx.circuit->template Attr< O >())
                 declare_in_arg(op, fmt);
 
             if constexpr (sizeof...(Ts) != 0)
@@ -693,19 +714,28 @@ namespace circ::print::verilog
                     declare_in_arg(operand, iarg_fmt );
             }
         }
-
-        void declare_out_arg()
-        {
-            ctx.os() << "output [0:0] result" << std::endl;
-            result_arg = "result";
-        }
-
-        void assign_out_arg(const std::string &name, const std::string &what)
-        {
-            ctx.os() << "assign " << name << " = " << what << ";\n";
-        }
-
     };
+
+    template< typename Impl >
+    struct ModuleHeader : Impl
+    {
+        using Impl::Impl;
+
+        void declare_module(const std::string &name, Operation *op)
+        {
+            this->ctx.os() << "module " << name << "(" << std::endl;
+            this->declare_in_args(op);
+            this->ctx.os() << std::endl;
+            this->declare_out_args();
+            this->ctx.os() << ");\n";
+        }
+
+        void end_module() { this->ctx.os() << "endmodule" << std::endl; }
+    };
+
+    template< typename IArgFmt, typename Ctx >
+    using core_module_header = ModuleHeader< CoreModuleHeader< IArgFmt, Ctx > >;
+
 
     static inline std::string get_module_name(Operation *op)
     {
@@ -719,7 +749,7 @@ namespace circ::print::verilog
     static inline void print(std::ostream &os, const std::string &module_name, Circuit *c)
     {
         ctx_t ctx{ os, c };
-        ModuleHeader< iarg_fmt::UseName, ctx_t > header(ctx);
+        core_module_header< iarg_fmt::UseName, ctx_t > header(ctx);
 
         header.declare_module(module_name, c);
         auto ret = OpFmt< ctx_t >(ctx).write(c);
