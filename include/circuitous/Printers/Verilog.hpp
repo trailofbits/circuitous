@@ -625,7 +625,6 @@ namespace circ::print::verilog
         Ctx &ctx;
 
         std::string result_arg;
-        std::unordered_map< Operation *, std::string > args;
         IArgFmt iarg_fmt;
 
         ModuleDecl(Ctx &ctx_) : ctx(ctx_) {}
