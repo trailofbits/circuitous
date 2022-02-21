@@ -24,6 +24,8 @@ namespace circ
     struct Operation : public Node< Operation >, HasStringMeta
     {
       public:
+        using kind_t = uint32_t;
+
         static constexpr uint32_t kind = 0;
         static constexpr uint32_t bool_size = 1u;
 
