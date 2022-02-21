@@ -17,6 +17,74 @@
 namespace circ
 {
 
+    struct VerifierResult
+    {
+        using report_t = std::string;
+        using reports_t = std::vector< report_t >;
+
+        reports_t errors;
+        reports_t warnings;
+
+        struct Message
+        {
+            std::stringstream ss;
+            reports_t sink;
+
+            Message(reports_t &sink_) : sink(sink_) {}
+            Message(const Message &) = delete;
+            Message(Message &&) = delete;
+            Message &operator=(Message) = delete;
+            ~Message() { sink.push_back(ss.str() + "\n"); }
+
+            template< typename T >
+            Message &operator<<(T &&t)
+            {
+                ss << std::forward< T >(t);
+                return *this;
+            }
+        };
+
+        auto add_warning() { return Message(warnings); }
+        auto add_error() { return Message(errors); }
+
+        bool has_errors() { return !errors.empty(); }
+        bool has_warnings() { return !warnings.empty(); }
+
+        void merge(VerifierResult &&other)
+        {
+            auto do_move = [](auto &to, auto &from)
+            {
+                to.insert(to.end(),
+                          std::make_move_iterator(from.begin()),
+                          std::make_move_iterator(from.end()));
+            };
+            do_move(errors, other.errors);
+            do_move(warnings, other.warnings);
+        }
+
+        friend auto operator<<(std::ostream &os, const VerifierResult &self)
+        -> decltype( os << "" )
+        {
+            auto print_results = [&](const auto &what, const auto &results)
+            {
+                if (results.empty())
+                {
+                    os << "No " << what << " found." << std::endl;
+                    return;
+                }
+
+                os << what << ":" << std::endl;
+                for (const auto &result : results)
+                    os << " * " << result << std::endl;
+            };
+
+            print_results("errors", self.errors);
+            print_results("warnings", self.warnings);
+            return os;
+        }
+    };
+
+
     // Really simple structural verifier
     struct Verifier
     {
@@ -26,6 +94,17 @@ namespace circ
         bool status = true;
 
         std::string Report() { return ss.str(); }
+
+        // TODO(lukas): Just rework whole verifier to use `VerifierResult`.
+        void account(VerifierResult &&result)
+        {
+            if (result.has_errors())
+                status &= false;
+            for (auto &&err : result.errors)
+                ss << std::move(err);
+            for (auto &&warn : result.warnings)
+                _warnings << std::move(warn);
+        }
 
         void log_src_dump(Operation *op, const std::string &gprefix = "")
         {
