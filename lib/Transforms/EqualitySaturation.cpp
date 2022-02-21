@@ -121,6 +121,7 @@ namespace circ::eqsat {
     OpTemplate Visit(Select *op) { return select(op); }
 
     OpTemplate Visit(DecodeCondition *op)   { return opcode(op); }
+    OpTemplate Visit(DecoderResult *op)     { return opcode(op); }
     OpTemplate Visit(VerifyInstruction *op) { return opcode(op); }
     OpTemplate Visit(OnlyOneCondition *op)  { return opcode(op); }
 
