@@ -404,6 +404,29 @@ namespace circ
             for (auto root : circuit->Attr< DecoderResult >())
                 verify_constrained_subtree(root, root, allowed_nodes);
         }
+
+
+        VerifierResult verify_decoder_result_presence(Circuit *circuit)
+        {
+            VerifierResult out;
+            for (auto ctx : circuit->Attr< VerifyInstruction >())
+            {
+                std::vector< Operation * > decoder_results;
+                for (auto op : ctx->operands)
+                    if (is_of< DecoderResult >(op))
+                        decoder_results.push_back(op);
+                if (decoder_results.size() == 0)
+                {
+                    out.add_error() << "Conext:\n" << pretty_print< false >(ctx)
+                                    << "has no DecoderResult operand";
+                } else if (decoder_results.size() > 1) {
+                    out.add_error() << "Context:\n" << pretty_print< false >(ctx)
+                                    << "has " << decoder_results.size()
+                                    << " DecoderResult operand";
+                }
+            }
+            return out;
+        }
     };
 
     // Check if circuit has some really basic structural integrity, and return
@@ -415,6 +438,7 @@ namespace circ
         verifier.VerifyAdvices(circuit);
         verifier.verify_decoder_result(circuit);
         verifier.VerifyIDs(circuit);
+        verifier.account(verifier.verify_decoder_result_presence(circuit));
         return {verifier.status, verifier.Report(), verifier._warnings.str() };
     }
 
