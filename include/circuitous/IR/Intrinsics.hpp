@@ -38,6 +38,11 @@ namespace circ::irops {
   // Same as `And`.
   simple_intrinsic(VerifyInst, impl::predicate_base_t, "__circuitous.verify_inst");
 
+  // Result of multiple decoder checks, semantically equivalent to `&&` on all its arguments.
+  // Reason this is a separate intrinsic is that the node will be easily identifiable by
+  // later analysis/transformation.
+  simple_intrinsic(DecoderResult, impl::predicate_base_t, "__circuitous.decoder_result");
+
   // Binary operation, that returns true iff its operands are equal
   simple_intrinsic(Eq, impl::binary_check_t, "__circuitous.eq");
   // Same as `Eq`, serves to denote output comparison.
