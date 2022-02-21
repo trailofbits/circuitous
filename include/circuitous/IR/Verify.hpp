@@ -302,6 +302,29 @@ namespace circ
                 CollectIDs(o, seen, ids);
         }
 
+        // `root` is passed only for error messages.
+        void verify_constrained_subtree(Operation *root, Operation *current,
+                                        const std::unordered_set< Operation::kind_t > &allowed)
+        {
+            if (!allowed.count(current->op_code))
+            {
+                ss << pretty_print< true >(root) << "\t -- has in its subtree operation that "
+                   << "is not allowed:\n\t" << pretty_print< true >(current);
+                status &= false;
+            }
+
+            for (auto op : current->operands)
+                verify_constrained_subtree(root, op, allowed);
+        }
+
+        void verify_decoder_result(Circuit *circuit)
+        {
+            auto allowed_nodes = collect_kinds< DecodeCondition, Constant,
+                                                DecoderResult, Extract,
+                                                InputInstructionBits >();
+            for (auto root : circuit->Attr< DecoderResult >())
+                verify_constrained_subtree(root, root, allowed_nodes);
+        }
     };
 
     // Check if circuit has some really basic structural integrity, and return
@@ -311,6 +334,7 @@ namespace circ
         Verifier verifier;
         verifier.Verify(circuit);
         verifier.VerifyAdvices(circuit);
+        verifier.verify_decoder_result(circuit);
         verifier.VerifyIDs(circuit);
         return {verifier.status, verifier.Report(), verifier._warnings.str() };
     }
