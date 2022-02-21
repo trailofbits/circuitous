@@ -312,6 +312,7 @@ namespace circ::print::verilog
                 case CAnd::kind:
                 case VerifyInstruction::kind:
                 case And::kind:
+                case DecoderResult::kind:
                     return "&";
                 case CXor::kind: return "^";
                 case Concat::kind:
@@ -445,6 +446,9 @@ namespace circ::print::verilog
         /* Nary helpers */
         std::string Visit(And *op) { return make(zip(), op); }
         std::string Visit(Or *op)  { return make(zip(), op); }
+
+        /* Decoder result wrapper */
+        std::string Visit(DecoderResult *op) { return make(zip(), op); }
 
         /* LLVM ops */
         std::string Visit(Add *op) { return make(zip(), op); }

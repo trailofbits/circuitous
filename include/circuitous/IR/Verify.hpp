@@ -125,6 +125,7 @@ namespace circ
                 case Circuit::kind:
                 case Or::kind:
                 case And::kind:
+                case DecoderResult::kind:
                     return not_exactly(0, op);
             }
 
