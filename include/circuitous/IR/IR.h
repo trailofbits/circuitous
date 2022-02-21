@@ -614,6 +614,7 @@ namespace circ
     make_bool_op(Or, 2);
     make_bool_op(OnlyOneCondition, 3);
     make_bool_op(And, 4);
+    make_bool_op(DecoderResult, 5);
 
     #undef make_bool_op
 
@@ -623,6 +624,7 @@ namespace circ
         CountLeadingZeroes, CountTrailingZeroes, Extract, PopulationCount,
         Parity, InputImmediate,
         RegConstraint, PreservedConstraint, CopyConstraint, DecodeCondition,
+        DecoderResult,
         ReadConstraint, WriteConstraint, UnusedConstraint,
         VerifyInstruction, OnlyOneCondition,
         AdviceConstraint, Select, And,
