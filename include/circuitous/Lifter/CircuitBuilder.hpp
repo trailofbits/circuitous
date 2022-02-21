@@ -157,6 +157,10 @@ namespace circ
             : has_ctx_ref(ctx_), ir(ir_), isel(isel_)
         {}
 
+        llvm::Value *get_decoder_tree();
+
+      private:
+
         values_t byte_fragments();
         std::string generate_raw_bytes(const std::string &str, uint64_t form, uint64_t to);
         llvm::Value *create_bit_check(uint64_t from, uint64_t to);
