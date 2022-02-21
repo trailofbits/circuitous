@@ -413,7 +413,7 @@ namespace circ {
         auto [begin, end] = inline_flattened(sem_call, make_breakpoint);
         ir.SetInsertPoint(this->head);
 
-        auto params = decoder(ctx, ir, isel).byte_fragments();
+        auto params = decoder(ctx, ir, isel).get_decoder_tree();
 
         auto mem_checks = mem::synthetize_memory(begin, end, ctx.ptr_size);
         ir.SetInsertPoint(this->head);
@@ -790,6 +790,12 @@ namespace circ {
         auto compare = irops::make< irops::DecodeCondition >(ir, {tail, extracted}, tail_size);
         out.push_back(compare);
         return out;
+    }
+
+    llvm::Value *decoder::get_decoder_tree()
+    {
+        auto all_fragments = byte_fragments();
+        return irops::make< irops::DecoderResult >(ir, all_fragments);
     }
 
     void CircuitMaker::prepare_module()
