@@ -750,9 +750,121 @@ namespace circ::print::verilog
         void end_module() { this->ctx.os() << "endmodule" << std::endl; }
     };
 
+    template< typename Ctx >
+    struct CheckerModuleHeader : ModuleHeaderBase< Ctx >
+    {
+        using parent_t = ModuleHeaderBase< Ctx >;
+        using parent_t::parent_t;
+
+        static std::string bare_name(Operation *op)
+        {
+            auto full_name = iarg_fmt::UseName()(op);
+            auto [prefix, name] = llvm::StringRef(full_name).split("_");
+            if (prefix == "In" || prefix == "Out")
+                return name.str();
+            return full_name;
+        }
+
+        struct TraceBlueprint
+        {
+            // Ordered to be consistent.
+            // TODO(lukas): Figure out what to do if some field is missing (reg for example
+            //              is never used).
+            std::map< std::string, Operation * > fields;
+            uint32_t total_size = 0;
+
+            template< typename ... Ts >
+            static TraceBlueprint make(Circuit *c)
+            {
+                TraceBlueprint out;
+                out.add< Ts ... >(c);
+                return out;
+            }
+
+            template< typename T, typename ... Ts >
+            void add(Circuit *c)
+            {
+                add(c->template Attr< T >());
+                if constexpr (sizeof ... (Ts) != 0)
+                    return add< Ts ... >(c);
+            }
+
+            void add(auto &ops)
+            {
+                for (auto op : ops)
+                {
+                    auto name = bare_name(op);
+                    check(!fields.count(name));
+                    fields.emplace(name, op);
+                    total_size += op->size;
+                }
+            }
+        };
+
+        TraceBlueprint trace_bp;
+
+        void declare_in_args(Operation *op)
+        {
+            trace_bp = TraceBlueprint::template make<
+                InputRegister, InputErrorFlag, InputTimestamp,
+                Memory, InputInstructionBits,
+                Advice >(this->ctx.circuit);
+            this->declare_in_arg("current", trace_bp.total_size);
+            this->declare_in_arg("next", trace_bp.total_size);
+        }
+
+        void declare_out_args()
+        {
+            this->declare_out_arg("result", 1);
+            this->declare_out_arg("dummy", 1, true);
+        }
+
+        void finalize(Operation *op)
+        {
+            std::map< std::string, Operation * > ins;
+            std::map< std::string, Operation * > outs;
+            collect< InputRegister, InputErrorFlag, InputTimestamp, Memory,
+                     InputInstructionBits, Advice >(ins);
+            collect< OutputRegister, OutputErrorFlag, OutputTimestamp >(outs);
+
+            uint32_t start = 0;
+            for (auto &[ bare_, op_ ] : trace_bp.fields)
+            {
+                auto emit = [&, bare = bare_, op = op_](auto &from, auto &collection)
+                {
+                    if (!collection.count(bare))
+                        return false;
+                    auto trg_op = collection[bare];
+                    OpFmt< Ctx > builder (this->ctx);
+                    auto name = this->ctx.give_name(trg_op, iarg_fmt::UseName()(trg_op));
+                    auto body = builder.make_extract(from, start + op->size - 1, start);
+                    builder.make_wire(name, body, op->size);
+                    return true;
+                };
+                auto status = emit("current", ins);
+                check(status);
+                emit("next", outs);
+
+                start += op_->size;
+            }
+        }
+
+        template< typename T, typename ... Ts >
+        void collect(std::map< std::string, Operation * > &in)
+        {
+            for (auto op : this->ctx.circuit->template Attr< T >())
+                in.emplace( bare_name(op), op );
+
+            if constexpr (sizeof ... (Ts) != 0)
+                return collect< Ts ... >(in);
+        }
+    };
+
     template< typename IArgFmt, typename Ctx >
     using core_module_header = ModuleHeader< CoreModuleHeader< IArgFmt, Ctx > >;
 
+    template< typename Ctx >
+    using checker_module_header = ModuleHeader< CheckerModuleHeader< Ctx > >;
 
     static inline std::string get_module_name(Operation *op)
     {
@@ -766,11 +878,15 @@ namespace circ::print::verilog
     static inline void print(std::ostream &os, const std::string &module_name, Circuit *c)
     {
         ctx_t ctx{ os, c };
-        core_module_header< iarg_fmt::UseName, ctx_t > header(ctx);
+        // TODO(lukas): Add some mechanism to choose - as there will most likely be many
+        //              options, this may need to be more complex than a simple flag.
+        //core_module_header< iarg_fmt::UseName, ctx_t > header(ctx);
+        checker_module_header< ctx_t > header(ctx);
 
         header.declare_module(module_name, c);
         auto ret = OpFmt< ctx_t >(ctx).write(c);
         header.assign_out_arg("result", ret);
+        header.assign_out_arg("dummy", impl::bin_zero(1u));
         header.end_module();
     }
 
