@@ -101,7 +101,7 @@ namespace circ
     }
 
     template< bool with_meta = true >
-    static inline std::string pretty_print(Operation *op)
+    static inline std::string pretty_print(const Operation *op)
     {
         std::stringstream ss;
         ss << op->id() << ": " << to_string(op->op_code);
