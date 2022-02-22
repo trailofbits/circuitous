@@ -100,7 +100,7 @@ namespace circ::print::verilog
         std::string &give_name(Operation *op, std::string name)
         {
             auto [it, flag] = op_names.emplace(op, std::move(name));
-            check(flag) << "\n" << dbg().str();
+            check(flag, [&](){ return "\n" + dbg().str(); });
             return it->second;
         }
 
