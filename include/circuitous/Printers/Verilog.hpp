@@ -643,9 +643,12 @@ namespace circ::print::verilog
         ModuleHeaderBase(Ctx &ctx_) : ctx(ctx_) {}
 
 
-        void declare_out_arg(const std::string &name, uint32_t size)
+        void declare_out_arg(const std::string &name, uint32_t size, bool is_last = false)
         {
-            ctx.os() << "output " << impl::wire_size(size) << " " << name << std::endl;
+            ctx.os() << "output " << impl::wire_size(size) << " " << name;
+            if (!is_last)
+                ctx.os() << ",";
+            ctx.os() << std::endl;
             result_args.emplace(name, false);
         }
 
@@ -724,7 +727,7 @@ namespace circ::print::verilog
             }
         }
 
-        void declare_out_args() { this->declare_out_arg("result", 1); }
+        void declare_out_args() { this->declare_out_arg("result", 1, true); }
     };
 
 
