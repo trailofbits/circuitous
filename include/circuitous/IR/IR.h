@@ -86,6 +86,22 @@ namespace circ
         return (op->op_code & T::mask) == T::apply(0u);
     }
 
+    template< typename T, typename ... Ts >
+    void collect_kinds(std::unordered_set< Operation::kind_t > &seen)
+    {
+        seen.insert(T::kind);
+        if constexpr (sizeof ... (Ts) != 0)
+            return collect_kinds< Ts ... >( seen );
+    }
+
+    template< typename ... Ts >
+    std::unordered_set< Operation::kind_t > collect_kinds()
+    {
+        std::unordered_set< Operation::kind_t > out;
+        collect_kinds< Ts ... >( out );
+        return out;
+    }
+
     template< typename Base, Base root_, uint8_t position_ >
     struct kind_fragment
     {
