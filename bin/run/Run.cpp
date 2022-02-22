@@ -246,7 +246,7 @@ auto parse_cmd(int argc, char *argv[])
 {
     using namespace circ::cli;
     using parser_t = circ::CmdParser<
-        IRIn, LogDir, LogToStderr, DotOut,
+        run::IRIn, LogDir, LogToStderr, DotOut,
         Dbg,
         //StateIn, StateOut, DotOut,
         run::SingularCurrent, run::SingularNext,
