@@ -436,7 +436,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
     //              fix.
     // Simulate urem as
     // `a % b = a - (udiv(a, b) * b)`
-    Operation *handle_urem(llvm::Instruction *inst)
+    Operation *lower_urem(llvm::Instruction *inst)
     {
         auto a = Fetch(inst->getParent()->getParent(), inst->getOperand(0u));
         auto b = Fetch(inst->getParent()->getParent(), inst->getOperand(1u));
@@ -510,7 +510,8 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
                 case llvm::BinaryOperator::ZExt: return Emplace<ZExt>(inst, size);
                 case llvm::BinaryOperator::SExt: return Emplace<SExt>(inst, size);
                 case llvm::BinaryOperator::ICmp: return handle_predicate(inst);
-                case llvm::BinaryOperator::URem: return handle_urem(inst);
+                case llvm::BinaryOperator::URem: return Emplace<URem>(inst, size);
+                case llvm::BinaryOperator::SRem: return Emplace<SRem>(inst, size);
 
                 default :
                     unreachable() << "Cannot lower llvm inst: "
@@ -519,10 +520,6 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         };
 
         auto op = handle_op();
-        // `urem` is already fully constructed as it is lowered via more ops.
-        if (op_code == llvm::BinaryOperator::URem)
-            return op;
-
         for (const auto &op_ : inst->operand_values())
             op->AddUse(Fetch(func, op_));
 
@@ -532,12 +529,12 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
     void VisitSelect(llvm::Function *func, llvm::Instruction *val)
     {
         if (val_to_op.count(val))
-          return;
+            return;
 
         auto sel = llvm::dyn_cast<llvm::SelectInst>(val);
         if (Fetch(func, sel->getCondition())->op_code == Undefined::kind) {
-          Emplace< Undefined >(sel, value_size(sel));
-          return;
+            Emplace< Undefined >(sel, value_size(sel));
+            return;
         }
 
         auto true_val = Fetch(func, sel->getTrueValue());
