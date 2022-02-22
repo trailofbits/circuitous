@@ -175,6 +175,7 @@ class Interpret(SimulateCWDMixin):
         if dbg_verbose:
             args += ["--dot-out", self.locate(case.name + ".result.dot")]
             args += ["--logtostderr"]
+            args += ["--dbg"]
             parent.metafiles[case.name + ".result.dot"] = self.locate(case.name + ".result.dot")
         if interpreter_death:
             args += ["--die"]
