@@ -382,6 +382,9 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         if (irops::Or::is(fn)) {
             return VisitGenericIntrinsic< Or >(call, fn);
         }
+        if (irops::DecoderResult::is(fn)) {
+            return VisitGenericIntrinsic< DecoderResult >(call, fn);
+        }
         if (irops::Memory::is(fn)) {
             auto [_, id] = irops::Memory::parse_args< uint32_t >(fn);
             return VisitGenericIntrinsic< Memory >(call, fn,
