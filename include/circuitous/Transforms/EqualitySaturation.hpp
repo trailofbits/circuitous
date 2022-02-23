@@ -125,11 +125,16 @@ namespace circ::eqsat {
 
   using label_match = std::variant< anonymous_match, unary_match, variadic_match >;
 
-  inline std::string_view name(const anonymous_match &) { return "anonymous"; }
-  inline std::string_view name(const unary_match &m)    { return label_name(m.label); }
-  inline std::string_view name(const variadic_match &m) { return label_name(m.label); }
-  inline std::string_view name(const label_match &match)
-  {
+  inline std::string name(const anonymous_match &) {
+    return "anonymous";
+  }
+  inline std::string name(const unary_match &m) {
+    return label_name(m.label);
+  }
+  inline std::string name(const variadic_match &m) {
+    return label_name(m.label);
+  }
+  inline std::string name(const label_match &match) {
     return std::visit([&] (const auto &m) { return name(m); }, match);
   }
 
@@ -898,9 +903,12 @@ namespace circ::eqsat {
   template< typename Graph >
   struct Rule
   {
-    Rule(std::string_view name, std::string_view lhs_, std::string_view rhs_)
-      : name(name), lhs(make_pattern(lhs_)), rhs(make_pattern(rhs_))
-      , places(get_indexed_places(lhs))
+    Rule(const std::string &name, const std::string &lhs_,
+         const std::string &rhs_)
+        : name(name),
+          lhs(make_pattern(lhs_)),
+          rhs(make_pattern(rhs_)),
+          places(get_indexed_places(lhs)) 
     {}
 
     auto match(const Graph &egraph) const
