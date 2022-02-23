@@ -52,12 +52,12 @@ namespace circ::eqsat {
 
     std::string full_name() const
     {
-      return bitwidth ? std::string(name) + ":" + std::to_string(*bitwidth) : std::string(name);
+      return bitwidth ? name + ":" + std::to_string(*bitwidth) : name;
     }
 
     bool operator==(const operation&) const = default;
 
-    std::string_view name;
+    std::string name;
     std::optional< bitwidth_t > bitwidth;
   };
 
@@ -69,27 +69,27 @@ namespace circ::eqsat {
 
   struct placeholder_tag;
   // place has to be named with prefix '?'
-  using place = strong_type< std::string_view, placeholder_tag >;
+  using place = strong_type<std::string, placeholder_tag>;
 
   struct label_tag;
   // subexpression label has to be named with prefix '$'
-  using unary_label = strong_type< std::string_view, label_tag >;
+  using unary_label = strong_type<std::string, label_tag>;
 
   struct variadic_label_tag;
   // variadic label has to be named with prefix '$' and suffixed with '...'
-  using variadic_label = strong_type< std::string_view, variadic_label_tag >;
+  using variadic_label = strong_type<std::string, variadic_label_tag>;
 
   using anonymous_label = std::monostate;
 
   using label = std::variant< unary_label, variadic_label, anonymous_label >;
 
-  static inline std::string_view label_name(const label &lab)
-  {
-    return std::visit( overloaded {
-      [] (const unary_label &l)     -> std::string_view { return l.ref(); },
-      [] (const variadic_label &l)  -> std::string_view { return l.ref(); },
-      [] (const anonymous_label &l) -> std::string_view { return "none"; }
-    }, lab);
+  static inline std::string label_name(const label &lab) {
+    return std::visit(
+        overloaded{
+            [](const unary_label &l) -> std::string { return l.ref(); },
+            [](const variadic_label &l) -> std::string { return l.ref(); },
+            [](const anonymous_label &l) -> std::string { return "none"; }},
+        lab);
   }
 
   template< typename stream >
@@ -104,7 +104,7 @@ namespace circ::eqsat {
     return label_name(a) == label_name(b);
   }
 
-  using context_name = std::string_view;
+  using context_name = std::string;
 
   struct single_context_tag;
   using single_context = strong_type<context_name, single_context_tag>;
@@ -269,7 +269,7 @@ namespace circ::eqsat {
 
   struct Pattern : expr
   {
-    using named_exprs = std::unordered_map< std::string_view, expr >;
+    using named_exprs = std::unordered_map<std::string, expr>;
 
     explicit Pattern(const expr &e) : expr(e) {}
     explicit Pattern(expr &&e) : expr(std::move(e)) {}
@@ -304,7 +304,6 @@ namespace circ::eqsat {
     named_exprs subexprs;
   };
 
-  // TODO(Heno): constexpr
   static expr wrap(expr e) {
     if (std::holds_alternative<atom>(e)) {
       std::vector<expr> vec{};
@@ -326,13 +325,12 @@ namespace circ::eqsat {
     return fmap( value, number_parser<value_t>() );
   }
 
-  constexpr parser<std::string_view> auto name_parser()
-  {
-    return [] (parse_input_t in) -> parse_result_t<std::string_view> {
+  constexpr parser<std::string> auto name_parser() {
+    return [](parse_input_t in) -> parse_result_t<std::string> {
       if (auto prefix = length_parser(isalpha)(in); prefix && result(prefix) > 0) {
         if (auto suffix = length_parser(isdigit)(rest(prefix))) {
           auto length = result(prefix) + result(suffix);
-          return {{in.substr(0, length), in.substr(length)}};
+          return {{std::string(in.substr(0, length)), in.substr(length)}};
         }
       }
 
