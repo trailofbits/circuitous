@@ -214,5 +214,17 @@ namespace circ::cli
         static inline const auto opt = circ::CmdOpt("--eqsat", false);
     };
 
+    struct Patterns : circ::DefaultCmdOpt, PathArg {
+      static inline const auto opt = circ::CmdOpt("--patterns", false);
+
+      static std::string help() {
+        return "Path to file containing patterns for equality saturation.\n";
+      }
+
+      static std::string short_help() {
+        return help();
+      }
+    };
+
 } // namespace circ::cli
 

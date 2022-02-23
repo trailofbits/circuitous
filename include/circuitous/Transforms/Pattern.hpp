@@ -4,34 +4,32 @@
 
 #pragma once
 
-#include <circuitous/Util/StrongType.hpp>
-
-#include <circuitous/Util/Parser.hpp>
-#include <circuitous/Util/Logging.hpp>
-#include <circuitous/Util/Overloads.hpp>
+#include <algorithm>
+#include <cassert>
+#include <cctype>
+#include <charconv>
+#include <circuitous/Support/Log.hpp>
 #include <circuitous/Util/ConstExprVector.hpp>
 #include <circuitous/Util/FixedString.hpp>
+#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Overloads.hpp>
+#include <circuitous/Util/Parser.hpp>
 #include <circuitous/Util/StrongType.hpp>
-
-#include <cassert>
-#include <algorithm>
-#include <cctype>
-#include <cstring>
-#include <memory>
-#include <stdexcept>
-#include <type_traits>
-#include <utility>
-#include <vector>
-#include <optional>
-#include <variant>
-#include <string>
-#include <span>
-#include <charconv>
-#include <unordered_map>
-#include <string_view>
-#include <iostream>
 #include <concepts>
+#include <cstring>
+#include <iostream>
+#include <memory>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <unordered_map>
 #include <unordered_set>
+#include <utility>
+#include <variant>
+#include <vector>
 
 namespace circ::eqsat {
 

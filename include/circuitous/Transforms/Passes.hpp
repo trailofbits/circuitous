@@ -29,10 +29,20 @@ namespace circ
   {
     CircuitPtr run(CircuitPtr &&circuit) override
     {
-      return eqsat::EqualitySaturation(std::move(circuit));
+      return eqsat::EqualitySaturation(std::move(circuit), rulesets);
     }
 
     static Pass get() { return std::make_shared< EqualitySaturationPass >(); }
+
+    void add_rules(std::vector< eqsat::RuleSet > &&ruleset) {
+      rulesets.insert(
+        rulesets.end(),
+        std::make_move_iterator(ruleset.begin()),
+        std::make_move_iterator(ruleset.end())
+      );
+    }
+
+    std::vector<eqsat::RuleSet> rulesets;
   };
 
 
@@ -70,11 +80,10 @@ namespace circ
       { "dummy-pass",      DummyPass::get() }
     };
 
-    void add_pass(const std::string &name)
-    {
+    NamedPass &add_pass(const std::string &name) {
       auto pass = known_passes.at(name);
       log_info() << "Adding pass: " << name;
-      passes.emplace_back(name, pass);
+      return passes.emplace_back(name, pass);
     }
 
     CircuitPtr run_pass(const Pass &pass, CircuitPtr &&circuit)
