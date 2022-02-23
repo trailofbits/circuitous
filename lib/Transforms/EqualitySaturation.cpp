@@ -423,7 +423,6 @@ namespace circ::eqsat {
   template< typename Graph >
   using Scheduler = BasicRulesScheduler< Graph, PatternCircuitBuilder< Graph > >;
   using DefaultRunner = EqSatRunner< CircuitEGraph, Scheduler >;
-  using CircuitRewriteRules = Rules< CircuitEGraph >;
 
   // CostGraph precomputes cost for all equality nodes
   // in the underlying egraph according to a given cost function
@@ -437,7 +436,7 @@ namespace circ::eqsat {
   {
     using ENode = typename Graph::Node;
     using EClass = typename Graph::EClass;
-    using CostMap = std::map< const ENode*, std::uint64_t >;
+    using CostMap = std::map<const ENode *, std::int64_t>;
 
     CostGraph(const Graph &graph, CostFunction eval)
       : graph(graph), eval(eval)
@@ -513,23 +512,21 @@ namespace circ::eqsat {
     }
 
   private:
+   std::int64_t eval_cost(const ENode *node) {
+     if (auto cost = costs.find(node); cost != costs.end())
+       return cost->second;
 
-    std::uint64_t eval_cost(const ENode *node)
-    {
-      if (auto cost = costs.find(node); cost != costs.end())
-        return cost->second;
+     auto fold = [&](unsigned cost, auto id) -> std::int64_t {
+       const auto &eclass = graph.eclass(id);
+       for (const auto *node : eclass.nodes)
+         costs.try_emplace(node, eval_cost(node));
 
-      auto fold = [&] (unsigned cost, auto id) -> std::uint64_t {
-        const auto &eclass = graph.eclass(id);
-        for (const auto *node : eclass.nodes)
-          costs.try_emplace(node, eval_cost(node));
+       return cost + costs[minimal(eclass)];
+     };
 
-        return cost + costs[minimal(eclass)];
-      };
-
-      const auto &ch = node->children();
-      return std::accumulate(ch.begin(), ch.end(), eval(node), fold);
-    }
+     const auto &ch = node->children();
+     return std::accumulate(ch.begin(), ch.end(), eval(node), fold);
+   }
 
     const Graph &graph;
 
@@ -776,84 +773,16 @@ namespace circ::eqsat {
     return std::move(circuit);
   }
 
-  CircuitPtr EqualitySaturation(const CircuitPtr &circuit)
-  {
-    using Runner = eqsat::DefaultRunner;
-    using RewriteRules = eqsat::CircuitRewriteRules;
-    using EGraph = typename Runner::EGraph;
-
-    log_info() << "Start equality saturation";
-
-    auto runner = Runner::make_runner(circuit);
-
-    RewriteRules extend_arithmetic;
-    // extend all multiplications to i128
-    extend_arithmetic.emplace_back( "extend-mul-i8-to-i128",
-      "((let M (op_Mul:8 ?a ?b)) (commutative-match $M))",
-      "((let Ext (op_Trunc:8 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
-    );
-    extend_arithmetic.emplace_back( "extend-mul-i16-to-i128",
-      "((let M (op_Mul:16 ?a ?b)) (commutative-match $M))",
-      "((let Ext (op_Trunc:16 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
-    );
-    extend_arithmetic.emplace_back( "extend-mul-i32-to-i128",
-      "((let M (op_Mul:32 ?a ?b)) (commutative-match $M))",
-      "((let Ext (op_Trunc:32 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
-    );
-    extend_arithmetic.emplace_back( "extend-mul-i64-to-i128",
-      "((let M (op_Mul:64 ?a ?b)) (commutative-match $M))",
-      "((let Ext (op_Trunc:64 (op_Mul:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
-    );
-
-    // extend all additions to i128
-    extend_arithmetic.emplace_back( "extend-add-i8-to-i128",
-      "((let M (op_Add:8 ?a ?b)) (commutative-match $M))",
-      "((let Ext (op_Trunc:8 (op_Add:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
-    );
-    extend_arithmetic.emplace_back( "extend-add-i16-to-i128",
-      "((let M (op_Add:16 ?a ?b)) (commutative-match $M))",
-      "((let Ext (op_Trunc:16 (op_Add:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
-    );
-    extend_arithmetic.emplace_back( "extend-add-i32-to-i128",
-      "((let M (op_Add:32 ?a ?b)) (commutative-match $M))",
-      "((let Ext (op_Trunc:32 (op_Add:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
-    );
-    extend_arithmetic.emplace_back( "extend-add-i64-to-i128",
-      "((let M (op_Add:64 ?a ?b)) (commutative-match $M))",
-      "((let Ext (op_Trunc:64 (op_Add:128 (op_SExt:128 ?a) (op_SExt:128 ?b)))) (union $M $Ext))"
-    );
-
-
-    runner.run(extend_arithmetic);
-
-    RewriteRules bond_arithmetic;
-    bond_arithmetic.emplace_back( "advice-and-bond-mul-i128",
-      "((let Muls (op_Mul:128):C) (disjoint C...) (commutative-match $Muls...))",
-      "((let Bond (bond $Muls...)) (let Adviced (op_Mul:128 op_Advice:128 op_Advice:128)) (union $Bond $Adviced))"
-    );
-
-    bond_arithmetic.emplace_back( "advice-and-bond-add-i128",
-      "((let Adds (op_Add:128):C) (disjoint C...) (commutative-match $Adds...))",
-      "((let Bond (bond $Adds...)) (let Adviced (op_Add:128 op_Advice:128 op_Advice:128)) (union $Bond $Adviced))"
-    );
-
-    runner.run(bond_arithmetic);
-
-    std::ofstream outb("egraph-not-lowered.dot");
-    to_dot(runner.egraph(), outb);
+  CircuitPtr lower(auto &runner, const auto &circ) {
     lower_advices(runner.egraph(), runner.builder());
-    log_info() << "Equality saturation stopped";
 
-    std::ofstream outa("egraph-after.dot");
-    to_dot(runner.egraph(), outa);
-
-    auto eval = [] (const auto &node) -> std::uint64_t {
+    auto eval = [](const auto &node) -> std::int64_t {
       // TODO(Heno) implement cost function
       if (name(node) == "Mul") {
-        return 1000; // * bitwidth(node).value();
+        return 1000;  // * bitwidth(node).value();
       }
       if (name(node) == "Add") {
-        return 100; // * bitwidth(node).value();
+        return 100;  // * bitwidth(node).value();
       }
       return 1;
     };
@@ -861,9 +790,43 @@ namespace circ::eqsat {
     auto costgraph = eqsat::CostGraph(runner.egraph(), eval);
     auto optimal = costgraph.optimal();
 
-    eqsat::CircuitExtractor extractor(optimal);
-    return postprocess(
-        extractor.run(runner.node(circuit.get()), circuit->ptr_size));
+    eqsat::CircuitExtractor ext(optimal);
+    return postprocess(ext.run(runner.node(circ.get()), circ->ptr_size));
   }
 
-} // namespace circ::eqsat
+  using RuleSets = std::span<RuleSet>;
+
+  auto make_runner(const auto &circuit) {
+    return eqsat::DefaultRunner::make_runner(circuit);
+  }
+
+  CircuitPtr apply_rules(auto &&runner, RuleSets rules, auto &&circuit) {
+    if (rules.empty())
+      return lower(runner, std::move(circuit));
+
+    const auto &ruleset = rules.front();
+    log_info() << "apply rules: " << ruleset.name;
+    runner.run(ruleset.rules);
+
+    std::ofstream oute("after-" + ruleset.name + ".dot");
+    to_dot(runner.egraph(), oute);
+
+    auto tail = rules.subspan(1);
+
+    if (ruleset.name.find("freeze") != std::string::npos) {
+      circuit = lower(runner, std::move(circuit));
+      return apply_rules(make_runner(circuit), tail, std::move(circuit));
+    } else {
+      return apply_rules(std::move(runner), tail, std::move(circuit));
+    }
+  }
+
+  CircuitPtr EqualitySaturation(CircuitPtr &&circuit, RuleSets rules) {
+    log_info() << "Start equality saturation";
+    auto runner = make_runner(circuit);
+    auto result = apply_rules(runner, rules, std::move(circuit));
+    log_info() << "Equality saturation stopped";
+    return result;
+  }
+
+  }  // namespace circ::eqsat

@@ -4,33 +4,32 @@
 
 #pragma once
 
+#include <circuitous/IR/IR.h>
+
 #include <algorithm>
+#include <circuitous/ADT/EGraph.hpp>
+#include <circuitous/ADT/UnionFind.hpp>
+#include <circuitous/Support/Check.hpp>
+#include <circuitous/Transforms/EqSat/Graph.hpp>
+#include <circuitous/Transforms/PassBase.hpp>
+#include <circuitous/Transforms/Pattern.hpp>
+#include <circuitous/Util/Parser.hpp>
 #include <cstddef>
 #include <cstdint>
+#include <experimental/iterator>
 #include <functional>
 #include <iterator>
 #include <map>
-#include <set>
 #include <memory>
 #include <optional>
+#include <set>
+#include <string>
+#include <string_view>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
 #include <variant>
 #include <vector>
-#include <string>
-#include <string_view>
-#include <experimental/iterator>
-
-#include <circuitous/IR/IR.h>
-#include <circuitous/ADT/EGraph.hpp>
-#include <circuitous/ADT/UnionFind.hpp>
-#include <circuitous/Transforms/Pattern.hpp>
-#include <circuitous/Transforms/PassBase.hpp>
-
-#include <circuitous/Transforms/EqSat/Graph.hpp>
-
-#include <circuitous/Support/Check.hpp>
 
 namespace circ::eqsat {
 
@@ -933,9 +932,136 @@ namespace circ::eqsat {
     indexed_places places;
   };
 
-
   template< typename Graph >
   using Rules = std::vector< Rule< Graph > >;
+
+  using RewriteRule = Rule<CircuitEGraph>;
+  using RewriteRules = Rules<CircuitEGraph>;
+
+  static inline std::optional<std::string_view>
+  parse_ruleset_name(std::string_view line) {
+    if (!line.starts_with('[')) {
+      return std::nullopt;
+    }
+    if (!line.ends_with(']')) {
+      log_error() << "missing closing bracket: " << line;
+      return std::nullopt;
+    }
+    return line.substr(1, line.size() - 2);
+  }
+
+  struct RuleSet {
+    std::string name;
+    RewriteRules rules;
+  };
+
+  using MaybeRuleSet = std::optional<RuleSet>;
+
+  using MaybeString = std::optional<std::string>;
+
+  static inline MaybeRuleSet maybe_new_ruleset(std::string_view line) {
+    if (auto name = parse_ruleset_name(line))
+      return RuleSet{std::string{name.value()}, RewriteRules{}};
+    return std::nullopt;
+  }
+
+  static inline MaybeString parse_rule_name(std::string_view line) {
+    if (line.ends_with(':'))
+      return std::string(line.substr(0, line.size() - 1));
+    return std::nullopt;
+  }
+
+  static inline std::string_view ltrim(std::string_view line) {
+    line.remove_prefix(
+        std::min(line.find_first_not_of(" \n\r\t"), line.size()));
+    return line;
+  }
+
+  static inline bool is_commented(std::string_view line) {
+    return ltrim(line).starts_with('#');
+  }
+
+  static inline std::optional<std::string> get_nonempty_line(std::istream &is) {
+    std::string line;
+    while (std::getline(is, line)) {
+      if (line.empty()) {
+        /* noop */
+      } else if (is_commented(line)) {
+        /* noop */
+      } else {
+        return line;
+      }
+    }
+
+    return std::nullopt;
+  }
+
+  static inline MaybeString parse_pattern(std::string_view line) {
+    line = ltrim(line);
+    if (line.starts_with('-'))
+      return std::string(line.substr(2));
+    return std::nullopt;
+  }
+
+  static inline std::optional<RewriteRule>
+  parse_rule(std::string_view name_line, std::istream &is) {
+    auto pattern = [&]() -> MaybeString {
+      if (auto line = get_nonempty_line(is)) {
+        if (auto pat = parse_pattern(*line)) {
+          return pat;
+        } else {
+          log_error() << "expected a pattern: " << *line;
+          return std::nullopt;
+        }
+      }
+
+      log_error() << "missing pattern";
+      return std::nullopt;
+    };
+
+    if (auto name = parse_rule_name(name_line)) {
+      log_info() << "rule: " << *name;
+      auto lhs = pattern();
+      auto rhs = pattern();
+      if (lhs && rhs) {
+        log_info() << "lhs: " << *lhs;
+        log_info() << "rhs: " << *rhs;
+        return RewriteRule{*name, *lhs, *rhs};
+      }
+    } else {
+      log_error() << "expected rule name: " << name_line;
+      return std::nullopt;
+    }
+
+    return std::nullopt;
+  }
+
+  static inline std::vector<RuleSet> parse_rules(std::istream &is) {
+    std::vector<RuleSet> rulesets;
+
+    auto add_to_current_ruleset = [&](auto &&rule) {
+      rulesets.back().rules.push_back(std::move(rule));
+    };
+
+    std::string line;
+    while (auto line = get_nonempty_line(is)) {
+      if (auto ruleset = maybe_new_ruleset(*line)) {
+        log_info() << "new set of rules: " << ruleset->name << '\n';
+        rulesets.push_back(std::move(*ruleset));
+      } else if (auto rule = parse_rule(*line, is)) {
+        add_to_current_ruleset(std::move(*rule));
+      } else {
+        unreachable() << "syntax error: " << *line << '\n';
+      }
+    }
+
+    return rulesets;
+  }
+
+  static inline std::vector<RuleSet> parse_rules(std::string_view filename) {
+    std::ifstream file(std::string(filename), std::ios::in);
+    return parse_rules(file);
+  }
 
   template< typename Graph, typename Builder >
   struct BasicRulesScheduler
@@ -963,7 +1089,7 @@ namespace circ::eqsat {
     Builder _builder;
   };
 
-  CircuitPtr EqualitySaturation(const CircuitPtr &);
+  CircuitPtr EqualitySaturation(CircuitPtr &&, std::span<RuleSet> rules);
 
   template< typename Graph, typename Builder >
   void lower_advices(Graph &egraph, const Builder &builder)

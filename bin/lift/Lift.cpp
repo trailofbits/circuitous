@@ -54,6 +54,7 @@ DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 DEFINE_string(ciff_in, "", "Load input from circuitous-seed --dbg produced file");
 
 
+DEFINE_string(patterns, "", "Equality saturation patterns.");
 DEFINE_bool(eqsat, false, "Enable equality saturation based optimizations.");
 DEFINE_bool(dbg, false, "Enable various debug dumps");
 
@@ -74,8 +75,14 @@ namespace
     {
         Optimizer opt;
 
-        if (cli.template present< cli::EqSat >())
-            opt.add_pass("eqsat");
+        if (cli.template present<cli::EqSat>()) {
+          auto &[name, pass] = opt.add_pass("eqsat");
+          if (auto patterns = cli.template get<cli::Patterns>()) {
+            auto eqpass =
+                std::dynamic_pointer_cast<circ::EqualitySaturationPass>(pass);
+            eqpass->add_rules(circ::eqsat::parse_rules(patterns.value()));
+          }
+        }
 
         auto result = opt.run(std::move(circuit));
         circ::log_info() << "Optimizations done.";
@@ -188,7 +195,7 @@ int main(int argc, char *argv[]) {
         cli::IROut, cli::DotOut,
         cli::BitBlastStats,
         cli::LogToStderr, cli::LogDir,
-        cli::EqSat,
+        cli::EqSat, cli::Patterns,
         cli::Help >;
 
     auto parsed_cli = parse_and_validate_cli< parser_t >(argc, argv);
