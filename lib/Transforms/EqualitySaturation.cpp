@@ -266,6 +266,7 @@ namespace circ::eqsat {
         // .Case(Select::op_code_str())
 
         .Case("DecodeCondition",   opcode(name))
+        .Case("DecoderResult",   opcode(name))
         .Case("VerifyInstruction", opcode(name))
         .Case("OnlyOneCondition",  opcode(name))
         .Case("Or",  opcode(name))
@@ -550,6 +551,7 @@ namespace circ::eqsat {
         .Case("parity",                circuit->Create< Parity >())
 
         .Case("DecodeCondition",      circuit->Create< DecodeCondition >())
+        .Case("DecoderResult",        circuit->Create< DecoderResult >())
         .Case("VerifyInstruction",    circuit->Create< VerifyInstruction >())
         .Case("OnlyOneCondition",     circuit->Create< OnlyOneCondition >())
 
