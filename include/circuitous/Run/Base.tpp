@@ -161,6 +161,21 @@ void OpSem<S>::Visit(And *op)
     return safe(op, and_);
 }
 
+// TODO(lukas): Merge with `And`.
+template<typename S>
+void OpSem<S>::Visit(DecoderResult *op)
+{
+    auto and_ = [&](DecoderResult *op_) {
+        for (const auto &child : op_->operands) {
+            if (self().get(child) == this->FalseVal()) {
+                return this->FalseVal();
+            }
+        }
+        return this->TrueVal();
+    };
+    return safe(op, and_);
+}
+
 template<typename S>
 void Base_<S>::Visit(Circuit *op)
 {
