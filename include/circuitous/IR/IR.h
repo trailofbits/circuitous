@@ -80,6 +80,9 @@ namespace circ
         return (is_specialization<Ts>(op->op_code) || ...);
     }
 
+    template< typename ... Ts >
+    bool is_one_of(Operation *op, tl::TL< Ts ... >) { return is_one_of< Ts ... >(op); }
+
     template< typename T >
     bool is_of(Operation *op)
     {
