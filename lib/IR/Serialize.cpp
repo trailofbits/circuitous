@@ -451,6 +451,7 @@ namespace {
         DECODE_CONDITION(UnusedConstraint)
 
         DECODE_GENERIC(InputInstructionBits)
+        DECODE_CONDITION(DecoderResult)
         DECODE_CONDITION(DecodeCondition)
         DECODE_CONDITION(Or)
         DECODE_CONDITION(And)
