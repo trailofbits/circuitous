@@ -172,6 +172,7 @@ namespace circ
         using parent_t::parent_t;
         static std::string op_code_str() { return "in." + parent_t::op_code_str(); }
         std::string Name() const override { return "In." + parent_t::Name(); }
+        std::string raw_name() const { return parent_t::Name(); }
     };
 
     template< template< typename > class T >
@@ -181,6 +182,7 @@ namespace circ
         using parent_t::parent_t;
         static std::string op_code_str() { return "out." + parent_t::op_code_str(); }
         std::string Name() const override { return "Out." + parent_t::Name(); }
+        std::string raw_name() const { return parent_t::Name(); }
     };
 
     /* I/O & Leaf nodes */
@@ -302,12 +304,20 @@ namespace circ
         std::string Name() const override { return "instruction_bits"; }
     };
 
-    using leaf_values_ts = tl::make_list<
-        InputInstructionBits, Advice, Constant, Undefined,
-        InputTimestamp, OutputTimestamp,
-        InputErrorFlag, OutputErrorFlag,
-        InputRegister, OutputRegister, Memory
+    using input_leaves_ts = tl::make_list<
+        InputInstructionBits, Advice, Memory,
+        InputTimestamp, InputErrorFlag, InputRegister
     >;
+
+    using output_leaves_ts = tl::make_list<
+        OutputTimestamp, OutputErrorFlag, OutputRegister
+    >;
+
+    using nontrace_leaves_ts = tl::make_list<
+        Constant, Undefined
+    >;
+
+    using leaf_values_ts = tl::merge< input_leaves_ts, output_leaves_ts, nontrace_leaves_ts >;
 
     /* Constaints */
 
