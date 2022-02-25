@@ -223,6 +223,7 @@ namespace circ::run {
     }
     void Visit(Or *op);
     void Visit(And *op);
+    void Visit(DecoderResult *op);
 
     // Must be called in `safe` context.
     auto lhs(Operation *op) { return *self().get(op, 0); }
