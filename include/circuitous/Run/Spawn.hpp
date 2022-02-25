@@ -154,9 +154,17 @@ namespace circ::run
         // Verbose notification for debug purposes
         void notify_verbose(Operation *from, Operation *to)
         {
-            auto dbg_info = [](auto from, auto to) {
+            auto dbg_info = [&](auto from, auto to) {
+                auto tail = [&]() -> std::string
+                {
+                    if (blocked.count(to))
+                        return std::to_string(blocked[to]);
+                    return "(unknown)";
+                }();
+
                 log_dbg() << pretty_print< false >(from) << " -- notifies -> "
-                          << pretty_print< false >(to);
+                          << pretty_print< false >(to)
+                          << "which is blocked by:" << tail;
             };
             return notify(from, to, dbg_info);
         }
@@ -195,6 +203,7 @@ namespace circ::run
                 notify(op, user);
             notify_mem(op);
         }
+
     };
 
     template<typename Base>
