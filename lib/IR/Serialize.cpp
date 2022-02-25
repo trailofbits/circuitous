@@ -300,7 +300,8 @@ namespace {
         Operation *Visit(T *op, uint64_t id)
         {
             unreachable() << "Cannot deserialize "
-                          << T::kind << ". Most likely cause is missing impl.";
+                          << fragment_as_str(T::kind)
+                          << ". Most likely cause is missing impl.";
         }
 
         Operation *Decode(raw_id_t id, raw_op_code_t op_code)
