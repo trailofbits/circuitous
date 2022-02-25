@@ -204,7 +204,10 @@ namespace circ
             auto fn = ctx.arch()->DeclareLiftedFunction(name, ctx.module());
             ctx.arch()->InitializeEmptyLiftedFunction(fn);
 
-            Impl lifter(ctx.arch(), ctx.module());
+            // We need lifetime of the table to outlast the life of lifter
+            auto intrinsics = remill::IntrinsicTable(ctx.module());
+            Impl lifter(ctx.arch(), ctx.module(), &intrinsics);
+
             lifter.SupplyShadow(&info.shadow());
             check(fn->size() == 1);
 
@@ -212,7 +215,7 @@ namespace circ
             auto status = lifter.LiftIntoBlock(rinst, block, false);
 
             if (!was_lifted_correctly(status, rinst))
-                return {};
+                log_kill() << "Cannot recover from inccorectly lifted function.";
 
             // Check if unsupported intrinsics are present (some wild intrinsic can appear
             // when lifting new isels or llvm versions are changed).
