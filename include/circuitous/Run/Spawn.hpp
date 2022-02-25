@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <circuitous/IR/Trace.hpp>
 #include <circuitous/Run/Base.hpp>
 
 #include <circuitous/Support/Log.hpp>
@@ -321,6 +322,43 @@ namespace circ::run
         {
             parent_t::init();
             init_notify<Advice, OutputRegister, OutputErrorFlag, OutputTimestamp, Memory>();
+        }
+
+
+        // `[ current, next ]`.
+        // In `next` only values "visible" by this transition are updated.
+        std::tuple< std::string, std::string > to_traces(Circuit *circuit)
+        {
+            auto trace = Trace::make(circuit);
+            std::string current(trace.total_size, '0');
+            std::string next(trace.total_size, '0');
+
+            auto inject = [&](auto &where, auto op, auto &field) {
+                const auto &[start, size, _] = field;
+                auto maybe_value = this->GetNodeVal(op);
+                check(maybe_value);
+
+                auto val_as_str = maybe_value->toString(2, false);
+                if (val_as_str.size() < size)
+                {
+                    auto diff = size - val_as_str.size();
+                    val_as_str.insert(0, std::string(diff, '0'));
+                }
+
+                where.replace(start, size, val_as_str);
+            };
+
+            for (auto &[op, field] : trace.parse_map)
+            {
+                if (is_one_of(op, input_leaves_ts{}))
+                    inject(current, op, *field);
+                else if (is_one_of(op, output_leaves_ts{}))
+                    inject(next, op, *field);
+                else
+                    unreachable() << "Unreachable.";
+            }
+            check(current.size() == trace.total_size && next.size() == trace.total_size);
+            return { current, next };
         }
 
         template< typename S >
