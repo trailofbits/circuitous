@@ -87,8 +87,9 @@ namespace circ
 
         std::unordered_map< uint64_t, llvm::Value * > reg_op_dsts;
 
-        InstructionLifter(arch_ptr_t arch_, llvm::Module *module_)
-            : parent(arch_, remill::IntrinsicTable(module_)),
+        InstructionLifter(arch_ptr_t arch_, llvm::Module *module_,
+                          remill::IntrinsicTable *table)
+            : parent(arch_, table),
               arch(arch_),
               module(module_),
               llvm_ctx(&module_->getContext()),
