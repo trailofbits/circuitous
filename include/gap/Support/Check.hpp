@@ -102,6 +102,19 @@ namespace gap {
         return { std::cerr, std::move( loc ), static_cast< bool >(condition) };
     }
 
+    // TODO(lukas): Turn off in non-debug build.
+    void dcheck(auto &&condition, auto msg_gen,
+                source_location loc = source_location::current())
+    {
+        if (!condition)
+        {
+            CheckMessage(std::cerr, std::move(loc), static_cast< bool >(condition))
+                    << msg_gen();
+        }
+
+    }
+
+
     static inline auto unreachable(source_location loc = source_location::current())
     -> TerminatingMessage
     {
