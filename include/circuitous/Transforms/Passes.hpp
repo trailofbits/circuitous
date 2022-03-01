@@ -162,15 +162,14 @@ namespace circ
       auto result = this->Next::run_pass(npass, std::move(circuit));
       log_info() << "Done. Running verify pass:";
 
-      const auto &[status, msg, warnings] = VerifyCircuit(result.get());
+      auto verify_res = verify_circuit(result.get());
 
-      if (!status)
+      if (verify_res.has_errors())
         log_kill() << "Verify failed!\n"
-                   << warnings << "\n"
-                   << msg;
+                   << verify_res;
 
-      if (!warnings.empty())
-        log_error() << warnings;
+      if (verify_res.has_warnings())
+        log_error() << verify_res.get_warnings();
 
       log_info() <<"Circuit is okay.";
       return result;
