@@ -177,7 +177,7 @@ void reload_test(const circ::CircuitPtr &circuit)
 {
     circuit->serialize("reload_test.circir");
     auto reload = circ::Circuit::deserialize("reload_test.circir");
-    VerifyCircuit(reload.get());
+    VerifyCircuit("Reload test starting ...\n", reload.get(), "Reload test successful.\n");
 }
 
 int main(int argc, char *argv[]) {
