@@ -112,12 +112,15 @@ auto load_circ(const std::string &file)
     // Deserialize circuit from binary IR file
     auto circuit = circ::Circuit::deserialize(ir);
 
-    const auto &[status, msg, warnings] = circ::VerifyCircuit(circuit.get());
-    circ::check(status,
-                [msg_ = msg](){ return "Loaded IR is not valid -- Aborting.\n" + msg_; });
-    if (!warnings.empty())
+    auto verify_res = circ::verify_circuit(circuit.get());
+    circ::check(!verify_res.has_errors(), [&]() {
+            std::ostringstream os;
+            os << "Loaded IR is not valid -- Aborting.\n" << verify_res;
+            return os.str();
+    });
+    if (verify_res.has_warnings())
         circ::log_info() << "Warnings produced while loading IR.\n"
-                         << warnings;
+                         << verify_res.get_warnings();
 
     return circuit;
 }
