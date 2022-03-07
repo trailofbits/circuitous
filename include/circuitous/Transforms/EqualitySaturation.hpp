@@ -538,10 +538,52 @@ namespace circ::eqsat {
       return std::visit( [&] (const auto &l) { return match(e, l); }, lab );
     }
 
+    using single_match = std::pair< Id, Substitutions >;
+
+    // pick m elements from n
+    using combination  = std::vector< std::size_t >;
+    using combinations = std::vector< combination >;
+
+    static bool for_combination(std::size_t n, std::size_t m, std::size_t off,
+                                combination curr, auto yield)
+    {
+      if (m == 0) {
+        return yield(std::move(curr));
+      }
+
+      for (std::size_t i = off; i <= n - m; ++i) {
+        combination next = curr;
+        next.push_back(i);
+        if (for_combination(n, m - 1, i + 1, std::move(next), yield))
+          return true;
+      }
+
+      return false;
+    }
+
+    static bool for_combination(std::size_t n, std::size_t m, auto yield) {
+      return for_combination(n, m, 0, {}, yield);
+    }
+
+    static Matches make_viariadic_match(const std::vector< single_match > &matched,
+                                        const combination& comb, variadic_label l)
+    {
+      std::set<Id> ids;
+      Substitutions subs;
+
+      for (auto idx : comb) {
+        const auto &[matched_id, matched_subs] = matched[idx];
+        ids.insert(matched_id);
+        subs.insert(matched_subs.begin(), matched_subs.end());
+      }
+
+      variadic_match vmatch{l, ids};
+      return { matched_labels{{vmatch}, subs} };
+    }
+
     // not optimal but works for greedy solutions
     Matches match(const auto &e, variadic_label l) const
     {
-      using single_match = std::pair< Id, Substitutions >;
       std::vector< single_match > matched;
       for (const auto &[id, eclass] : egraph.classes()) {
         if (auto subs = match_eclass(eclass, e); !subs.empty()) {
@@ -549,34 +591,29 @@ namespace circ::eqsat {
         }
       }
 
-      Matches result;
-      // generate powerset of all combinations of matched nodes
-      auto power_set_size = std::pow(2, matched.size());
-      for(unsigned int i = 1; i < power_set_size; i++) {
-        std::set<Id> ids;
-        Substitutions subs;
-        for (unsigned int j = 0; j < matched.size(); j++) {
-          if (i & (1 << j)) {
-            // Avoid potential name clash with above `subs` and `id`.
-            const auto &[matched_id, matched_subs] = matched[j];
-            ids.insert(matched_id);
-            subs.insert(matched_subs.begin(), matched_subs.end());
-          }
-        }
+      for (std::size_t pick = matched.size(); pick > 0; --pick) {
+        std::optional<Matches> result = std::nullopt;
+        circ::log_info() << "[eqsat] trying combination of size " << pick;
+        for_combination(matched.size(), pick, [&] (auto comb) {
+          auto matches = make_viariadic_match(matched, comb, l);
 
-        if (ids.size() > result.size()) {
-          variadic_match vmatch{l, ids};
-          Matches matches{ matched_labels{{vmatch}, subs} };
+          // return the first match that satisfies constraints
           for (const auto &con : pattern.context_constraints) {
             matches = filter_constrained_disjoint_contexts(std::move(matches), con);
           }
+
           if (matches.size() > 0) {
             result = std::move(matches);
           }
-        }
+
+          return result.has_value();
+        });
+
+        if (result.has_value())
+          return result.value();
       }
 
-      return result;
+      return {};
     }
 
     unary_match named_match(const unary_label &l, Id id) const { return {l, id}; }
@@ -908,7 +945,7 @@ namespace circ::eqsat {
         : name(name),
           lhs(make_pattern(lhs_)),
           rhs(make_pattern(rhs_)),
-          places(get_indexed_places(lhs)) 
+          places(get_indexed_places(lhs))
     {}
 
     auto match(const Graph &egraph) const
