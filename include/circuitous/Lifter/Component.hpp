@@ -45,21 +45,22 @@ namespace circ::component {
     using SaturationProp = SaturationProp_;
     using TimestampProp = TimestampProp_;
 
-    struct Context {
-        using self_t = Context;
+    template< typename Derived >
+    struct ComponentWithArgs
+    {
 
         llvm::Instruction *current = nullptr;
         // To eliminate duplicate calls
         std::unordered_set< llvm::Value * > operands;
 
         template< typename ... Args >
-        Context(llvm::BasicBlock *bb_, Args && ... args)
-            : current(_make_dummy(bb_))
+        ComponentWithArgs(llvm::BasicBlock *bb, Args && ... args)
         {
-          add_operands(std::forward< Args >(args)...);
+            current = self()._make_dummy(bb);
+            add_operands(std::forward< Args >(args)...);
         }
 
-        Context(llvm::Instruction *c)
+        ComponentWithArgs(llvm::Instruction *c)
             : current(c)
         {
             auto call = llvm::dyn_cast< llvm::CallInst >(c);
@@ -71,26 +72,25 @@ namespace circ::component {
             }
         }
 
+        Derived &self() { return static_cast< Derived & >(*this); }
+
         template< typename L > requires (std::is_base_of_v< llvm::Value, L >)
-        void _add(const std::vector< L * > &vs) {
+        void _add(const std::vector< L * > &vs)
+        {
             operands.insert(vs.begin(), vs.end());
         }
+
         void _add(llvm::Value *v) { operands.insert(v); }
 
         template< typename H, typename ...Args >
-        self_t &add_operands(H &&h, Args && ...args)
+        Derived &add_operands(H &&h, Args && ...args)
         {
             _add(std::forward< H >(h));
             if constexpr (sizeof...(Args) == 0) {
-                return *this;
+                return self();
             } else {
                 return add_operands< Args ... >(std::forward< Args >(args)...);
             }
-        }
-
-        static llvm::Instruction *_make_dummy(llvm::BasicBlock  *bb) {
-            llvm::IRBuilder<> ir(bb);
-            return irops::make< irops::VerifyInst >(ir, ir.getTrue());
         }
 
         // Caller is responsible for correctly setting insertion point wrt to domination
@@ -101,13 +101,32 @@ namespace circ::component {
         }
         llvm::Value *regenerate(llvm::IRBuilder<> &irb) {
             // TODO(lukas): Accept other collections in `irops::make`.
-            auto new_ = irops::make< irops::VerifyInst >(
-                irb, std::vector< llvm::Value * >(operands.begin(), operands.end()));
+            auto new_ = self().create_raw(
+                    irb, std::vector< llvm::Value * >(operands.begin(), operands.end()));
             new_->copyMetadata(*current);
             current->replaceAllUsesWith(new_);
             current->eraseFromParent();
             current = new_;
             return current;
+        }
+    };
+
+    struct Context : ComponentWithArgs< Context >
+    {
+        using parent_t = ComponentWithArgs< Context >;
+        using self_t = Context;
+
+        using parent_t::parent_t;
+
+        static llvm::Instruction *_make_dummy(llvm::BasicBlock  *bb)
+        {
+            llvm::IRBuilder<> ir(bb);
+            return irops::make< irops::VerifyInst >(ir, ir.getTrue());
+        }
+
+        llvm::Instruction *create_raw(llvm::IRBuilder<> &irb, const auto &ops)
+        {
+            return irops::make< irops::VerifyInst >(irb, ops);
         }
     };
 
