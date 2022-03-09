@@ -7,10 +7,9 @@
 #include <circuitous/IR/Visitors.hpp>
 #include <circuitous/Support/Check.hpp>
 
-#include <vector>
+#include <algorithm>
 #include <optional>
-
-
+#include <vector>
 
 namespace circ
 {
@@ -25,6 +24,7 @@ namespace circ
         PartialEnc(std::size_t size) : bits(size, std::nullopt) {}
 
         auto &operator[](std::size_t idx) { return bits[idx]; }
+        const auto &operator[](std::size_t idx) const { return bits[idx]; }
         auto size() const { return bits.size(); }
 
         self_t &define(std::size_t from_inc, std::size_t to_inc, std::vector< int > vals)
@@ -127,7 +127,6 @@ namespace circ
         {
             for (const auto &[ctx, _] : encs)
             {
-                log_info() << _;
                 for (auto &[_, y] : unproved)
                     y.insert(ctx);
                 unproved[ctx] = {};
@@ -150,10 +149,12 @@ namespace circ
                 unproved[b].erase(a);
             };
 
-            for (auto &[a_ctx, a_enc] : encs)
-                for (auto &[b_ctx, b_enc] : encs)
+            for (const auto &[a_ctx, a_enc] : encs)
+                for (const auto &[b_ctx, b_enc] : encs)
+                {
                     if (join(a_enc[i], b_enc[i]))
                         prove(a_ctx, b_ctx);
+                }
         }
 
         VerifierResult run()
@@ -187,6 +188,25 @@ namespace circ
             return out;
         }
 
+        std::string stats() const
+        {
+            std::stringstream ss;
+            ss << "Encoding:\n";
+            for (const auto &[ctx, enc] : encs)
+            {
+                ss << pretty_print(ctx) << "\n";
+                ss << enc << "\n";
+            }
+
+            ss << "Unproved:\n";
+            for (const auto &[ctx, others] : unproved)
+            {
+                ss << pretty_print(ctx) << "\n";
+                for (auto o : others)
+                    ss << "\t" << pretty_print< false >(o) << "\n";
+            }
+            return ss.str();
+        }
     };
 
     Operation *get_decoder_result(Operation *root)
