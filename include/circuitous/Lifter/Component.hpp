@@ -62,7 +62,6 @@ namespace circ::component {
         Context(llvm::Instruction *c)
             : current(c)
         {
-            log_info() << "Start.";
             auto call = llvm::dyn_cast< llvm::CallInst >(c);
             check(call);
             for (uint32_t i = 0; i < call->getNumArgOperands(); ++i)
@@ -70,7 +69,6 @@ namespace circ::component {
                 check(!llvm::isa< llvm::Function >(call->getArgOperand(i)));
                 operands.insert(call->getArgOperand(i));
             }
-            log_info() << "Done.";
         }
 
         template< typename L > requires (std::is_base_of_v< llvm::Value, L >)
