@@ -48,20 +48,19 @@ namespace circ::component {
     struct Context {
         using self_t = Context;
 
-        llvm::BasicBlock *bb = nullptr;
         llvm::Instruction *current = nullptr;
         // To eliminate duplicate calls
         std::unordered_set< llvm::Value * > operands;
 
         template< typename ... Args >
         Context(llvm::BasicBlock *bb_, Args && ... args)
-            : bb(bb_), current(_make_dummy(bb_))
+            : current(_make_dummy(bb_))
         {
           add_operands(std::forward< Args >(args)...);
         }
 
         Context(llvm::Instruction *c)
-            : bb(c->getParent()), current(c)
+            : current(c)
         {
             log_info() << "Start.";
             auto call = llvm::dyn_cast< llvm::CallInst >(c);
