@@ -5,6 +5,7 @@
 #include <circuitous/IR/Verify.hpp>
 
 #include <circuitous/IR/Visitors.hpp>
+#include <circuitous/Support/Check.hpp>
 
 #include <vector>
 #include <optional>
@@ -14,16 +15,61 @@
 namespace circ
 {
 
-    using bits_t = std::vector< std::optional< int > >;
+    struct PartialEnc
+    {
+        using self_t = PartialEnc;
+        using bits_t = std::vector< std::optional< int > >;
+
+        bits_t bits;
+
+        PartialEnc(std::size_t size) : bits(size, std::nullopt) {}
+
+        auto &operator[](std::size_t idx) { return bits[idx]; }
+        auto size() const { return bits.size(); }
+
+        self_t &define(std::size_t from_inc, std::size_t to_inc, std::vector< int > vals)
+        {
+            dcheck(vals.size() == to_inc - from_inc + 1, [](){
+                    return "Inconsistent arguments to PartialEnc::define()!"; });
+
+            for (std::size_t i = 0; from_inc + i <= to_inc; ++i)
+            {
+                dcheck(!bits[from_inc + i], [](){ return "Cannot re-define bits."; });
+                bits[from_inc + i] = vals[i];
+            }
+            return *this;
+        }
+
+        std::string to_string() const
+        {
+            std::ostringstream ss;
+            ss << *this;
+            return ss.str();
+        }
+
+        friend auto operator<<(std::ostream &os, const self_t &self) -> decltype( os << "" )
+        {
+            for (const auto &b : self.bits)
+            {
+                if (b)
+                    os << *b;
+                else
+                    os << "-";
+            }
+            return os;
+        }
+    };
 
     struct EncCollector : Visitor< EncCollector, true >
     {
         using parent_t = Visitor< EncCollector, true >;
         using self_t = EncCollector;
 
-        bits_t bits;
+        PartialEnc enc;
 
-        bits_t take() { return std::move(bits); }
+        EncCollector(std::size_t size) : enc(size) {}
+
+        PartialEnc take() { return std::move(enc); }
 
         self_t &Visit(const Operation *op)
         {
@@ -40,11 +86,105 @@ namespace circ
 
         self_t &Visit(const DecodeCondition *op)
         {
+            auto convert = [](const auto &str) {
+                std::vector< int > out;
+                for (auto c : str)
+                {
+                    dcheck(c == '0' || c == '1', [](){ return "Unknown value in bits."; });
+                    out.push_back((c == '0') ? 0 : 1);
+                }
+                return out;
+            };
+
             auto expected = op->operands[0];
             auto extracted = op->operands[1];
 
             check(is_of< Constant >(expected) && is_of< Extract >(extracted));
+            const auto &constant = static_cast< const Constant & >(*expected);
+            const auto &extract = static_cast< const Extract & >(*extracted);
+            enc.define(extract.low_bit_inc, extract.high_bit_exc - 1, convert(constant.bits));
             return *this;
+        }
+
+    };
+
+    struct UniqnuessVerifier
+    {
+        using unproved_t = std::unordered_map< Operation *, std::unordered_set< Operation * > >;
+        using encs_t = std::unordered_map< Operation *, PartialEnc >;
+
+        encs_t encs;
+        unproved_t unproved;
+
+
+        UniqnuessVerifier(std::unordered_map< Operation *, PartialEnc > encs_)
+            : encs(std::move(encs_))
+        {
+            populate_unproved();
+        }
+
+        void populate_unproved()
+        {
+            for (const auto &[ctx, _] : encs)
+            {
+                log_info() << _;
+                for (auto &[_, y] : unproved)
+                    y.insert(ctx);
+                unproved[ctx] = {};
+            }
+        }
+
+        bool join(const std::optional< int > &a, const std::optional< int > &b)
+        {
+            if (!a || !b)
+                return false;
+
+            return *a != *b;
+        }
+
+        void try_prove(std::size_t i)
+        {
+            auto prove = [&](auto a, auto b)
+            {
+                unproved[a].erase(b);
+                unproved[b].erase(a);
+            };
+
+            for (auto &[a_ctx, a_enc] : encs)
+                for (auto &[b_ctx, b_enc] : encs)
+                    if (join(a_enc[i], b_enc[i]))
+                        prove(a_ctx, b_ctx);
+        }
+
+        VerifierResult run()
+        {
+            dcheck(!encs.empty(), []() {
+                    return "Need at least one context to verify uniqnuess."; });
+            for (std::size_t i = 0; i < encs.begin()->second.size(); ++i)
+                try_prove(i);
+            return collect_unproved();
+        }
+
+        VerifierResult collect_unproved() const
+        {
+            VerifierResult out;
+            for (const auto &[ctx, others] : unproved)
+            {
+                if (!others.empty())
+                {
+                    std::stringstream ss;
+                    ss << pretty_print(ctx) << " has uniqnuess collisions with:\n";
+                    for (auto o : others)
+                        ss << "\t" << pretty_print(o);
+
+                    ss << "Encodings:\n";
+                    ss << encs.find(ctx)->second << "\n";
+                    for (auto o : others)
+                        ss << encs.find(o)->second << "\n";
+                    out.add_error() << ss.str();
+                }
+            }
+            return out;
         }
 
     };
@@ -63,14 +203,14 @@ namespace circ
         return out;
     }
 
-    bool verify_context_uniqueness(Circuit *circuit)
+    VerifierResult verify_ctxs_uniqueness(Circuit *circuit)
     {
-        std::unordered_map< Operation *, bits_t > all;
+        std::unordered_map< Operation *, PartialEnc > all;
         for (auto ctx : circuit->Attr< VerifyInstruction >())
         {
-            all[ctx] = EncCollector().Dispatch(get_decoder_result(ctx)).take();
+            all.emplace(ctx, EncCollector(15 * 8).Dispatch(get_decoder_result(ctx)).take());
         }
-        return all.size() == 3;
+        return UniqnuessVerifier(std::move(all)).run();
     }
 
 

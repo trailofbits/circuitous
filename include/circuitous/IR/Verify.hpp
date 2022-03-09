@@ -100,6 +100,8 @@ namespace circ
         }
     };
 
+    VerifierResult verify_ctxs_uniqueness(Circuit *circuit);
+
     VerifierResult verify_arity(Operation *circuit, bool recursive = true);
     VerifierResult verify_advices(Circuit *circuit);
     VerifierResult verify_decoder_result(Circuit *circuit);
@@ -120,6 +122,7 @@ namespace circ
             run(verify_advices, circuit);
             run(verify_decoder_result, circuit);
             run(verify_ids, circuit);
+            run(verify_ctxs_uniqueness, circuit);
             return *this;
         }
 
@@ -145,8 +148,6 @@ namespace circ
 
     };
 
-    bool verify_context_uniqueness(Circuit *circuit);
-
     static inline VerifierResult verify_circuit(Circuit *circuit)
     {
         return Verifier().run_all(circuit).take();
@@ -157,7 +158,6 @@ namespace circ
                                      Circuit *circuit,
                                      const std::string &suffix="Done.")
     {
-        verify_context_uniqueness(circuit);
         log_info() << prefix;
         auto res = Verifier().run_all(circuit).take();
         if (res.has_errors())
