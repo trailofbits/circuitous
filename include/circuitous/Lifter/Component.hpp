@@ -118,7 +118,7 @@ namespace circ::component {
 
         using parent_t::parent_t;
 
-        static llvm::Instruction *_make_dummy(llvm::BasicBlock  *bb)
+        static llvm::Instruction *_make_dummy(llvm::BasicBlock *bb)
         {
             llvm::IRBuilder<> ir(bb);
             return irops::make< irops::VerifyInst >(ir, ir.getTrue());
@@ -130,15 +130,37 @@ namespace circ::component {
         }
     };
 
+    template< typename ImplOp >
+    struct TopLevel : ComponentWithArgs< TopLevel< ImplOp > >
+    {
+        using parent_t = ComponentWithArgs< TopLevel< ImplOp > >;
+        using self_t = TopLevel< ImplOp >;
+
+        using parent_t::parent_t;
+
+        static llvm::Instruction *_make_dummy(llvm::BasicBlock *bb)
+        {
+            llvm::IRBuilder<> irb(bb);
+            return irops::make< ImplOp >(irb, irb.getTrue());
+        }
+
+        llvm::Instruction *create_raw(llvm::IRBuilder<> &irb, const auto &ops)
+        {
+            return irops::make< ImplOp >(irb, ops);
+        }
+    };
+
     template< typename H, typename ...Args >
-    auto construct(llvm::IRBuilder<> &ir) {
+    auto construct(llvm::IRBuilder<> &ir)
+    {
         auto self = std::make_tuple(H::construct(ir));
         if constexpr (sizeof...(Args) == 0) return self;
         else return std::tuple_cat(self, construct< Args ... >(ir));
     }
 
-    template< typename ... Args>
-    auto construct(llvm::BasicBlock *bb) {
+    template< typename ... Args >
+    auto construct(llvm::BasicBlock *bb)
+    {
         llvm::IRBuilder<> irb(bb);
         return construct< Args ... >(irb);
     }
