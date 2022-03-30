@@ -64,7 +64,13 @@ namespace circ::run::trace {
         }
 
         llvm::APInt get_inst_bits(uint32_t size) const {
-            return llvm::APInt(size, inst_bits, /* radix = */ 16U);
+            std::string reoredered;
+            check(inst_bits.size() >= 2);
+            for (int i = static_cast< int >(inst_bits.size() - 2); i >= 0; i -= 2)
+            {
+                reoredered += inst_bits.substr(static_cast< unsigned long >(i), 2);
+            }
+            return llvm::APInt(size, reoredered, /* radix = */ 16U);
         }
         llvm::APInt get_ebit() const { return (ebit) ? llvm::APInt(1, 1) : llvm::APInt(1, 0); }
         llvm::APInt get_timestamp() const {

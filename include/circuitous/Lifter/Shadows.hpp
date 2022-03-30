@@ -21,6 +21,9 @@
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/Support/Log.hpp>
 
+#include <circuitous/Util/InstructionBytes.hpp>
+#include <circuitous/Util/LLVMUtil.hpp>
+
 namespace circ::shadowinst
 {
 
@@ -90,7 +93,7 @@ namespace circ::shadowinst
         explicit ordered_bits_t(const bits_t &data_)
         {
             data.reserve(data_.size());
-            data.insert(data.end(), data_.rbegin(), data_.rend());
+            data.insert(data.end(), data_.begin(), data_.end());
         }
     };
 

@@ -56,7 +56,7 @@ namespace circ
 
             std::vector<llvm::Function *> out;
             for (auto [from, to] : current)
-                out.push_back(irops::Extract::create_fn(module, from, to));
+                out.push_back(irops::ExtractRaw::create_fn(module, from, to));
             return out;
         }
 

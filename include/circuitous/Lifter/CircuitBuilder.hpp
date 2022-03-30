@@ -171,10 +171,9 @@ namespace circ
         {
             std::string full_inst;
             // Encoding check needed since `x` is unsigned.
-            for (auto x = rinst_size() - 1; x >= 0 && x < encoding.size(); --x)
-              full_inst += (encoding[x]) ? '1' : '0';
+            for (std::size_t i = 0; i < encoding.size(); ++i)
+              full_inst += (encoding[i]) ? '1' : '0';
 
-            std::reverse(full_inst.begin(), full_inst.end());
             return full_inst;
         }
     };

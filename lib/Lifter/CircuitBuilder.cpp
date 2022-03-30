@@ -743,19 +743,9 @@ namespace circ {
 
     std::string decoder::generate_raw_bytes(const std::string &full, uint64_t from, uint64_t to)
     {
-        std::string out;
-        while(true) {
-            // NOTE(lukas): To handle un-aligned values.
-            uint64_t y = std::min(from + (8 - from % 8), to);
-            std::string partial = full.substr(from, y - from);
-            std::reverse(partial.begin(), partial.end());
-
-            out = partial + out;
-            if (y == to)
-                return out;
-
-            from = y;
-        }
+        auto n = full.substr(from, to - from);
+        std::reverse(n.begin(), n.end());
+        return n;
     }
 
     llvm::Value *decoder::create_bit_check(uint64_t from, uint64_t to)

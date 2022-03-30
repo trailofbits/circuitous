@@ -185,8 +185,8 @@ namespace circ::shadowinst {
     select_args[0] = region_selector(ir, s_reg);
 
     llvm::Type *type = nullptr;
-    for (auto &[str, reg] : s_reg.translation_bytes_map()) {
-      auto idx = llvm::APInt{static_cast<uint32_t>(bits), str, 2}.getLimitedValue();
+    for (const auto &[str, reg] : s_reg.translation_bytes_map()) {
+      auto idx = llvm::APInt{static_cast< uint32_t >(bits), str, 2}.getLimitedValue();
       check(select_args.size() > idx + 1);
       select_args[idx + 1] = get_reg(ir, reg);
       if (!type) {
@@ -202,7 +202,7 @@ namespace circ::shadowinst {
         continue;
       }
       select_args[idx] = llvm::UndefValue::get(type);
-      auto key = ir.getIntN(static_cast<uint32_t>(bits), idx - 1);
+      auto key = ir.getIntN(static_cast< uint32_t >(bits), idx - 1);
       holes.push_back(ir.CreateICmpEQ(select_args[0], key));
     }
 
