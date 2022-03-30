@@ -28,7 +28,7 @@ namespace circ
         struct Message
         {
             std::stringstream ss;
-            reports_t sink;
+            reports_t &sink;
 
             Message(reports_t &sink_) : sink(sink_) {}
             Message(const Message &) = delete;
