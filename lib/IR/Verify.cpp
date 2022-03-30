@@ -49,12 +49,16 @@ namespace circ
 
         friend auto operator<<(std::ostream &os, const self_t &self) -> decltype( os << "" )
         {
+            std::size_t idx = 0;
             for (const auto &b : self.bits)
             {
                 if (b)
                     os << *b;
                 else
                     os << "-";
+
+                if (++idx % 8 == 0)
+                    os << " ";
             }
             return os;
         }
