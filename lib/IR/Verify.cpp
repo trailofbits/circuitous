@@ -167,7 +167,9 @@ namespace circ
                     return "Need at least one context to verify uniqnuess."; });
             for (std::size_t i = 0; i < encs.begin()->second.size(); ++i)
                 try_prove(i);
-            return collect_unproved();
+            auto x = collect_unproved();
+            log_dbg() << stats();
+            return x;
         }
 
         VerifierResult collect_unproved() const
