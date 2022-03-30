@@ -25,7 +25,7 @@
  *
  * When we encounter `mov rax, rbx` and `mov rcx, rdx` we would want
  * to treat them as one generic instruction in form `mov reg1, reg2`.
- * This is useful because it allows us make the generated cirucit smaller.
+ * This is useful because it allows us make the generated circuit smaller.
  *
  * We try not to relay on any arch specific information (to make this
  * component as re-usable as we can).
