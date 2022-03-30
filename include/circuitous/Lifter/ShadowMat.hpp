@@ -97,18 +97,6 @@ namespace circ::shadowinst {
     llvm::Value *get() { return llvm::cast_or_null< T >(head); }
   };
 
-  static inline auto make_APInt(
-    const std::vector<bool> &bits, std::size_t from, std::size_t size)
-  {
-    check(bits.size() >= from + size) << bits.size() << " >= " << from + size;
-
-    std::string span;
-    for (uint64_t i = 0; i < size; ++i) {
-      span += (bits[from + i]) ? '1' : '0';
-    }
-    auto size_ = static_cast<uint32_t>(size);
-    return llvm::APInt(size_, span, 2);
-  }
 
   static inline auto region_selector(llvm::IRBuilder<> &ir, const Reg &s_reg) {
     std::vector<llvm::Value *> input_fragments;

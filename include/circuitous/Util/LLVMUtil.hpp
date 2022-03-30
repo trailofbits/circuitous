@@ -291,4 +291,17 @@ namespace circ
         os.flush();
         return { std::move(error) };
     }
+
+    // `bits` is taken by copy since it is reversed inplace.
+    static inline auto make_APInt(auto bits, std::size_t from, std::size_t size)
+    {
+        check(bits.size() >= from + size) << bits.size() << " >= " << from + size;
+
+        std::string span;
+        for (uint64_t i = 0; i < size; ++i)
+            span += (bits[from + i]) ? '1' : '0';
+        auto size_ = static_cast< uint32_t >(size);
+        return llvm::APInt(size_, span, 2);
+    }
+
 } // namespace circ
