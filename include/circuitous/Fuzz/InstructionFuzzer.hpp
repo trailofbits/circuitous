@@ -488,7 +488,7 @@ namespace circ
             std::vector< bool > out;
             for (auto idx : idxs) {
                 auto byte = static_cast< uint8_t >(nrinst.bytes[idx / 8]);
-                out.push_back((byte >> (7 - (idx % 8))) & 1u);
+                out.push_back(byte & (1u << (idx % 8)));
             }
             return out;
         }
@@ -496,11 +496,12 @@ namespace circ
         std::vector< uint64_t > collect_idxs(const shadowinst::has_regions &regions)
         {
             std::vector< uint64_t > idxs;
-            for (const auto &[from, size] : regions) {
-                auto afrom = rinst.bytes.size() * 8 - from - size;
-                for (uint64_t i = 0; i < size; ++i) {
-                    idxs.push_back(afrom);
-                    ++afrom;
+            for (const auto &[from_, size_] : regions) {
+                auto size = static_cast< int64_t >(size_);
+                auto from = static_cast< int64_t >(from_);
+                for (int64_t afrom = from + size - 1; afrom >= from; --afrom)
+                {
+                    idxs.push_back(static_cast< uint64_t >(afrom));
                 }
             }
             return idxs;
@@ -793,12 +794,12 @@ namespace circ
             auto byte = static_cast<uint8_t>(bytes[idxs[current] / 8 ]);
             uint8_t mask = 1;
             bytes[idxs[current] / 8]
-                = static_cast< char >(byte ^ (mask << (7 - idxs[current] % 8)));
+                = static_cast< char >(byte ^ (mask << (idxs[current] % 8)));
             _Permutate(bytes, idxs, current + 1, yield);
             // We are taking bytes as reference we need to flip back as we backtrack!
             byte = static_cast<uint8_t>(bytes[idxs[current] / 8 ]);
             bytes[idxs[current] / 8]
-                = static_cast< char >(byte ^ (mask << (7 - idxs[current] % 8)));
+                = static_cast< char >(byte ^ (mask << (idxs[current] % 8)));
         }
     };
 
