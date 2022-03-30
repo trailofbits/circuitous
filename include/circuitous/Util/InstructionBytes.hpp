@@ -12,6 +12,42 @@
 
 namespace circ
 {
+
+    std::string enc_to_str(const auto &enc)
+    {
+        std::string out;
+        for (std::size_t i = 0; i < enc.size(); ++i)
+            out += (enc[i]) ? '1' : '0';
+        return out;
+    }
+
+    static inline std::string inst_bytes_as_str(const std::string &str)
+    {
+        std::stringstream ss;
+        for (std::size_t i = 0; i < str.size();)
+        {
+            dcheck(str[i] == '0' || str[i] == '1', []() { return "Unexpected chars."; });
+            ss << str[i];
+
+            ++i;
+            if (i % 8 == 0 && i < str.size())
+                ss << " ";
+        }
+        return ss.str();
+
+    }
+
+    template< unsigned long N > requires (N % 8 == 0)
+    static inline std::string inst_bytes_as_str(const std::bitset< N > &enc)
+    {
+        return inst_bytes_as_str(enc_to_str(enc));
+    }
+
+    static inline std::string inst_bytes_as_str(const std::vector< bool > &enc)
+    {
+        return inst_bytes_as_str(enc_to_str(enc));
+    }
+
     // Just a wrapper to provide
     //  * common operations we need to do often on instruction bytes
     //  * separate type to avoid confusion with `std::string`.
@@ -28,9 +64,9 @@ namespace circ
         std::string as_hex_str() const
         {
             std::stringstream ss;
-            ss << std::setw(2) << std::setfill('0') << std::hex;
             for (auto c : data)
-                ss << static_cast< unsigned >(static_cast< uint8_t >(c));
+                ss << std::setw(2) << std::setfill('0') << std::hex
+                   << static_cast< unsigned >(static_cast< uint8_t >(c));
             return ss.str();
         }
 
@@ -42,17 +78,27 @@ namespace circ
             return data.back();
         }
 
-        template< uint64_t N >
+        template< uint64_t N > requires (N % 8 == 0)
         std::bitset< N > to_enc() const
         {
             std::bitset< N > out;
+            dcheck(N >= data.size(), [&]() { return "to_enc cannot hold entire data!"; });
             std::size_t i = 0;
-            for (char byte_ : underlying_t(data.rbegin(), data.rend()))
+            for (char byte_ : data)
             {
                 const auto byte = static_cast< uint8_t >(byte_);
-                for (auto b = 0u; b < 8u; ++b, ++i)
-                    if ((byte >> b) & 1u)
+                for (int b = 0; b < 8; ++b, ++i)
+                {
+                    dcheck( i < N, [&](){
+                        std::stringstream out;
+                        out << "Trying to write to bitset at " << i
+                            << " whereas max size is " << N << "\n";
+                        return out.str();
+                    });
+
+                    if (byte & (1u << b))
                         out.set(i);
+                }
             }
             return out;
         }

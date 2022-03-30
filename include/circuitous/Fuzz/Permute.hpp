@@ -36,13 +36,13 @@ namespace circ::ifuzz::permutate
         permutations_t out;
         out.resize(rinst.bytes.size() * 8);
         for (std::size_t i = 0; i < rinst.bytes.size(); ++i) {
-            for (int j = 7; j >= 0; --j) {
-                auto index = 8 * i + 7 - static_cast<uint64_t>(j);
+            for (int j = 0; j < 8; ++j) {
+                auto index = 8 * i + static_cast< uint64_t >(j);
 
                 std::string flipped = rinst.bytes;
-                auto byte = static_cast<uint8_t>(flipped[i]);
+                auto byte = static_cast< uint8_t >(flipped[i]);
                 uint8_t mask = 1;
-                flipped[i] = static_cast<char>(byte ^ (mask << j));
+                flipped[i] = static_cast< char >(byte ^ (mask << j));
 
                 remill::Instruction tmp;
                 if (arch->DecodeInstruction(0, flipped, tmp)) {
