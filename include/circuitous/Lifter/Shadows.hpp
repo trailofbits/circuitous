@@ -287,6 +287,12 @@ namespace circ::shadowinst
             return dirty.count(reg);
         }
 
+        bool has_saturated_map() const
+        {
+            return translation_bytes_map().size() ==
+                static_cast< std::size_t >(std::pow(2, this->region_bitsize()));
+        }
+
         void mark_dirty(const reg_t &reg)
         {
             check(translation_map.count(reg));
