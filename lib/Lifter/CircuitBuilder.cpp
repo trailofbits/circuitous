@@ -785,7 +785,36 @@ namespace circ {
     llvm::Value *decoder::get_decoder_tree()
     {
         auto all_fragments = byte_fragments();
+        auto translations = irops::make< irops::And >(ir, emit_translation_trees());
+        all_fragments.push_back(translations);
         return irops::make< irops::DecoderResult >(ir, all_fragments);
+    }
+
+    auto decoder::emit_translation_trees() -> values_t
+    {
+        values_t out;
+        for (const auto &s_op : isel.shadow.operands)
+            if (s_op.reg)
+                out.push_back(emit_translation_tree(*s_op.reg));
+        return out;
+    }
+
+    llvm::Value *decoder::emit_translation_tree(const shadowinst::Reg &sreg)
+    {
+        if (sreg.has_saturated_map())
+            return ir.getTrue();
+
+        auto selector = region_selector(ir, sreg);
+
+        values_t conds;
+        for (auto &[reg, mats] : sreg.translation_map)
+            for (auto &mat : mats)
+            {
+                auto as_constant = ir.getInt(make_APInt(mat, 0, mat.size()));
+                conds.push_back(ir.CreateICmpEQ(selector, as_constant));
+            }
+
+        return irops::make< irops::Or >(ir, conds);
     }
 
     void CircuitMaker::prepare_module()
