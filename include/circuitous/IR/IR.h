@@ -544,6 +544,8 @@ namespace circ
 
         bool Equals(const Operation *that) const override;
 
+        uint32_t extracted_size() const { return high_bit_exc - low_bit_inc; }
+
         inline explicit Extract(uint32_t low_bit_inc_, uint32_t high_bit_exc_)
             : Operation(high_bit_exc_ - low_bit_inc_, kind),
               low_bit_inc(low_bit_inc_),
