@@ -92,35 +92,49 @@ namespace
 
 }  // namespace
 
-template< typename Parser, typename H, typename ... Ts >
-std::string collect_status(const Parser &parser)
-{
-    std::string self = H::opt.primary + " -> ";
-    if (parser.template present< H >())
-        self += "matched!\n";
-    else
-        self += "not matched!\n";
-    if constexpr (sizeof ... (Ts) == 0) return self;
-    else return self + collect_status< Parser, Ts ... >(parser);
-}
 
-template< typename Parser, typename ... Ts >
-std::string status(const Parser &parser, std::tuple< Ts ... >)
-{
-    return collect_status< Parser, Ts ... >(parser);
-}
+using input_options = circ::tl::TL<
+    cli::CiffIn,
+    cli::IRIn,
+    cli::SMTIn,
+    cli::BytesIn
+>;
+using deprecated_options = circ::tl::TL<
+    circ::cli::LogToStderr,
+    circ::cli::LogDir
+>;
+using output_options = circ::tl::TL<
+    cli::SMTOut,
+    cli::JsonOut,
+    cli::BitBlastSmtOut,
+    cli::VerilogOut,
+    cli::IROut,
+    cli::DotOut
+>;
+using remill_config_options = circ::tl::TL<
+    circ::cli::Arch,
+    circ::cli::OS
+>;
+
+using other_options = circ::tl::TL<
+    circ::cli::Dbg,
+    circ::cli::BitBlastStats,
+    circ::cli::EqSat,
+    circ::cli::Patterns,
+    circ::cli::Help,
+    circ::cli::Version
+>;
+
+using cmd_opts_list = circ::tl::merge<
+    input_options,
+    deprecated_options,
+    output_options,
+    remill_config_options,
+    other_options
+>;
 
 circ::CircuitPtr get_input_circuit(auto &cli)
 {
-    using in_opts = std::tuple< cli::CiffIn, cli::IRIn, cli::SMTIn, cli::BytesIn >;
-    if (!cli.exactly_one_present(in_opts{}))
-    {
-        std::cerr << "Multiple options to produce circuit specified, do not know how to "
-                  << "proceed!" << std::endl;
-        std::cerr << status(cli, in_opts{});
-        return {};
-    }
-
     auto make_circuit = [&](auto buf) {
         circ::log_info() << "Going to make circuit";
         circ::Ctx ctx{ *cli.template get< cli::OS >(), *cli.template get< cli::Arch >() };
@@ -162,21 +176,42 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
         circ::print_circuit(*bitblast_smt, circ::print_bitblasted_smt, circuit.get());
 }
 
-template< typename Parser >
-auto parse_and_validate_cli(int argc, char *argv[])
+template< typename OptsList >
+auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::ParsedCmd >
 {
-    auto yield_err = [&](const auto &lopt, const auto &msg)
+    using namespace circ;
+
+    static const auto yield_err = [&](const auto &msg)
     {
-        std::cerr << lopt << " validate() failed with: " << msg << std::endl;
+        std::cerr << msg << std::endl;
     };
 
-    auto parsed = Parser::parse_argv(argc, argv).validate(yield_err);
-
+    auto parsed = circ::CmdParser< OptsList >::parse_argv(argc, argv);
     if (!parsed)
     {
-        std::cerr << "Command line arguments were not validated correctly, see "
+        std::cerr << "Command line arguments were not parsed correctly, see "
                   << "stderr for more details.";
+        return {};
     }
+
+    auto v = Validator(parsed);
+
+    if (v.check(is_singleton< cli::Help >())
+         .check(is_singleton< cli::Version >())
+         .process_errors(yield_err))
+    {
+        return {};
+    }
+
+    if (v.check(are_exclusive< input_options >())
+         .process_errors(yield_err))
+    {
+        return {};
+    }
+
+    if (v.validate_leaves( OptsList{} ).process_errors(yield_err))
+        return {};
+
     return parsed;
 }
 
@@ -188,32 +223,24 @@ void reload_test(const circ::CircuitPtr &circuit)
 }
 
 int main(int argc, char *argv[]) {
-    using parser_t = circ::CmdParser<
-        cli::Arch, cli::OS, cli::Dbg,
-        cli::IRIn, cli::SMTIn, cli::BytesIn, cli::CiffIn,
-        cli::SMTOut, cli::JsonOut, cli::BitBlastSmtOut, cli::VerilogOut,
-        cli::IROut, cli::DotOut,
-        cli::BitBlastStats,
-        cli::LogToStderr, cli::LogDir,
-        cli::EqSat, cli::Patterns,
-        cli::Help >;
-
-    auto parsed_cli = parse_and_validate_cli< parser_t >(argc, argv);
-    if (!parsed_cli)
+    auto maybe_parsed_cli = parse_and_validate_cli< cmd_opts_list >(argc, argv);
+    if (!maybe_parsed_cli)
         return 1;
+
+    auto parsed_cli = std::move(*maybe_parsed_cli);
 
     circ::add_sink< circ::severity::kill >(std::cerr);
     circ::add_sink< circ::severity::error >(std::cerr);
     circ::add_sink< circ::severity::warn >(std::cerr);
     circ::add_sink< circ::severity::info >(std::cout);
+    circ::add_sink< circ::severity::trace >(std::cout);
 
+    circ::Tracers::trace_all = true;
     // NOTE(lukas): Support libraries still need to be initialized, since
     //              remill may be using/relying on them.
     google::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
 
-    // TODO(lukas): Eventually remove.
-    std::cout << parsed_cli.dbg_str();
 
     // TODO(lukas): Allow filename as option? And maybe same for other logging
     //              sinks?
