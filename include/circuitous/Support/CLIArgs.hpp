@@ -158,6 +158,12 @@ namespace circ::cli
         static std::string help() { return "Print help messages.\n"; }
     };
 
+    struct Version : circ::DefaultCmdOpt, derive_short_help< Version >, Arity< 0 >
+    {
+        static inline const auto opt = circ::CmdOpt("--version", false);
+        static std::string help() { return "Print version.\n"; }
+    };
+
     struct Arch : circ::DefaultCmdOpt, Arity< 1 >, circ::HasAllowed< Arch >
     {
         static inline const auto opt = circ::CmdOpt("--arch", true);
@@ -193,6 +199,8 @@ namespace circ::cli
 
     struct OS : circ::DefaultCmdOpt, PathArg, circ::HasAllowed< OS >
     {
+        using circ::HasAllowed< OS >::validate;
+
         static inline const auto opt = circ::CmdOpt("--os", true);
         static inline const std::unordered_set< std::string > allowed =
         {
