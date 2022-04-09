@@ -176,6 +176,9 @@ namespace circ
 
             return full_inst;
         }
+
+        values_t emit_translation_trees();
+        llvm::Value *emit_translation_tree(const shadowinst::Reg &sreg);
     };
 
     struct circuit_builder : CircuitFunction
