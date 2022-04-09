@@ -16,6 +16,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <circuitous/Util/TypeList.hpp>
+
 namespace circ
 {
     struct cmd_opt_tag_t {};
@@ -52,7 +54,7 @@ namespace circ
             std::stringstream ss;
             for (auto &token : tokens)
                 if (!S::allowed.count(token))
-                    ss << token << " is not allowed.\n";
+                    ss << S::opt.primary << " does not allow option: " << token;
             if (auto str = ss.str(); !str.empty())
                 return { std::move(str) };
             return {};
@@ -71,7 +73,8 @@ namespace circ
             -> std::same_as< std::optional< std::string > >;
     };
 
-
+    template< typename T >
+    constexpr bool is_cmd_opt() { return std::is_base_of_v< cmd_opt_tag_t, T >; }
 
     template< typename Self >
     struct Printable
@@ -96,10 +99,11 @@ namespace circ
         }
     };
 
-    template< typename ... Cmds >
-    struct ParsedCmd : Printable< ParsedCmd< Cmds ... > >
+    // NOTE(lukas): To simplify we are dropping the `template< typename ... Ops >` here
+    //              as it complicates code a lot and does not bring much upside.
+    struct ParsedCmd : Printable< ParsedCmd >
     {
-        using self_t = ParsedCmd< Cmds ... >;
+        using self_t = ParsedCmd;
         using tokens_t = std::vector< std::string >;
         using parse_map_t = std::unordered_map< std::string, tokens_t >;
 
@@ -129,6 +133,8 @@ namespace circ
 
         /** Access **/
 
+        std::size_t size() const { return parsed.size(); }
+
         template< typename Cmd >
         std::optional< tokens_t > get_raw() const
         {
@@ -157,14 +163,294 @@ namespace circ
         }
 
         template< typename Cmd >
-        bool present() const { return parsed.count(Cmd::opt.primary); }
+        bool present() const { return present(Cmd::opt.primary); }
+        bool present(const std::string &primary) const { return parsed.count(primary); }
+    };
+
+
+    // Statefull - empty on creation.
+    // Call to `validate` invalidates the object and it is never ready to be used again.
+    struct ValidationRule
+    {
+        using error_t = std::optional< std::string >;
+        using parsed_t = ParsedCmd;
+
+      protected:
+
+        template< typename ... Ts >
+        static std::vector< std::string > opts_to_primary()
+        {
+            std::vector< std::string > out;
+            _opts_to_primary< Ts ... >(out);
+            return out;
+        }
+
+
+        template< typename H, typename ... Ts >
+        static void _opts_to_primary(std::vector< std::string > &out)
+        {
+            out.push_back(H::opt.primary);
+            if constexpr (sizeof ... (Ts) != 0)
+                return _opts_to_primary< Ts ... >(out);
+        }
+
+        template< typename ... Args >
+        static std::vector< std::string > filter_present(const parsed_t &parsed)
+        {
+            auto cond = [](const auto &p, const auto &o) { return p.present(o); };
+            // TODO(lukas): Will need manual specification.
+            return _filter< Args ... >(parsed, std::move( cond ));
+        }
+
+        template< typename ... Args >
+        static std::vector< std::string > filter_missing(const parsed_t &parsed)
+        {
+            auto cond = [](const auto &p, const auto &o) { return !p.present(o); };
+            // TODO(lukas): Will need manual specification.
+            return _filter< Args ... >(parsed, std::move( cond ));
+        }
+
+        template< typename ... Args, typename C >
+        static std::vector< std::string > _filter(const parsed_t &parsed, C &&cond)
+        {
+            std::vector< std::string > filtered;
+            for (const auto &opt : opts_to_primary< Args ... >())
+                if (cond(parsed, opt))
+                    filtered.push_back(opt);
+            return filtered;
+        }
+
+
+        static std::string format_opts(const std::vector< std::string > &opts)
+        {
+            std::stringstream ss;
+            ss << "[";
+            for (const auto &opt : opts)
+                ss << " " << opt;
+            ss << " ]";
+            return ss.str();
+        }
+    };
+
+    template< typename Self >
+    struct CountPresent : ValidationRule
+    {
+      protected:
+        std::vector< std::string > filtered;
+
+        Self &self() { return static_cast< Self & >(*this); }
+        const Self &self() const { return static_cast< const Self & >(*this); }
+
+        error_t do_validation()
+        {
+            if (self().satisfies())
+                return {};
+            return self().make_error();
+
+        }
+
+        template< typename ... Args > requires (sizeof ... (Args) != 0)
+        error_t init_and_validate(const parsed_t &parsed)
+        {
+            filtered = filter_present< Args ... >(parsed);
+            return do_validation();
+        }
+
+    };
+
+    template< typename ... Args >
+    struct Exclusive : CountPresent< Exclusive< Args ... > >
+    {
+        // It does not make sense to have less than 2 arguments as exclusive.
+        static_assert( sizeof ... (Args) >= 2 );
+
+        using parent_t = CountPresent< Exclusive< Args ... > >;
+        using parsed_t = typename parent_t::parsed_t;
+        using error_t = typename parent_t::error_t;
+
+        error_t validate(const parsed_t &parsed)
+        {
+            return this->template init_and_validate< Args ... >(parsed);
+        }
+
+        bool satisfies() const { return this->filtered.size() <= 1; }
+
+        error_t make_error() const
+        {
+            return "Following should be exclusive: " + parent_t::format_opts(this->filtered);
+        }
+    };
+
+
+    template< uint64_t N, typename ... Args >
+    struct ExactlyNOf : CountPresent< ExactlyNOf< N, Args ... > >
+    {
+        static_assert( sizeof ... (Args) >= N + 1 );
+
+        using parent_t = CountPresent< ExactlyNOf< N, Args ... > >;
+        using parsed_t = typename parent_t::parsed_t;
+        using error_t = typename parent_t::error_t;
+
+        error_t validate(const parsed_t &parsed) { return this->init_and_validate(parsed); }
+        bool satisfies() const { return this->filtered.size() == N; }
+
+        error_t make_error() const
+        {
+            return "Expected " + std::to_string(N) + " of: "
+                               + parent_t::format_opts(this->filtered);
+        }
+    };
+
+    template< typename L, typename ... Rhs >
+    struct Implies : ValidationRule
+    {
+        static_assert( sizeof ... (Rhs) >= 1 );
+
+        using parent_t = ValidationRule;
+        using parsed_t = typename parent_t::parsed_t;
+        using error_t = parent_t::error_t;
+
+        error_t validate(const parsed_t &parsed)
+        {
+            // If left side is `false` there is no need to check.
+            if (!parsed.template present< L >())
+                return {};
+
+            auto missing = this->parent_t::filter_missing< Rhs ... >();
+            if (missing.size() == 0)
+                return {};
+
+            std::stringstream ss;
+            ss << L::primary << " implies " << parent_t::format_opts(missing);
+            return std::make_optional( ss.str() );
+        }
+    };
+
+    template< typename ... Args >
+    struct Present : ValidationRule
+    {
+        static_assert( sizeof ... (Args) >= 1 );
+
+        using parent_t = ValidationRule;
+        using parsed_t = typename parent_t::parsed_t;
+        using error_t = typename parent_t::error_t;
+
+        error_t validate(const parsed_t &parsed)
+        {
+            auto missing = this->parent_t::filter_missing< Args ... >();
+            if (missing.size() == 0)
+                return {};
+            return "Missing: " << parent_t::format_opts(missing);
+        }
+    };
+
+    template< typename T >
+    struct IsSingleton : ValidationRule
+    {
+        using parent_t = ValidationRule;
+        using parsed_t = typename parent_t::parsed_t;
+        using error_t = typename parent_t::error_t;
+
+        error_t validate(const parsed_t &parsed)
+        {
+            if (!parsed.template present< T >() || parsed.size() == 1)
+                return {};
+
+            return "Expected " + T::opt.primary + " to be a singleton option.";
+        }
+    };
+
+    template< typename ... Args > struct are_exclusive : Exclusive< Args ... > {};
+    template< typename ... Args >
+    struct are_exclusive< tl::TL< Args ... > > : Exclusive< Args ... > {};
+
+    template< typename L, typename ... Rhs >
+    auto implies() { return Implies< L, Rhs ... >(); }
+
+    template< typename ... Args >
+    auto one_of() { return ExactlyNOf< 1ul, Args ... >(); }
+
+    template< typename ... Args >
+    auto is_present() { return Present< Args ... >(); }
+
+    template< typename T >
+    auto is_singleton() { return IsSingleton< T >(); }
+
+    struct Validator
+    {
+        using self_t = Validator;
+        using error_t = std::string;
+        using errors_t = std::vector< error_t >;
+
+        errors_t errs;
+        const ParsedCmd &parsed;
+
+        Validator( const ParsedCmd &parsed_ ) : parsed( parsed_ ) {}
+        Validator spawn() { return Validator( *this ); }
+
+        bool has_errors() const { return !errs.empty(); }
+        errors_t take() { return std::move(errs); }
+
+        template< typename Yield >
+        bool process_errors(Yield &&yield)
+        {
+            for (const auto &err : errs)
+                yield(err);
+            if (!has_errors())
+                return false;
+
+            errs.clear();
+            return true;
+        }
+
+        template< typename C, typename ... Cs >
+        self_t &check( C &&c, Cs &&... cs )
+        {
+            run_check(std::forward< C >(c));
+            if constexpr (sizeof ... (Cs) != 0)
+                return check(std::forward< Cs >(cs) ...);
+            else
+                return *this;
+        }
+
+        template< typename ... Ts >
+        self_t &validate_leaves(tl::TL< Ts ... >)
+        {
+            return do_validate_leaves< Ts ... >();
+        }
+
+      private:
+
+        template< typename H, typename ... Ts > requires (is_cmd_opt< H >())
+        self_t &do_validate_leaves()
+        {
+            if constexpr (Validates< H >)
+                if (auto tokens = parsed.get_raw< H >())
+                    if (auto msg = H::validate(*tokens))
+                        errs.push_back(std::move(*msg));
+
+            if constexpr (sizeof ... (Ts) == 0)
+                return *this;
+            else
+                return do_validate_leaves< Ts ... >();
+        }
+
+        template< typename C >
+        void run_check(C &&c)
+        {
+            if (auto err = c.validate(parsed))
+                errs.push_back(std::move(*err));
+        }
+
+
     };
 
     template< typename ... Cmds >
-    struct CmdParser : Printable< CmdParser< Cmds ... > >
+    struct CmdParser_impl : Printable< CmdParser_impl< Cmds ... > >
     {
+        using cmd_ts = tl::TL< Cmds ... >;
       private:
-        using self_t = CmdParser< Cmds ... >;
+        using self_t = CmdParser_impl< Cmds ... >;
 
         using tokens_t = std::vector< std::string >;
         using tokens_view_t = const tokens_t &;
@@ -178,83 +464,16 @@ namespace circ
 
       public:
 
-        static self_t parse_argv(int argc, char **argv)
+        static ParsedCmd parse_argv(int argc, char **argv)
         {
             self_t parser;
             for (int i = 1; i < argc; ++i)
                 parser.tokens.push_back(argv[i]);
             parser.match_opt();
-            return parser;
-        }
-
-
-
-        /** Validation **/
-
-        // Validate the parsed result
-        //  * required opts must be present
-        //  * opts that are present must be valid if such term is defined for them
-        //    (i.e. they have `validate` method)
-        // In case problems are found `yield` is called with `(primary, error_msg)`
-        // and false is returned.
-        // NOTE(lukas): `yield` can (and very often will) have state. Watch out for copies.
-        template< typename Yield >
-        auto validate(Yield &&yield) -> ParsedCmd< Cmds ... >
-        {
-            return _validate< Yield, Cmds ... >(yield);
-        }
-
-
-        auto validate() -> ParsedCmd< Cmds ... >
-        {
-            auto yield_basic_err = [&](const auto &lopt, const auto &msg)
-            {
-                std::cerr << lopt << " validate() failed with: " << msg << std::endl;
-            };
-            return validate(yield_basic_err);
+            return { std::move(parser.parsed), true };
         }
 
       private:
-
-        template< typename Yield, typename ... Ts >
-        auto _validate(Yield &yield) -> ParsedCmd< Cmds ... >
-        {
-            // First argument is a move of `parsed` which would empty `this`; therefore
-            // we need to first check the validity.
-            bool validity = is_valid< Yield, Ts ... >(yield);
-            return ParsedCmd< Cmds ... >(std::move(parsed), validity);
-        }
-
-        template< typename Yield, typename H, typename ... Ts >
-        bool is_valid(Yield &yield)
-        {
-            auto current = is_one_valid< Yield, H >(yield);
-            if constexpr ( sizeof ... (Ts) != 0 )
-                return current && is_valid< Yield, Ts ... >(yield);
-            else
-                return current;
-        }
-
-        template< typename Yield, typename Cmd >
-        bool is_one_valid(Yield &yield)
-        {
-            auto report_fail = [&](auto msg) {
-                yield(Cmd::opt.primary, msg);
-                return false;
-            };
-
-            if (!matched< Cmd >() && Cmd::opt.required)
-                return report_fail("Required but not present.");
-
-            // It is not present, therefore nothing else needs to be checked
-            if (!matched< Cmd >())
-                return true;
-
-            if constexpr (Validates< Cmd >)
-                if (auto msg = Cmd::validate(*get_raw< Cmd >()))
-                    return report_fail("Validate failed: " + *msg);
-            return true;
-        }
 
         /** Access **/
 
@@ -402,5 +621,11 @@ namespace circ
             return out;
         }
     };
+
+    template< typename ... Ts >
+    struct CmdParser : CmdParser_impl< Ts ... > {};
+
+    template< typename ... Ts >
+    struct CmdParser< tl::TL< Ts ... > > : CmdParser_impl< Ts ... > {};
 
 } // namespace circ
