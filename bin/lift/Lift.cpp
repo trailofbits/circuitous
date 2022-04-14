@@ -32,11 +32,8 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <unordered_map>
 
 // TODO(lukas): Clean this up once remill gets rid of gflags.
-//DEFINE_string(arch, "", "");
-//DEFINE_string(os, REMILL_OS, "");
-
-DECLARE_string(os);
-DECLARE_string(arch);
+DEFINE_string(arch, "", "");
+DEFINE_string(os, REMILL_OS, "");
 
 DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(smt_in, "", "Path to the input smt2 file.");
