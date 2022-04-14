@@ -57,6 +57,7 @@ DEFINE_string(ciff_in, "", "Load input from circuitous-seed --dbg produced file"
 DEFINE_string(patterns, "", "Equality saturation patterns.");
 DEFINE_bool(eqsat, false, "Enable equality saturation based optimizations.");
 DEFINE_bool(dbg, false, "Enable various debug dumps");
+DEFINE_bool(quiet, false, "");
 
 namespace cli = circ::cli;
 
@@ -117,6 +118,7 @@ using remill_config_options = circ::tl::TL<
 >;
 
 using other_options = circ::tl::TL<
+    circ::cli::Quiet,
     circ::cli::Dbg,
     circ::cli::BitBlastStats,
     circ::cli::EqSat,
@@ -225,27 +227,45 @@ void reload_test(const circ::CircuitPtr &circuit)
 int main(int argc, char *argv[]) {
     auto maybe_parsed_cli = parse_and_validate_cli< cmd_opts_list >(argc, argv);
     if (!maybe_parsed_cli)
+    {
+        std::cerr << circ::help_str(cmd_opts_list());
         return 1;
+    }
 
     auto parsed_cli = std::move(*maybe_parsed_cli);
 
-    circ::add_sink< circ::severity::kill >(std::cerr);
-    circ::add_sink< circ::severity::error >(std::cerr);
-    circ::add_sink< circ::severity::warn >(std::cerr);
-    circ::add_sink< circ::severity::info >(std::cout);
-    circ::add_sink< circ::severity::trace >(std::cout);
+    if (parsed_cli.template present< circ::cli::Help >())
+    {
+        std::cout << circ::help_str(cmd_opts_list());
+        return 0;
+    }
 
-    circ::Tracers::trace_all = true;
+    if (parsed_cli.template present< circ::cli::Version >())
+    {
+        std::cerr << "TODO: Implement proper version message";
+        return 1;
+    }
+
+    if (!parsed_cli.template present< circ::cli::Quiet >())
+    {
+        circ::add_sink< circ::severity::kill >(std::cerr);
+        circ::add_sink< circ::severity::error >(std::cerr);
+        circ::add_sink< circ::severity::warn >(std::cerr);
+        circ::add_sink< circ::severity::info >(std::cout);
+        circ::add_sink< circ::severity::trace >(std::cout);
+
+        circ::Tracers::trace_all = true;
+
+        // TODO(lukas): Allow filename as option? And maybe same for other logging
+        //              sinks?
+        if (parsed_cli.present< cli::Dbg >())
+            circ::add_sink< circ::severity::dbg >(std::cout);
+
+    }
     // NOTE(lukas): Support libraries still need to be initialized, since
     //              remill may be using/relying on them.
     google::ParseCommandLineFlags(&argc, &argv, true);
     google::InitGoogleLogging(argv[0]);
-
-
-    // TODO(lukas): Allow filename as option? And maybe same for other logging
-    //              sinks?
-    if (parsed_cli.present< cli::Dbg >())
-        circ::add_sink< circ::severity::dbg >(std::cout);
 
     auto circuit = get_input_circuit(parsed_cli);
     if (!circuit)
