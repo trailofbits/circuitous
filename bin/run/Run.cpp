@@ -245,21 +245,74 @@ void run(const CLI &parsed_cli)
     }
 }
 
-auto parse_cmd(int argc, char *argv[])
+using run_modes = circ::tl::TL<
+    circ::cli::run::Derive,
+    circ::cli::run::Verify
+>;
+using deprecated_options = circ::tl::TL<
+    circ::cli::LogDir,
+    circ::cli::LogToStderr
+>;
+using input_options = circ::tl::TL<
+    circ::cli::run::IRIn
+>;
+using output_options = circ::tl::TL<
+    circ::cli::run::ExportDerived,
+    circ::cli::DotOut
+>;
+using config_options = circ::tl::TL<
+    circ::cli::run::SingularCurrent,
+    circ::cli::run::SingularNext,
+    circ::cli::run::Traces,
+    circ::cli::run::Memory,
+    circ::cli::run::Die
+>;
+using other_options = circ::tl::TL<
+    circ::cli::Help,
+    circ::cli::Version,
+    circ::cli::Dbg
+>;
+
+using cmd_opts_list = circ::tl::merge<
+    run_modes,
+    deprecated_options,
+    input_options,
+    output_options,
+    config_options,
+    other_options
+>;
+
+std::optional< circ::ParsedCmd > parse_and_validate(int argc, char *argv[])
 {
-    using namespace circ::cli;
-    using parser_t = circ::CmdParser<
-        run::IRIn, LogDir, LogToStderr, DotOut,
-        Dbg,
-        //StateIn, StateOut, DotOut,
-        run::SingularCurrent, run::SingularNext,
-        run::ExportDerived,
-        run::Traces, run::Memory,
-        run::Verify, run::Derive,
-        run::Die
-    >;
-    using run_mode = std::tuple< run::Verify, run::Derive >;
-    return parser_t::parse_argv(argc, argv).validate();
+    using namespace circ;
+    static const auto yield_err = [&](const auto &msg)
+    {
+        std::cerr << msg << std::endl;
+    };
+
+    auto parsed = CmdParser< cmd_opts_list >::parse_argv(argc, argv);
+    if (!parsed)
+    {
+        std::cerr << "Command line argumentes were not parsed cirrectly, see "
+                  << "stderr for more details.";
+        return {};
+    }
+
+    auto v = Validator(parsed);
+    if (v.check(is_singleton< cli::Help >())
+         .check(is_singleton< cli::Version >())
+         .process_errors(yield_err))
+    {
+        return {};
+    }
+
+    if (v.check(are_exclusive< run_modes >()).process_errors(yield_err))
+        return {};
+
+    if (v.validate_leaves(cmd_opts_list()).process_errors(yield_err))
+        return {};
+
+    return parsed;
 }
 
 int main(int argc, char *argv[])
@@ -269,19 +322,29 @@ int main(int argc, char *argv[])
     circ::add_sink< circ::severity::warn >(std::cerr);
     circ::add_sink< circ::severity::info >(std::cout);
 
-    auto cli = parse_cmd(argc, argv);
+    auto maybe_cli = parse_and_validate(argc, argv);
+    if (!maybe_cli)
+    {
+        std::cerr << circ::help_str(cmd_opts_list());
+        return 1;
+    }
+
+    auto cli = std::move(*maybe_cli);
+
+    if (cli.present< circ::cli::Help >())
+    {
+        std::cerr << circ::help_str(cmd_opts_list());
+        return 0;
+    }
+
+    if (cli.present< circ::cli::Version >())
+    {
+        std::cerr << "TODO: Implement proper version message!";
+        return 1;
+    }
 
     if (cli.present< circ::cli::Dbg >())
         circ::add_sink< circ::severity::dbg >(std::cout);
-
-    using run_modes_t = std::tuple< circ::cli::run::Derive, circ::cli::run::Verify >;
-    if (!cli.exactly_one_present(run_modes_t{}))
-    {
-        std::cerr << "Must choose one of run or derive!\n" << std::endl;
-        return 1;
-    }
-    if (cli.present< circ::cli::Dbg >())
-        circ::add_sink< circ::severity::dbg >(std::cerr);
 
     if (cli.present< circ::cli::run::Verify >())
         run< circ::run::VQueueInterpreter >(cli);
