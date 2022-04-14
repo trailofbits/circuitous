@@ -164,6 +164,12 @@ namespace circ::cli
         static std::string help() { return "Print version.\n"; }
     };
 
+    struct Quiet : circ::DefaultCmdOpt, Arity< 0 >
+    {
+        static inline const auto opt = circ::CmdOpt("--quiet", false);
+        static std::string help() { return "Suppress any logs.\n"; }
+    };
+
     struct Arch : circ::DefaultCmdOpt, Arity< 1 >, circ::HasAllowed< Arch >
     {
         static inline const auto opt = circ::CmdOpt("--arch", true);
