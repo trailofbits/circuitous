@@ -105,12 +105,12 @@ using deprecated_options = circ::tl::TL<
     circ::cli::LogDir
 >;
 using output_options = circ::tl::TL<
-    cli::SMTOut,
-    cli::JsonOut,
-    cli::BitBlastSmtOut,
-    cli::VerilogOut,
-    cli::IROut,
-    cli::DotOut
+    circ::cli::SMTOut,
+    circ::cli::JsonOut,
+    circ::cli::BitBlastSmtOut,
+    circ::cli::VerilogOut,
+    circ::cli::IROut,
+    circ::cli::DotOut
 >;
 using remill_config_options = circ::tl::TL<
     circ::cli::Arch,
