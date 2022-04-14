@@ -205,7 +205,7 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
         return {};
     }
 
-    if (v.check(are_exclusive< input_options >())
+    if (v.check(one_of< input_options >())
          .process_errors(yield_err))
     {
         return {};
