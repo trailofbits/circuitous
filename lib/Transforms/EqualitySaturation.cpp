@@ -559,6 +559,7 @@ namespace circ::eqsat {
 
         .Case("Or",  circuit->Create< Or >())
         .Case("And", circuit->Create< And >())
+        .Case("DecoderResult", circuit->Create< DecoderResult >())
 
         .Default( nullptr );
 
