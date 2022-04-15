@@ -138,7 +138,7 @@ namespace circ::run {
     }
 
     value_type GetNodeVal(Operation *op) const;
-    value_type get(Operation *op) const  {
+    value_type get(Operation *op) const {
       return GetNodeVal(op);
     }
 

@@ -244,7 +244,7 @@ namespace circ::run
                     if (!what)
                         return "( no value )";
                     std::stringstream ss;
-                    ss << "[ "<< what->getBitWidth() << "b: " << what->toString(16, false)
+                    ss << "[ "<< what->getBitWidth() << "b: " << llvm::toString(*what, 16, false)
                        << " ]";
                     return ss.str();
                 };
@@ -401,7 +401,7 @@ namespace circ::run
                       }
                 } else {
                     auto val = parent->GetNodeVal(op);
-                    ss << (val ? val->toString(16, false) : "(undef)");
+                    ss << (val ? llvm::toString(*val, 16, false) : "(undef)");
                 }
 
                 if (op->operands.size() == 0) {
@@ -417,7 +417,7 @@ namespace circ::run
                         ss << " (no value set)";
                     else {
                         auto val = parent->GetNodeVal(o);
-                        ss << (val ? val->toString(16, false) : "(undef)");
+                        ss << (val ? llvm::toString(*val, 16, false) : "(undef)");
                     }
                 };
 
