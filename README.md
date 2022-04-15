@@ -12,6 +12,13 @@ cmake -DVCPKG_ROOT=/path/to/vckpg \
 make
 ```
 
+Using `cmake preset` requires to have variables `VCPKG_ROOT` `remill_DIR` in the environment:
+
+```
+cmake --preset ninja-multi-osx-cxx-common
+cmake --build --preset ninja-multi-cxx-common-release
+```
+
 ### Docker image
 
 To build via Docker run, specify the architecture, base Ubuntu image and LLVM version. For example, to build `circuitous` linking against LLVM 12 on Ubuntu 20.04 on AMD64 do:
