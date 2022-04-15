@@ -1,8 +1,8 @@
 # Copyright (c) 2020-2021 Trail of Bits, Inc.
 cmake_minimum_required(VERSION 3.14)
 
-find_package(remill COMPONENTS VCPKG_DEPS QUIET)
 include(cmake/vcpkg_helper.cmake)
+find_package(remill COMPONENTS VCPKG_DEPS QUIET)
 
 project(circuitous
   LANGUAGES C CXX ASM
@@ -45,10 +45,14 @@ include(cmake/static_analyzers.cmake)
 # test options
 option(ENABLE_TESTING "Enable Test Builds" ON)
 
+# gap library
+find_package(gap REQUIRED)
+
 target_link_libraries(circuitous_settings INTERFACE
   remill_settings
   remill
   gflags
+  gap::gap
 )
 
 target_include_directories(circuitous_settings INTERFACE
