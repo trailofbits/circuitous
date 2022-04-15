@@ -27,7 +27,7 @@ namespace circ::run {
     }
 
     Formatter &operator<<(const llvm::APInt &apint) {
-      ss << apint.toString(16, false);
+      ss << llvm::toString(apint, 16, false);
       return *this;
     }
 

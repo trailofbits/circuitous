@@ -139,7 +139,7 @@ void export_derived(I inspect, const std::string &export_derived_to)
 {
     // Open output file
     std::error_code ec;
-    llvm::raw_fd_ostream output(export_derived_to, ec, llvm::sys::fs::F_Text);
+    llvm::raw_fd_ostream output(export_derived_to, ec, llvm::sys::fs::OF_Text);
     circ::check(!ec) << "Error while opening output state JSON file: " << ec.message();
 
     // Dump output register values to JSON
@@ -162,7 +162,7 @@ void export_derived(I inspect, const std::string &export_derived_to)
         output_obj["timestamp"] = as_str(inspect->get(inspect.circuit->output_timestamp()));
 
         auto str = [](auto val) {
-            return val.toString(10, false);
+            return llvm::toString(val, 10, false);
         };
 
         for (const auto &val : inspect->get_derived_mem()) {
@@ -238,7 +238,7 @@ void run(const CLI &parsed_cli)
     {
         std::unordered_map<circ::Operation *, std::string> values;
         for (auto &[op, val] : run.values()) {
-            values[op] = (val) ? val->toString(16, false) : std::string("{ undef }");
+            values[op] = (val) ? llvm::toString(*val, 16, false) : std::string("{ undef }");
         }
         std::ofstream os(*dot_out);
         circ::print_dot(os, circuit.get(), values);
