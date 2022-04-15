@@ -783,8 +783,11 @@ namespace circ {
     llvm::Value *decoder::get_decoder_tree()
     {
         auto all_fragments = byte_fragments();
-        auto translations = irops::make< irops::And >(ir, emit_translation_trees());
-        all_fragments.push_back(translations);
+        if (auto trees = emit_translation_trees(); !trees.empty())
+        {
+            auto translations = irops::make< irops::And >(ir,trees);
+            all_fragments.push_back(translations);
+        }
         return irops::make< irops::DecoderResult >(ir, all_fragments);
     }
 
@@ -792,15 +795,19 @@ namespace circ {
     {
         values_t out;
         for (const auto &s_op : isel.shadow.operands)
+        {
             if (s_op.reg)
                 out.push_back(emit_translation_tree(*s_op.reg));
+        }
         return out;
     }
 
     llvm::Value *decoder::emit_translation_tree(const shadowinst::Reg &sreg)
     {
-        if (sreg.has_saturated_map())
+        if (sreg.has_saturated_map() || sreg.region_bitsize() == 0)
+        {
             return ir.getTrue();
+        }
 
         auto selector = region_selector(ir, sreg);
 
