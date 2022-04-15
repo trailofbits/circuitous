@@ -129,9 +129,9 @@ namespace circ
 
         void populate_unproved()
         {
-            for (const auto &[ctx, _] : encs)
+            for (const auto &[ctx, enc] : encs)
             {
-                for (auto &[_, y] : unproved)
+                for (auto &[op, y] : unproved)
                     y.insert(ctx);
                 unproved[ctx] = {};
             }

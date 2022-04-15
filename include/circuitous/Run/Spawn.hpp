@@ -339,8 +339,8 @@ namespace circ::run
         std::tuple< std::string, std::string > to_traces(Circuit *circuit)
         {
             auto trace = Trace::make(circuit);
-            std::string current(trace.total_size, '0');
-            std::string next(trace.total_size, '0');
+            std::string current_trace(trace.total_size, '0');
+            std::string next_trace(trace.total_size, '0');
 
             auto inject = [&](auto &where, auto op, auto &field) {
                 const auto &[start, size, _] = field;
@@ -360,14 +360,15 @@ namespace circ::run
             for (auto &[op, field] : trace.parse_map)
             {
                 if (is_one_of(op, input_leaves_ts{}))
-                    inject(current, op, *field);
+                    inject(current_trace, op, *field);
                 else if (is_one_of(op, output_leaves_ts{}))
-                    inject(next, op, *field);
+                    inject(next_trace, op, *field);
                 else
                     unreachable() << "Unreachable.";
             }
-            check(current.size() == trace.total_size && next.size() == trace.total_size);
-            return { current, next };
+            check(current_trace.size() == trace.total_size);
+            check(next_trace.size() == trace.total_size);
+            return { current_trace, next_trace };
         }
 
         template< typename S >

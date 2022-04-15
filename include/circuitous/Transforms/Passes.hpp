@@ -130,9 +130,13 @@ namespace circ
       }
 
       std::stringstream ss;
-      const auto &[name, def] = history[0];
-      ss << name << ":" << std::endl;
-      printer::Print(ss, def);
+
+      {
+        const auto &[name, def] = history[0];
+        ss << name << ":" << std::endl;
+        printer::Print(ss, def);
+      }
+
       for (std::size_t i = 1; i < history.size(); ++i) {
         auto &[name, def] = history[i];
         ss << name << ":" << std::endl;

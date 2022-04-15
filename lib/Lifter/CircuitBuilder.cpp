@@ -225,9 +225,9 @@ namespace circ {
 
         check(fn->arg_size() % 2 == 0 && fn->arg_size() == ctx.regs().size() * 2);
         for (uint32_t i = 0; i < fn->arg_size(); i += 2) {
-            const auto &name = ctx.regs()[ i / 2 ]->name;
-            remill::NthArgument(fn, i)->setName(name + ".in");
-            remill::NthArgument(fn, i + 1)->setName(name + ".out");
+            const auto &reg_name = ctx.regs()[ i / 2 ]->name;
+            remill::NthArgument(fn, i)->setName(reg_name + ".in");
+            remill::NthArgument(fn, i + 1)->setName(reg_name + ".out");
 
             arg_map.emplace_back(ctx.regs()[ i / 2 ], fn->getArg(i), fn->getArg(i + 1));
         }

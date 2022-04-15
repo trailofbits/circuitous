@@ -542,7 +542,7 @@ namespace circ
         std::vector< shadowinst::has_regions > get_candidates(
             const shadowinst::has_regions &original)
         {
-            auto [from, size_] = original.biggest_chunk();
+            auto [from_, size_] = original.biggest_chunk();
             auto size = size_;
             // 3 bits are okay since we do not always need REX prefix.
             // 4 and more bits are most likely an error in decoding and we definitely
@@ -573,6 +573,8 @@ namespace circ
                 out.regions[hole - 1] = 3ul;
                 return { std::move(out) };
             };
+
+            auto from = from_;
 
             std::vector< shadowinst::has_regions > candidates;
 

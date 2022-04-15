@@ -94,12 +94,12 @@ namespace print {
 
     template<typename C>
     std::string Hash(const C& ops) {
-      std::stringstream ss;
+      std::stringstream hash;
       for (auto op : ops) {
-        ss << Hash(op);
-        ss << " | ";
+        hash << Hash(op);
+        hash << " | ";
       }
-      return ss.str();
+      return hash.str();
     }
 
     std::string Hash(Operation *op) {

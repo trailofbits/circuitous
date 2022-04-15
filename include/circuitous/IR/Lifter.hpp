@@ -326,7 +326,7 @@ namespace circ
         {
             // We run this to run some extra checks, but we do not care about result.
             llvm::IRBuilder<> ir(bb);
-            auto module = bb->getModule();
+            auto mod = bb->getModule();
 
             auto constant_imm = this->parent::LiftImmediateOperand(inst, bb, arg, arch_op);
 
@@ -339,7 +339,7 @@ namespace circ
                 return HideValue(constant_imm, bb, size);
 
 
-            auto inst_fn = ChooseImm(arch_op.size, ImmediateOperand(module, *CurrentShade().immediate));
+            auto inst_fn = ChooseImm(arch_op.size, ImmediateOperand(mod, *CurrentShade().immediate));
             // Similar situation as with empty map
             if (!inst_fn)
                 return HideValue(constant_imm, bb, size);
@@ -528,18 +528,18 @@ namespace circ
 
             auto val = LoadRegValue(block, state_ptr, reg_name);
             auto val_type = llvm::dyn_cast_or_null<llvm::IntegerType>(val->getType());
-            auto word_type = llvm::cast<llvm::IntegerType>(zero->getType());
+            auto curr_word_type = llvm::cast<llvm::IntegerType>(zero->getType());
 
             check(val_type) << "Register " << reg_name << " expected to be an integer.";
 
             auto val_size = val_type->getBitWidth();
-            auto word_size = word_type->getBitWidth();
-            check(val_size <= word_size)
+            auto curr_word_size = curr_word_type->getBitWidth();
+            check(val_size <= curr_word_size)
                 << "Register " << reg_name << " expected to be no larger than the "
-                << "machine word size (" << word_type->getBitWidth() << " bits).";
+                << "machine word size (" << curr_word_type->getBitWidth() << " bits).";
 
-            if (val_size < word_size)
-                val = new llvm::ZExtInst(val, word_type, llvm::Twine::createNull(), block);
+            if (val_size < curr_word_size)
+                val = new llvm::ZExtInst(val, curr_word_type, llvm::Twine::createNull(), block);
 
             return val;
         }
