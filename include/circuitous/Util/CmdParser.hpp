@@ -22,7 +22,11 @@ namespace circ
 {
     struct cmd_opt_tag_t {};
 
-    struct DefaultCmdOpt : cmd_opt_tag_t {};
+    struct DefaultCmdOpt : cmd_opt_tag_t
+    {
+        static std::string help() { return ""; }
+        static std::string short_help() { return ""; }
+    };
 
     struct CmdOpt
     {
@@ -43,6 +47,20 @@ namespace circ
         bool matches(const std::string &what) const
         {
             return what == primary || aliases.count(what);
+        }
+
+        std::string help() const
+        {
+            std::stringstream ss;
+            ss << (!required ? "[ " : "  ");
+            ss << primary;
+
+            for (const auto &alias : aliases)
+                ss << ", " << alias;
+
+            ss << (!required ? "] " : "  ");
+
+            return ss.str();
         }
     };
 
@@ -628,4 +646,58 @@ namespace circ
     template< typename ... Ts >
     struct CmdParser< tl::TL< Ts ... > > : CmdParser_impl< Ts ... > {};
 
+    template< typename H, typename ... Ts >
+    void help_str(std::stringstream &out, std::size_t indent_size)
+    {
+        auto reindent = [](const auto &str, auto size)
+        {
+            std::string out;
+            for (std::size_t i = 0; i < str.size(); ++i)
+            {
+                out += str[i];
+                if (str[i] == '\n' && i != str.size() - 1)
+                    out += std::string(size, ' ');
+            }
+            if (out.back() == '\n')
+                out.pop_back();
+            return out;
+        };
+
+        auto print_self = [&]()
+        {
+            auto header = H::opt.help();
+            out << header
+                << std::string(indent_size - header.size(), ' ')
+                << reindent(H::help(), indent_size) << "\n";
+        };
+        auto rec = [&]()
+        {
+            if constexpr (sizeof ... (Ts) != 0)
+                return help_str< Ts ... >(out, indent_size);
+        };
+
+        if (H::opt.required) {
+            print_self(); rec();
+        } else {
+            rec(); print_self();
+        }
+    }
+
+    template< typename H, typename ... Ts >
+    std::size_t help_header_size()
+    {
+        std::size_t self = H::opt.help().size();
+        if constexpr (sizeof ... (Ts) == 0)
+            return self;
+        else
+            return std::max< std::size_t >(self, help_header_size< Ts ... >());
+    }
+
+    template< typename ... Ts >
+    std::string help_str(tl::TL< Ts ... >)
+    {
+        std::stringstream ss;
+        help_str< Ts ... >(ss, help_header_size< Ts ... >() + 2);
+        return ss.str();
+    }
 } // namespace circ
