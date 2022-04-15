@@ -309,13 +309,17 @@ namespace circ
         using parsed_t = typename parent_t::parsed_t;
         using error_t = typename parent_t::error_t;
 
-        error_t validate(const parsed_t &parsed) { return this->init_and_validate(parsed); }
+        error_t validate(const parsed_t &parsed)
+        {
+            return this->template init_and_validate< Args ... >(parsed);
+        }
         bool satisfies() const { return this->filtered.size() == N; }
 
         error_t make_error() const
         {
-            return "Expected " + std::to_string(N) + " of: "
-                               + parent_t::format_opts(this->filtered);
+            return "Expected "
+                + std::to_string(N) + " of: "
+                + parent_t::format_opts(parent_t::template opts_to_primary< Args ... >());
         }
     };
 
@@ -382,11 +386,12 @@ namespace circ
     template< typename ... Args >
     struct are_exclusive< tl::TL< Args ... > > : Exclusive< Args ... > {};
 
+    template< typename ... Args > struct one_of : ExactlyNOf< 1ul, Args ... > {};
+    template< typename ... Args >
+    struct one_of< tl::TL< Args ... > > : ExactlyNOf< 1ul, Args... > {};
+
     template< typename L, typename ... Rhs >
     auto implies() { return Implies< L, Rhs ... >(); }
-
-    template< typename ... Args >
-    auto one_of() { return ExactlyNOf< 1ul, Args ... >(); }
 
     template< typename ... Args >
     auto is_present() { return Present< Args ... >(); }
