@@ -122,7 +122,6 @@ namespace circ
             run(verify_advices, circuit);
             run(verify_decoder_result, circuit);
             run(verify_ids, circuit);
-            run(verify_ctxs_uniqueness, circuit);
             return *this;
         }
 
