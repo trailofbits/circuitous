@@ -304,4 +304,15 @@ namespace circ
         return llvm::APInt(size_, span, 2);
     }
 
+    // NOTE(lukas): This is a fix for the time being - once llvm removes
+    //              for `llvm::PointerType::getElementType()` we will require
+    //              huge rework of multiple parts of code anyway.
+    static inline llvm::LoadInst *make_non_opaque_load(llvm::IRBuilder<> &irb,
+                                                       llvm::Value *from)
+    {
+        auto ptr_ty = llvm::dyn_cast< llvm::PointerType >(from->getType());
+        check(ptr_ty);
+        return irb.CreateLoad(ptr_ty->getElementType(), from);
+    }
+
 } // namespace circ
