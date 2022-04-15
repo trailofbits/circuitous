@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include <deque>
+
 #include <circuitous/IR/Visitors.hpp>
 
 #include <circuitous/Support/Check.hpp>
