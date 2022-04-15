@@ -82,18 +82,22 @@ namespace circ
         llvm::Module *module;
         llvm::LLVMContext *llvm_ctx;
         llvm::IntegerType *word_type;
+
+        remill::IntrinsicTable *table;
+
         uint64_t word_size = 0;
         uint64_t select_counter = 0;
 
         std::unordered_map< uint64_t, llvm::Value * > reg_op_dsts;
 
         InstructionLifter(arch_ptr_t arch_, llvm::Module *module_,
-                          remill::IntrinsicTable *table)
-            : parent(arch_, table),
+                          remill::IntrinsicTable *table_)
+            : parent(arch_, table_),
               arch(arch_),
               module(module_),
               llvm_ctx(&module_->getContext()),
               word_type(llvm::Type::getIntNTy(*llvm_ctx, arch_->address_size)),
+              table(table_),
               word_size(arch_->address_size)
         {}
 
@@ -239,7 +243,7 @@ namespace circ
             auto pc_ref = LoadRegAddress(block, state_ptr, remill::kPCVariableName);
             auto next_pc_ref = LoadRegAddress(block, state_ptr, remill::kNextPCVariableName);
             ir.CreateStore(ir.CreateLoad(next_pc_ref), pc_ref);
-            auto return_val = remill::LoadMemoryPointer(block);
+            auto return_val = remill::LoadMemoryPointer(block, *table);
             ir.CreateRet(return_val);
 
             // Inline
