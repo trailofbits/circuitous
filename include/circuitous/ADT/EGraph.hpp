@@ -378,8 +378,8 @@ namespace circ::eqsat {
 
       // obliterate empty classes
       for (auto it = _classes.begin(); it != _classes.end(); ) {
-        auto &[_, eclass] = *it;
-        it = eclass.empty() ? _classes.erase(it) : std::next(it);
+        auto &[_, ec] = *it;
+        it = ec.empty() ? _classes.erase(it) : std::next(it);
       }
     }
 

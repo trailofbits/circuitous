@@ -1088,7 +1088,6 @@ namespace circ::eqsat {
       rulesets.back().rules.push_back(std::move(rule));
     };
 
-    std::string line;
     while (auto line = get_nonempty_line(is)) {
       if (auto ruleset = maybe_new_ruleset(*line)) {
         log_info() << "new set of rules: " << ruleset->name << '\n';

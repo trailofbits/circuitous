@@ -229,10 +229,10 @@ struct Flattener {
     }
 
     llvm::Value *sel_val = ir.CreateCall(error, args);
-    for (auto [ret_inst, reaching_cond] : ret_vals) {
-      check(reaching_cond != ir.getTrue());
+    for (auto [ret_inst, reaching_condition] : ret_vals) {
+      check(reaching_condition != ir.getTrue());
       llvm::Value *ret_val = ret_inst->getReturnValue();
-      sel_val = ir.CreateSelect(reaching_cond, ret_val, sel_val);
+      sel_val = ir.CreateSelect(reaching_condition, ret_val, sel_val);
       ret_inst->eraseFromParent();
     }
 

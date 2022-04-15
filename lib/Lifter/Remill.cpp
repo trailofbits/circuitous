@@ -180,8 +180,8 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
     auto is_supported(auto triple)
     {
-        auto arch = remill::GetArchName(triple);
-        return arch == remill::kArchAMD64 || arch == remill::kArchX86;
+        auto arch_name = remill::GetArchName(triple);
+        return arch_name == remill::kArchAMD64 || arch_name == remill::kArchX86;
     }
 
     auto get_triple(llvm::Function *fn)
@@ -208,7 +208,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         //              that includes `_avx` variants.
         check(is_supported(get_triple(fn)));
 
-        auto [from, size] = irops::Extract::parse_args< uint32_t >(fn);
+        auto [extract_from, size] = irops::Extract::parse_args< uint32_t >(fn);
         auto arg = extract_argument(call, fn);
 
         // We split extract to sepratate bytes. This is so we can reorder them,
@@ -229,7 +229,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
                 from = y;
             }
         };
-        partials = generate_fragments(from ,from + size);
+        partials = generate_fragments(extract_from, extract_from + size);
 
         if (partials.size() == 1) {
             // `Emplace` was not called, therefore manual assignement is needed.
@@ -356,8 +356,8 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             return VisitGenericIntrinsic< Concat >(call, fn, size);
         }
         if (irops::Select::is(fn)) {
-            auto [bits, size] = irops::Select::parse_args< uint32_t >(fn);
-            return VisitGenericIntrinsic< Select >(call, fn, bits, size);
+            auto [select_bits, size] = irops::Select::parse_args< uint32_t >(fn);
+            return VisitGenericIntrinsic< Select >(call, fn, select_bits, size);
         }
         if (irops::OutputCheck::is(fn)) {
             return VisitGenericIntrinsic< RegConstraint >(call, fn);
@@ -582,16 +582,16 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             return;
 
         auto num_bits = value_size(val);
-        llvm::SmallString<128> bits;
+        llvm::SmallString<128> val_bits;
 
-        bits.reserve(num_bits);
+        val_bits.reserve(num_bits);
         ap_val.toStringUnsigned(bits, 2);
-        while (bits.size() < num_bits)
+        while (val_bits.size() < num_bits)
         {
-            bits.insert(bits.begin(), '0');
+            val_bits.insert(val_bits.begin(), '0');
         }
-        std::reverse(bits.begin(), bits.end());
-        auto bits_str = bits.str().str();
+        std::reverse(val_bits.begin(), val_bits.end());
+        auto bits_str = val_bits.str().str();
 
         auto &bits_op = bits_to_constants[bits_str];
         if (!bits_op)
@@ -720,12 +720,12 @@ Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func, Ctx &ctx)
     for (auto &arg : circuit_func->args()) {
         auto arg_size = static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
         // Expected output register.
-        if (auto name = circuit_builder::is_output_reg(&arg)) {
-            importer.Emplace<OutputRegister>(&arg, *name, arg_size);
+        if (auto out_name = circuit_builder::is_output_reg(&arg)) {
+            importer.Emplace<OutputRegister>(&arg, *out_name, arg_size);
             ++num_output_regs;
             // Input register.
-        } else if (auto name = circuit_builder::is_input_reg(&arg)) {
-            importer.Emplace<InputRegister>(&arg, *name, arg_size);
+        } else if (auto in_name = circuit_builder::is_input_reg(&arg)) {
+            importer.Emplace<InputRegister>(&arg, *in_name, arg_size);
             ++num_input_regs;
         }
     }

@@ -787,7 +787,7 @@ namespace circ::print::verilog
             unreachable() << "Trying to get trace name for unexpected op.";
         }
 
-        void finalize(Operation *op)
+        void finalize(Operation *)
         {
             for (auto &[op, field] : trace->parse_map)
             {

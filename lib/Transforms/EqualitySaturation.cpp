@@ -361,12 +361,8 @@ namespace circ::eqsat {
       _egraph.rebuild();
 
       Status stopped = std::nullopt;
-
-      unsigned int steps = 0;
-
       while (!stopped.has_value()) {
         stopped = step(rules);
-        steps++;
       }
 
       return stopped.value();

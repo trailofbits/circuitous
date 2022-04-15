@@ -232,7 +232,7 @@ namespace circ {
 
       auto have_compatible_ctxs = [&](auto &use) {
         auto user = use.getUser();
-        if (auto call = llvm::dyn_cast< llvm::CallInst >(user))
+        if (llvm::isa< llvm::CallInst >(user))
           return false;
         auto as_inst = llvm::dyn_cast< llvm::Instruction >(user);
         check(as_inst);
