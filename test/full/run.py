@@ -136,6 +136,7 @@ class Lifter(SimulateCWDMixin):
         args = [self.binary,
                 "--os", "macos",
                 "--log-dir", self.test_dir,
+                "--quiet",
                 "--bytes-in", bytes,
                 "--json-out", self.locate("out.json"),
                 "--ir-out", self.locate(self.circuit_name(bytes))]
