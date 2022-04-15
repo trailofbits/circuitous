@@ -20,11 +20,11 @@
 namespace circ::parser
 {
   template< typename T >
-  concept integral = std::is_integral_v<T>;
+  concept integral = std::is_integral_v< T >;
 
   template< typename F, typename... Args >
   concept invocable = requires(F &&f, Args&& ...args) {
-    std::invoke(std::forward<F>(f), std::forward<Args>(args)...);
+    std::invoke(std::forward< F >(f), std::forward< Args >(args)...);
   };
 
   using parse_input_t = std::string_view;
@@ -33,7 +33,7 @@ namespace circ::parser
   // optional result and remaining (unparsed) string.
 
   template< typename P >
-  concept Parser = invocable<P, parse_input_t >;
+  concept Parser = invocable< P, parse_input_t >;
 
   template< typename T >
   using parse_result_t = std::optional< std::pair< T, std::string_view > >;
@@ -78,8 +78,8 @@ namespace circ::parser
   }
 
   template< typename P, typename F,
-            typename T =  std::invoke_result_t< F, parse_type<P>, parse_input_t > >
-  constexpr parser<T> auto bind(P&& p, F&& f)
+            typename T =  std::invoke_result_t< F, parse_type< P >, parse_input_t > >
+  constexpr auto bind(P&& p, F&& f)
   {
     return [=] (parse_input_t in) -> T {
       if (auto res = p(in)) {
@@ -123,7 +123,7 @@ namespace circ::parser
   // Both parsers have to return the same type.
   template< typename P1, typename P2,
             typename T = std::enable_if_t< std::is_same_v< parse_type<P1>, parse_type<P2> > > >
-  constexpr parser<T> auto operator|(P1&& p1, P2&& p2)
+  constexpr auto operator|(P1&& p1, P2&& p2)
   {
     return [=] (parse_input_t in) {
       if (auto r1 = p1(in))
@@ -226,7 +226,7 @@ namespace circ::parser
   // apply parser 'p' zero or more times, accumulating the results according to a
   // function 'f' with initial accumulator value 'init'
   template <typename P, typename T, typename F>
-  constexpr parser<T> auto many(P &&p, T &&init, F &&f)
+  constexpr parser< std::decay_t< T > > auto many(P &&p, T &&init, F &&f)
   {
     return [p = std::forward<P>(p), init = std::forward<T>(init),
             f = std::forward<F>(f)] (parse_input_t in)
@@ -238,7 +238,7 @@ namespace circ::parser
 
   // apply parser 'p' at least once
   template <typename P, typename T, typename F>
-  constexpr parser<T> auto many1(P &&p, T &&init, F &&f)
+  constexpr parser< std::decay_t< T > > auto many1(P &&p, T &&init, F &&f)
   {
     return [p = std::forward<P>(p), init = std::forward<T>(init),
             f = std::forward<F>(f)] (parse_input_t in)
@@ -362,8 +362,8 @@ namespace circ::parser
     return detail::digit_parser<I>("0"sv);
   }
 
-  template< integral I >
-  constexpr parser<I> auto value_parser()
+  template< typename I >
+  constexpr auto value_parser()
   {
     return bind(
       nonzero_parser<I>(),
