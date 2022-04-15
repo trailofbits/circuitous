@@ -213,7 +213,8 @@ namespace circ
                 llvm::IRBuilder<> ir(load);
                 auto cond = shadowinst::make_explicit_decode(ir, *s_reg, name);
                 auto select = irops::make< irops::Select >(
-                        ir, {cond, ir.CreateLoad(gep), ir.CreateLoad(val)});
+                        ir,
+                        {cond, make_non_opaque_load(ir, gep), make_non_opaque_load(ir, val)});
 
                 load->replaceAllUsesWith(select);
             }
@@ -242,7 +243,7 @@ namespace circ
             llvm::IRBuilder ir(block);
             auto pc_ref = LoadRegAddress(block, state_ptr, remill::kPCVariableName);
             auto next_pc_ref = LoadRegAddress(block, state_ptr, remill::kNextPCVariableName);
-            ir.CreateStore(ir.CreateLoad(next_pc_ref), pc_ref);
+            ir.CreateStore(make_non_opaque_load(ir, next_pc_ref), pc_ref);
             auto return_val = remill::LoadMemoryPointer(block, *table);
             ir.CreateRet(return_val);
 
