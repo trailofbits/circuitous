@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <bitset>
 #include <iomanip>
 #include <string>
 #include <sstream>
