@@ -123,6 +123,13 @@ jobs:
           path: ${{ steps.build_paths.outputs.REL_SOURCE }}/remill
           fetch-depth: 0
 
+      - name: Clone the gap repository
+        uses: actions/checkout@v2
+        with:
+          repository: 'lifting-bits/gap'
+          path: ${{ steps.build_paths.outputs.REL_SOURCE }}/gap
+          fetch-depth: 0
+
       - name: Download the cxx-common ${{ matrix.cxxcommon_version}} package
         shell: bash
         id: cxxcommon_installer
@@ -191,6 +198,44 @@ jobs:
                 --target install
           echo ::set-output name=PATH::${DESTDIR}
 
+      - name: Configure gap
+        working-directory: ${{ steps.build_paths.outputs.SOURCE }}/gap
+
+        env:
+          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
+
+        run: |
+          cmake -B ${{ steps.build_paths.outputs.BUILD }}/gap_build \
+              -DCMAKE_C_COMPILER=clang-12 \
+              -DCMAKE_CXX_COMPILER=clang++-12 \
+              -DCMAKE_VERBOSE_MAKEFILE=true \
+              -DVCPKG_ROOT="${{ steps.cxxcommon_installer.outputs.PATH }}" \
+              -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
+              -DCMAKE_INSTALL_PREFIX:PATH=${{ steps.build_paths.outputs.INSTALL }}/gap
+              -G Ninja
+
+      - name: Build gap
+        working-directory: ${{ steps.build_paths.outputs.BUILD }}
+
+        env:
+          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
+
+        run: |
+          cmake --build gap_build -j $(nproc)
+
+      - name: Install gap
+        id: gap_installer
+        working-directory: ${{ steps.build_paths.outputs.BUILD }}
+
+        env:
+          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
+
+        run: |
+          export DESTDIR=${{ steps.build_paths.outputs.INSTALL }}/gap
+          cmake --build gap_build \
+                --target install
+          echo ::set-output name=PATH::${DESTDIR}
+
       - name: Configure circuitous
         working-directory: ${{ steps.build_paths.outputs.BUILD }}
 
@@ -207,6 +252,7 @@ jobs:
               -DVCPKG_ROOT="${{ steps.cxxcommon_installer.outputs.PATH }}" \
               -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
               -Dremill_DIR:PATH=${{ steps.remill_installer.outputs.PATH }}/usr/local/lib/cmake/remill \
+              -Dgap_DIR:PATH=${{ steps.gap_installer.outputs.PATH }}/usr/local/lib/cmake/gap \
               -G Ninja \
               ${{ steps.build_paths.outputs.SOURCE }}/circuitous
 
