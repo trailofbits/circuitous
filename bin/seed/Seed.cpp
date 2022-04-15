@@ -31,10 +31,8 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <remill/BC/Util.h>
 #include <remill/OS/OS.h>
 
-//DEFINE_string(arch, "", "");
-//DEFINE_string(os, "", "");
-DECLARE_string(arch);
-DECLARE_string(os);
+DEFINE_string(arch, "", "");
+DEFINE_string(os, "", "");
 
 DEFINE_bool(prune, false, "Prune mode - take existing dbg format and prune,");
 DEFINE_string(prune_spec, "", "Path to spec file to prune by.");
