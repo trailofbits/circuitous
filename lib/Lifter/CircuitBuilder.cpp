@@ -119,7 +119,7 @@ namespace circ {
             ir.getIntNTy(static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
         auto coerced_type = ir.CreateBitCast(gep, llvm::PointerType::getUnqual(store_type));
 
-        auto loaded = ir.CreateLoad(coerced_type);
+        auto loaded = make_non_opaque_load(ir, coerced_type);
         if (reg_type != store_type)
             return ir.CreateTrunc(loaded, reg_type);
 
@@ -667,7 +667,7 @@ namespace circ {
                     check(proccessed - 1 < dst_regs.size()) << proccessed - 1
                                                             << " >= " << dst_regs.size();
                     auto eq = irops::make< irops::Xor >(ir, reg_checks);
-                    auto dst_load = ir.CreateLoad(dst_regs[proccessed - 1]);
+                    auto dst_load = make_non_opaque_load(ir, dst_regs[proccessed - 1]);
                     auto reg_addr = reg_part->AddressOf(state.raw(), ir);
 
                     auto store_ty =

@@ -193,7 +193,7 @@ struct Flattener {
           // Otherwise the SF would always be `0` no matter the `x`
           llvm::IRBuilder<> ir(new_block);
           auto ptr_op = store->getPointerOperand();
-          auto original = ir.CreateLoad(ptr_op);
+          auto original = make_non_opaque_load(ir, ptr_op);
           auto guarded = ir.CreateSelect(reaching_cond[block], store->getOperand(0), original);
           ir.CreateStore(guarded, ptr_op);
         } else if (!inst->isTerminator()) {
