@@ -140,15 +140,6 @@ target_link_libraries(circuitous-run PUBLIC
   circuitous_printers
 )
 
-add_executable(circuitous-cost-gen
-  bin/costgen/CostGen.cpp
-)
-
-target_link_libraries(circuitous-cost-gen PUBLIC
-  circuitous_settings
-  circuitous_ir
-)
-
 #
 # tests
 #
