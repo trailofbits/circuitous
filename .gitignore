@@ -29,6 +29,7 @@ cmake-build-release
 compile_commands.json
 
 build/*
+builds/*
 test/full/tmp*
 
 *.o
