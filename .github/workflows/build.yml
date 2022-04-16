@@ -205,14 +205,15 @@ jobs:
           CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
 
         run: |
-          cmake -B ${{ steps.build_paths.outputs.BUILD }}/gap_build \
+          cmake -S ${{ steps.build_paths.outputs.SOURCE }}/gap \
+              -B ${{ steps.build_paths.outputs.BUILD }}/gap_build \
+              -G Ninja \
               -DCMAKE_C_COMPILER=clang-12 \
               -DCMAKE_CXX_COMPILER=clang++-12 \
               -DCMAKE_VERBOSE_MAKEFILE=true \
               -DVCPKG_ROOT="${{ steps.cxxcommon_installer.outputs.PATH }}" \
               -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
               -DCMAKE_INSTALL_PREFIX:PATH=${{ steps.build_paths.outputs.INSTALL }}/gap
-              -G Ninja
 
       - name: Build gap
         working-directory: ${{ steps.build_paths.outputs.BUILD }}

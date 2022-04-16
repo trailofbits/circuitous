@@ -25,6 +25,7 @@ FindAndSelectClangCompiler()
 #
 find_package(remill CONFIG REQUIRED)
 find_package(gflags CONFIG REQUIRED)
+find_package(gap CONFIG REQUIRED)
 
 #
 # target settings
@@ -44,9 +45,6 @@ include(cmake/static_analyzers.cmake)
 
 # test options
 option(ENABLE_TESTING "Enable Test Builds" ON)
-
-# gap library
-find_package(gap REQUIRED)
 
 target_link_libraries(circuitous_settings INTERFACE
   remill_settings
