@@ -29,7 +29,7 @@ jobs:
           - { name: 'ubuntu', tag: '20.04' }
 
         llvm: [ '13' ]
-        cxxcommon_version: [ 'v0.1.4' ]
+        cxxcommon_version: [ 'v0.2.1' ]
 
     runs-on: ubuntu-20.04
 
