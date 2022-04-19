@@ -205,6 +205,7 @@ jobs:
           cmake -S ${{ steps.build_paths.outputs.SOURCE }}/gap \
               -B ${{ steps.build_paths.outputs.BUILD }}/gap_build \
               -G Ninja \
+              -DVCPKG_MANIFEST_MODE=OFF \
               -DCMAKE_C_COMPILER=clang-12 \
               -DCMAKE_CXX_COMPILER=clang++-12 \
               -DCMAKE_VERBOSE_MAKEFILE=true \
