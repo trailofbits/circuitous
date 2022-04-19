@@ -67,7 +67,7 @@ jobs:
           echo ::set-output name=CCACHE::$(pwd)/${rel_ccache_path}
 
       - name: Update the cache (downloads)
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ${{ steps.build_paths.outputs.DOWNLOADS }}
 
@@ -77,7 +77,7 @@ jobs:
             gitmodules_${{ matrix.image.name }}_${{ matrix.image.tag }}_${{ matrix.llvm }}
 
       - name: Update the cache (ccache)
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: ${{ steps.build_paths.outputs.CCACHE }}
 
@@ -105,10 +105,9 @@ jobs:
 
 
       - name: Clone the circuitous repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           path: ${{ steps.build_paths.outputs.REL_SOURCE }}/circuitous
-          fetch-depth: 0
           submodules: true
 
       - name: Install circuitous requirements
@@ -117,18 +116,16 @@ jobs:
           pip install --no-cache-dir -r ${{ steps.build_paths.outputs.REL_SOURCE }}/circuitous/requirements.txt
 
       - name: Clone the remill repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: 'lifting-bits/remill'
           path: ${{ steps.build_paths.outputs.REL_SOURCE }}/remill
-          fetch-depth: 0
 
       - name: Clone the gap repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           repository: 'lifting-bits/gap'
           path: ${{ steps.build_paths.outputs.REL_SOURCE }}/gap
-          fetch-depth: 0
 
       - name: Download the cxx-common ${{ matrix.cxxcommon_version}} package
         shell: bash
