@@ -101,6 +101,10 @@ namespace circ::irops {
   // this should allow llvm optimizations to eliminate more instructions.
   simple_intrinsic(Operand, impl::advice_allocator_t, "__circuitous.operand_advice");
 
+  // Helps to unify later all decoder related selections and operations
+  simple_intrinsic(OpSelector, impl::op_selector_t, "__circuitous.op.selector");
+
+  simple_intrinsic(WasDecoded, impl::was_decoded_t, "__circuitous.op.was_decoded");
   // Denotes that given hint/advice is not used and should be zeroed.
   simple_intrinsic(UnusedConstraint, impl::unary_check_t, "__circuitous.unused_constraint");
   // Anchor some part of code - usefull to keep track of code regions (e.g. all instructions
