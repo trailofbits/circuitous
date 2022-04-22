@@ -145,42 +145,6 @@ namespace circ
         llvm::Value *locate_in_reg(const std::string &name) { return _locate_reg< 1 >(name); }
     };
 
-    struct decoder : has_ctx_ref
-    {
-        using has_ctx_ref::has_ctx_ref;
-        using values_t = std::vector< llvm::Value * >;
-
-        llvm::IRBuilder<> &ir;
-        ISEL_view isel;
-
-        decoder(CtxRef ctx_, llvm::IRBuilder<> &ir_, ISEL_view &isel_)
-            : has_ctx_ref(ctx_), ir(ir_), isel(isel_)
-        {}
-
-        llvm::Value *get_decoder_tree();
-
-      private:
-
-        values_t byte_fragments();
-        std::string generate_raw_bytes(const std::string &str, uint64_t form, uint64_t to);
-        llvm::Value *create_bit_check(uint64_t from, uint64_t to);
-
-        auto rinst_size() { return isel.instruction.bytes.size() * 8; }
-
-        std::string convert_encoding(const auto &encoding)
-        {
-            std::string full_inst;
-            // Encoding check needed since `x` is unsigned.
-            for (std::size_t i = 0; i < encoding.size(); ++i)
-              full_inst += (encoding[i]) ? '1' : '0';
-
-            return full_inst;
-        }
-
-        values_t emit_translation_trees();
-        llvm::Value *emit_translation_tree(const shadowinst::Reg &sreg);
-    };
-
     struct circuit_builder : CircuitFunction
     {
         using parent_t = CircuitFunction;

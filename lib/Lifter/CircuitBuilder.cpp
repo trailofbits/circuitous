@@ -12,6 +12,7 @@
 #include <circuitous/Lifter/Memory.hpp>
 #include <circuitous/Lifter/Instruction.hpp>
 #include <circuitous/Lifter/SelectFold.hpp>
+#include <circuitous/Lifter/Components/Decoder.hpp>
 
 #include <circuitous/IR/Lifter.hpp>
 
@@ -411,7 +412,7 @@ namespace circ {
         auto [begin, end] = inline_flattened(sem_call, make_breakpoint);
         ir.SetInsertPoint(this->head);
 
-        auto params = decoder(ctx, ir, isel).get_decoder_tree();
+        auto params = build::Decoder(ctx, ir, isel).get_decoder_tree();
 
         auto mem_checks = mem::synthetize_memory(begin, end, ctx.ptr_size);
         ir.SetInsertPoint(this->head);
@@ -736,90 +737,6 @@ namespace circ {
         }();
         out.push_back(irops::make< irops::OutputCheck >(irb, {current_err, ebit_out}));
         return std::make_tuple(out, current_err);
-    }
-
-
-    std::string decoder::generate_raw_bytes(const std::string &full, uint64_t from, uint64_t to)
-    {
-        auto n = full.substr(from, to - from);
-        std::reverse(n.begin(), n.end());
-        return n;
-    }
-
-    llvm::Value *decoder::create_bit_check(uint64_t from, uint64_t to)
-    {
-        auto encoding = convert_encoding(isel.encoding);
-        std::string expected = generate_raw_bytes(encoding, from, to);
-
-        auto size = static_cast< uint32_t >(expected.size());
-        check(size == to - from) << size << " != " << to - from;
-
-        auto expected_v = ir.getInt(llvm::APInt(size, expected, 2));
-        auto extracted = irops::make_leaf< irops::ExtractRaw >(ir, from, to - from);
-        return irops::make< irops::DecodeCondition >(ir, {expected_v, extracted}, size);
-    }
-
-    auto decoder::byte_fragments() -> values_t
-    {
-        values_t out;
-
-        auto unknown_regions = isel.shadow.UnknownRegions(rinst_size());
-        // `unknown_regions` are in `[ from, size ]` format.
-        for (auto [from, to] : shadowinst::FromToFormat(unknown_regions))
-            out.push_back(create_bit_check(from, to));
-
-        // TODO(lukas): Now we need to check the tail.
-        //              Try to lift `6689d8` and `89d8` to demonstrate the issue.
-        // TODO(lukas): For now we assume it is padded with 0s.
-        auto tail_size = static_cast< uint32_t >(kMaxNumInstBits - rinst_size());
-        auto tail = ir.getInt(llvm::APInt(tail_size, 0, false));
-
-        auto extracted = irops::make_leaf< irops::ExtractRaw >(ir, rinst_size(), tail_size);
-        auto compare = irops::make< irops::DecodeCondition >(ir, {tail, extracted}, tail_size);
-        out.push_back(compare);
-        return out;
-    }
-
-    llvm::Value *decoder::get_decoder_tree()
-    {
-        auto all_fragments = byte_fragments();
-        if (auto trees = emit_translation_trees(); !trees.empty())
-        {
-            auto translations = irops::make< irops::And >(ir,trees);
-            all_fragments.push_back(translations);
-        }
-        return irops::make< irops::DecoderResult >(ir, all_fragments);
-    }
-
-    auto decoder::emit_translation_trees() -> values_t
-    {
-        values_t out;
-        for (const auto &s_op : isel.shadow.operands)
-        {
-            if (s_op.reg)
-                out.push_back(emit_translation_tree(*s_op.reg));
-        }
-        return out;
-    }
-
-    llvm::Value *decoder::emit_translation_tree(const shadowinst::Reg &sreg)
-    {
-        if (sreg.has_saturated_map() || sreg.region_bitsize() == 0)
-        {
-            return ir.getTrue();
-        }
-
-        auto selector = region_selector(ir, sreg);
-
-        values_t conds;
-        for (auto &[reg, mats] : sreg.translation_map)
-            for (auto &mat : mats)
-            {
-                auto as_constant = ir.getInt(make_APInt(mat, 0, mat.size()));
-                conds.push_back(ir.CreateICmpEQ(selector, as_constant));
-            }
-
-        return irops::make< irops::Or >(ir, conds);
     }
 
     void CircuitMaker::prepare_module()
