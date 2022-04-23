@@ -72,10 +72,10 @@ jobs:
       id: paths
       run: |
         mkdir -p build src install ccache
-        echo ::set-output name=src::${{ github.workspace }}/src
-        echo ::set-output name=build::${{ github.workspace }}/build
-        echo ::set-output name=install::${{ github.workspace }}/install
-        echo ::set-output name=ccache::${{ github.workspace }}/ccache
+        echo ::set-output name=src::$(pwd)/src
+        echo ::set-output name=build::$(pwd)/build
+        echo ::set-output name=install::$(pwd)/install
+        echo ::set-output name=ccache::$(pwd)/ccache
 
     - name: Get latest CMake and ninja
       uses: xlauko/get-cmake@main
@@ -100,6 +100,27 @@ jobs:
         path: ${{ steps.paths.outputs.src }}/gap
         submodules: true
         fetch-depth: 1
+
+    # setup vcpkg for gap
+    - name: Setup vcpkg
+      uses: lukka/run-vcpkg@v10
+      with:
+        vcpkgDirectory: ${{ steps.paths.outputs.install }}/vcpkg
+        vcpkgGitCommitId: '${{ env.VCPKG_COMMIT_ID }}'
+        vcpkgJsonGlob: vcpkg.json
+
+    - name: Configure gap
+      working-directory: ${{ steps.paths.outputs.src }}/gap
+      env:
+        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+      run: |
+        cmake \
+          -G Ninja \
+          -S . \
+          -B ${{ steps.paths.outputs.build }}/gap \
+          -DCMAKE_VERBOSE_MAKEFILE=true \
+          -DVCPKG_ROOT=${{ steps.paths.outputs.install }}/vcpkg \
+          -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/gap
 
     # setup remill
     - name: Clone the remill repository
@@ -146,6 +167,8 @@ jobs:
         fetch-depth: 1
 
     - name: Install circuitous python requirements
+      working-directory: ${{ steps.paths.outputs.src }}/circuitous
       shell: bash
       run: |
-          pip install --no-cache-dir -r ${{ steps.paths.outputs.src }}/circuitous/requirements.txt
+          ls .
+          pip install --no-cache-dir -r requirements.txt
