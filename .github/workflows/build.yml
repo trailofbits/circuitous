@@ -20,6 +20,14 @@ on:
     branches:
       - '*'
 
+env:
+  # Indicates the location of the vcpkg as a Git submodule of the project repository.
+  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+  # Tells vcpkg where binary packages are stored.
+  VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg/bincache
+  # Use specific vcpkg version
+  VCPKG_COMMIT_ID: '9836ae4f2671db41e07843f31b4e341f0d3ebfb1'
+
 jobs:
   build_linux:
     strategy:
@@ -29,7 +37,7 @@ jobs:
           - { name: 'ubuntu', tag: '20.04' }
 
         llvm: [ '13' ]
-        cxxcommon_version: [ 'v0.2.1' ]
+        cxxcommon_version: [ 'v0.2.2' ]
 
     runs-on: ubuntu-20.04
 
@@ -43,250 +51,102 @@ jobs:
         password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
-      - name: Setup the build paths
-        shell: bash
-        id: build_paths
-        run: |
-          rel_build_path="build"
-          rel_source_path="src"
-          rel_install_path="install"
-          rel_downloads_path="downloads"
-          rel_ccache_path="ccache"
+    # setup environment
+    - name: "Create directory '${{ env.VCPKG_DEFAULT_BINARY_CACHE }}'"
+      run: mkdir -p $VCPKG_DEFAULT_BINARY_CACHE
+      shell: bash
 
-          mkdir -p ${rel_build_path} \
-                   ${rel_install_path} \
-                   ${rel_downloads_path} \
-                   ${rel_ccache_path}
+    - name: Install dependencies
+      shell: bash
+      run: |
+        apt-get update
+        apt-get install --yes --no-install-recommends \
+          clang-12 build-essential ninja-build libstdc++-10-dev
 
-          echo ::set-output name=SOURCE::$(pwd)/${rel_source_path}
-          echo ::set-output name=REL_SOURCE::${rel_source_path}
-          echo ::set-output name=BUILD::$(pwd)/${rel_build_path}
-          echo ::set-output name=REL_BUILD::${rel_build_path}
-          echo ::set-output name=INSTALL::$(pwd)/${rel_install_path}
-          echo ::set-output name=DOWNLOADS::$(pwd)/${rel_downloads_path}
-          echo ::set-output name=CCACHE::$(pwd)/${rel_ccache_path}
-
-      - name: Update the cache (downloads)
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.build_paths.outputs.DOWNLOADS }}
-
-          key: |
-            gitmodules_${{ matrix.image.name }}_${{ matrix.image.tag }}_${{ matrix.llvm }}_${{ github.sha }}
-          restore-keys: |
-            gitmodules_${{ matrix.image.name }}_${{ matrix.image.tag }}_${{ matrix.llvm }}
-
-      - name: Update the cache (ccache)
-        uses: actions/cache@v3
-        with:
-          path: ${{ steps.build_paths.outputs.CCACHE }}
-
-          key: |
-            gitmodules_${{ matrix.image.name }}_${{ matrix.image.tag }}_${{ matrix.llvm }}_${{ github.sha }}
-          restore-keys: |
-            gitmodules_${{ matrix.image.name }}_${{ matrix.image.tag }}_${{ matrix.llvm }}
-
-      - name: Install system requirements
-        shell: bash
-        run: |
-          apt-get update
-          apt-get install -y software-properties-common
-
-          wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
-
-          add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-12 main"
-
-          apt-get update
-          apt-get install -y clang-12 libstdc++-10-dev
-
-          update-alternatives \
+        update-alternatives \
             --install /usr/bin/clang clang /usr/bin/clang-12 10 \
             --slave   /usr/bin/clang++ clang++ /usr/bin/clang++-12
 
+    - name: Setup paths
+      shell: bash
+      id: paths
+      run: |
+        mkdir -p build src install ccache
+        echo ::set-output name=src::${{ github.workspace }}/src
+        echo ::set-output name=build::${{ github.workspace }}/build
+        echo ::set-output name=install::${{ github.workspace }}/install
+        echo ::set-output name=ccache::${{ github.workspace }}/ccache
 
-      - name: Clone the circuitous repository
-        uses: actions/checkout@v3
-        with:
-          path: ${{ steps.build_paths.outputs.REL_SOURCE }}/circuitous
-          submodules: true
+    - name: Get latest CMake and ninja
+      uses: xlauko/get-cmake@main
 
-      - name: Install circuitous requirements
-        shell: bash
-        run: |
-          pip install --no-cache-dir -r ${{ steps.build_paths.outputs.REL_SOURCE }}/circuitous/requirements.txt
+    # setup cxx-common
+    - name: Download cxx-common
+      id: cxxcommon
+      uses: lifting-bits/download-cxx-common@v1
+      with:
+        llvm: ${{ matrix.llvm }}
+        version: ${{ matrix.cxxcommon_version }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        image: ${{ matrix.image.name }}
+        image_tag: ${{ matrix.image.tag }}
+        destination: ${{ steps.paths.outputs.install }}
 
-      - name: Clone the remill repository
-        uses: actions/checkout@v3
-        with:
-          repository: 'lifting-bits/remill'
-          path: ${{ steps.build_paths.outputs.REL_SOURCE }}/remill
+    # setup gap
+    - name: Clone the gap repository
+      uses: actions/checkout@v3
+      with:
+        repository: 'lifting-bits/gap'
+        path: ${{ steps.paths.outputs.src }}/gap
+        submodules: true
+        fetch-depth: 1
 
-      - name: Clone the gap repository
-        uses: actions/checkout@v3
-        with:
-          repository: 'lifting-bits/gap'
-          path: ${{ steps.build_paths.outputs.REL_SOURCE }}/gap
+    # setup remill
+    - name: Clone the remill repository
+      uses: actions/checkout@v3
+      with:
+        repository: 'lifting-bits/remill'
+        path: ${{ steps.paths.outputs.src }}/remill
+        submodules: true
+        fetch-depth: 1
 
-      - name: Download the cxx-common ${{ matrix.cxxcommon_version}} package
-        shell: bash
-        id: cxxcommon_installer
-        working-directory: ${{ steps.build_paths.outputs.DOWNLOADS }}
-        run: |
-          folder_name="vcpkg_${{ matrix.image.name }}-${{ matrix.image.tag }}_llvm-${{ matrix.llvm }}_amd64"
-          archive_name="${folder_name}.tar.xz"
+    - name: Configure remill
+      working-directory: ${{ steps.paths.outputs.src }}/remill
+      env:
+        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+      run: |
+        cmake \
+          -G Ninja \
+          -S . \
+          -B ${{ steps.paths.outputs.build }}/remill \
+          -DCMAKE_VERBOSE_MAKEFILE=true \
+          -DVCPKG_ROOT=${{ steps.cxxcommon.outputs.path }} \
+          -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/remill
 
-          url="https://github.com/lifting-bits/cxx-common/releases/download/${{ matrix.cxxcommon_version}}/${archive_name}"
-          local_path="${{ steps.build_paths.outputs.DOWNLOADS }}/${archive_name}"
+    # CMake Error: The source directory "/home/runner/work/circuitous/circuitous/src/remill" does not exist.
+    - name: Build remill
+      working-directory: ${{ steps.paths.outputs.src }}/remill
+      env:
+        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+      run: |
+        cmake --build ${{ steps.paths.outputs.build }}/remill -j $(nproc)
 
-          if [[ ! -f "${local_path}" ]] ; then
-            echo "Downloading: ${url}"
-            curl "${url}" -L -o "${local_path}"
+    - name: Install remill
+      working-directory: ${{ steps.paths.outputs.src }}/remill
+      env:
+        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+      run: |
+        cmake --build ${{ steps.paths.outputs.build }}/remill --target install
 
-            ls -t ${{ steps.build_paths.outputs.DOWNLOADS }}/vcpkg_* | tail -n +2 | while read archive_file ; do
-              rm "${archive_file}"
-            done
-          fi
+    # setup circuitous
+    - name: Clone the circuitous repository
+      uses: actions/checkout@v3
+      with:
+        path: ${{ steps.paths.outputs.src }}/circuitous
+        submodules: true
+        fetch-depth: 1
 
-          tar xf "${local_path}" -C "${{ steps.build_paths.outputs.INSTALL }}"
-
-          destination_path="${{ steps.build_paths.outputs.INSTALL }}/vcpkg"
-
-          mv "${{ steps.build_paths.outputs.INSTALL }}/${folder_name}" \
-             "${destination_path}"
-
-          echo "${destination_path}/installed/x64-linux-rel/tools/llvm-${{matrix.llvm}}" >> $GITHUB_PATH
-
-          echo ::set-output name=PATH::${destination_path}
-
-      - name: Configure remill
-        working-directory: ${{ steps.build_paths.outputs.BUILD }}
-
-        env:
-          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
-
-        run: |
-          mkdir remill_build && cd remill_build
-
-          cmake \
-              -DCMAKE_VERBOSE_MAKEFILE=true \
-              -DVCPKG_ROOT="${{ steps.cxxcommon_installer.outputs.PATH }}" \
-              -G Ninja \
-              ${{ steps.build_paths.outputs.SOURCE }}/remill
-
-      - name: Build remill
-        working-directory: ${{ steps.build_paths.outputs.BUILD }}
-
-        env:
-          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
-
-        run: |
-          cmake --build remill_build -j $(nproc)
-
-      - name: Install remill
-        id: remill_installer
-        working-directory: ${{ steps.build_paths.outputs.BUILD }}
-
-        env:
-          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
-
-        run: |
-          export DESTDIR=${{ steps.build_paths.outputs.INSTALL }}/remill
-          cmake --build remill_build \
-                --target install
-          echo ::set-output name=PATH::${DESTDIR}
-
-      - name: Configure gap
-        working-directory: ${{ steps.build_paths.outputs.SOURCE }}/gap
-
-        env:
-          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
-
-        run: |
-          cmake -S ${{ steps.build_paths.outputs.SOURCE }}/gap \
-              -B ${{ steps.build_paths.outputs.BUILD }}/gap_build \
-              -G Ninja \
-              -DVCPKG_MANIFEST_MODE=OFF \
-              -DCMAKE_C_COMPILER=clang-12 \
-              -DCMAKE_CXX_COMPILER=clang++-12 \
-              -DCMAKE_VERBOSE_MAKEFILE=true \
-              -DVCPKG_ROOT="${{ steps.cxxcommon_installer.outputs.PATH }}" \
-              -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
-              -DCMAKE_INSTALL_PREFIX:PATH=${{ steps.build_paths.outputs.INSTALL }}/gap
-
-      - name: Build gap
-        working-directory: ${{ steps.build_paths.outputs.BUILD }}
-
-        env:
-          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
-
-        run: |
-          cmake --build gap_build -j $(nproc)
-
-      - name: Install gap
-        id: gap_installer
-        working-directory: ${{ steps.build_paths.outputs.BUILD }}
-
-        env:
-          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
-
-        run: |
-          export DESTDIR=${{ steps.build_paths.outputs.INSTALL }}/gap
-          cmake --build gap_build \
-                --target install
-          echo ::set-output name=PATH::${DESTDIR}
-
-      - name: Configure circuitous
-        working-directory: ${{ steps.build_paths.outputs.BUILD }}
-
-        env:
-          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
-
-        run: |
-          mkdir circuitous_build && cd circuitous_build
-
-          cmake \
-              -DCMAKE_C_COMPILER=clang-12 \
-              -DCMAKE_CXX_COMPILER=clang++-12 \
-              -DCMAKE_VERBOSE_MAKEFILE=true \
-              -DVCPKG_ROOT="${{ steps.cxxcommon_installer.outputs.PATH }}" \
-              -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
-              -Dremill_DIR:PATH=${{ steps.remill_installer.outputs.PATH }}/usr/local/lib/cmake/remill \
-              -Dgap_DIR:PATH=${{ steps.gap_installer.outputs.PATH }}/usr/local/lib/cmake/gap \
-              -G Ninja \
-              ${{ steps.build_paths.outputs.SOURCE }}/circuitous
-
-      - name: Build circuitous
-        working-directory: ${{ steps.build_paths.outputs.BUILD }}
-
-        env:
-          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
-
-        run: |
-          cmake --build circuitous_build -j $(nproc)
-
-      - name: Install circuitous
-        id: circuitous_installer
-        working-directory: ${{ steps.build_paths.outputs.BUILD }}
-
-        env:
-          CCACHE_DIR: ${{ steps.build_paths.outputs.CCACHE }}
-
-        run: |
-          export DESTDIR=${{ steps.build_paths.outputs.INSTALL }}/circuitous
-          cmake --build circuitous_build \
-                --target install
-          echo ::set-output name=PATH::${DESTDIR}
-
-      - name: Run unit tests
-        working-directory: ${{ steps.build_paths.outputs.BUILD }}/circuitous_build
-
-        run: |
-          ctest
-
-
-      - name: Run functional tests
-        working-directory: ${{ steps.build_paths.outputs.SOURCE }}/circuitous/test
-
-        run: |
-          export CIRCUITOUS_BUILD_DIR=${{ steps.build_paths.outputs.BUILD }}/circuitous_build
-          python3 ./full/run.py --tag min --jobs $(nproc)
+    - name: Install circuitous python requirements
+      shell: bash
+      run: |
+          pip install --no-cache-dir -r ${{ steps.paths.outputs.src }}/circuitous/requirements.txt
