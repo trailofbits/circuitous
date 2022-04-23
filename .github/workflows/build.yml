@@ -123,7 +123,6 @@ jobs:
           -DVCPKG_ROOT=${{ steps.cxxcommon.outputs.path }} \
           -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/remill
 
-    # CMake Error: The source directory "/home/runner/work/circuitous/circuitous/src/remill" does not exist.
     - name: Build remill
       working-directory: ${{ steps.paths.outputs.src }}/remill
       env:
