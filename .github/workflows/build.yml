@@ -27,6 +27,9 @@ env:
   VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg/bincache
   # Use specific vcpkg version
   VCPKG_COMMIT_ID: '9836ae4f2671db41e07843f31b4e341f0d3ebfb1'
+  # Link against libc++
+  CXXFLAGS: '-stdlib=libc++'
+  LDFLAGS: '-stdlib=libc++ -lc++abi'
 
 jobs:
   build_linux:
@@ -61,7 +64,7 @@ jobs:
       run: |
         apt-get update
         apt-get install --yes --no-install-recommends \
-          clang-12 build-essential ninja-build libstdc++-10-dev
+          clang-12 build-essential ninja-build libc++-12-dev libc++abi-12-dev
 
         update-alternatives \
             --install /usr/bin/clang clang /usr/bin/clang-12 10 \
