@@ -30,6 +30,9 @@ env:
   # Link against libc++
   CXXFLAGS: '-stdlib=libc++'
   LDFLAGS: '-stdlib=libc++ -lc++abi'
+  # Setup compiler
+  CC: clang-12
+  CXX: clang++-12
 
 jobs:
   build_linux:
