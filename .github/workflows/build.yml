@@ -64,7 +64,7 @@ jobs:
       run: |
         apt-get update
         apt-get install --yes --no-install-recommends \
-          clang-12 build-essential ninja-build libc++-12-dev libc++abi-12-dev
+          clang-12 build-essential ninja-build ccache
 
         update-alternatives \
             --install /usr/bin/clang clang /usr/bin/clang-12 10 \
@@ -125,6 +125,20 @@ jobs:
           -DGAP_ENABLE_COROUTINES=OFF \
           -DVCPKG_ROOT=${{ steps.paths.outputs.install }}/vcpkg \
           -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/gap
+
+    - name: Build gap
+      working-directory: ${{ steps.paths.outputs.src }}/gap
+      env:
+        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+      run: |
+        cmake --build ${{ steps.paths.outputs.build }}/gap -j $(nproc)
+
+    - name: Install gap
+      working-directory: ${{ steps.paths.outputs.src }}/gap
+      env:
+        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+      run: |
+        cmake --build ${{ steps.paths.outputs.build }}/gap --target install
 
     # setup remill
     - name: Clone the remill repository
