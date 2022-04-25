@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <optional>
 #include <variant>
+#include <functional>
 #include <concepts>
 #include <tuple>
 
