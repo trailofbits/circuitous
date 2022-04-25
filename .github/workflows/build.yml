@@ -27,9 +27,6 @@ env:
   VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg/bincache
   # Use specific vcpkg version
   VCPKG_COMMIT_ID: '9836ae4f2671db41e07843f31b4e341f0d3ebfb1'
-  # Link against libc++
-  CXXFLAGS: '-stdlib=libc++'
-  LDFLAGS: '-stdlib=libc++ -lc++abi'
   # Setup compiler
   CC: clang-12
   CXX: clang++-12
