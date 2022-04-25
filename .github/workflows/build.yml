@@ -123,6 +123,8 @@ jobs:
           -B ${{ steps.paths.outputs.build }}/gap \
           -DCMAKE_VERBOSE_MAKEFILE=true \
           -DGAP_ENABLE_COROUTINES=OFF \
+          -DENABLE_TESTING=OFF \
+          -DENABLE_EXAMPLES=OFF \
           -DVCPKG_ROOT=${{ steps.paths.outputs.install }}/vcpkg \
           -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/gap
 
