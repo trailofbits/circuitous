@@ -108,149 +108,92 @@ namespace circ::shadowinst
         llvm::Value *get() { return llvm::cast_or_null< T >(head); }
     };
 
-
-    static inline auto region_selector(llvm::IRBuilder<> &ir, const Reg &s_reg)
+    struct Materializer
     {
-        std::vector<llvm::Value *> input_fragments;
+        using values_t = std::vector< llvm::Value *>;
 
-        for (auto &[from, size] : s_reg.regions) {
-            auto extract = irops::make_leaf< irops::Extract >(ir, from, size);
-            input_fragments.push_back(extract);
-        }
-        // We need to match the order of the entry in `translation_map`
-        std::reverse(input_fragments.begin(), input_fragments.end());
-        return irops::make< irops::Concat >(ir, input_fragments);
-    }
+        llvm::IRBuilder<> &irb;
+        const Reg &s_reg;
 
-    // Emit instructions that will check the encoding of the register `reg_name`
-    // First we check each entry of the `translation_map`
-    //
-    // fragment1 = extract.X1.X2()
-    // fragment2 = extract.Y1.Y2()
-    // ...
-    //
-    // Then we need to check the concated value against what's passed in
-    // `translation_map`
-    //
-    // fullN = concat(fragmentN, fragmentN-1, ..., fragment1)
-    // final_check = and fullN translation_map[REG]
-    //
-    // This can also be achieved without concats only with `and`s, but this should
-    // produced a slightly nicer bitcode.
-    static inline auto decoder_conditions(
-      const Reg &s_reg, const Reg::reg_t &reg_name, llvm::IRBuilder<> &ir)
-    {
-        check(s_reg.translation_map.count(reg_name));
+        Materializer(llvm::IRBuilder<> &irb_, const Reg &s_reg_)
+            : irb(irb_), s_reg(s_reg_)
+        {}
 
-        std::vector<llvm::Value *> translation_checks;
-        for (auto &mats : s_reg.translation_map.find(reg_name)->second)
+      private:
+        void append(auto &into, const auto &from)
         {
-            std::vector<llvm::Value *> input_fragments;
-            std::size_t current = 0;
-
-            if (s_reg.regions.empty())
-            {
-                translation_checks.push_back(ir.getTrue());
-                continue;
-            }
-
-
-            for (auto &[from, size] : s_reg.regions)
-            {
-                auto extract =
-                  irops::make< irops::Extract >(ir, std::vector< llvm::Value * >{}, from, size);
-                input_fragments.push_back(extract);
-                current += size;
-            }
-            check(!input_fragments.empty());
-            // We need to match the order of the entry in `translation_map`
-            std::reverse(input_fragments.begin(), input_fragments.end());
-            auto full_input = irops::make< irops::Concat >(ir, input_fragments);
-            auto expected_value = ir.getInt(make_APInt(mats, 0, current));
-            translation_checks.push_back(ir.CreateICmpEQ(full_input, expected_value));
-        }
-        return translation_checks;
-    }
-
-    static inline auto decoder_conditions(auto arch, const Reg &s_reg, llvm::IRBuilder<> &ir)
-    {
-        // Insert elements from vector `from` into vector `into`.
-        // Usefull if `from` is rvalue, since then `begin(), end()` cannot be easily
-        // retrieved at the same time.
-        auto append = [](auto &into, const auto &from) {
             into.insert(into.end(), from.begin(), from.end());
-        };
-
-        std::map< Reg::reg_t, std::vector< llvm::Value * > > out;
-        for (const auto &[reg, _] : s_reg.translation_map)
-            append(out[enclosing_reg(arch, reg)->name], decoder_conditions(s_reg, reg, ir));
-
-        return out;
-    }
-
-    template< typename Getter >
-    auto make_intrinsics_decoder(const Reg &s_reg, llvm::IRBuilder<> &ir, Getter &get_reg)
-    {
-        auto entries = s_reg.translation_entries_count();
-        auto bits = s_reg.region_bitsize();
-        check(entries <= (1 << bits))
-            << "Translation entries count do not correspond to regions size "
-            << entries << " > " << (1 << bits);
-
-        std::vector<llvm::Value *> select_args((1 << bits) + 1, nullptr);
-        select_args[0] = region_selector(ir, s_reg);
-
-        llvm::Type *type = nullptr;
-        for (const auto &[str, reg] : s_reg.translation_bytes_map()) {
-            auto idx = llvm::APInt{static_cast< uint32_t >(bits), str, 2}.getLimitedValue();
-            check(select_args.size() > idx + 1);
-            select_args[idx + 1] = get_reg(ir, reg);
-
-            if (!type)
-                type = select_args[idx + 1]->getType();
-            check(type == select_args[idx + 1]->getType());
         }
 
-        check(type);
-        std::vector<llvm::Value *> holes;
-        for (std::size_t idx = 1; idx < select_args.size(); ++idx)
+      public:
+        [[nodiscard]] llvm::Type *selector_type() const;
+
+        [[nodiscard]] llvm::Value *region_selector() const;
+        [[nodiscard]] llvm::Value *opaque_selector() const;
+
+        llvm::Value *tie_opaque_selector() const;
+
+        llvm::Value *was_decoded() const;
+
+        template< typename Getter >
+        llvm::Instruction *unguarded_decoder(llvm::Value *selector, Getter &get_reg) const
         {
-            if (select_args[idx])
-                continue;
+            auto entries = s_reg.translation_entries_count();
+            auto bits = s_reg.region_bitsize();
+            check(entries <= (1 << bits))
+                << "Translation entries count do not correspond to regions size "
+                << entries << " > " << (1 << bits);
 
-            select_args[idx] = llvm::UndefValue::get(type);
-            auto key = ir.getIntN(static_cast< uint32_t >(bits), idx - 1);
-            holes.push_back(ir.CreateICmpEQ(select_args[0], key));
+            std::vector<llvm::Value *> select_args((1 << bits) + 1, nullptr);
+            select_args[0] = selector;
+
+            llvm::Type *type = nullptr;
+            for (const auto &[str, reg] : s_reg.translation_bytes_map()) {
+                auto idx = llvm::APInt{static_cast< uint32_t >(bits), str, 2}.getLimitedValue();
+                check(select_args.size() > idx + 1);
+                select_args[idx + 1] = get_reg(irb, reg);
+
+                if (!type)
+                    type = select_args[idx + 1]->getType();
+                check(type == select_args[idx + 1]->getType());
+            }
+
+            check(type);
+            for (std::size_t i = 0; i < select_args.size(); ++i)
+                if (!select_args[i])
+                    select_args[i] = llvm::UndefValue::get(type);
+
+            check(select_args.size() > 1);
+            return irops::make< irops::Select >(irb, select_args);
         }
 
-        // We cannot accept is a hole was selected
-        auto cond = [&]() -> llvm::Value * {
-            if (holes.empty())
-                return nullptr;
-            return ir.CreateNot(make_or(ir, holes));
-        }();
-
-        // We do not need to do any extra checking if we decoded something because
-        // the select is "saturated" -- each possible return is a valid register
-        check(select_args.size() > 1);
-        auto select = irops::make< irops::Select >(ir, select_args);
-        return std::make_tuple(cond, select);
-    }
-
-    // Return `i1` that is set to true if `s_reg` was decoded to `reg`.
-    static inline auto make_explicit_decode(
-        llvm::IRBuilder<> &ir, const Reg &s_reg, const std::string &reg)
-    {
-        auto selector = region_selector(ir, s_reg);
-
-        auto it = s_reg.translation_map.find(reg);
-        check(it != s_reg.translation_map.end());
-
-        llvm::Value *acc = ir.getFalse();
-        for (auto &mat : it->second) {
-            auto as_constant = ir.getInt(make_APInt(mat, 0, mat.size()));
-            acc = ir.CreateOr(ir.CreateICmpEQ(selector, as_constant), acc);
+        template< typename Getter >
+        llvm::Instruction *unguarded_decoder(Getter &get_reg) const
+        {
+            return unguarded_decoder(opaque_selector(), get_reg);
         }
-        return acc;
-    }
+
+        using mats_t = Reg::materializations_t;
+        auto translation_entries(const mats_t &mats) const -> values_t;
+
+        auto translation_entries_of(const std::string &name) -> values_t
+        {
+            auto it = s_reg.translation_map.find(name);
+            check(it != s_reg.translation_map.end());
+            return translation_entries(it->second);
+        }
+
+        template< typename Arch >
+        auto translation_map(const Arch &arch)
+        -> std::map< Reg::reg_t, std::vector< llvm::Value * > >
+        {
+            std::map< Reg::reg_t, std::vector< llvm::Value * > > out;
+            for (const auto &[reg, _] : s_reg.translation_map)
+            {
+                auto &out_bucket = out[enclosing_reg(arch, reg)->name];
+                append(out_bucket, translation_entries_of(reg));
+            }
+            return out;
+        }
+    };
 } // namespace circ::shadowinst
