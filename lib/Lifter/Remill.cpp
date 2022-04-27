@@ -376,6 +376,12 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             auto [_, size] = irops::Operand::parse_args< uint32_t >(fn);
             return VisitGenericIntrinsic< Advice >(call, fn, size, ++advice_idx);
         }
+
+        if ( irops::RegSelector::is(fn)) {
+            auto [_, size] = irops::RegSelector::parse_args< uint32_t >(fn);
+            return VisitGenericIntrinsic< Advice >(call, fn, size, ++advice_idx);
+        }
+
         if (irops::AdviceConstraint::is(fn)) {
             return VisitGenericIntrinsic< AdviceConstraint >(call, fn);
         }
