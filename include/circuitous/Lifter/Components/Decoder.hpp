@@ -26,12 +26,14 @@ namespace circ::build
 
         llvm::IRBuilder<> &ir;
         ISEL_view isel;
+        std::vector< llvm::Value *> to_verify;
 
         Decoder(CtxRef ctx_, llvm::IRBuilder<> &ir_, ISEL_view &isel_)
             : has_ctx_ref(ctx_), ir(ir_), isel(isel_)
         {}
 
-        llvm::Value *get_decoder_tree();
+
+        auto get_decoder_tree() -> std::tuple< llvm::Value *, std::vector< llvm::Value * > >;
 
       private:
 

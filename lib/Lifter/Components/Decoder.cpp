@@ -22,7 +22,6 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ::build
 {
-
     std::string Decoder::generate_raw_bytes(const std::string &full, uint64_t from, uint64_t to)
     {
         auto n = full.substr(from, to - from);
@@ -64,7 +63,8 @@ namespace circ::build
         return out;
     }
 
-    llvm::Value *Decoder::get_decoder_tree()
+    auto Decoder::get_decoder_tree()
+    -> std::tuple< llvm::Value *, std::vector< llvm::Value * > >
     {
         CIRC_TRACE() << isel.shadow.to_string();
         auto all_fragments = byte_fragments();
@@ -73,7 +73,7 @@ namespace circ::build
             auto translations = irops::make< irops::And >(ir,trees);
             all_fragments.push_back(translations);
         }
-        return irops::make< irops::DecoderResult >(ir, all_fragments);
+        return { irops::make< irops::DecoderResult >(ir, all_fragments), to_verify };
     }
 
     auto Decoder::emit_translation_trees() -> values_t
