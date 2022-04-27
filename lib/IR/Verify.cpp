@@ -448,7 +448,7 @@ namespace circ
             Verifier::CollectAdviceUsers(circuit, collected);
 
             auto advice_to_str = [](auto op) {
-                return "ADVICE [ " + std::to_string(op->id()) + " ]";
+                return pretty_print(op);
             };
 
             for (auto &[a, users] : collected)
