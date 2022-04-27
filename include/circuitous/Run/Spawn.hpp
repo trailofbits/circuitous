@@ -473,7 +473,7 @@ namespace circ::run
             if (!this->has_value(op))
                 return {};
             switch (op->op_code) {
-                case DecodeCondition::kind:
+                case DecoderResult::kind:
                 {
                     if (this->GetNodeVal(op) == this->FalseVal())
                         return std::make_optional(false);
