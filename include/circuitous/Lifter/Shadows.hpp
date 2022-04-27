@@ -250,6 +250,8 @@ namespace circ::shadowinst
         std::map< reg_t, materializations_t > translation_map;
         std::unordered_set< reg_t > dirty;
 
+        std::optional< std::size_t > selector;
+
         Reg(region_t o) : has_regions(std::move(o)) {}
 
         std::string to_string(uint8_t indent=0) const
@@ -524,6 +526,8 @@ namespace circ::shadowinst
         std::vector< std::vector< operand_ctx_t > > deps;
         std::vector< std::set< uint32_t > > dirt;
 
+        std::vector< Reg * > selectors;
+
         Instruction() = default;
         Instruction(const Instruction &other) : operands(other.operands)
         {
@@ -544,6 +548,29 @@ namespace circ::shadowinst
         auto size() const { return operands.size(); }
         const auto &operator[](std::size_t idx) const { return operands[idx]; }
         auto &operator[](std::size_t idx) { return operands[idx]; }
+
+        // Cannot have templated code in function local `struct` defnitions.
+        struct assign_
+        {
+            Instruction &self;
+            void operator()(Reg &what)
+            {
+                check(!what.selector);
+                what.selector = self.selectors.size();
+                self.selectors.push_back(&what);
+            }
+            void operator()(Address &addr) { addr.ForEach(*this); }
+            // Fallthrough
+            void operator()(auto &&) {}
+        };
+
+        void distribute_selectors()
+        {
+            assign_ assign{ *this };
+            for (auto &op : operands)
+                op.for_each_existing(assign);
+
+        }
 
         bool operator==(const Instruction &o) const
         {
