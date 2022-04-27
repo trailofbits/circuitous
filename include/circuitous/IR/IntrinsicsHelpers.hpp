@@ -382,18 +382,18 @@ namespace circ::irops {
       using self_t = typename N::self_t;
 
       using N::create_fn;
-      static_assert(N::encoded_args_size == 3);
+      static_assert(N::encoded_args_size == 2);
 
-      static auto name(auto x, auto y, llvm::Type *type) {
+      static auto name(auto x, llvm::Type *type) {
         auto int_type = llvm::dyn_cast< llvm::IntegerType >(type);
         check(int_type);
         auto size = int_type->getScalarSizeInBits();
-        return N::name(static_cast< uint64_t >(x), static_cast< uint64_t >(y), size);
+        return N::name(static_cast< uint64_t >(x), size);
       }
 
-      static auto create_fn(llvm::Module *module, auto x, auto y, llvm::Type *type) {
+      static auto create_fn(llvm::Module *module, auto x, llvm::Type *type) {
         auto fnt = llvm::FunctionType::get(type, {}, true);
-        return N::create_fn(module, self_t::name(x, y, type), fnt);
+        return N::create_fn(module, self_t::name(x, type), fnt);
       }
     };
 
@@ -533,10 +533,10 @@ namespace circ::irops {
     using extract_t = Melted< Extract< def_base_t< S, D, 2 > > >;
 
     template< typename S, typename D >
-    using op_selector_t = Melted< OperandLeaf< def_base_t< S, D, 3 > > >;
+    using reg_selector_t = Melted< OperandLeaf< def_base_t< S, D, 2 > > >;
 
     template< typename S, typename D >
-    using was_decoded_t = Melted< OperandLeaf< def_base_t< S, D, 3 > > >;
+    using was_decoded_t = Melted< OperandLeaf< def_base_t< S, D, 2 > > >;
 
     template< typename S, typename D >
     using concat_t = Melted< Concat< def_base_t< S, D, 1 > > >;
