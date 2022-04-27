@@ -445,13 +445,13 @@ namespace circ {
         auto error_transition = emit_error_transitions(c_ebit);
         ir.SetInsertPoint(this->head);
         ctxs.back()._add(ir.CreateAnd(computational_res, error_transition));
-        ctxs.back()._add(dst_cond);
 
         add_isel_metadata(ctxs.back().current, isel);
     }
 
 
-    const shadowinst::Reg *get_written(std::size_t idx, ISEL_view isel)
+    auto get_written(std::size_t idx, ISEL_view isel)
+    -> std::tuple< const shadowinst::Reg *, std::size_t >
     {
         for (std::size_t i = 0; i < isel.instruction.operands.size(); ++i) {
             // We care only for write operands
@@ -461,10 +461,10 @@ namespace circ {
             if (!isel.shadow.operands[i].reg)
                 continue;
             if (idx == 0)
-                return &(*isel.shadow.operands[i].reg);
+                return { &(*isel.shadow.operands[i].reg), i };
             --idx;
         }
-        return nullptr;
+        return { nullptr, 0 };
     }
 
     llvm::Value *current_val(llvm::Value *dst_reg)
@@ -500,7 +500,8 @@ namespace circ {
     }
 
     auto circuit_builder::handle_dst_reg(llvm::Instruction *dst_reg,
-                                         const shadowinst::Reg &s_reg, State &state)
+                                         const shadowinst::Reg &s_reg, State &state,
+                                         std::size_t reg_idx)
     -> cond_val_tuple
     {
         llvm::IRBuilder<> irb(this->head);
@@ -508,8 +509,10 @@ namespace circ {
         auto locate_out_reg = [&](auto &ir, auto &name) { return this->locate_out_reg(name); };
         auto locate_in_reg = [&](auto &ir, auto &name) { return this->locate_in_reg(name); };
 
-        auto [cond, select] = shadowinst::make_intrinsics_decoder(s_reg, irb, locate_out_reg);
-        auto [_, full] = shadowinst::make_intrinsics_decoder(s_reg, irb, locate_in_reg);
+        auto m = shadowinst::Materializer(irb, s_reg);
+        auto select = m.unguarded_decoder(locate_out_reg);
+        auto full = m.unguarded_decoder(locate_in_reg);
+
         auto [dcond, updated] = shadowinst::store_fragment(
             current_val(dst_reg), full, irb, s_reg, *ctx.arch());
         return { dcond, irops::make< irops::OutputCheck >(irb, {updated, select}) };
@@ -523,9 +526,9 @@ namespace circ {
 
         std::vector< cond_val_tuple > partials;
         for (std::size_t i = 0; i < dst_regs.size(); ++i) {
-            auto s_reg = get_written(i, isel);
+            auto [s_reg, reg_idx] = get_written(i, isel);
             check(s_reg);
-            partials.push_back(handle_dst_reg(dst_regs[i], *s_reg, state));
+            partials.push_back(handle_dst_reg(dst_regs[i], *s_reg, state, reg_idx));
         }
 
         llvm::IRBuilder<> irb(this->head);
@@ -588,7 +591,8 @@ namespace circ {
             auto &s_reg = *s_op.reg;
             dirty.insert(s_reg.dirty.begin(), s_reg.dirty.end());
 
-            for (auto &[reg, vals] : shadowinst::decoder_conditions(ctx.arch(), s_reg, ir))
+            auto m = shadowinst::Materializer(ir, s_reg);
+            for (auto &[reg, vals] : m.translation_map(ctx.arch()))
                 conditions[reg] = update(combine(vals), conditions[reg]);
         }
 
@@ -659,10 +663,12 @@ namespace circ {
                     // This is a lot of memory operations and we rely heavily on llvm
                     // `mm2reg` pass to help us out.
 
-                    // Someone before us may have written something - we need to reset the value.
+                    // Someone before us may have written something - we need to
+                    // reset the value.
+
                     state.store(ir, reg, original_val);
-                    auto reg_checks =
-                        shadowinst::decoder_conditions(*s_op.reg, reg_part->name, ir);
+                    auto m = shadowinst::Materializer(ir, *s_op.reg);
+                    auto reg_checks = m.translation_entries_of(reg_part->name);
 
                     // Check if everything is still valid.
                     check(proccessed - 1 < dst_regs.size()) << proccessed - 1

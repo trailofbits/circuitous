@@ -74,6 +74,7 @@ namespace circ
         using arch_ptr_t = const remill::Arch *;
 
         using functions_t = std::vector<llvm::Function *>;
+        using materializer_t = shadowinst::Materializer;
 
         using parent::LiftIntoBlock;
 
@@ -211,7 +212,7 @@ namespace circ
                 s_reg->mark_dirty(name);
 
                 llvm::IRBuilder<> ir(load);
-                auto cond = shadowinst::make_explicit_decode(ir, *s_reg, name);
+                auto cond = shadowinst::Materializer(ir, *s_reg).was_decoded();
                 auto select = irops::make< irops::Select >(
                         ir,
                         {cond, make_non_opaque_load(ir, gep), make_non_opaque_load(ir, val)});
@@ -480,17 +481,8 @@ namespace circ
                 return retrieved;
             };
 
-            // TODO(lukas): Handle holes.
-            auto [cond, select] =
-                shadowinst::make_intrinsics_decoder(s_reg, ir, safe_locate_reg);
-            // TODO(lukas): Magic string.
+            auto select = materializer_t(ir, s_reg).unguarded_decoder(safe_locate_reg);
             AddMetadata(select, "__circuitous.ordering", select_counter++);
-            if (cond) {
-                auto wrapped = irops::make< irops::Transport >(ir, cond);
-                // TODO(lukas): Magic string.
-                AddMetadata(llvm::dyn_cast<llvm::Instruction>(wrapped),
-                            "circuitous.verify_fn_args", 0);
-            }
 
             if (s_reg.is_saturated_by_zeroes())
                 return llvm::ConstantInt::get(select->getType(), 0, false);
