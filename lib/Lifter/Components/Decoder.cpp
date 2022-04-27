@@ -98,15 +98,21 @@ namespace circ::build
 
     llvm::Value *Decoder::emit_translation_tree(const shadowinst::Reg &sreg)
     {
-        if (sreg.has_saturated_map() || sreg.region_bitsize() == 0)
+        if (sreg.region_bitsize() == 0)
             return ir.getTrue();
 
-        auto selector = region_selector(ir, sreg);
+        auto materializer = shadowinst::Materializer(ir, sreg);
+        auto selector = materializer.opaque_selector();
+        to_verify.push_back(materializer.tie_opaque_selector());
+
+        if (sreg.has_saturated_map())
+            return ir.getTrue();
+
 
         values_t conds;
         for (auto &val : shadowinst::translation_map_complement(sreg.translation_map))
             conds.push_back(ir.CreateICmpEQ(selector, ir.getInt(val)));
-        }
-         return ir.CreateNot(irops::make< irops::And >(ir, conds));
+        return ir.CreateNot(irops::make< irops::And >(ir, conds));
     }
+
 }  // namespace circ::build
