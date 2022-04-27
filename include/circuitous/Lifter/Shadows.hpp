@@ -760,4 +760,39 @@ namespace circ::shadowinst
                 out += bytes[bytes.size() - 1 - i];
         return out;
     }
+
+    auto translation_map_complement(const auto &translation_map)
+    -> std::vector< llvm::APInt >
+    {
+        constexpr auto hash = [](const auto &x) { return llvm::hash_value(x); };
+        std::unordered_set< llvm::APInt, decltype(hash) > seen;
+        // TODO(lukas): We may not need this check.
+        std::optional< uint32_t > size;
+
+        for (const auto &[reg, mats] : translation_map)
+            for (const auto &mat : mats)
+            {
+                if (!size)
+                    size = mat.size();
+                check(*size == mat.size());
+                auto as_apint = make_APInt(mat, 0, mat.size());
+                seen.insert(as_apint);
+            }
+
+        std::vector< llvm::APInt > out;
+        auto v = llvm::APInt(*size, 0, false);
+        uint32_t max_v = 1 << *size;
+        check(size);
+        for (uint32_t i = 0; i < max_v; ++i)
+        {
+            if (!seen.count(v))
+                out.push_back(v);
+            ++v;
+        }
+        check(seen.size() + out.size() == max_v) << seen.size() << " + " << out.size()
+                                                 << " != " << max_v;
+        return out;
+
+    }
+
 } // namespace circ::shadowinst
