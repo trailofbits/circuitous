@@ -102,7 +102,7 @@ namespace circ::irops {
   simple_intrinsic(Operand, impl::advice_allocator_t, "__circuitous.operand_advice");
 
   // Helps to unify later all decoder related selections and operations
-  simple_intrinsic(OpSelector, impl::op_selector_t, "__circuitous.op.selector");
+  simple_intrinsic(RegSelector, impl::reg_selector_t, "__circuitous.reg_selector");
 
   simple_intrinsic(WasDecoded, impl::was_decoded_t, "__circuitous.op.was_decoded");
   // Denotes that given hint/advice is not used and should be zeroed.
