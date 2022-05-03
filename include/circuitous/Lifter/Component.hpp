@@ -65,7 +65,7 @@ namespace circ::component {
         {
             auto call = llvm::dyn_cast< llvm::CallInst >(c);
             check(call);
-            for (uint32_t i = 0; i < call->getNumArgOperands(); ++i)
+            for (uint32_t i = 0; i < call->arg_size(); ++i)
             {
                 check(!llvm::isa< llvm::Function >(call->getArgOperand(i)));
                 operands.insert(call->getArgOperand(i));

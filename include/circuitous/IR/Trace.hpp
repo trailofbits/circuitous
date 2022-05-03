@@ -5,6 +5,7 @@
 #pragma once
 
 #include <deque>
+#include <map>
 
 #include <circuitous/IR/Visitors.hpp>
 

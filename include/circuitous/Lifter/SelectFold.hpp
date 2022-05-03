@@ -55,7 +55,7 @@ namespace circ {
           for (std::size_t i = 0; i < blueprints.size() && !found; ++i) {
             if (irops::Instance< irops::Select >::are_compatible(select, blueprints[i])) {
               // They are compatible but current has more operands -> is more general
-              if (select->getNumArgOperands() > blueprints[i]->getNumArgOperands()) {
+              if (select->arg_size() > blueprints[i]->arg_size()) {
                 blueprints[i] = select;
               }
               found = true;

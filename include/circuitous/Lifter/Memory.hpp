@@ -51,7 +51,7 @@ namespace circ::mem {
 
   static inline auto constrained_by(llvm::CallInst *ctx) {
     std::unordered_set<uint64_t> constrained;
-    for (auto i = 0u; i < ctx->getNumArgOperands(); ++i) {
+    for (auto i = 0u; i < ctx->arg_size(); ++i) {
       auto call = llvm::dyn_cast<llvm::CallInst>(ctx->getArgOperand(i));
 
       if (!call ||
