@@ -48,7 +48,7 @@ namespace {
 auto call_args(llvm::CallInst *call)
 {
     std::vector<llvm::Value *> out;
-    for (uint32_t i = 0; i < call->getNumArgOperands(); ++i) {
+    for (uint32_t i = 0; i < call->arg_size(); ++i) {
         // NOTE(lukas): Check if we do not include the called fn by accident.
         check(!llvm::isa<llvm::Function>(call->getArgOperand(i)));
         out.push_back(call->getArgOperand(i));
@@ -90,8 +90,8 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context, llvm::Value *v
     {
         if (auto call_val = llvm::dyn_cast<llvm::CallInst>(inst_val))
         {
-            for (auto &op_use : call_val->arg_operands())
-                self->Visit(context, op_use);
+            for (auto it = call_val->arg_begin(); it < call_val->arg_end(); ++it)
+                self->Visit(context, *it);
             return self->VisitFunctionCall(context, call_val);
 
         }

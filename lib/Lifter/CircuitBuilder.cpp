@@ -148,7 +148,7 @@ namespace circ {
         std::unordered_set<llvm::Value *> verifies;
         // Skip all other operands
         std::vector<llvm::Value *> others;
-        for (uint32_t i = 0; i < call->getNumArgOperands(); ++i) {
+        for (uint32_t i = 0; i < call->arg_size(); ++i) {
             if (auto verif = llvm::dyn_cast< llvm::CallInst >(call->getArgOperand(i))) {
                 if (irops::VerifyInst::is(verif->getCalledFunction()))
                 {
@@ -292,7 +292,7 @@ namespace circ {
     void circuit_builder::propagate_undefs()
     {
         auto whose_rc = [&](llvm::CallInst *rc) {
-            check(rc->getNumArgOperands() == 2);
+            check(rc->arg_size() == 2);
             return rc->getArgOperand(1);
         };
 
@@ -395,7 +395,7 @@ namespace circ {
     {
         check(isel.lifted);
 
-        State state { this->head, ctx.state_ptr_type()->getElementType() };
+        State state { this->head, ctx.state_ptr_type()->getPointerElementType() };
         auto state_ptr = state.raw();
         llvm::IRBuilder<> ir(this->head);
 
@@ -671,7 +671,7 @@ namespace circ {
                     auto reg_addr = reg_part->AddressOf(state.raw(), ir);
 
                     auto store_ty =
-                        llvm::cast<llvm::PointerType>(reg_addr->getType())->getElementType();
+                        llvm::cast<llvm::PointerType>(reg_addr->getType())->getPointerElementType();
 
                     ir.CreateStore(ir.CreateSExtOrTrunc(dst_load, store_ty), reg_addr);
                     auto full_val = state.load(ir, reg);

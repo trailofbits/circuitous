@@ -6,16 +6,19 @@
 
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/Util/LLVMUtil.hpp>
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wsign-conversion"
-#pragma clang diagnostic ignored "-Wconversion"
+
+#include <circuitous/Util/Logging.hpp>
+
+CIRCUITOUS_RELAX_WARNINGS
+#include <llvm/IR/AbstractCallSite.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/Function.h>
 #include <llvm/ADT/iterator_range.h>
-#pragma clang diagnostic pop
+CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <cstdint>
 #include <utility>
+#include <map>
 
 #include <circuitous/IR/IntrinsicsHelpers.hpp>
 #include <circuitous/IR/Memory.hpp>
@@ -254,11 +257,11 @@ namespace circ::irops {
     // Returns `true` is `lhs` is compatible (i.e. is the same or can be extended
     // with padding and undefs) to match `rhs`.
     static bool is_compatible_with(llvm::CallInst *lhs, llvm::CallInst *rhs) {
-      if (lhs->getNumArgOperands() > rhs->getNumArgOperands())
+      if (lhs->arg_size() > rhs->arg_size())
         return false;
-      auto size = std::min(lhs->getNumArgOperands(), rhs->getNumArgOperands());
+      auto size = std::min(lhs->arg_size(), rhs->arg_size());
       auto op = [&](auto from, auto i) {
-        auto total = from->getNumArgOperands();
+        auto total = from->arg_size();
         auto idx = i + (i - 1) * ((total - 1) / (size - 1) - 1);
         return from->getArgOperand(idx);
       };
