@@ -206,7 +206,21 @@ jobs:
           -DVCPKG_ROOT="${{ steps.cxxcommon.outputs.path }}" \
           -Dremill_DIR:PATH=${{ steps.paths.outputs.install }}/remill \
           -Dgap_DIR:PATH=${{ steps.paths.outputs.install }}/gap \
-          ${{ steps.build_paths.outputs.SOURCE }}/circuitous
+          -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/circuitous
 
+    - name: Build circuitous
+      working-directory: ${{ steps.paths.outputs.build }}/circuitous
+      env:
+        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+
+      run: |
+        cmake --build ${{ steps.paths.outputs.build }}/circuitous -j $(nproc)
+
+    - name: Install circuitous
+      working-directory: ${{ steps.paths.outputs.src }}/circuitous
+      env:
+        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+      run: |
+        cmake --build ${{ steps.paths.outputs.build }}/circuitous --target install
 
 
