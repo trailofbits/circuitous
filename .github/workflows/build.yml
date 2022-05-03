@@ -162,6 +162,7 @@ jobs:
           -B ${{ steps.paths.outputs.build }}/remill \
           -DCMAKE_VERBOSE_MAKEFILE=true \
           -DVCPKG_ROOT=${{ steps.cxxcommon.outputs.path }} \
+          -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
           -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/remill
 
     - name: Build remill
@@ -190,5 +191,22 @@ jobs:
       working-directory: ${{ steps.paths.outputs.src }}/circuitous
       shell: bash
       run: |
-          ls .
           pip install --no-cache-dir -r requirements.txt
+
+    - name: Configure circuitous
+      working-directory: ${{ steps.paths.outputs.src }}/circuitous
+      shell: bash
+      run: |
+        cmake \
+          -G Ninja \
+          -S . \
+          -B ${{ steps.paths.outputs.build }}/circuitous \
+          -DCMAKE_VERBOSE_MAKEFILE=true \
+          -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
+          -DVCPKG_ROOT="${{ steps.cxxcommon.outputs.path }}" \
+          -Dremill_DIR:PATH=${{ steps.paths.outputs.install }}/remill \
+          -Dgap_DIR:PATH=${{ steps.paths.outputs.install }}/gap \
+          ${{ steps.build_paths.outputs.SOURCE }}/circuitous
+
+
+
