@@ -312,7 +312,7 @@ namespace circ
     {
         auto ptr_ty = llvm::dyn_cast< llvm::PointerType >(from->getType());
         check(ptr_ty);
-        return irb.CreateLoad(ptr_ty->getElementType(), from);
+        return irb.CreateLoad(ptr_ty->getPointerElementType(), from);
     }
 
 } // namespace circ
