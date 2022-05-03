@@ -39,7 +39,7 @@ jobs:
         image:
           - { name: 'ubuntu', tag: '20.04' }
 
-        llvm: [ '13' ]
+        llvm: [ '14' ]
         cxxcommon_version: [ 'v0.2.2' ]
 
     runs-on: ubuntu-20.04
