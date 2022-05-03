@@ -217,10 +217,20 @@ jobs:
         cmake --build ${{ steps.paths.outputs.build }}/circuitous -j $(nproc)
 
     - name: Install circuitous
-      working-directory: ${{ steps.paths.outputs.src }}/circuitous
+      working-directory: ${{ steps.paths.outputs.build }}/circuitous
       env:
         CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
       run: |
         cmake --build ${{ steps.paths.outputs.build }}/circuitous --target install
 
+    - name: Run circuitous unittests
+      working-directory: ${{ steps.paths.outputs.build }}/circuitous
+      run: |
+        ctest
 
+    - name: Run functional tests
+      working-directory: ${{ steps.paths.outputs.src }}/circuitous/test
+      env:
+        CIRCUITOUS_BUILD_DIR: ${{ steps.paths.outputs.build }}/circuitous
+      run: |
+        python3 ./full/run.py --tag min --jobs $(nproc)
