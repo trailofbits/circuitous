@@ -205,6 +205,7 @@ jobs:
           -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
           -DVCPKG_ROOT="${{ steps.cxxcommon.outputs.path }}" \
           -Dremill_DIR:PATH=${{ steps.paths.outputs.install }}/remill/lib/cmake/remill/ \
+          -DGAP_ENABLE_COROUTINES=OFF \
           -Dgap_DIR:PATH=${{ steps.paths.outputs.install }}/gap/lib/cmake/gap/ \
           -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/circuitous
 
