@@ -162,7 +162,7 @@ namespace circ::shadowinst
             return false;
         }
 
-        std::string to_string(uint8_t indent=0) const
+        std::string to_string(std::size_t indent=0) const
         {
             std::stringstream ss;
             for (auto [from, size] : regions)
@@ -342,9 +342,9 @@ namespace circ::shadowinst
             return encodings.size() == max_mats_count();
         }
 
-        std::string to_string(uint8_t indent) const
+        std::string to_string(std::size_t indent) const
         {
-            auto make_indent = [](uint8_t i) { return std::string(i, ' '); };
+            auto make_indent = [](std::size_t i) { return std::string(i, ' '); };
 
             std::stringstream ss;
 
@@ -431,7 +431,7 @@ namespace circ::shadowinst
         auto &tm() { return translation_map; }
         const auto &tm() const { return translation_map; }
 
-        std::string to_string(uint8_t indent=0) const
+        std::string to_string(std::size_t indent=0) const
         {
             std::stringstream ss;
             std::string _indent(indent * 2, ' ');
@@ -581,7 +581,7 @@ namespace circ::shadowinst
             return out;
         }
 
-        std::string to_string(uint8_t indent) const
+        std::string to_string(std::size_t indent) const
         {
             auto make_indent = [&](auto count) { return std::string(count * 2, ' '); };
 
@@ -698,7 +698,17 @@ namespace circ::shadowinst
             return visit(is_empty);
         }
 
+        std::string to_string(std::size_t indent = 0) const
+        {
+            auto fmt = [&](auto &op) { return op.to_string(indent); };
+            return visit(fmt);
+        }
     };
+
+    static inline std::ostream &operator<<(std::ostream &os, const Operand &op)
+    {
+        return os << op.to_string();
+    }
 
     struct Instruction
     {
@@ -879,33 +889,12 @@ namespace circ::shadowinst
                 ss << ")" << std::endl;
             }
 
-            for (const auto &op : operands) {
-                ss << " OP" << std::endl;
-
-                // REAFACTOR(lukas): It is copy pasta.
-                // TODO(lukas): Sanity check may be in order here
-                if (op.immediate()) {
-                    ss << "  Immediate:" << std::endl;
-                    for (auto [from, size] : *op.immediate())
-                        ss << "    " << from << " , " << size << std::endl;;
-                }
-                // TODO(lukas): Looks like copy pasta, but eventually these
-                //              attributes will have different structure
-                if (op.reg()) {
-                    ss << "  Reg:" << std::endl;
-                    ss << op.reg()->to_string(2);
-                }
-                if (op.shift()) {
-                    ss << "  Shift:" << std::endl;
-                    for (auto [from, size] : *op.shift())
-                        ss << " " << from << " , " << size << std::endl;
-                }
-                if (op.address()) {
-                    ss << "  Address" << std::endl;
-                    ss << op.address()->to_string(2);
-                }
+            for (std::size_t i = 0; i < operands.size(); ++i)
+            {
+                ss << "OP: " << i << ": ";
+                ss << operands[i].to_string();
             }
-            ss << "  (done)" << std::endl;
+            ss << "(print done)" << std::endl;
             return ss.str();
         }
     };
