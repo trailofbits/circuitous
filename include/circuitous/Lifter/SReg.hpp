@@ -28,11 +28,11 @@ namespace circ::shadowinst
             return 0ul;
         };
 
-        for (auto &[reg, bits] : s_reg.translation_map) {
+        for (auto &[reg, bits] : s_reg.tm()) {
             auto key = fetch_offset(reg);
 
             for (auto &bstr : bits)
-                out[key].push_back(s_reg.make_bitstring(bstr));
+                out[key].push_back(s_reg.tm().make_bitstring(bstr));
         }
         return out;
     }
@@ -57,7 +57,7 @@ namespace circ::shadowinst
             unreachable() << "Cannot fetch info for reg that is not in arch.";
         };
 
-        for (auto &[reg, bits] : s_reg.translation_map) {
+        for (auto &[reg, bits] : s_reg.tm()) {
             if (defaults(reg)) {
                 defaulted.push_back(reg);
                 continue;
@@ -65,7 +65,7 @@ namespace circ::shadowinst
 
             auto key = fetch_info(reg);
             for (auto &bstr : bits)
-                out[key].push_back(s_reg.make_bitstring(bstr));
+                out[key].push_back(s_reg.tm().make_bitstring(bstr));
         }
 
         check(defaulted.size() <= 1) << s_reg.to_string();
@@ -83,8 +83,8 @@ namespace circ::shadowinst
 
         auto &[key, _] = *(out.begin());
         for (auto reg : defaulted)
-            for (auto &bstr : s_reg.translation_map.find(reg)->second)
-                out[key].push_back(s_reg.make_bitstring(bstr));
+            for (auto &bstr : s_reg.tm().find(reg)->second)
+                out[key].push_back(s_reg.tm().make_bitstring(bstr));
 
         return out.begin()->first;
     }

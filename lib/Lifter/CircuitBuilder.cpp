@@ -458,10 +458,10 @@ namespace circ {
             if (isel.instruction.operands[i].action != remill::Operand::Action::kActionWrite)
                 continue;
 
-            if (!isel.shadow.operands[i].reg)
+            if (!isel.shadow.operands[i].reg())
                 continue;
             if (idx == 0)
-                return { &(*isel.shadow.operands[i].reg), i };
+                return { &(*isel.shadow.operands[i].reg()), i };
             --idx;
         }
         return { nullptr, 0 };
@@ -585,10 +585,10 @@ namespace circ {
                 continue;
 
             auto &s_op = isel.shadow.operands[i];
-            if (!s_op.reg)
+            if (!s_op.reg())
                 continue;
 
-            auto &s_reg = *s_op.reg;
+            auto &s_reg = *s_op.reg();
             dirty.insert(s_reg.dirty.begin(), s_reg.dirty.end());
 
             auto m = shadowinst::Materializer(ir, s_reg);
@@ -640,13 +640,13 @@ namespace circ {
                     continue;
 
                 auto &s_op = isel.shadow.operands[i];
-                if (!s_op.reg)
+                if (!s_op.reg())
                     continue;
 
                 ++proccessed;
-                auto &table = s_op.reg->translation_map;
+                auto &table = s_op.reg()->translation_map;
 
-                if (s_op.reg->is_dirty(reg->name))
+                if (s_op.reg()->is_dirty(reg->name))
                     continue;
 
                 for (auto reg_part : EnclosedClosure(reg)) {
@@ -667,7 +667,7 @@ namespace circ {
                     // reset the value.
 
                     state.store(ir, reg, original_val);
-                    auto m = shadowinst::Materializer(ir, *s_op.reg);
+                    auto m = shadowinst::Materializer(ir, *s_op.reg());
                     auto reg_checks = m.translation_entries_of(reg_part->name);
 
                     // Check if everything is still valid.

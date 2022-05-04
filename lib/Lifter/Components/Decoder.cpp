@@ -66,7 +66,6 @@ namespace circ::build
     auto Decoder::get_decoder_tree()
     -> std::tuple< llvm::Value *, std::vector< llvm::Value * > >
     {
-        CIRC_TRACE() << isel.shadow.to_string();
         auto all_fragments = byte_fragments();
         if (auto trees = emit_translation_trees(); !trees.empty())
         {
@@ -81,16 +80,16 @@ namespace circ::build
         values_t out;
         for (const auto &s_op : isel.shadow.operands)
         {
-            if (s_op.reg)
-                out.push_back(emit_translation_tree(*s_op.reg));
-            if (s_op.address)
+            if (s_op.reg())
+                out.push_back(emit_translation_tree(*s_op.reg()));
+            if (s_op.address())
             {
-                if (s_op.address->base_reg)
-                    out.push_back(emit_translation_tree(*s_op.address->base_reg));
-                if (s_op.address->index_reg)
-                    out.push_back(emit_translation_tree(*s_op.address->index_reg));
-                if (s_op.address->segment)
-                    out.push_back(emit_translation_tree(*s_op.address->segment));
+                if (s_op.address()->base_reg())
+                    out.push_back(emit_translation_tree(*s_op.address()->base_reg()));
+                if (s_op.address()->index_reg())
+                    out.push_back(emit_translation_tree(*s_op.address()->index_reg()));
+                if (s_op.address()->segment_reg())
+                    out.push_back(emit_translation_tree(*s_op.address()->segment_reg()));
             }
         }
         return out;
@@ -105,12 +104,12 @@ namespace circ::build
         auto selector = materializer.opaque_selector();
         to_verify.push_back(materializer.tie_opaque_selector());
 
-        if (sreg.has_saturated_map())
+        if (sreg.tm().is_saturated())
             return ir.getTrue();
 
 
         values_t conds;
-        for (auto &val : shadowinst::translation_map_complement(sreg.translation_map))
+        for (auto &val : sreg.tm().complement())
             conds.push_back(ir.CreateICmpEQ(selector, ir.getInt(val)));
         return ir.CreateNot(irops::make< irops::And >(ir, conds));
     }

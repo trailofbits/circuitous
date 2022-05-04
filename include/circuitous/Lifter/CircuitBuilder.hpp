@@ -220,7 +220,8 @@ namespace circ
 
         using cond_val_tuple = std::tuple< llvm::Value *, llvm::Value * >;
         cond_val_tuple handle_dst_reg(llvm::Instruction *dst_reg,
-                                      const shadowinst::Reg &s_reg, State &state);
+                                      const shadowinst::Reg &s_reg, State &state,
+                                      std::size_t reg_idx);
 
         cond_val_tuple handle_dst_regs_(std::vector< llvm::Instruction * > &dst_regs,
                                         ISEL_view isel, State &state);
