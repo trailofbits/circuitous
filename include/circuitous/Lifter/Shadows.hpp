@@ -647,12 +647,34 @@ namespace circ::shadowinst
         bool operator==(const Operand &) const = default;
 
         template< typename T, typename ... Args >
-        static auto make(Args && ... args) {
+        static self_t make(Args && ... args) {
             if constexpr (std::is_same_v< T, Address >)
                 return self_t(std::in_place_type_t< T >());
             else
                 return self_t(std::in_place_type_t< T >(), std::forward< Args >(args) ...);
         }
+
+        template< typename ...Args >
+        static self_t make(op_type type, Args && ...args)
+        {
+            switch(type)
+            {
+                case remill::Operand::Type::kTypeRegister: {
+                    return Operand::make< Reg >(std::forward<Args>(args)...);
+                }
+                case remill::Operand::Type::kTypeImmediate : {
+                    return Operand::make< Immediate >(std::forward<Args>(args)...);
+                }
+                case remill::Operand::Type::kTypeAddress : {
+                    return Operand::make<Address>(std::forward<Args>(args)...);
+                }
+                default :
+                    unreachable()
+                        << "Cannot replace shadow operand with"
+                        << "type that is neither reg, addr nor imm.";
+            }
+        }
+
 
         template< typename CB >
         auto visit(CB &&cb) { return std::visit(std::forward< CB >(cb), _data); }
@@ -674,8 +696,8 @@ namespace circ::shadowinst
         {
             auto is_empty = [](const auto &v) { return v.empty(); };
             return visit(is_empty);
-
         }
+
     };
 
     struct Instruction
@@ -783,26 +805,8 @@ namespace circ::shadowinst
         template< typename ...Args >
         auto &Replace(std::size_t idx, remill::Operand::Type type, Args && ...args)
         {
-            // REFACTOR(lukas): Move to `Operand`.
-            switch(type)
-            {
-                case remill::Operand::Type::kTypeRegister: {
-                    operands[idx] = Operand::make<Reg>(std::forward<Args>(args)...);
-                    return operands[idx];
-                }
-                case remill::Operand::Type::kTypeImmediate : {
-                    operands[idx] = Operand::make<Immediate>(std::forward<Args>(args)...);
-                    return operands[idx];
-                }
-                case remill::Operand::Type::kTypeAddress : {
-                    operands[idx] = Operand::make<Address>(std::forward<Args>(args)...);
-                    return operands[idx];
-                }
-                default :
-                    unreachable()
-                        << "Cannot replace shadow operand with"
-                        << "type that is neither reg, addr nor imm.";
-            }
+            operands[idx] = Operand::make(type, std::forward< Args >(args)...);
+            return operands[idx];
         }
 
         region_t IdentifiedRegions() const
