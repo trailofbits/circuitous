@@ -166,7 +166,9 @@ namespace circ::shadowinst
         {
             std::stringstream ss;
             for (auto [from, size] : regions)
-                ss << std::string(indent * 2, ' ') << from << " , " << size << std::endl;
+                ss << std::string(indent * 4, ' ') << "[ "
+                   << from << " , " << size
+                   << " ]" << std::endl;
 
             return ss.str();
         }
@@ -348,20 +350,40 @@ namespace circ::shadowinst
 
             std::stringstream ss;
 
+            if (this->empty())
+            {
+                ss << make_indent(indent * 4) << "( empty )" << std::endl;
+                return ss.str();
+            }
+
             for (const auto &[k, vs] : *this)
             {
-                ss << make_indent(indent) << k << std::endl;
-
+                auto subindent = make_indent(indent * 4 + k.size());
                 if (vs.empty())
                 {
-                    ss << "( none )";
-                } else {
-                    for (const auto &v : vs)
-                        ss << make_indent(indent + 1) << make_bitstring(v);
+                    ss << "( empty )";
+                    break;
                 }
 
-                ss << std::endl;
+                bool fst = true;
+                for (const auto &v : vs)
+                {
+                    if (fst)
+                    {
+                        ss << make_indent(indent * 4) << k;
+                        fst = false;
+                    } else {
+                        ss << subindent;
+                    }
+                    ss << " -> " << make_bitstring(v) << std::endl;
+                }
             }
+            ss << make_indent(indent * 4) << "( mappings: " << mappings_count()
+                                          << ", materializations: " << mats_count()
+                                          << " of maximum " << max_mats_count()
+                                          << " => "
+                                          << (is_saturated() ? "saturated" : "not saturated")
+                                          << " )" << std::endl;
             return ss.str();
         }
 
@@ -431,16 +453,17 @@ namespace circ::shadowinst
         auto &tm() { return translation_map; }
         const auto &tm() const { return translation_map; }
 
-        std::string to_string(std::size_t indent=0) const
+        std::string to_string(std::size_t indent=0, bool print_header=true) const
         {
             std::stringstream ss;
-            std::string _indent(indent * 2, ' ');
+            std::string _indent(indent * 4, ' ');
 
-            ss << _indent << "Regions:" << std::endl;
-            ss << this->has_regions::to_string(indent + 1);
-            ss << _indent << "Translation map:" << std::endl;
-
+            if (print_header)
+                ss << "Reg" << std::endl;
+            ss << this->has_regions::to_string(indent);
+            ss << _indent << "where mapping" << std::endl;
             ss << translation_map.to_string(indent + 1);
+
             return ss.str();
         }
 
@@ -463,6 +486,17 @@ namespace circ::shadowinst
         using has_regions::has_regions;
 
         void for_each_present(auto &cb) const { cb(*this); }
+        std::string to_string(std::size_t indent=0, bool print_header=true) const
+        {
+            std::stringstream ss;
+            std::string _indent(indent * 4, ' ');
+
+            if (print_header)
+                ss << "Immediate" << std::endl;
+            ss << this->has_regions::to_string(indent);
+
+            return ss.str();
+        }
     };
 
     struct Address
@@ -586,17 +620,18 @@ namespace circ::shadowinst
 
         std::string to_string(std::size_t indent) const
         {
-            auto make_indent = [&](auto count) { return std::string(count * 2, ' '); };
+            auto make_indent = [&](auto count) { return std::string(count * 4, ' '); };
 
             std::stringstream ss;
             auto format = [&](const auto &what, const std::string &prefix) {
-                ss << make_indent(indent) << prefix << ": " << std::endl;
+                ss << make_indent(indent) << "* " << prefix << std::endl;
                 if (what)
-                    ss << what->to_string(indent + 1);
+                    ss << what->to_string(indent + 1, false);
                 else
                     ss << make_indent(indent + 1u) << "( not set )\n";
             };
 
+            ss << "Address\n";
             format(base_reg(), "Base");
             format(index_reg(), "Index");
             format(segment_reg(), "Segment");
@@ -884,7 +919,7 @@ namespace circ::shadowinst
             for (std::size_t i = 0; i < operands.size(); ++i)
             {
                 ss << "OP: " << i << ": ";
-                ss << operands[i].to_string();
+                ss << operands[i].to_string(1);
             }
             ss << "(print done)" << std::endl;
             return ss.str();
