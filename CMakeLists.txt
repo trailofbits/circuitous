@@ -77,8 +77,12 @@ add_library(circuitous_lifter STATIC
   lib/Lifter/Remill.cpp
   lib/Lifter/BaseLifter.cpp
   lib/Lifter/Decoder.cpp
+  lib/Lifter/ShadowMat.cpp
+  lib/Lifter/Shadows.cpp
   lib/Lifter/CircuitSmithy.cpp
   lib/Lifter/Instruction.cpp
+
+  lib/Lifter/Components/Decoder.cpp
 )
 
 target_link_libraries(circuitous_lifter PUBLIC circuitous_settings)
@@ -118,7 +122,7 @@ add_executable(circuitous-seed
   bin/seed/Seed.cpp
 )
 
-target_link_libraries(circuitous-seed PUBLIC circuitous_settings)
+target_link_libraries(circuitous-seed PUBLIC circuitous_settings circuitous_lifter)
 
 add_executable(circuitous-lift
   bin/lift/Lift.cpp
