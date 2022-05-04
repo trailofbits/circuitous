@@ -30,7 +30,7 @@ namespace circ::irops {
     // TODO(lukas): Remove once we have `std::span`.
     static inline std::optional< uint32_t > uniform_size(auto begin, auto end)
     {
-      check(begin != end);
+      check(begin != end, [](){ return "Trying to get uniform size from nothing."; });
       std::optional< uint32_t > size;
       for (auto what : llvm::iterator_range(begin, end)) {
         auto what_size = what->getType()->getIntegerBitWidth();
