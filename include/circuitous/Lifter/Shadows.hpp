@@ -198,8 +198,16 @@ namespace circ::shadowinst
             return {};
         }
 
+        // REFACTOR(lukas): Not ideal.
         template< typename T >
         static auto is_empty(const std::optional< T > &x)
+        -> std::enable_if_t< std::is_base_of_v< has_regions, T >, bool >
+        {
+            return !x || x->empty();
+        }
+
+        template< typename T >
+        static auto is_empty(const T *x)
         -> std::enable_if_t< std::is_base_of_v< has_regions, T >, bool >
         {
             return !x || x->empty();
@@ -237,22 +245,191 @@ namespace circ::shadowinst
         }
     };
 
+    // It is expected `Materialization_t` is iterable and one item corresponds to one bit.
+    // TODO(lukas): Remove assumption that item is castable to bool and that represents
+    //              '1' or '0' depending on the casted value. Provide convertor to
+    //              either `llvm::APInt` or `std::string` that is the textual repr in binary?
+    // TODO(lukas): Enforce that you can insert only valid materialization w.r.t to bitsize.
+    template< typename Key_t, typename Materialization_t >
+    struct TranslationMap : protected std::map< Key_t, std::unordered_set< Materialization_t > >
+    {
+        using materialized_t = Materialization_t;
+        using materializations_t = std::unordered_set< materialized_t >;
+        using key_t = Key_t;
+
+        using storage_t = std::map< key_t, materializations_t >;
+
+        std::size_t bitsize = 0;
+      public:
+
+        TranslationMap(std::size_t bitsize_) : bitsize(bitsize_) {}
+        TranslationMap(const TranslationMap &) = default;
+        TranslationMap(TranslationMap &&) = default;
+
+        TranslationMap &operator=(const TranslationMap &) = default;
+        TranslationMap &operator=(TranslationMap &&) = default;
+
+        using storage_t::operator[];
+        using storage_t::empty;
+        using storage_t::begin;
+        using storage_t::end;
+        using storage_t::count;
+        using storage_t::find;
+
+        // TODO(lukas): See if really needed.
+        bool has_only(const key_t &k) const
+        {
+            return mappings_count() >= 1 && this->begin()->first == k;
+        }
+        // TODO(lukas): See if really needed.
+        void clear()
+        {
+            this->storage_t::clear();
+        }
+
+        template< typename T = std::size_t >
+        T max_mats_count() const
+        {
+            return static_cast< T >(std::pow(2, bitsize));
+        }
+
+        bool is_saturated() const
+        {
+            return mats_count() == max_mats_count();
+        }
+
+        std::size_t mappings_count() const { return this->size(); }
+        std::size_t mats_count() const
+        {
+            std::size_t acc = 0;
+            for (const auto &[_, v] : *this)
+                acc += v.size();
+            return acc;
+        }
+
+        template< typename T, typename Convert >
+        std::map< T, key_t > reverse_map(Convert &&convert) const
+        {
+            std::map< T, key_t > out;
+            for (auto &[ k, encodings ] :*this)
+                for (auto &encoding : encodings)
+                    out[convert(encoding)] = k;
+            return out;
+        }
+
+        static std::string make_bitstring(const Materialization_t &from)
+        {
+            std::string out;
+            for (std::size_t i = 0; i < from.size(); ++i)
+                out += (from[i]) ? '1' : '0';
+
+            return out;
+        }
+
+        std::map< std::string, key_t > reverse_bitmap() const
+        {
+            return reverse_map< std::string >(make_bitstring);
+        }
+
+        bool is_saturated_by_zeroes() const
+        {
+            if (mappings_count() != 1)
+                return false;
+            const auto &[key, encodings] = *this->begin();
+            if (!std::string_view(key).starts_with("__remill_zero_i"))
+                return false;
+
+            return encodings.size() == max_mats_count();
+        }
+
+        std::string to_string(uint8_t indent) const
+        {
+            auto make_indent = [](uint8_t i) { return std::string(i, ' '); };
+
+            std::stringstream ss;
+
+            for (const auto &[k, vs] : *this)
+            {
+                ss << make_indent(indent) << k << std::endl;
+
+                if (vs.empty())
+                {
+                    ss << "( none )";
+                } else {
+                    for (const auto &v : vs)
+                        ss << make_indent(indent + 1) << make_bitstring(v);
+                }
+
+                ss << std::endl;
+            }
+            return ss.str();
+        }
+
+        auto complement() const -> std::vector< llvm::APInt >
+        {
+            constexpr auto hash = [](const auto &x) { return llvm::hash_value(x); };
+            std::unordered_set< llvm::APInt, decltype(hash) > seen;
+            // TODO(lukas): We may not need this check.
+            std::optional< uint32_t > size;
+
+            for (const auto &[reg, mats] : *this)
+                for (const auto &mat : mats)
+                {
+                    if (!size)
+                        size = mat.size();
+                    check(*size == mat.size());
+                    auto as_apint = make_APInt(mat, 0, mat.size());
+                    seen.insert(as_apint);
+                }
+
+            std::vector< llvm::APInt > out;
+            auto v = llvm::APInt(*size, 0, false);
+            uint32_t max_v = 1 << *size;
+            check(size);
+            for (uint32_t i = 0; i < max_v; ++i)
+            {
+                if (!seen.count(v))
+                    out.push_back(v);
+                ++v;
+            }
+            check(seen.size() + out.size() == max_v) << seen.size() << " + " << out.size()
+                                                     << " != " << max_v;
+            return out;
+        }
+    };
+
+    template< typename K, typename V >
+    std::ostream &operator<<(std::ostream &os, const TranslationMap< K, V > &tm)
+    {
+        return os << tm.to_string();
+    }
+
     struct Reg : has_regions
     {
         // Actual instances for given reg
         using materialized_t = std::vector< bool >;
-        using materializations_t = std::unordered_set< materialized_t >;
         using reg_t = std::string;
+        using TM_t = TranslationMap< reg_t, materialized_t >;
 
         using has_regions::has_regions;
 
-        // NOTE(lukas): We want them ordererd.
-        std::map< reg_t, materializations_t > translation_map;
+        TM_t translation_map;
         std::unordered_set< reg_t > dirty;
 
         std::optional< std::size_t > selector;
 
-        Reg(region_t o) : has_regions(std::move(o)) {}
+        Reg(const ordered_bits_t &bits_)
+            : has_regions(bits_), translation_map(this->region_bitsize())
+        {}
+
+        Reg(const bits_t &bits) : Reg(ordered_bits_t(bits)) {}
+
+        Reg(const region_t &o)
+            : has_regions(o), translation_map(this->region_bitsize())
+        {}
+
+        auto &tm() { return translation_map; }
+        const auto &tm() const { return translation_map; }
 
         std::string to_string(uint8_t indent=0) const
         {
@@ -263,80 +440,20 @@ namespace circ::shadowinst
             ss << this->has_regions::to_string(indent + 1);
             ss << _indent << "Translation map:" << std::endl;
 
-            for (auto &[reg, all_mats] : translation_map)
-            {
-                ss << std::string((indent + 1) * 2, ' ' ) << reg
-                   << (is_dirty(reg) ? " (dirty)" : "") << std::endl;
-
-                for (auto &mat : all_mats)
-                {
-                    ss << std::string((indent + 2) * 2, ' ');
-
-                    if (mat.empty()) {
-                        ss << "( none )";
-                    } else {
-                        for (auto b : mat)
-                            ss << b;
-                    }
-                    ss << std::endl;
-                }
-            }
+            ss << translation_map.to_string(indent + 1);
             return ss.str();
         }
 
+        // REFACTOR(lukas): Remove.
         bool is_dirty(const reg_t &reg) const
         {
             return dirty.count(reg);
-        }
-
-        bool has_saturated_map() const
-        {
-            return translation_bytes_map().size() ==
-                static_cast< std::size_t >(std::pow(2, this->region_bitsize()));
         }
 
         void mark_dirty(const reg_t &reg)
         {
             check(translation_map.count(reg));
             dirty.insert(reg);
-        }
-
-        uint64_t translation_entries_count() const
-        {
-            uint64_t acc = 0;
-            for (auto &[_, mats] : translation_map)
-                acc += mats.size();
-            return acc;
-        }
-
-        static std::string make_bitstring(const std::vector< bool > &from)
-        {
-            std::string out;
-            for (std::size_t i = 0; i < from.size(); ++i)
-                out += (from[i]) ? '1' : '0';
-
-            return out;
-        }
-
-        std::map< std::string, reg_t > translation_bytes_map() const
-        {
-            std::map<std::string, reg_t> out;
-            for (auto &[reg, mats] : translation_map)
-                for (auto &encoding : mats)
-                    out[make_bitstring(encoding)] = reg;
-            return out;
-        }
-
-        bool is_saturated_by_zeroes() const
-        {
-            if (translation_map.size() != 1)
-                return false;
-            const auto &[key, encodings] = *translation_map.begin();
-            if (!std::string_view(key).starts_with("__remill_zero_i"))
-                return false;
-
-            return encodings.size() ==
-                   static_cast< std::size_t >(std::pow(2, this->region_bitsize()));
         }
     };
 
@@ -347,46 +464,102 @@ namespace circ::shadowinst
 
     struct Address
     {
-        std::optional< Reg > base_reg;
-        std::optional< Reg > index_reg;
-        std::optional< Reg > segment;
-        std::optional< Immediate > scale;
-        std::optional< Immediate > displacement;
+        using maybe_reg_t = std::optional< Reg >;
+        using maybe_imm_t = std::optional< Immediate >;
+
+        struct idx
+        {
+            static inline constexpr std::size_t base_reg = 0u;
+            static inline constexpr std::size_t index_reg = 1u;
+            static inline constexpr std::size_t segment_reg = 2u;
+
+            static inline constexpr std::size_t scale = 0u;
+            static inline constexpr std::size_t displacement = 1u;
+        };
+
+        std::array< maybe_reg_t, 3 > _regs;
+        std::array< maybe_imm_t, 2 > _imms;
 
         Address() = default;
 
+        template< typename T, typename Arr >
+        static T try_fetch(Arr &arr, std::size_t idx)
+        {
+            auto &v = arr[idx];
+            return (v) ? &*v : nullptr;
+        }
+
+        template< typename O >
+        static auto to_pointer(O &from)
+        {
+            return (from) ? &*from : nullptr;
+        }
+
+        #define circ_shadowinst_Address_make_getter(name, type, field) \
+            type name() { return try_fetch< type >(field, idx::name); } \
+            const type name() const { return try_fetch< const type >(field, idx::name); }
+
+        circ_shadowinst_Address_make_getter(base_reg, Reg *, _regs);
+        circ_shadowinst_Address_make_getter(index_reg, Reg *, _regs);
+        circ_shadowinst_Address_make_getter(segment_reg, Reg *, _regs);
+
+        circ_shadowinst_Address_make_getter(scale, Immediate *, _imms);
+        circ_shadowinst_Address_make_getter(displacement, Immediate *, _imms);
+
+        #undef circ_shadowinst_Address_make_getter
+
+        template< typename T, typename ... Args  >
+        auto do_make(std::size_t idx, Args &&... args)
+        -> std::enable_if_t< std::is_same_v< T, Reg >, Reg &>
+        {
+            _regs[idx] = std::make_optional(std::forward< Args >(args) ...);
+            return *_regs[idx];
+        }
+
+        template< typename T, typename ... Args  >
+        auto do_make(std::size_t idx, Args &&... args)
+        -> std::enable_if_t< std::is_same_v< T, Immediate >, Immediate &>
+        {
+            _imms[idx] = std::make_optional(std::forward< Args >(args) ...);
+            return *_imms[idx];
+        }
+
+        template< typename T, std::size_t idx, typename ... Args >
+        T &make(Args && ... args)
+        {
+            return do_make< T >(idx, std::forward< Args >(args) ... );
+        }
+
         bool operator==(const Address &) const = default;
+
+        template< typename Self, typename C >
+        static void _for_each_present(Self &self, C &&c)
+        {
+            for (auto &r : self._regs)
+                if (r)
+                    c(*r);
+            for (auto &i : self._imms)
+                if (i)
+                    c(*i);
+
+        }
+
+        template<typename C> void for_each_present(C &&c)
+        {
+            _for_each_present(*this, std::forward<C>(c));
+        }
+        template<typename C> void for_each_present(C &&c) const
+        {
+            _for_each_present(*this, std::forward<C>(c));
+        }
 
         bool empty() const
         {
-            return has_regions::is_empty(base_reg) &&
-                   has_regions::is_empty(index_reg) &&
-                   has_regions::is_empty(scale) &&
-                   has_regions::is_empty(displacement);
-        }
-
-        template< typename CB >
-        void ForEach(CB &cb)
-        {
-            auto invoke = [&](auto &on_what) { if (on_what) cb(*on_what); };
-
-            invoke(base_reg);
-            invoke(index_reg);
-            invoke(segment);
-            invoke(scale);
-            invoke(displacement);
-        }
-
-        template< typename CB >
-        void ForEach(CB &cb) const
-        {
-            auto invoke = [&](const auto &on_what) { if (on_what) cb(*on_what); };
-
-            invoke(base_reg);
-            invoke(index_reg);
-            invoke(segment);
-            invoke(scale);
-            invoke(displacement);
+            // REFACTOR(lukas): Think of api.
+            return has_regions::is_empty(base_reg()) &&
+                   has_regions::is_empty(index_reg()) &&
+                   has_regions::is_empty(scale()) &&
+                   has_regions::is_empty(displacement());
         }
 
         has_regions flatten_significant_regs() const
@@ -394,16 +567,18 @@ namespace circ::shadowinst
             has_regions out;
             auto exec = [&](const auto &other) { out.add(other); };
             auto invoke = [&](const auto &on_what) { if (on_what) exec(*on_what); };
-            invoke(base_reg);
-            invoke(index_reg);
+            invoke(base_reg());
+            invoke(index_reg());
             return out;
         }
 
+        // REFACTOR(lukas): Copy pasta.
         bool present(std::size_t idx) const
         {
             bool out = false;
-            auto collect = [&](auto &op) { out |= op.present(idx); };
-            return ForEach(collect), out;
+            auto collect = [&](const auto &op) { out |= op.present(idx); };
+            for_each_present(collect);
+            return out;
         }
 
         std::string to_string(uint8_t indent) const
@@ -419,15 +594,26 @@ namespace circ::shadowinst
                     ss << make_indent(indent + 1u) << "( not set )\n";
             };
 
-            format(base_reg, "Base");
-            format(index_reg, "Index");
-            format(segment, "Segment");
-            format(scale, "Scale");
-            format(displacement, "Displacement");
+            format(base_reg(), "Base");
+            format(index_reg(), "Index");
+            format(segment_reg(), "Segment");
+            format(scale(), "Scale");
+            format(displacement(), "Displacement");
 
             return ss.str();
         }
     };
+
+    template< typename T >
+    static inline bool compare(const T *lhs, const T *rhs)
+    {
+        if (!lhs && !rhs)
+            return true;
+        if (!lhs || !rhs)
+            return false;
+        return *lhs == *rhs;
+    }
+
 
     struct Shift : has_regions
     {
@@ -436,81 +622,59 @@ namespace circ::shadowinst
 
     struct Operand
     {
+        using self_t = Operand;
         using op_type = remill::Operand::Type;
 
-        std::optional<Immediate> immediate;
-        std::optional<Reg> reg;
-        std::optional<Address> address;
-        std::optional<Shift> shift;
+      protected:
+        std::variant< Immediate, Reg, Address, Shift > _data;
+
+        // Simply forwarded to the variant ctor.
+        template< typename ... Args >
+        Operand(Args && ...args) : _data(std::forward< Args >(args) ...) {}
+
+      public:
+
+        Immediate *immediate() { return std::get_if< Immediate >(&_data); }
+        Reg       *reg() { return std::get_if< Reg >(&_data); }
+        Address   *address() { return std::get_if< Address >(&_data); }
+        Shift     *shift() { return std::get_if< Shift >(&_data); }
+
+        const Immediate *immediate() const { return std::get_if< Immediate >(&_data); }
+        const Reg       *reg()       const { return std::get_if< Reg >(&_data); }
+        const Address   *address()   const { return std::get_if< Address >(&_data); }
+        const Shift     *shift()     const { return std::get_if< Shift >(&_data); }
 
         bool operator==(const Operand &) const = default;
 
-        template<typename T, typename ... Args>
-        static auto As(Args && ... args) {
-            static_assert(std::is_same_v<T, Immediate>
-                          || std::is_same_v<T, Reg>
-                          || std::is_same_v<T, Address>);
-
-            Operand op;
-            if constexpr (std::is_same_v<T, Immediate>)
-              op.immediate = Immediate(std::forward<Args>(args)...);
-            else if (std::is_same_v<T, Reg>)
-              op.reg = Reg(std::forward<Args>(args)...);
-            else if (std::is_same_v<T, Address>)
-              op.address = Address();
-
-            return op;
+        template< typename T, typename ... Args >
+        static auto make(Args && ... args) {
+            if constexpr (std::is_same_v< T, Address >)
+                return self_t(std::in_place_type_t< T >());
+            else
+                return self_t(std::in_place_type_t< T >(), std::forward< Args >(args) ...);
         }
 
         template< typename CB >
-        void for_each_existing(CB &cb)
-        {
-            auto invoke = [&](auto &on_what) { if (on_what) cb(*on_what); };
+        auto visit(CB &&cb) { return std::visit(std::forward< CB >(cb), _data); }
 
-            invoke(immediate);
-            invoke(reg);
-            invoke(address);
-            invoke(shift);
-        }
         template< typename CB >
-        void for_each_existing(CB &cb) const
-        {
-            auto invoke = [&](const auto &on_what) { if (on_what) cb(*on_what); };
-
-            invoke(immediate);
-            invoke(reg);
-            invoke(address);
-            invoke(shift);
-        }
+        auto visit(CB &&cb) const { return std::visit(std::forward< CB >(cb), _data); }
 
         bool present(std::size_t idx) const
         {
             bool out = false;
             auto collect = [&](auto &op) { out |= op.present(idx); };
-            return for_each_existing(collect), out;
+            visit(collect);
+            return out;
         }
 
-        bool IsHusk() const
-        {
-            // No operand is specified, therefore this is not a husk but a hardcoded op
-            if (!reg && !immediate && !shift && !address)
-                return false;
-
-            check(!shift.has_value()) << "Cannot handle shift";
-            check(  static_cast<uint8_t>(reg.has_value())
-                  + static_cast<uint8_t>(immediate.has_value())
-                  + static_cast<uint8_t>(address.has_value())
-                  + static_cast<uint8_t>(shift.has_value())
-            ) << "shadowinst::operand is of multiple types!";
-
-            return (reg && reg->empty())     || (immediate && immediate->empty()) ||
-                   (shift && shift->empty()) || (address && address->empty());
-        }
+        bool is_husk() const { return empty(); }
 
         bool empty() const
         {
-            auto is_empty = [](const auto &op) { return op && op->size(); };
-            return is_empty(immediate) && is_empty(reg);
+            auto is_empty = [](const auto &v) { return v.empty(); };
+            return visit(is_empty);
+
         }
     };
 
@@ -518,7 +682,7 @@ namespace circ::shadowinst
     {
         // We need to fullfil that is pointers to operands are never invalidated!
         // TODO(lukas): See if ^ cannot be relaxed, as it is a propbable source of errors.
-        std::deque<Operand> operands;
+        std::deque< Operand > operands;
 
         // Some instructions can depend on the same parts
         // of encoding - we want to keep track of those
@@ -559,7 +723,10 @@ namespace circ::shadowinst
                 what.selector = self.selectors.size();
                 self.selectors.push_back(&what);
             }
-            void operator()(Address &addr) { addr.ForEach(*this); }
+            void operator()(Address &addr)
+            {
+                addr.for_each_present(*this);
+            }
             // Fallthrough
             void operator()(auto &&) {}
         };
@@ -568,7 +735,7 @@ namespace circ::shadowinst
         {
             assign_ assign{ *this };
             for (auto &op : operands)
-                op.for_each_existing(assign);
+                op.visit(assign);
 
         }
 
@@ -601,7 +768,7 @@ namespace circ::shadowinst
         {
             uint32_t dirty_count = 0;
             for (const auto &op : operands)
-              if (op.reg && !op.reg->dirty.empty())
+              if (op.reg() && !op.reg()->dirty.empty())
                 ++dirty_count;
 
             return dirty_count <= 1;
@@ -610,24 +777,25 @@ namespace circ::shadowinst
         template< typename T, typename ...Args >
         auto &Add(Args && ... args)
         {
-            return operands.emplace_back(Operand::As<T>(std::forward<Args>(args)...));
+            return operands.emplace_back(Operand::make<T>(std::forward<Args>(args)...));
         }
 
         template< typename ...Args >
         auto &Replace(std::size_t idx, remill::Operand::Type type, Args && ...args)
         {
+            // REFACTOR(lukas): Move to `Operand`.
             switch(type)
             {
                 case remill::Operand::Type::kTypeRegister: {
-                    operands[idx] = Operand::As<Reg>(std::forward<Args>(args)...);
+                    operands[idx] = Operand::make<Reg>(std::forward<Args>(args)...);
                     return operands[idx];
                 }
                 case remill::Operand::Type::kTypeImmediate : {
-                    operands[idx] = Operand::As<Immediate>(std::forward<Args>(args)...);
+                    operands[idx] = Operand::make<Immediate>(std::forward<Args>(args)...);
                     return operands[idx];
                 }
                 case remill::Operand::Type::kTypeAddress : {
-                    operands[idx] = Operand::As<Address>(std::forward<Args>(args)...);
+                    operands[idx] = Operand::make<Address>(std::forward<Args>(args)...);
                     return operands[idx];
                 }
                 default :
@@ -644,36 +812,37 @@ namespace circ::shadowinst
             for (const auto &op : operands)
             {
                 // TODO(lukas): Sanity check may be in order here
-                if (op.immediate)
-                    for (auto [from, size] : *op.immediate)
+                if (op.immediate())
+                    for (auto [from, size] : *op.immediate())
                         out[from] = size;
 
+                // REAFACTOR(lukas): It is copy pasta.
                 // TODO(lukas): Looks like copy pasta, but eventually these
                 //              attributes will have different structure
-                if (op.reg)
-                    for (auto [from, size] : op.reg->regions)
+                if (op.reg())
+                    for (auto [from, size] : op.reg()->regions)
                         out[from] = size;
 
-                if (op.shift)
-                  for (auto [from, size] : *op.shift)
+                if (op.shift())
+                  for (auto [from, size] : *op.shift())
                     out[from] = size;
 
-                if (op.address)
+                if (op.address())
                 {
-                    if (op.address->base_reg)
-                        for (auto [from, size] : op.address->base_reg->regions)
+                    if (op.address()->base_reg())
+                        for (auto [from, size] : op.address()->base_reg()->regions)
                             out[from] = size;
 
-                    if (op.address->index_reg)
-                        for (auto [from, size] : op.address->index_reg->regions)
+                    if (op.address()->index_reg())
+                        for (auto [from, size] : op.address()->index_reg()->regions)
                             out[from] = size;
 
-                    if (op.address->scale)
-                        for (auto [from, size] : op.address->scale->regions)
+                    if (op.address()->scale())
+                        for (auto [from, size] : op.address()->scale()->regions)
                             out[from] = size;
 
-                    if (op.address->displacement)
-                        for (auto [from, size] : op.address->displacement->regions)
+                    if (op.address()->displacement())
+                        for (auto [from, size] : op.address()->displacement()->regions)
                             out[from] = size;
                 }
             }
@@ -709,47 +878,33 @@ namespace circ::shadowinst
             for (const auto &op : operands) {
                 ss << " OP" << std::endl;
 
+                // REAFACTOR(lukas): It is copy pasta.
                 // TODO(lukas): Sanity check may be in order here
-                if (op.immediate) {
+                if (op.immediate()) {
                     ss << "  Immediate:" << std::endl;
-                    for (auto [from, size] : *op.immediate)
+                    for (auto [from, size] : *op.immediate())
                         ss << "    " << from << " , " << size << std::endl;;
                 }
                 // TODO(lukas): Looks like copy pasta, but eventually these
                 //              attributes will have different structure
-                if (op.reg) {
+                if (op.reg()) {
                     ss << "  Reg:" << std::endl;
-                    ss << op.reg->to_string(2);
+                    ss << op.reg()->to_string(2);
                 }
-                if (op.shift) {
+                if (op.shift()) {
                     ss << "  Shift:" << std::endl;
-                    for (auto [from, size] : *op.shift)
+                    for (auto [from, size] : *op.shift())
                         ss << " " << from << " , " << size << std::endl;
                 }
-                if (op.address) {
+                if (op.address()) {
                     ss << "  Address" << std::endl;
-                    ss << op.address->to_string(2);
+                    ss << op.address()->to_string(2);
                 }
             }
             ss << "  (done)" << std::endl;
             return ss.str();
         }
     };
-
-    static inline std::string as_str(uint64_t from, uint64_t size)
-    {
-        std::stringstream ss;
-        ss << "[ " << from << ", " << size << " ]";
-        return ss.str();
-    }
-
-    static inline std::string as_str(const std::tuple< uint64_t, uint64_t > &interval)
-    {
-        std::stringstream ss;
-        auto [from, size] = interval;
-        ss << "[ " << from << ", " << size << " ]";
-        return ss.str();
-    }
 
     static inline std::string remove_shadowed(const Instruction &s_inst,
                                               const std::string &bytes)
@@ -759,40 +914,6 @@ namespace circ::shadowinst
             if (s_inst.present(i))
                 out += bytes[bytes.size() - 1 - i];
         return out;
-    }
-
-    auto translation_map_complement(const auto &translation_map)
-    -> std::vector< llvm::APInt >
-    {
-        constexpr auto hash = [](const auto &x) { return llvm::hash_value(x); };
-        std::unordered_set< llvm::APInt, decltype(hash) > seen;
-        // TODO(lukas): We may not need this check.
-        std::optional< uint32_t > size;
-
-        for (const auto &[reg, mats] : translation_map)
-            for (const auto &mat : mats)
-            {
-                if (!size)
-                    size = mat.size();
-                check(*size == mat.size());
-                auto as_apint = make_APInt(mat, 0, mat.size());
-                seen.insert(as_apint);
-            }
-
-        std::vector< llvm::APInt > out;
-        auto v = llvm::APInt(*size, 0, false);
-        uint32_t max_v = 1 << *size;
-        check(size);
-        for (uint32_t i = 0; i < max_v; ++i)
-        {
-            if (!seen.count(v))
-                out.push_back(v);
-            ++v;
-        }
-        check(seen.size() + out.size() == max_v) << seen.size() << " + " << out.size()
-                                                 << " != " << max_v;
-        return out;
-
     }
 
 } // namespace circ::shadowinst
