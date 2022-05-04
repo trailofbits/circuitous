@@ -63,8 +63,8 @@ namespace circ
         auto RegisterOperand(llvm::Module *module)
         {
             auto &current = CurrentShade();
-            check(current.reg);
-            check(current.reg->regions.size() == 1);
+            check(current.reg());
+            check(current.reg()->regions.size() == 1);
         }
     };
 
@@ -177,7 +177,8 @@ namespace circ
         {
             std::vector<llvm::StoreInst *> writes;
             auto val = remill::NthArgument(isel, 2 + idx);
-            auto &s_reg = shadow->operands[idx].reg;
+            auto s_reg = shadow->operands[idx].reg();
+            check(s_reg) << "REFACTOR";
 
             // Get all stores that are storing into the destination operand
             for (auto &bb : *isel)
@@ -337,7 +338,7 @@ namespace circ
 
             // If there is no shadow - or there is a shadow but it does not have size,
             // just return the original value hidden behind intrinsic
-            if (!CurrentShade().immediate || CurrentShade().immediate->size() == 0)
+            if (!CurrentShade().immediate() || CurrentShade().immediate()->size() == 0)
                 return HideValue(constant_imm, bb, size);
 
 
@@ -428,10 +429,10 @@ namespace circ
             remill::Instruction &inst, llvm::BasicBlock *bb,
             llvm::Value *state_ptr, llvm::Argument *arg, remill::Operand &op)
         {
-            if (!CurrentShade().reg)
+            if (!CurrentShade().reg())
                 return this->parent::LiftRegisterOperand(inst, bb, state_ptr, arg, op);
 
-            const auto &s_reg = *CurrentShade().reg;
+            const auto &s_reg = *CurrentShade().reg();
 
             auto concrete = this->parent::LiftRegisterOperand(inst, bb, state_ptr, arg, op);
             if (s_reg.size() == 0)
@@ -484,7 +485,7 @@ namespace circ
             auto select = materializer_t(ir, s_reg).unguarded_decoder(safe_locate_reg);
             AddMetadata(select, "__circuitous.ordering", select_counter++);
 
-            if (s_reg.is_saturated_by_zeroes())
+            if (s_reg.tm().is_saturated_by_zeroes())
                 return llvm::ConstantInt::get(select->getType(), 0, false);
             return shadowinst::mask_shift_coerce(select, ir, s_reg, *arch);
         }
@@ -550,13 +551,14 @@ namespace circ
             if (!ifuzz::has_reg< I >(CurrentShade()))
                 return LoadWordRegValOrZero_(block, state_ptr, r_reg.name, zero);
 
-            auto &s_reg = ifuzz::get_reg< I >(CurrentShade());
+            auto s_reg = ifuzz::get_reg< I >(CurrentShade());
+            check(s_reg) << "REFACTOR";
 
             if (s_reg->empty()) {
-                if (s_reg->translation_map.size() == 0)
+                if (s_reg->translation_map.mappings_count() == 0)
                     return LoadWordRegValOrZero_(block, state_ptr, r_reg.name, zero);
 
-                check(s_reg->translation_map.size() == 1);
+                check(s_reg->translation_map.mappings_count() == 1);
                 auto &entry = *s_reg->translation_map.begin();
                 check(entry.second.size() == 1);
                 check(entry.second.begin()->empty());
@@ -567,7 +569,7 @@ namespace circ
 
         template< typename I >
         llvm::Value *LiftSImmediate(
-            llvm::BasicBlock *block, const std::optional<shadowinst::Immediate> &maybe_s_imm,
+            llvm::BasicBlock *block, const shadowinst::Immediate *maybe_s_imm,
             I concrete_val)
         {
             if (!maybe_s_imm || maybe_s_imm->size() == 0)
@@ -605,7 +607,7 @@ namespace circ
             remill::Instruction &rinst, llvm::BasicBlock *block, llvm::Value *state_ptr,
             llvm::Argument *arg, remill::Operand &r_op) override
         {
-            if (!CurrentShade().address)
+            if (!CurrentShade().address())
                 return this->parent::LiftAddressOperand(rinst, block, state_ptr, arg, r_op);
 
             auto base_reg = LiftSReg< ifuzz::sel::base >(block, state_ptr, r_op);
@@ -616,11 +618,11 @@ namespace circ
             //              scale, but the second will have set remill scale to one (artifact
             //              of xed).
             auto concrete_scale = [&]() -> uint64_t {
-                if (CurrentShade().address->scale->empty() &&
-                    !CurrentShade().address->index_reg->empty())
+                if (CurrentShade().address()->scale()->empty() &&
+                    !CurrentShade().address()->index_reg()->empty())
                 {
-                    check(CurrentShade().address->index_reg->regions ==
-                          CurrentShade().address->base_reg->regions);
+                    check(CurrentShade().address()->index_reg()->regions ==
+                          CurrentShade().address()->base_reg()->regions);
                     if (r_op.addr.scale != 1)
                         log_error() << "Overriding scale to 1 based on shadow info.";
                     return 1ul;
@@ -628,9 +630,9 @@ namespace circ
                 return static_cast< uint64_t >(r_op.addr.scale);
             }();
 
-            auto scale = LiftSImmediate(block, CurrentShade().address->scale, concrete_scale);
+            auto scale = LiftSImmediate(block, CurrentShade().address()->scale(), concrete_scale);
             check(scale);
-            auto displacement = LiftSImmediate(block, CurrentShade().address->displacement,
+            auto displacement = LiftSImmediate(block, CurrentShade().address()->displacement(),
                                                r_op.addr.displacement);
 
             auto segment_reg = LiftSReg< ifuzz::sel::segment >(block, state_ptr, r_op);

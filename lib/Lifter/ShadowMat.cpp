@@ -32,6 +32,7 @@ namespace circ::shadowinst
 
     llvm::Value *Materializer::opaque_selector() const
     {
+        check(s_reg.selector);
         return irops::make_leaf< irops::RegSelector >(irb, *s_reg.selector, selector_type());
     }
 

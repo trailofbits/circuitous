@@ -119,6 +119,7 @@ namespace circ::shadowinst
             : irb(irb_), s_reg(s_reg_)
         {}
 
+
       private:
         void append(auto &into, const auto &from)
         {
@@ -138,7 +139,7 @@ namespace circ::shadowinst
         template< typename Getter >
         llvm::Instruction *unguarded_decoder(llvm::Value *selector, Getter &get_reg) const
         {
-            auto entries = s_reg.translation_entries_count();
+            auto entries = s_reg.tm().mats_count();
             auto bits = s_reg.region_bitsize();
             check(entries <= (1 << bits))
                 << "Translation entries count do not correspond to regions size "
@@ -148,7 +149,7 @@ namespace circ::shadowinst
             select_args[0] = selector;
 
             llvm::Type *type = nullptr;
-            for (const auto &[str, reg] : s_reg.translation_bytes_map()) {
+            for (const auto &[str, reg] : s_reg.tm().reverse_bitmap()) {
                 auto idx = llvm::APInt{static_cast< uint32_t >(bits), str, 2}.getLimitedValue();
                 check(select_args.size() > idx + 1);
                 select_args[idx + 1] = get_reg(irb, reg);
@@ -173,7 +174,7 @@ namespace circ::shadowinst
             return unguarded_decoder(opaque_selector(), get_reg);
         }
 
-        using mats_t = Reg::materializations_t;
+        using mats_t = Reg::TM_t::materializations_t;
         auto translation_entries(const mats_t &mats) const -> values_t;
 
         auto translation_entries_of(const std::string &name) -> values_t
