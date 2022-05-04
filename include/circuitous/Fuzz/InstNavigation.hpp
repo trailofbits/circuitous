@@ -29,13 +29,13 @@ namespace circ::ifuzz
     bool has_reg(const shadowinst::Operand &op)
     {
         if constexpr ( I == sel::reg )
-            return op.reg.has_value();
+            return op.reg() != nullptr;
         else if constexpr ( I == sel::base )
-            return op.address && op.address->base_reg.has_value();
+            return op.address() && op.address()->base_reg() != nullptr;
         else if constexpr ( I == sel::index )
-            return op.address && op.address->index_reg.has_value();
+            return op.address() && op.address()->index_reg() != nullptr;
         else if constexpr ( I == sel::segment )
-            return op.address && op.address->segment.has_value();
+            return op.address() && op.address()->segment_reg() != nullptr;
         else
             unreachable() << "Unreachable";
     }
@@ -65,36 +65,31 @@ namespace circ::ifuzz
 
 
     template< uint32_t I >
-    std::optional< shadowinst::Reg > &get_reg(shadowinst::Operand &op)
+    shadowinst::Reg *get_reg(shadowinst::Operand &op)
     {
-        if constexpr ( I == sel::reg )          return op.reg;
-        else if constexpr ( I == sel::base )    return op.address->base_reg;
-        else if constexpr ( I == sel::index )   return op.address->index_reg;
-        else if constexpr ( I == sel::segment ) return op.address->segment;
+        if constexpr ( I == sel::reg )          return op.reg();
+        else if constexpr ( I == sel::base )    return op.address()->base_reg();
+        else if constexpr ( I == sel::index )   return op.address()->index_reg();
+        else if constexpr ( I == sel::segment ) return op.address()->segment_reg();
         else unreachable() << "Unreachable";
     }
 
     template< uint32_t I >
-    const std::optional< shadowinst::Reg > &get_reg(const shadowinst::Operand &op)
+    const shadowinst::Reg *get_reg(const shadowinst::Operand &op)
     {
-        if constexpr ( I == sel::reg )          return op.reg;
-        else if constexpr ( I == sel::base )    return op.address->base_reg;
-        else if constexpr ( I == sel::index )   return op.address->index_reg;
-        else if constexpr ( I == sel::segment ) return op.address->segment;
+        if constexpr ( I == sel::reg )          return op.reg();
+        else if constexpr ( I == sel::base )    return op.address()->base_reg();
+        else if constexpr ( I == sel::index )   return op.address()->index_reg();
+        else if constexpr ( I == sel::segment ) return op.address()->segment_reg();
         else unreachable() << "Unreachable";
     }
+
+    // REFACTOR(lukas): Deprecated.
     // Returns a copy!
     template< uint32_t I >
     std::optional< shadowinst::Reg > get_reg_safely(shadowinst::Operand &op)
     {
-        if constexpr ( I == sel::reg )
-            return op.reg;
-        else
-        {
-            if (!op.address)
-                return {};
-            return get_reg< I >(op);
-        }
+        unreachable() << "Unreachable";
     }
 
     template< uint32_t I >

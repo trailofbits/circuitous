@@ -140,7 +140,7 @@ namespace circ
         {
             idx_to_husk_t out;
             for (std::size_t i = 0; i < fuzzer.rinst.operands.size(); ++i)
-                if (s_inst[i].IsHusk())
+                if (s_inst[i].is_husk())
                     out[i] = &fuzzer.rinst.operands[i];
             return out;
         }
@@ -188,7 +188,7 @@ namespace circ
                 s_inst.deps.back().emplace_back(i, &s_inst.Replace(i, op->type, husk_bits));
 
                 if (op->type == remill::Operand::Type::kTypeAddress)
-                    fuzzer.distribute_addr(husk_bits, i, *s_inst[i].address);
+                    fuzzer.distribute_addr(husk_bits, i, *s_inst[i].address());
             }
         }
 
