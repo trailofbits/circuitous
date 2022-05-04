@@ -455,11 +455,14 @@ namespace circ::shadowinst
             check(translation_map.count(reg));
             dirty.insert(reg);
         }
+        void for_each_present(auto &cb) const { cb(*this); }
     };
 
     struct Immediate : has_regions
     {
-      using has_regions::has_regions;
+        using has_regions::has_regions;
+
+        void for_each_present(auto &cb) const { cb(*this); }
     };
 
     struct Address
@@ -618,6 +621,7 @@ namespace circ::shadowinst
     struct Shift : has_regions
     {
         using has_regions::has_regions;
+        void for_each_present(auto &cb) const { cb(*this); }
     };
 
     struct Operand
@@ -682,6 +686,12 @@ namespace circ::shadowinst
         template< typename CB >
         auto visit(CB &&cb) const { return std::visit(std::forward< CB >(cb), _data); }
 
+        template< typename CB >
+        void for_each_present(CB &cb) const
+        {
+            return visit([&](const auto &x) { return x.for_each_present(cb); });
+        }
+
         bool present(std::size_t idx) const
         {
             bool out = false;
@@ -744,6 +754,14 @@ namespace circ::shadowinst
         auto size() const { return operands.size(); }
         const auto &operator[](std::size_t idx) const { return operands[idx]; }
         auto &operator[](std::size_t idx) { return operands[idx]; }
+
+        // Will be passed `const &` of all present *leaves*.
+        template< typename CB >
+        void for_each_present(CB &cb) const
+        {
+            for (const auto &op : operands)
+                op.for_each_present(cb);
+        }
 
         // Cannot have templated code in function local `struct` defnitions.
         struct assign_
@@ -822,44 +840,18 @@ namespace circ::shadowinst
         region_t IdentifiedRegions() const
         {
             region_t out;
-
-            for (const auto &op : operands)
+            auto collect = [&](const has_regions &x)
             {
-                // TODO(lukas): Sanity check may be in order here
-                if (op.immediate())
-                    for (auto [from, size] : *op.immediate())
-                        out[from] = size;
-
-                // REAFACTOR(lukas): It is copy pasta.
-                // TODO(lukas): Looks like copy pasta, but eventually these
-                //              attributes will have different structure
-                if (op.reg())
-                    for (auto [from, size] : op.reg()->regions)
-                        out[from] = size;
-
-                if (op.shift())
-                  for (auto [from, size] : *op.shift())
-                    out[from] = size;
-
-                if (op.address())
+                for (const auto &[from, size] : x.regions)
                 {
-                    if (op.address()->base_reg())
-                        for (auto [from, size] : op.address()->base_reg()->regions)
-                            out[from] = size;
-
-                    if (op.address()->index_reg())
-                        for (auto [from, size] : op.address()->index_reg()->regions)
-                            out[from] = size;
-
-                    if (op.address()->scale())
-                        for (auto [from, size] : op.address()->scale()->regions)
-                            out[from] = size;
-
-                    if (op.address()->displacement())
-                        for (auto [from, size] : op.address()->displacement()->regions)
-                            out[from] = size;
+                    dcheck(!out.count(from) || out[from] == size, [](){
+                        return "Inconsistent regions."; }
+                    );
+                    out[from] = size;
                 }
-            }
+            };
+
+            for_each_present(collect);
             return out;
         }
 
