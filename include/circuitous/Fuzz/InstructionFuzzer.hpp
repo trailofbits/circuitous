@@ -111,17 +111,16 @@ namespace circ
                     distributed_bits[3][i] = true;
             }
 
-            auto make = [](auto &where, const auto& bits_) {
-                using raw_t = std::decay_t< std::remove_reference_t< decltype(where) > >;
-                using T = typename raw_t::value_type;
-                // These are inner operands and therefore do not have a position.
-                where = std::make_optional< T >(shadowinst::ordered_bits_t(bits_));
+            using I = shadowinst::Address::idx;
+            auto ob = [&](std::size_t i)
+            {
+                return shadowinst::ordered_bits_t(distributed_bits[i]);
             };
 
-            make(s_addr.base_reg, distributed_bits[0]);
-            make(s_addr.index_reg, distributed_bits[1]);
-            make(s_addr.scale, distributed_bits[2]);
-            make(s_addr.displacement, distributed_bits[3]);
+            s_addr.do_make< shadowinst::Reg >(I::base_reg, ob(0));
+            s_addr.do_make< shadowinst::Reg >(I::index_reg, ob(1));
+            s_addr.do_make< shadowinst::Immediate >(I::scale, ob(2));
+            s_addr.do_make< shadowinst::Immediate >(I::displacement, ob(3));
         }
 
         auto empty_bits() const { return bits_t(rinst.bytes.size() * 8, false); }
@@ -180,11 +179,11 @@ namespace circ
                     }
                     case OpType::kTypeAddress: {
                         auto &s_addr = shadow_inst.Add<shadowinst::Address>();
-                        distribute_addr(op_bits[i], i, *s_addr.address);
+                        distribute_addr(op_bits[i], i, *s_addr.address());
                         break;
                     }
                     default:
-                        shadow_inst.operands.emplace_back();
+                        unreachable() << "REFACTOR!";
                         break;
                 }
             }
@@ -194,7 +193,7 @@ namespace circ
 
             for (std::size_t i = 0; i < shadow_inst.operands.size(); ++i)
             {
-                if (!shadow_inst[i].IsHusk()) {
+                if (!shadow_inst[i].is_husk()) {
                     shadow_inst.deps.push_back( {{i, &shadow_inst[i]}} );
                     shadow_inst.dirt.push_back( dirts[i] );
                 }
@@ -203,7 +202,6 @@ namespace circ
 
             // It is possible some operands were not properly populated
             // (due to being read+write operands), so they need special attention.
-            //ResolveHusks(shadow_inst);
             HuskResolver(*this).resolve_husks(shadow_inst);
             if (generate_all)
                 PopulateTranslationTables(shadow_inst);
@@ -235,7 +233,7 @@ namespace circ
         {
             using namespace ifuzz;
             for (auto idx : todo)
-                if (!s_inst[idx].address.has_value() || s_inst[idx].address->segment.has_value()
+                if (!s_inst[idx].address() || s_inst[idx].address()->segment_reg()
                     || !has_reg< sel::base >(s_inst[idx]))
                 {
                     return;
@@ -243,8 +241,14 @@ namespace circ
 
             for (auto idx : todo)
             {
-                auto &segment = get_reg< sel::segment >(s_inst[idx]);
-                segment = shadowinst::Reg(get_reg< sel::base >(s_inst[idx])->regions);
+                auto segment = get_reg< sel::segment >(s_inst[idx]);
+                dcheck(s_inst[idx].address(), [&](){ return "Expected addr to be present"; });
+                if (!segment)
+                    s_inst[idx].address()->do_make< shadowinst::Reg >(
+                            shadowinst::Address::idx::segment_reg,
+                            get_reg< sel::base >(s_inst[idx])->regions);
+                else
+                    *segment = shadowinst::Reg(get_reg< sel::base >(s_inst[idx])->regions);
             }
         }
 
@@ -269,8 +273,9 @@ namespace circ
         {
             for (std::size_t i = 0; i < s_inst.operands.size(); ++i)
             {
-                auto s_op = s_inst[i];
-                auto r_op = nrinst.operands[i];
+                // REFACTOR(lukas): No longer make copies.
+                auto &s_op = s_inst[i];
+                auto &r_op = nrinst.operands[i];
 
                 using namespace ifuzz;
                 if (!check_entry< sel::base >(s_op, r_op, nrinst) ||
@@ -292,7 +297,8 @@ namespace circ
                 return;
             for (auto idx : todo)
             {
-                auto &reg = get_reg< I >(s_inst[idx]);
+                auto *reg = get_reg< I >(s_inst[idx]);
+                check(reg) << "REFACTOR";
                 if (!reg->empty() && reg->translation_map.empty())
                     reg->regions.clear();
             }
@@ -302,25 +308,23 @@ namespace circ
                                         const idx_vector_t &todo)
         {
             for (auto idx : todo)
-                check(s_inst[idx].address->segment == s_inst[todo[0]].address->segment);
-
-            if (!rinst.segment_override || !s_inst[todo[0]].address)
+                check(shadowinst::compare(s_inst[idx].address()->segment_reg(),
+                                          s_inst[todo[0]].address()->segment_reg()));
+            if (!rinst.segment_override || !s_inst[todo[0]].address())
                 return;
 
-            auto &front = s_inst[todo[0]].address->segment;
+            auto front = s_inst[todo[0]].address()->segment_reg();
             if (!front)
                 return;
 
             // TODO(lukas): Fix on remill side.
             auto seg_base = rinst.segment_override->name + "BASE";
-            check(front->translation_map.size() == 1 &&
-                  front->translation_map.begin()->first == seg_base)
-              << front->to_string();
+            check(front->translation_map.has_only(seg_base)) << front->to_string();
             for (auto idx : todo)
             {
-                s_inst[idx].address->segment->regions.clear();
-                s_inst[idx].address->segment->translation_map.clear();
-                s_inst[idx].address->segment->translation_map[seg_base] = {{}};
+                s_inst[idx].address()->segment_reg()->regions.clear();
+                s_inst[idx].address()->segment_reg()->translation_map.clear();
+                s_inst[idx].address()->segment_reg()->translation_map[seg_base] = {{}};
             }
         }
 
@@ -459,7 +463,7 @@ namespace circ
         bool try_populate_reg(shadowinst::Instruction &s_inst, const idx_vector_t &todo)
         {
             for (auto idx : todo)
-                if (!ifuzz::get_reg< I >(s_inst[idx]).has_value())
+                if (!ifuzz::get_reg< I >(s_inst[idx]))
                     return false;
             return try_populate_reg_< I >(s_inst, todo);
         }
@@ -469,8 +473,8 @@ namespace circ
         {
             for (auto idx : todo)
             {
-                auto addr = s_inst[idx].address;
-                if (!addr || !ifuzz::get_reg< I >(s_inst[idx]).has_value()) {
+                auto addr = s_inst[idx].address();
+                if (!addr || !ifuzz::get_reg< I >(s_inst[idx])) {
                     return false;
                 }
             }
@@ -586,7 +590,6 @@ namespace circ
             if (size == 2) {
                 // _DD_ -> DDD_
                 if (from != 0 && !original.regions.count(from - 1))
-                    //candidates.push_back(_dd_left(original, from));
                     try_emplace(_dd_left, from);
                 // _DD_ -> _DDD
                 if (from + size < rinst.bytes.size() * 8 && !original.regions.count(from + size))
@@ -596,7 +599,6 @@ namespace circ
             if (size == 1)
                 if (auto hole = original.get_hole())
                     try_emplace(_d_hole, *hole);
-            //candidates.push_back(_d_hole(original, *hole));
             return candidates;
         }
 
@@ -615,7 +617,7 @@ namespace circ
                                    const std::string &name,
                                    auto value)
         {
-            check(ifuzz::has_reg< I >(s_inst[idx]));
+            check(ifuzz::has_reg< I >(s_inst[idx])) << idx << " " << I;
             auto &self = *ifuzz::get_reg< I >(s_inst[idx]);
             self.translation_map[name].insert(value);
         }
@@ -649,9 +651,9 @@ namespace circ
         void consolidate_addr(shadowinst::Instruction &s_inst, const idx_vector_t &todo,
                               std::set< uint32_t > dirt)
         {
-            if (!s_inst[todo[0]].address)
+            if (!s_inst[todo[0]].address())
                 return;
-            auto flattened = s_inst[todo[0]].address->flatten_significant_regs();
+            auto flattened = s_inst[todo[0]].address()->flatten_significant_regs();
             for (auto from : dirt)
                 flattened.add(from, 1);
 
@@ -672,20 +674,24 @@ namespace circ
             auto n_s_inst = s_inst;
             for (auto idx : todo)
             {
-                n_s_inst[idx].address->base_reg = shadowinst::Reg(raw_candidate.regions);
-                n_s_inst[idx].address->index_reg = shadowinst::Reg(raw_candidate.regions);
+                check(n_s_inst[idx].address()->base_reg() &&
+                      n_s_inst[idx].address()->index_reg());
+                *n_s_inst[idx].address()->base_reg() = shadowinst::Reg(raw_candidate.regions);
+                *n_s_inst[idx].address()->index_reg() = shadowinst::Reg(raw_candidate.regions);
             }
 
             populate_whole_addr(n_s_inst, todo, raw_candidate);
 
             for (auto idx : todo) {
                 using namespace ifuzz;
-                check(n_s_inst[idx].address == n_s_inst[todo[0]].address);
+                check(shadowinst::compare(n_s_inst[idx].address(),
+                                          n_s_inst[todo[0]].address()));
             }
 
             for (auto idx : todo) {
-                auto &index = ifuzz::get_reg< ifuzz::sel::index >(n_s_inst[idx]);
-                if (index->translation_map.size() != 1)
+                auto index = ifuzz::get_reg< ifuzz::sel::index >(n_s_inst[idx]);
+                check(index) << "REFACTOR!";
+                if (index->translation_map.mappings_count() != 1)
                     break;
                 const auto &[key, _] = *index->translation_map.begin();
                 if (std::string_view(key).starts_with("__remill_zero_"))
@@ -696,10 +702,10 @@ namespace circ
             }
 
             for (auto idx : todo) {
-                if (!n_s_inst[idx].address->base_reg->translation_map.empty())
-                    s_inst[idx].address->base_reg = n_s_inst[idx].address->base_reg;
-                if (!n_s_inst[idx].address->index_reg->translation_map.empty())
-                    s_inst[idx].address->index_reg = n_s_inst[idx].address->index_reg;
+                if (!n_s_inst[idx].address()->base_reg()->translation_map.empty())
+                    *s_inst[idx].address()->base_reg() = *n_s_inst[idx].address()->base_reg();
+                if (!n_s_inst[idx].address()->index_reg()->translation_map.empty())
+                    *s_inst[idx].address()->index_reg() = *n_s_inst[idx].address()->index_reg();
             }
 
         }
@@ -740,9 +746,10 @@ namespace circ
                 return true;
             };
 
-            std::optional< shadowinst::Reg > chosen = s_reg;
+            check(s_reg) << "REFACTOR";
+            shadowinst::Reg chosen = *s_reg;
             auto grew = [&](auto &fst) {
-                return chosen->translation_map.size() < fst.translation_map.size();
+                return chosen.translation_map.mappings_count() < fst.translation_map.mappings_count();
             };
 
 
@@ -756,14 +763,17 @@ namespace circ
                 // Make copy, so populate family can be easily called.
                 auto n_s_inst = s_inst;
                 for (auto idx : todo)
-                    ifuzz::get_reg< I >(n_s_inst[idx]) = c;
+                {
+                    check( ifuzz::get_reg< I >(n_s_inst[idx]) ) << "REFACTOR";
+                    *ifuzz::get_reg< I >(n_s_inst[idx]) = c;
+                }
                 populate(n_s_inst, todo);
                 auto &repr = get_repr(n_s_inst);
                 if (has_only_singleton_mappings(repr) && grew(repr))
                     chosen = repr;
             }
 
-            if (chosen == s_reg) {
+            if (chosen == *s_reg) {
                 if (arch->address_size == 64)
                     log_kill() << "Reg enlargement heuristic did not choose any candidate!\n"
                         << rinst.Serialize() << "\n"
@@ -776,7 +786,8 @@ namespace circ
             }
 
             for (auto idx : todo) {
-                ifuzz::get_reg< I >(s_inst[idx]) = *chosen;
+                check(ifuzz::get_reg< I >(s_inst[idx])) << "REFACTOR";
+                *ifuzz::get_reg< I >(s_inst[idx]) = chosen;
             }
             return true;
         }
