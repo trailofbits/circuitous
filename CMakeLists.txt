@@ -15,6 +15,17 @@ include(cmake/prevent_in_source_builds.cmake)
 
 include(GNUInstallDirs)
 
+# check if circuitous is being used directly or via add_subdirectory,
+# but allow overriding
+if(NOT DEFINED CIRCUITOUS_MASTER_PROJECT)
+    if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
+        set(CIRCUITOUS_MASTER_PROJECT ON)
+    else()
+        set(CIRCUITOUS_MASTER_PROJECT OFF)
+    endif()
+endif()
+
+
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/settings.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake")
 
@@ -163,7 +174,88 @@ else()
   set(install_folder "${CMAKE_INSTALL_PREFIX}")
 endif()
 
-install(
-  TARGETS circuitous-lift circuitous-run
-  RUNTIME DESTINATION "${install_folder}/bin"
-)
+option(CIRCUITOUS_INSTALL "Generate the install target." ${CIRCUITOUS_MASTER_PROJECT})
+
+if (CIRCUITOUS_INSTALL)
+  set(CIRCUITOUS_CMAKE_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME})
+
+  set(CIRCUITOUS_INSTALL_TARGETS
+    # executables
+    circuitous-lift
+    circuitous-run
+    # libraries
+    circuitous_eqsat
+    circuitous_ir
+    circuitous_lifter
+    circuitous_printers
+    circuitous_settings
+    circuitous_transforms
+  )
+
+  set(CIRCUITOUS_EXPORT_NAME circuitousTargets)
+
+  install(TARGETS ${CIRCUITOUS_INSTALL_TARGETS}
+    EXPORT ${CIRCUITOUS_EXPORT_NAME}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      NAMELINK_SKIP
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gap/core
+  )
+
+  install(EXPORT ${CIRCUITOUS_EXPORT_NAME}
+    FILE ${CIRCUITOUS_EXPORT_NAME}.cmake
+    NAMESPACE gap::
+    DESTINATION ${CIRCUITOUS_CMAKE_INSTALL_DIR}
+  )
+
+  install(TARGETS ${CIRCUITOUS_INSTALL_TARGETS}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+      NAMELINK_ONLY
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/gap/core
+  )
+
+
+  #
+  # packaging support
+  #
+
+  set(CPACK_PACKAGE_VENDOR "Trail of Bits")
+  set(CPACK_PACKAGE_DESCRIPTION_SUMMARY
+    "A utility library to bridge llvm and mlir gaps."
+  )
+  set(CPACK_PACKAGE_VERSION_MAJOR ${CMAKE_PROJECT_VERSION_MAJOR})
+  set(CPACK_PACKAGE_VERSION_MINOR ${CMAKE_PROJECT_VERSION_MINOR})
+  set(CPACK_PACKAGE_VERSION_PATCH ${CMAKE_PROJECT_VERSION_PATCH})
+  set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE")
+  set(CPACK_RESOURCE_FILE_README "${CMAKE_CURRENT_SOURCE_DIR}/README.md")
+
+  include(CPack)
+
+  set(CIRCUITOUS_CONFIG_NAME "${PROJECT_NAME}Config")
+  set(CIRCUITOUS_PACKAGE_CONFIG_FILE "${CIRCUITOUS_CONFIG_NAME}.cmake")
+  set(CIRCUITOUS_PACKAGE_CONFIG_VERSION_FILE "${CIRCUITOUS_CONFIG_NAME}Version.cmake")
+
+  include(CMakePackageConfigHelpers)
+
+  configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${CIRCUITOUS_CONFIG_NAME}.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/${CIRCUITOUS_PACKAGE_CONFIG_FILE}"
+    INSTALL_DESTINATION ${CIRCUITOUS_CMAKE_INSTALL_DIR}
+  )
+
+  write_basic_package_version_file(
+    ${CIRCUITOUS_PACKAGE_CONFIG_VERSION_FILE}
+    VERSION ${PACKAGE_VERSION}
+    COMPATIBILITY SameMajorVersion
+  )
+
+  install(FILES
+    "${CMAKE_CURRENT_BINARY_DIR}/${CIRCUITOUS_PACKAGE_CONFIG_FILE}"
+    "${CMAKE_CURRENT_BINARY_DIR}/${CIRCUITOUS_PACKAGE_CONFIG_VERSION_FILE}"
+    DESTINATION ${CIRCUITOUS_CMAKE_INSTALL_DIR}
+  )
+
+endif()
