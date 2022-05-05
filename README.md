@@ -52,3 +52,12 @@ Option `--reduce_imms` will run the (for now) experimental reduction of immediat
 ## Tests
 
 See `test/README.md`
+
+## Distribution and Licensing
+
+The views, opinions, and/or findings expressed are those of the author(s) and
+should not be interpreted as representing the official views or policies of the
+Department of Defense or the U.S. Government.
+
+*circuitous* is licensed under the GNU AGPLv3 License. A copy of the terms can
+be found in the [LICENSE](./LICENSE) file.
