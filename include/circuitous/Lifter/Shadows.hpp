@@ -27,31 +27,6 @@
 namespace circ::shadowinst
 {
 
-    static inline std::string to_binary(const std::string &bytes)
-    {
-        std::stringstream ss;
-        for (char byte_ : bytes)
-        {
-            auto byte = static_cast< uint8_t >(byte_);
-            for (int b = 7; b >= 0; --b)
-                ss << static_cast< uint16_t >(byte >> b & 1u);
-        }
-        return ss.str();
-    }
-
-    static inline std::string to_hex(const std::string &bytes)
-    {
-        std::stringstream ss;
-        for (auto byte : bytes) {
-            ss << std::hex;
-            if (static_cast<uint8_t>(byte) < 16)
-                ss << "0";
-
-            ss << static_cast<unsigned>(static_cast<uint8_t>(byte));
-        }
-        return ss.str();
-    }
-
     // This describes a region of decoded bytes where
     // it makes sense to talk about an "entity" -- register, immediate operand,
     // etc. While it will usually be one contignous entry, we don't need to constraint
@@ -60,29 +35,8 @@ namespace circ::shadowinst
     using region_t = std::map<uint64_t, uint64_t>;
     using maybe_region_t = std::optional<region_t>;
 
-    static inline region_t Invert(region_t what, uint64_t lenght)
-    {
-        region_t out;
-        uint64_t current = 0;
-        for (auto &[from, size] : what) {
-            if (current != from)
-                out[current] = from - current;
-
-            current = from + size;
-        }
-
-        if (current != lenght)
-            out[current] = lenght - current;
-        return out;
-    }
-
-    static inline region_t FromToFormat(const region_t &region)
-    {
-        region_t out;
-        for (auto &[from, size] : region)
-            out[from] = from + size;
-        return out;
-    }
+    region_t Invert(region_t what, uint64_t lenght);
+    region_t FromToFormat(const region_t &region);
 
     using bits_t = std::vector< bool >;
 
@@ -453,25 +407,10 @@ namespace circ::shadowinst
         auto &tm() { return translation_map; }
         const auto &tm() const { return translation_map; }
 
-        std::string to_string(std::size_t indent=0, bool print_header=true) const
-        {
-            std::stringstream ss;
-            std::string _indent(indent * 4, ' ');
-
-            if (print_header)
-                ss << "Reg" << std::endl;
-            ss << this->has_regions::to_string(indent);
-            ss << _indent << "where mapping" << std::endl;
-            ss << translation_map.to_string(indent + 1);
-
-            return ss.str();
-        }
+        std::string to_string(std::size_t indent=0, bool print_header=true) const;
 
         // REFACTOR(lukas): Remove.
-        bool is_dirty(const reg_t &reg) const
-        {
-            return dirty.count(reg);
-        }
+        bool is_dirty(const reg_t &reg) const { return dirty.count(reg); }
 
         void mark_dirty(const reg_t &reg)
         {
@@ -486,17 +425,7 @@ namespace circ::shadowinst
         using has_regions::has_regions;
 
         void for_each_present(auto &cb) const { cb(*this); }
-        std::string to_string(std::size_t indent=0, bool print_header=true) const
-        {
-            std::stringstream ss;
-            std::string _indent(indent * 4, ' ');
-
-            if (print_header)
-                ss << "Immediate" << std::endl;
-            ss << this->has_regions::to_string(indent);
-
-            return ss.str();
-        }
+        std::string to_string(std::size_t indent=0, bool print_header=true) const;
     };
 
     struct Address
@@ -590,56 +519,10 @@ namespace circ::shadowinst
             _for_each_present(*this, std::forward<C>(c));
         }
 
-        bool empty() const
-        {
-            // REFACTOR(lukas): Think of api.
-            return has_regions::is_empty(base_reg()) &&
-                   has_regions::is_empty(index_reg()) &&
-                   has_regions::is_empty(scale()) &&
-                   has_regions::is_empty(displacement());
-        }
-
-        has_regions flatten_significant_regs() const
-        {
-            has_regions out;
-            auto exec = [&](const auto &other) { out.add(other); };
-            auto invoke = [&](const auto &on_what) { if (on_what) exec(*on_what); };
-            invoke(base_reg());
-            invoke(index_reg());
-            return out;
-        }
-
-        // REFACTOR(lukas): Copy pasta.
-        bool present(std::size_t idx) const
-        {
-            bool out = false;
-            auto collect = [&](const auto &op) { out |= op.present(idx); };
-            for_each_present(collect);
-            return out;
-        }
-
-        std::string to_string(std::size_t indent) const
-        {
-            auto make_indent = [&](auto count) { return std::string(count * 4, ' '); };
-
-            std::stringstream ss;
-            auto format = [&](const auto &what, const std::string &prefix) {
-                ss << make_indent(indent) << "* " << prefix << std::endl;
-                if (what)
-                    ss << what->to_string(indent + 1, false);
-                else
-                    ss << make_indent(indent + 1u) << "( not set )\n";
-            };
-
-            ss << "Address\n";
-            format(base_reg(), "Base");
-            format(index_reg(), "Index");
-            format(segment_reg(), "Segment");
-            format(scale(), "Scale");
-            format(displacement(), "Displacement");
-
-            return ss.str();
-        }
+        bool empty() const;
+        has_regions flatten_significant_regs() const;
+        bool present(std::size_t idx) const;
+        std::string to_string(std::size_t indent) const;
     };
 
     template< typename T >
@@ -798,47 +681,8 @@ namespace circ::shadowinst
                 op.for_each_present(cb);
         }
 
-        // Cannot have templated code in function local `struct` defnitions.
-        struct assign_
-        {
-            Instruction &self;
-            void operator()(Reg &what)
-            {
-                check(!what.selector);
-                what.selector = self.selectors.size();
-                self.selectors.push_back(&what);
-            }
-            void operator()(Address &addr)
-            {
-                addr.for_each_present(*this);
-            }
-            // Fallthrough
-            void operator()(auto &&) {}
-        };
-
-        void distribute_selectors()
-        {
-            assign_ assign{ *this };
-            for (auto &op : operands)
-                op.visit(assign);
-
-        }
-
-        bool operator==(const Instruction &o) const
-        {
-            if (o.operands != operands)
-                return false;
-
-            auto cmp_op_ctx = [](const operand_ctx_t &ctx, const operand_ctx_t &octx) {
-                return std::get< 0 >(ctx) == std::get< 0 >(octx);
-            };
-
-            auto cmp_deps = [&](const auto &cluster, const auto &ocluster) {
-                return std::equal(cluster.begin(), cluster.end(), ocluster.begin(), cmp_op_ctx);
-            };
-
-            return std::equal(deps.begin(), deps.end(), o.deps.begin(), cmp_deps);
-        }
+        void distribute_selectors();
+        bool operator==(const Instruction &o) const;
 
         bool present(std::size_t idx) const
         {
@@ -849,15 +693,8 @@ namespace circ::shadowinst
             return false;
         }
 
-        bool validate()
-        {
-            uint32_t dirty_count = 0;
-            for (const auto &op : operands)
-              if (op.reg() && !op.reg()->dirty.empty())
-                ++dirty_count;
-
-            return dirty_count <= 1;
-        }
+        // REFACTOR(lukas): Remove when removing whole `dirty` mechanism.
+        bool validate() const;
 
         template< typename T, typename ...Args >
         auto &Add(Args && ... args)
@@ -872,23 +709,7 @@ namespace circ::shadowinst
             return operands[idx];
         }
 
-        region_t IdentifiedRegions() const
-        {
-            region_t out;
-            auto collect = [&](const has_regions &x)
-            {
-                for (const auto &[from, size] : x.regions)
-                {
-                    dcheck(!out.count(from) || out[from] == size, [](){
-                        return "Inconsistent regions."; }
-                    );
-                    out[from] = size;
-                }
-            };
-
-            for_each_present(collect);
-            return out;
-        }
+        region_t IdentifiedRegions() const;
 
         // We need lenght of the entire region to be able to calculate last region
         region_t UnknownRegions(uint64_t lenght) const
@@ -896,44 +717,10 @@ namespace circ::shadowinst
             return Invert(IdentifiedRegions(), lenght);
         }
 
-        std::string to_string() const
-        {
-            std::stringstream ss;
-            ss << "Shadowinst:" << std::endl;
+        std::string to_string() const;
 
-            for (const auto &cluster : deps) {
-                ss << "Deps cluster: [ ";
-                for (const auto &[idx, _] : cluster)
-                    ss << idx << " ";
-                ss << "]" << std::endl;
-            }
-
-            for (const auto &dirts : dirt)
-            {
-                ss << "dirt( ";
-                for (auto d : dirts)
-                    ss << d << " ";
-                ss << ")" << std::endl;
-            }
-
-            for (std::size_t i = 0; i < operands.size(); ++i)
-            {
-                ss << "OP: " << i << ": ";
-                ss << operands[i].to_string(1);
-            }
-            ss << "(print done)" << std::endl;
-            return ss.str();
-        }
     };
 
-    static inline std::string remove_shadowed(const Instruction &s_inst,
-                                              const std::string &bytes)
-    {
-        std::string out;
-        for (std::size_t i = 0; i < bytes.size(); ++i)
-            if (s_inst.present(i))
-                out += bytes[bytes.size() - 1 - i];
-        return out;
-    }
+    std::string remove_shadowed(const Instruction &s_inst, const std::string &bytes);
 
 } // namespace circ::shadowinst
