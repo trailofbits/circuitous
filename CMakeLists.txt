@@ -4,7 +4,18 @@ cmake_minimum_required(VERSION 3.14)
 include(cmake/vcpkg_helper.cmake)
 find_package(remill COMPONENTS VCPKG_DEPS QUIET)
 
-project(circuitous
+# Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
+if (POLICY CMP0025)
+  cmake_policy(SET CMP0025 NEW)
+endif ()
+
+if (POLICY CMP0116)
+  cmake_policy(SET CMP0116 NEW)
+endif ()
+
+list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" )
+
+project( circuitous
   LANGUAGES C CXX ASM
   VERSION 0.1.0
   DESCRIPTION "Binary to circuit lifter tool"
