@@ -1,6 +1,5 @@
 # Copyright (c) 2022 Trail of Bits, Inc.
 
-add_subdirectory( costgen )
 add_subdirectory( lift )
 add_subdirectory( run )
 add_subdirectory( seed )
