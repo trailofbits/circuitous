@@ -84,9 +84,7 @@ enable_sanitizers( circuitous_settings )
 
 add_library( cicuitous_dependencies INTERFACE )
 target_link_libraries( cicuitous_dependencies INTERFACE
-  remill_settings
   remill
-  gflags
   gap::gap
 )
 
