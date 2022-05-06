@@ -47,9 +47,7 @@ if(NOT DEFINED CIRCUITOUS_MASTER_PROJECT)
     endif()
 endif()
 
-
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake")
-
+include( find_clang )
 FindAndSelectClangCompiler()
 
 #
@@ -59,34 +57,43 @@ find_package(remill CONFIG REQUIRED)
 find_package(gflags CONFIG REQUIRED)
 
 #
+# standard compilation options
+#
+add_library( circuitous_project_options INTERFACE )
+
+#
 # target settings
 #
+add_library( circuitous_settings INTERFACE )
+target_compile_features( circuitous_settings INTERFACE cxx_std_20 )
 
-add_library(circuitous_settings INTERFACE)
+target_include_directories(circuitous_settings INTERFACE
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
 
-include(cmake/compiler_warnings.cmake)
-set_project_warnings(circuitous_settings)
+# standard compiler warnings
+include( compiler_warnings )
+set_project_warnings( circuitous_settings )
 
 # sanitizer options if supported by compiler
-include(cmake/sanitizers.cmake)
-enable_sanitizers(circuitous_settings)
+include( sanitizers )
+enable_sanitizers( circuitous_settings )
 
-# allow for static analysis options
-include(cmake/static_analyzers.cmake)
+# sanitizer options if supported by compiler
+include( sanitizers )
+enable_sanitizers( circuitous_settings )
 
-# test options
-option(ENABLE_TESTING "Enable Test Builds" ON)
-
-target_link_libraries(circuitous_settings INTERFACE
+add_library( cicuitous_dependencies INTERFACE )
+target_link_libraries( cicuitous_dependencies INTERFACE
   remill_settings
   remill
   gflags
   gap::gap
 )
 
-target_include_directories(circuitous_settings INTERFACE
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
+target_link_libraries( circuitous_settings INTERFACE
+  cicuitous_dependencies
 )
 
 #
@@ -178,8 +185,9 @@ target_link_libraries(circuitous-run PUBLIC
 #
 # tests
 #
+option( ENABLE_TESTING "Enable Test Builds" ON )
 
-if (ENABLE_TESTING)
+if ( ENABLE_TESTING )
   enable_testing()
   add_subdirectory(test)
 endif()
@@ -204,6 +212,7 @@ if (CIRCUITOUS_INSTALL)
     circuitous-lift
     circuitous-run
     # libraries
+    cicuitous_dependencies
     circuitous_eqsat
     circuitous_ir
     circuitous_lifter
