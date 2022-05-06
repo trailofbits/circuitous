@@ -4,7 +4,7 @@
 
 add_subdirectory(lib)
 
-add_executable(test_circuitous
+add_executable( test-circuitous
   main.cpp
 
   ADT/UnionFind.cpp
@@ -14,15 +14,15 @@ add_executable(test_circuitous
   Transforms/EqualitySaturation.cpp
 )
 
-target_link_libraries(test_circuitous
+target_link_libraries( test-circuitous
   PRIVATE
-    circuitous_settings
-    thirdparty_doctest
-    test_support
+    circuitous::settings
+    doctest::doctest
+    circuitous::testing
 )
 
 add_test(
-  NAME test_circuitous
-  COMMAND "$<TARGET_FILE:test_circuitous>"
+  NAME test-circuitous
+  COMMAND "$<TARGET_FILE:test-circuitous>"
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 )
