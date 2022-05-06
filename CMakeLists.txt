@@ -21,6 +21,9 @@ set_property( GLOBAL PROPERTY USE_FOLDERS ON )
 # prevent in source builds check
 include( prevent_in_source_builds )
 
+# general project options
+include( project_settings )
+
 include(GNUInstallDirs)
 
 # check if circuitous is being used directly or via add_subdirectory,
@@ -34,7 +37,6 @@ if(NOT DEFINED CIRCUITOUS_MASTER_PROJECT)
 endif()
 
 
-include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/settings.cmake")
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/utils.cmake")
 
 FindAndSelectClangCompiler()
