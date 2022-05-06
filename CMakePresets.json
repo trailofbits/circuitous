@@ -6,33 +6,64 @@
       "patch": 0
   },
   "configurePresets": [
-      {
-          "name": "ninja-multi-osx-cxx-common",
-          "displayName": "Ninja Multi-Config OSX with cxx-common",
-          "description": "Configure with cxx-common toolchain for x64-osx",
-          "binaryDir": "${sourceDir}/builds/${presetName}",
-          "generator": "Ninja Multi-Config",
-          "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-          "installDir": "${sourceDir}/install",
-          "cacheVariables": {
-              "CMAKE_CONFIGURATION_TYPES": "Release;RelWithDebInfo;Debug",
-              "VCPKG_TARGET_TRIPLET": "x64-osx",
-              "VCPKG_HOST_TRIPLET": "x64-osx"
-          }
-      }
+    {
+        "name": "ninja-multi-cxx-common",
+        "hidden": true,
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "generator": "Ninja Multi-Config",
+        "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "installDir": "${sourceDir}/install",
+        "cacheVariables": {
+            "CMAKE_CONFIGURATION_TYPES": "Release;RelWithDebInfo;Debug",
+            "VCPKG_OVERLAY_TRIPLETS": "$env{VCPKG_ROOT}/../triplets",
+            "VCPKG_OVERLAY_PORTS": "$env{VCPKG_ROOT}/../ports"
+        }
+    },
+    {
+        "name": "ninja-multi-osx-cxx-common",
+        "inherits": "ninja-multi-cxx-common",
+        "displayName": "Ninja Multi-Config osx with cxx-common",
+        "description": "Configure with cxx-common toolchain for x64-osx",
+        "cacheVariables": {
+            "VCPKG_TARGET_TRIPLET": "x64-osx",
+            "VCPKG_HOST_TRIPLET": "x64-osx"
+        }
+    },
+    {
+        "name": "ninja-multi-linux-cxx-common",
+        "inherits": "ninja-multi-cxx-common",
+        "displayName": "Ninja Multi-Config linux with cxx-common",
+        "description": "Configure with cxx-common toolchain for x64-linux",
+        "cacheVariables": {
+            "VCPKG_TARGET_TRIPLET": "x64-linux",
+            "VCPKG_HOST_TRIPLET": "x64-linux"
+        }
+    }
   ],
   "buildPresets": [
-      {
-          "name": "ninja-multi-cxx-common-release",
-          "configurePreset": "ninja-multi-osx-cxx-common",
-          "displayName": "Build osx-release with cxx-common",
-          "configuration": "Release"
-      },
-      {
-          "name": "ninja-multi-cxx-common-debug",
-          "configurePreset": "ninja-multi-osx-cxx-common",
-          "displayName": "Build osx-debug with cxx-common",
-          "configuration": "Debug"
-      }
+    {
+        "name": "ninja-multi-cxx-common-release",
+        "configurePreset": "ninja-multi-osx-cxx-common",
+        "displayName": "Build osx-release with cxx-common",
+        "configuration": "Release"
+    },
+    {
+        "name": "ninja-multi-cxx-common-debug",
+        "configurePreset": "ninja-multi-osx-cxx-common",
+        "displayName": "Build osx-debug with cxx-common",
+        "configuration": "Debug"
+    },
+    {
+        "name": "ninja-multi-cxx-common-release",
+        "configurePreset": "ninja-multi-linux-cxx-common",
+        "displayName": "Build linux-release with cxx-common",
+        "configuration": "Release"
+    },
+    {
+        "name": "ninja-multi-cxx-common-debug",
+        "configurePreset": "ninja-multi-linux-cxx-common",
+        "displayName": "Build linux-debug with cxx-common",
+        "configuration": "Debug"
+    }
   ]
 }
