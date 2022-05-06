@@ -2,6 +2,8 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 #
 
+find_package(doctest CONFIG REQUIRED)
+
 add_subdirectory(lib)
 
 add_executable( test-circuitous
