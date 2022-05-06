@@ -49,6 +49,14 @@ include( find_clang )
 FindAndSelectClangCompiler()
 
 #
+# CCACHE
+#
+find_program( CCACHE_PROGRAM ccache )
+if ( CCACHE_PROGRAM )
+  set_property( GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${CCACHE_PROGRAM}" )
+endif ()
+
+#
 # libraries
 #
 find_package( remill CONFIG REQUIRED )
