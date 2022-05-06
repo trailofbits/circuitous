@@ -18,8 +18,8 @@ add_executable( test-circuitous
 
 target_link_libraries( test-circuitous
   PRIVATE
-    circuitous::settings
     doctest::doctest
+    circuitous::settings
     circuitous::testing
 )
 
