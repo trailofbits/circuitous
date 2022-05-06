@@ -3,6 +3,9 @@
   "version-string": "latest",
   "dependencies": [
     "doctest",
-    "spdlog"
+    "spdlog",
+    "glog",
+    "xed",
+    "z3"
   ]
 }
