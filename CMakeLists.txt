@@ -1,31 +1,10 @@
 # Copyright (c) 2020-2021 Trail of Bits, Inc.
 cmake_minimum_required(VERSION 3.14)
 
-include(cmake/vcpkg_helper.cmake)
-find_package(remill COMPONENTS VCPKG_DEPS QUIET)
-
-# Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
-if (POLICY CMP0025)
-  cmake_policy(SET CMP0025 NEW)
-endif ()
-
-if (POLICY CMP0116)
-  cmake_policy(SET CMP0116 NEW)
-endif ()
-
-list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" )
-
-project( circuitous
-  LANGUAGES C CXX ASM
-  VERSION 0.1.0
-  DESCRIPTION "Binary to circuit lifter tool"
-  HOMEPAGE_URL "https://github.com/trailofbits/circuitous.git"
-)
-
 #
 # Use gap library
 #
-find_package(gap CONFIG REQUIRED)
+find_package( gap CONFIG REQUIRED )
 
 set_property( GLOBAL PROPERTY USE_FOLDERS ON )
 
@@ -37,13 +16,34 @@ include( project_settings )
 
 # check if circuitous is being used directly or via add_subdirectory,
 # but allow overriding
-if(NOT DEFINED CIRCUITOUS_MASTER_PROJECT)
-    if(CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR)
-        set(CIRCUITOUS_MASTER_PROJECT ON)
+if( NOT DEFINED CIRCUITOUS_MASTER_PROJECT )
+    if( CMAKE_CURRENT_SOURCE_DIR STREQUAL CMAKE_SOURCE_DIR )
+        set( CIRCUITOUS_MASTER_PROJECT ON )
     else()
-        set(CIRCUITOUS_MASTER_PROJECT OFF)
+        set( CIRCUITOUS_MASTER_PROJECT OFF )
     endif()
 endif()
+
+list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" )
+
+include( vcpkg_setup )
+find_package( remill COMPONENTS VCPKG_DEPS QUIET )
+
+# Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
+if ( POLICY CMP0025 )
+  cmake_policy( SET CMP0025 NEW )
+endif ()
+
+if ( POLICY CMP0116 )
+  cmake_policy( SET CMP0116 NEW )
+endif ()
+
+project( circuitous
+  LANGUAGES C CXX ASM
+  VERSION 0.1.0
+  DESCRIPTION "Binary to circuit lifter tool"
+  HOMEPAGE_URL "https://github.com/trailofbits/circuitous.git"
+)
 
 include( find_clang )
 FindAndSelectClangCompiler()
@@ -51,8 +51,8 @@ FindAndSelectClangCompiler()
 #
 # libraries
 #
-find_package(remill CONFIG REQUIRED)
-find_package(gflags CONFIG REQUIRED)
+find_package( remill CONFIG REQUIRED )
+find_package( gflags CONFIG REQUIRED )
 
 #
 # standard compilation options
@@ -65,7 +65,7 @@ add_library( circuitous_project_options INTERFACE )
 add_library( circuitous_settings INTERFACE )
 target_compile_features( circuitous_settings INTERFACE cxx_std_20 )
 
-target_include_directories(circuitous_settings INTERFACE
+target_include_directories( circuitous_settings INTERFACE
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
@@ -99,8 +99,8 @@ include( add_circuitous_target )
 #
 # install settings
 #
-option(CIRCUITOUS_INSTALL "Generate the install target." ${CIRCUITOUS_MASTER_PROJECT})
-include(GNUInstallDirs)
+option( CIRCUITOUS_INSTALL "Generate the install target." ${CIRCUITOUS_MASTER_PROJECT} )
+include( GNUInstallDirs )
 
 #
 # library targets
@@ -119,5 +119,5 @@ option( ENABLE_TESTING "Enable Test Builds" ON )
 
 if ( ENABLE_TESTING )
   enable_testing()
-  add_subdirectory(test)
+  add_subdirectory( test )
 endif()
