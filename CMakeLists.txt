@@ -11,7 +11,15 @@ project(circuitous
   HOMEPAGE_URL "https://github.com/trailofbits/circuitous.git"
 )
 
-include(cmake/prevent_in_source_builds.cmake)
+#
+# Use gap library
+#
+find_package(gap CONFIG REQUIRED)
+
+set_property( GLOBAL PROPERTY USE_FOLDERS ON )
+
+# prevent in source builds check
+include( prevent_in_source_builds )
 
 include(GNUInstallDirs)
 
@@ -36,7 +44,6 @@ FindAndSelectClangCompiler()
 #
 find_package(remill CONFIG REQUIRED)
 find_package(gflags CONFIG REQUIRED)
-find_package(gap CONFIG REQUIRED)
 
 #
 # target settings
