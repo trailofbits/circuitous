@@ -16,7 +16,15 @@ function( add_circuitous_library name )
       ${PARSED_ARGS_LINK_LIBS}
   )
 
+  # setup namespaced alais
   add_library( circuitous::${name} ALIAS ${library_name} )
+
+  # install target
+  if ( CIRCUITOUS_INSTALL )
+    get_property( targets GLOBAL PROPERTY CIRCUITOUS_INSTALL_TARGETS )
+    set( targets "${library_name};${targets}")
+    set_property( GLOBAL PROPERTY CIRCUITOUS_INSTALL_TARGETS ${targets} )
+  endif()
 endfunction()
 
 function( add_circuitous_executable name )
@@ -33,5 +41,11 @@ function( add_circuitous_executable name )
       ${PARSED_ARGS_LINK_LIBS}
   )
 
+  # install target
+  if ( CIRCUITOUS_INSTALL )
+    get_property( targets GLOBAL PROPERTY CIRCUITOUS_INSTALL_TARGETS )
+    set( targets "${executable_name};${targets}")
+    set_property( GLOBAL PROPERTY CIRCUITOUS_INSTALL_TARGETS ${targets} )
+  endif()
 endfunction()
 
