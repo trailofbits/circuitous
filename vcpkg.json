@@ -6,6 +6,7 @@
     "spdlog",
     "glog",
     "xed",
-    "z3"
+    "z3",
+    "llvm-14"
   ]
 }
