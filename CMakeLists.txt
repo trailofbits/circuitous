@@ -1,5 +1,5 @@
 # Copyright (c) 2020-2021 Trail of Bits, Inc.
-cmake_minimum_required( VERSION 3.21 )
+cmake_minimum_required( VERSION 3.23 )
 
 #
 # Use gap library

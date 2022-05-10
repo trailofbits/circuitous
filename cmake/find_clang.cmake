@@ -1,5 +1,3 @@
-cmake_minimum_required(VERSION 3.2)
-
 function(FindAndSelectClangCompiler)
   if(DEFINED ENV{LLVM_INSTALL_PREFIX})
     set(LLVM_INSTALL_PREFIX $ENV{LLVM_INSTALL_PREFIX} PARENT_SCOPE)
