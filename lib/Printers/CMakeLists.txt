@@ -2,6 +2,10 @@
 
 find_package(Z3 CONFIG REQUIRED 4.8.16)
 
+add_headers( Printers CIRCUITOUS_PRINTERS_HEADERS
+  Verilog.hpp
+)
+
 add_circuitous_library( printers
   SOURCES
     DOT.cpp
@@ -12,4 +16,6 @@ add_circuitous_library( printers
     Topology.cpp
   LINK_LIBS
     z3::libz3
+  HEADERS
+    ${CIRCUITOUS_PRINTERS_HEADERS}
 )

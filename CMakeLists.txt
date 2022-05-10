@@ -78,6 +78,16 @@ target_include_directories( circuitous_settings INTERFACE
   $<INSTALL_INTERFACE:include>
 )
 
+# adds header paths of library to list named var
+function(add_headers lib var)
+  set(headers ${${var}})
+  foreach (header ${ARGN})
+    set(headers ${headers} ${PROJECT_SOURCE_DIR}/include/circuitous/${lib}/${header})
+  endforeach()
+  set(${var} ${headers} PARENT_SCOPE)
+endfunction()
+
+
 # standard compiler warnings
 include( compiler_warnings )
 set_project_warnings( circuitous_settings )
@@ -163,6 +173,7 @@ if (CIRCUITOUS_INSTALL)
       NAMELINK_SKIP
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/circuitous
+    FILE_SET HEADERS
   )
 
   install(EXPORT ${CIRCUITOUS_EXPORT_NAME}

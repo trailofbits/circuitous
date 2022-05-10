@@ -1,6 +1,11 @@
 # Copyright (c) 2022 Trail of Bits, Inc.
 
+add_subdirectory( ADT )
+add_subdirectory( Dbg )
+add_subdirectory( Fuzz )
 add_subdirectory( IR )
 add_subdirectory( Lifter )
 add_subdirectory( Printers )
+add_subdirectory( Support )
 add_subdirectory( Transforms )
+add_subdirectory( Util )
