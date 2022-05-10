@@ -2,7 +2,7 @@
  * Copyright (c) 2021 Trail of Bits, Inc.
  */
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/IR.hpp>
 #include <circuitous/Printers.h>
 #include <circuitous/Transforms.h>
 #include <llvm/ADT/StringRef.h>

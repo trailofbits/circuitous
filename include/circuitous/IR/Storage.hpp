@@ -5,7 +5,7 @@
 #pragma once
 
 #include <circuitous/Util/TypeList.hpp>
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/IR.hpp>
 #include <circuitous/Support/Check.hpp>
 
 namespace circ

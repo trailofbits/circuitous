@@ -13,7 +13,7 @@
 #include <circuitous/Run/Trace.hpp>
 
 #include <circuitous/IR/Verify.hpp>
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/IR.hpp>
 #include <circuitous/Printers.h>
 
 #include <fstream>

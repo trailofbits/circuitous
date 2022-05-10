@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
 
 #include <circuitous/Lifter/BaseLifter.hpp>
