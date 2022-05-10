@@ -20,7 +20,7 @@ CIRCUITOUS_RELAX_WARNINGS
 #include <z3++.h>
 CIRCUITOUS_UNRELAX_WARNINGS
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Storage.hpp>
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Intrinsics.hpp>

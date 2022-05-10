@@ -9,9 +9,9 @@
 #include <doctest/doctest.h>
 #include <support/EGraph.hpp>
 #include <circuitous/Transforms/Pattern.hpp>
+#include <circuitous/IR/IR.hpp>
 #include <optional>
 #include <variant>
-#include "circuitous/IR/IR.h"
 
 namespace circ::eqsat {
 

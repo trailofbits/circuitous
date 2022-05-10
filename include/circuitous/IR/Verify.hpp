@@ -9,7 +9,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Metadata.hpp>
 #include <circuitous/IR/Shapes.hpp>
 #include <circuitous/Support/Check.hpp>

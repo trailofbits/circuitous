@@ -2,7 +2,7 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
-#include <circuitous/IR/IR.h>
+#include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Verify.hpp>
 #include <circuitous/IR/SMT.hpp>
 #include <circuitous/Printers.h>
