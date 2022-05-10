@@ -11,12 +11,12 @@
         "hidden": true,
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "generator": "Ninja Multi-Config",
-        "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+        "toolchainFile": "$env{CXX_COMMON_ROOT}/vcpkg/scripts/buildsystems/vcpkg.cmake",
         "installDir": "${sourceDir}/install",
         "cacheVariables": {
             "CMAKE_CONFIGURATION_TYPES": "Release;RelWithDebInfo;Debug",
-            "VCPKG_OVERLAY_TRIPLETS": "$env{VCPKG_ROOT}/../triplets",
-            "VCPKG_OVERLAY_PORTS": "$env{VCPKG_ROOT}/../ports"
+            "VCPKG_OVERLAY_TRIPLETS": "$env{CXX_COMMON_ROOT}/triplets",
+            "VCPKG_OVERLAY_PORTS": "$env{CXX_COMMON_ROOT}/ports"
         }
     },
     {
@@ -42,25 +42,25 @@
   ],
   "buildPresets": [
     {
-        "name": "ninja-multi-cxx-common-release",
+        "name": "ninja-osx-cxx-common-rel",
         "configurePreset": "ninja-multi-osx-cxx-common",
         "displayName": "Build osx-release with cxx-common",
         "configuration": "Release"
     },
     {
-        "name": "ninja-multi-cxx-common-debug",
+        "name": "ninja-osx-cxx-common-deb",
         "configurePreset": "ninja-multi-osx-cxx-common",
         "displayName": "Build osx-debug with cxx-common",
         "configuration": "Debug"
     },
     {
-        "name": "ninja-multi-cxx-common-release",
+        "name": "ninja-linux-cxx-common-rel",
         "configurePreset": "ninja-multi-linux-cxx-common",
         "displayName": "Build linux-release with cxx-common",
         "configuration": "Release"
     },
     {
-        "name": "ninja-multi-cxx-common-debug",
+        "name": "ninja-linux-cxx-common-deb",
         "configurePreset": "ninja-multi-linux-cxx-common",
         "displayName": "Build linux-debug with cxx-common",
         "configuration": "Debug"
