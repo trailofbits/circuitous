@@ -12,7 +12,7 @@
 #include <circuitous/Lifter/Flatten.hpp>
 #include <circuitous/Fuzz/InstructionFuzzer.hpp>
 
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/LegacyPassManager.h>

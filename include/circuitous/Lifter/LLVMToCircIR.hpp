@@ -4,7 +4,7 @@
 
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/Lifter/Context.hpp>
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/Module.h>

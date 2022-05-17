@@ -11,7 +11,7 @@
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Util/ConstExprVector.hpp>
 #include <circuitous/Util/FixedString.hpp>
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Util/Overloads.hpp>
 #include <circuitous/Util/Parser.hpp>
 #include <circuitous/Util/StrongType.hpp>

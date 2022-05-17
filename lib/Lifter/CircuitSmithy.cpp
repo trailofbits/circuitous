@@ -2,7 +2,7 @@
  * Copyright (c) 2021 Trail of Bits, Inc.
  */
 
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/Support/raw_os_ostream.h>

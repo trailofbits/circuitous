@@ -5,7 +5,7 @@
 #include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Memory.hpp>
 
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Check.hpp>
 
 

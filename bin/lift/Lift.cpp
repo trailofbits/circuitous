@@ -10,7 +10,7 @@
 #include <circuitous/IR/Cost.hpp>
 
 #include <circuitous/Printers/Verilog.hpp>
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Util/CmdParser.hpp>
 
 #include <circuitous/Support/Ciff.hpp>

@@ -13,7 +13,7 @@
 #include <remill/BC/Util.h>
 #include <remill/Arch/Arch.h>
 
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/Instructions.h>

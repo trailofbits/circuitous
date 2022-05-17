@@ -11,11 +11,10 @@
 
 #include <circuitous/Run/Trace.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
-#include <circuitous/Util/Logging.hpp>
 
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/ADT/StringRef.h>

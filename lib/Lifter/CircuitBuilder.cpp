@@ -17,7 +17,7 @@
 #include <circuitous/IR/Lifter.hpp>
 
 #include <circuitous/Support/Log.hpp>
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Check.hpp>
 
 #include <remill/BC/Compat/CallSite.h>

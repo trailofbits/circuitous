@@ -7,7 +7,6 @@
 #include <circuitous/Lifter/Context.hpp>
 
 #include <circuitous/Support/Check.hpp>
-#include <circuitous/Util/Logging.hpp>
 
 namespace circ
 {

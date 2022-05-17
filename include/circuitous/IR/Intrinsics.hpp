@@ -7,7 +7,7 @@
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/Util/LLVMUtil.hpp>
 
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/AbstractCallSite.h>
