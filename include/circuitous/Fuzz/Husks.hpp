@@ -183,9 +183,10 @@ namespace circ
                     const rops_map_t &group, const bits_t &husk_bits)
         {
             s_inst.deps.push_back({});
+            shadowinst::ordered_bits_t obits(husk_bits, fuzzer.rinst_bitsize());
             for (auto &[i, op] : group)
             {
-                s_inst.deps.back().emplace_back(i, &s_inst.Replace(i, op->type, husk_bits));
+                s_inst.deps.back().emplace_back(i, &s_inst.Replace(i, op->type, obits));
 
                 if (op->type == remill::Operand::Type::kTypeAddress)
                     fuzzer.distribute_addr(husk_bits, i, *s_inst[i].address());
