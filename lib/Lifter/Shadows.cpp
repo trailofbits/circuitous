@@ -65,31 +65,27 @@ namespace circ::shadowinst
 
     /* Address */
 
-    bool Address::empty() const
+    auto Address::flatten_significant_regs() const -> Regions
     {
-        // REFACTOR(lukas): Think of api.
-        return has_regions::is_empty(base_reg()) &&
-               has_regions::is_empty(index_reg()) &&
-               has_regions::is_empty(scale()) &&
-               has_regions::is_empty(displacement());
-    }
+        auto q = []< query::answers_queries_t V >(const V &r)
+        {
+            return std::make_optional(r.total_size());
+        };
+        auto c = query::get_combinator([](auto l, auto r) {
+            return l;
+        });
+        auto s = this->query(query::overloaded{q, c});
+        check(s);
 
-    has_regions Address::flatten_significant_regs() const
-    {
-        has_regions out;
-        auto exec = [&](const auto &other) { out.add(other); };
+        Regions out(*s);
+        auto exec = [&](const auto &other)
+        {
+            for (auto kv : other.regions.areas)
+                out.add(kv);
+        };
         auto invoke = [&](const auto &on_what) { if (on_what) exec(*on_what); };
         invoke(base_reg());
         invoke(index_reg());
-        return out;
-    }
-
-    // REFACTOR(lukas): Copy pasta.
-    bool Address::present(std::size_t idx) const
-    {
-        bool out = false;
-        auto collect = [&](const auto &op) { out |= op.present(idx); };
-        for_each_present(collect);
         return out;
     }
 
@@ -173,7 +169,7 @@ namespace circ::shadowinst
         region_t out;
         auto collect = [&](const has_regions &x)
         {
-            for (const auto &[from, size] : x.regions)
+            for (const auto &[from, size] : x.regions.areas)
             {
                 dcheck(!out.count(from) || out[from] == size, [](){
                     return "Inconsistent regions."; }

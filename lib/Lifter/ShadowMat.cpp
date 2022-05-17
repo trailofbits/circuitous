@@ -13,14 +13,14 @@ namespace circ::shadowinst
 
     llvm::Type *Materializer::selector_type() const
     {
-        return irb.getIntNTy(static_cast< uint32_t >(s_reg.region_bitsize()));
+        return irb.getIntNTy(static_cast< uint32_t >(s_reg.regions.marked_size()));
     }
 
     llvm::Value *Materializer::region_selector() const
     {
         std::vector<llvm::Value *> input_fragments;
 
-        for (auto &[from, size] : s_reg.regions) {
+        for (auto &[from, size] : s_reg.regions.areas) {
             auto extract = irops::make_leaf< irops::Extract >(irb, from, size);
             input_fragments.push_back(extract);
         }
@@ -56,7 +56,7 @@ namespace circ::shadowinst
         auto selector = opaque_selector();
         for (auto &mat : mats)
         {
-            auto expected_value = irb.getInt(make_APInt(mat, 0, s_reg.region_bitsize()));
+            auto expected_value = irb.getInt(make_APInt(mat, 0, s_reg.regions.marked_size()));
             translation_checks.push_back(irb.CreateICmpEQ(selector, expected_value));
         }
         return translation_checks;
