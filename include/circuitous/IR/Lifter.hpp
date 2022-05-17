@@ -52,10 +52,10 @@ namespace circ
         auto ImmediateOperand(llvm::Module *module, const shadowinst::Immediate &s_imm)
         {
             auto &current = s_imm;
-            check(current.size() >= 1);
+            check(current.regions.marked_size() >= 1);
 
             std::vector<llvm::Function *> out;
-            for (auto [from, to] : current)
+            for (auto [from, to] : current.regions.areas)
                 out.push_back(irops::ExtractRaw::create_fn(module, from, to));
             return out;
         }
@@ -64,7 +64,7 @@ namespace circ
         {
             auto &current = CurrentShade();
             check(current.reg());
-            check(current.reg()->regions.size() == 1);
+            check(current.reg()->regions.marked_size() == 1);
         }
     };
 
@@ -338,8 +338,11 @@ namespace circ
 
             // If there is no shadow - or there is a shadow but it does not have size,
             // just return the original value hidden behind intrinsic
-            if (!CurrentShade().immediate() || CurrentShade().immediate()->size() == 0)
+            if (!CurrentShade().immediate() ||
+                CurrentShade().immediate()->regions.marked_size() == 0)
+            {
                 return HideValue(constant_imm, bb, size);
+            }
 
 
             auto inst_fn = ChooseImm(arch_op.size, ImmediateOperand(mod, *CurrentShade().immediate));
@@ -435,7 +438,7 @@ namespace circ
             const auto &s_reg = *CurrentShade().reg();
 
             auto concrete = this->parent::LiftRegisterOperand(inst, bb, state_ptr, arg, op);
-            if (s_reg.size() == 0)
+            if (s_reg.regions.marked_size() == 0)
                 return concrete;
 
             llvm::IRBuilder<> ir(bb);
@@ -572,7 +575,7 @@ namespace circ
             llvm::BasicBlock *block, const shadowinst::Immediate *maybe_s_imm,
             I concrete_val)
         {
-            if (!maybe_s_imm || maybe_s_imm->size() == 0)
+            if (!maybe_s_imm || maybe_s_imm->regions.marked_size() == 0)
                 return HideValue(block, concrete_val);
             auto &s_imm = *maybe_s_imm;
 

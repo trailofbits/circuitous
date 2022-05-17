@@ -97,7 +97,7 @@ namespace circ::build
 
     llvm::Value *Decoder::emit_translation_tree(const shadowinst::Reg &sreg)
     {
-        if (sreg.region_bitsize() == 0)
+        if (sreg.regions.marked_size() == 0)
             return ir.getTrue();
 
         auto materializer = shadowinst::Materializer(ir, sreg);
