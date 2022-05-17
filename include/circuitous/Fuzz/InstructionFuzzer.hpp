@@ -76,6 +76,8 @@ namespace circ
           : arch(arch_), rinst(rinst_), permutations(ifuzz::permutate::flip(rinst, arch))
         {}
 
+        std::size_t rinst_bitsize() const { return rinst.bytes.size() * 8; }
+
         // We know that `bits` are used to encode `s_addr`. We need to
         // determine the relationship between these bits and attributes
         // of Address operand.
@@ -114,7 +116,7 @@ namespace circ
             using I = shadowinst::Address::idx;
             auto ob = [&](std::size_t i)
             {
-                return shadowinst::ordered_bits_t(distributed_bits[i]);
+                return shadowinst::ordered_bits_t(distributed_bits[i], rinst_bitsize());
             };
 
             s_addr.do_make< shadowinst::Reg >(I::base_reg, ob(0));
@@ -162,19 +164,20 @@ namespace circ
 
         auto FuzzOps(bool generate_all=true)
         {
-            shadowinst::Instruction shadow_inst;
+            shadowinst::Instruction shadow_inst(rinst_bitsize());
             auto [op_bits, dirts] = generate_bits();
 
             for (std::size_t i = 0; i < rinst.operands.size(); ++i)
             {
+                shadowinst::ordered_bits_t obits(op_bits[i], rinst_bitsize());
                 switch(rinst.operands[i].type)
                 {
                     case OpType::kTypeRegister : {
-                        shadow_inst.Add<shadowinst::Reg>(op_bits[i]);
+                        shadow_inst.Add<shadowinst::Reg>(obits);
                         break;
                     }
                     case OpType::kTypeImmediate : {
-                        shadow_inst.Add<shadowinst::Immediate>(op_bits[i]);
+                        shadow_inst.Add<shadowinst::Immediate>(obits);
                         break;
                     }
                     case OpType::kTypeAddress: {
@@ -322,9 +325,9 @@ namespace circ
             check(front->translation_map.has_only(seg_base)) << front->to_string();
             for (auto idx : todo)
             {
-                s_inst[idx].address()->segment_reg()->regions.clear();
-                s_inst[idx].address()->segment_reg()->translation_map.clear();
-                s_inst[idx].address()->segment_reg()->translation_map[seg_base] = {{}};
+                auto segment_reg = s_inst[idx].address()->segment_reg();
+                segment_reg->clear();
+                segment_reg->tm()[seg_base] = {{}};
             }
         }
 
@@ -341,7 +344,6 @@ namespace circ
             derive_segment(s_inst, todo);
             try_populate_addr< ifuzz::sel::segment >(s_inst, todo);
             default_reg< sel::segment >(s_inst, todo);
-            //coerce_by_segment_override(s_inst, todo);
         }
 
 
@@ -497,10 +499,10 @@ namespace circ
             return out;
         }
 
-        std::vector< uint64_t > collect_idxs(const shadowinst::has_regions &regions)
+        std::vector< uint64_t > collect_idxs(const shadowinst::has_regions &hr)
         {
             std::vector< uint64_t > idxs;
-            for (const auto &[from_, size_] : regions) {
+            for (const auto &[from_, size_] : hr.regions.areas) {
                 auto size = static_cast< int64_t >(size_);
                 auto from = static_cast< int64_t >(from_);
                 for (int64_t afrom = from + size - 1; afrom >= from; --afrom)
@@ -546,59 +548,46 @@ namespace circ
         std::vector< shadowinst::has_regions > get_candidates(
             const shadowinst::has_regions &original)
         {
-            auto [from_, size_] = original.biggest_chunk();
+            auto [from_, size_] = original.regions.biggest_chunk();
             auto size = size_;
             // 3 bits are okay since we do not always need REX prefix.
             // 4 and more bits are most likely an error in decoding and we definitely
             // do not want to add even more.
-            if (size == 3 || original.region_bitsize() >= 4)
+            if (size == 3 || original.regions.marked_size() >= 4)
                 return {};
 
             using maybe_region_t = std::optional< shadowinst::has_regions >;
-            auto _dd_left = [&](shadowinst::has_regions out, uint64_t from) -> maybe_region_t {
-                if (!ifuzz::is_reg_octet(from - 1, size + 1))
-                    return {};
-                out.regions.erase(from);
-                out.regions[from - 1] = size + 1;
-                return { std::move(out) };
-            };
-
-            auto _dd_right = [&](shadowinst::has_regions out, uint64_t from) -> maybe_region_t {
-                if (!ifuzz::is_reg_octet(from, size + 1))
-                    return {};
-                out.regions[from] = size + 1;
-                return { std::move(out) };
-            };
-
-            auto _d_hole = [&](shadowinst::has_regions out, auto hole) -> maybe_region_t {
-                if (!ifuzz::is_reg_octet(hole - 1, 3ul))
-                    return {};
-                out.regions.erase(hole + 1);
-                out.regions[hole - 1] = 3ul;
-                return { std::move(out) };
-            };
 
             auto from = from_;
 
             std::vector< shadowinst::has_regions > candidates;
 
-            auto try_emplace = [&](auto fn, auto arg) {
-                if (auto r = fn(original, arg))
-                    candidates.push_back(std::move(*r));
-            };
-
-            if (size == 2) {
-                // _DD_ -> DDD_
-                if (from != 0 && !original.regions.count(from - 1))
-                    try_emplace(_dd_left, from);
-                // _DD_ -> _DDD
-                if (from + size < rinst.bytes.size() * 8 && !original.regions.count(from + size))
-                    try_emplace(_dd_right, from);
-                //candidates.push_back(_dd_right(original, from));
+            // REFACTOR(lukas): Remove copy & paste.
+            if (size == 2)
+            {
+                // copy
+                auto n1 = original.regions;
+                if (n1.extend_left(from) && ifuzz::is_reg_octet(from - 1, n1.areas[from - 1]))
+                    candidates.emplace_back(std::move(n1));
+                // copy
+                auto n2 = original.regions;
+                if (n2.extend_right(from) && ifuzz::is_reg_octet(from, n2.areas[from]))
+                    candidates.emplace_back(std::move(n2));
             }
+
             if (size == 1)
-                if (auto hole = original.get_hole())
-                    try_emplace(_d_hole, *hole);
+            {
+                // copy
+                auto n3 = original.regions;
+                for (auto hole : original.regions.get_holes())
+                {
+                    if (n3.merge_areas(hole - 1, hole + 1, 1) &&
+                        ifuzz::is_reg_octet(hole - 1, n3.areas[hole - 1]))
+                    {
+                        candidates.emplace_back(std::move(n3));
+                    }
+                }
+            }
             return candidates;
         }
 
@@ -655,12 +644,12 @@ namespace circ
                 return;
             auto flattened = s_inst[todo[0]].address()->flatten_significant_regs();
             for (auto from : dirt)
-                flattened.add(from, 1);
+                flattened.add({from, 1});
 
             auto raw_candidates = get_candidates(flattened);
-            if (flattened.size() == 1)
+            if (flattened.marked_size() == 1)
             {
-                auto [from, size] = *flattened.begin();
+                auto [from, size] = *flattened.areas.begin();
                 if (ifuzz::is_reg_octet(from, size))
                     raw_candidates.push_back(flattened);
             }
