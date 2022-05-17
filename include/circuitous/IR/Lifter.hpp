@@ -345,7 +345,7 @@ namespace circ
             }
 
 
-            auto inst_fn = ChooseImm(arch_op.size, ImmediateOperand(mod, *CurrentShade().immediate));
+            auto inst_fn = ChooseImm(arch_op.size, ImmediateOperand(mod, *CurrentShade().immediate()));
             // Similar situation as with empty map
             if (!inst_fn)
                 return HideValue(constant_imm, bb, size);

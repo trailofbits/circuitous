@@ -159,7 +159,8 @@ namespace circ::shadowinst
 
         self_t &mark_area(const interval &vs)
         {
-            areas.insert(std::move(vs));
+            auto [x, y] = vs;
+            areas.emplace(x, y);
             return *this;
         }
 
