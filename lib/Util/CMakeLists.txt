@@ -6,7 +6,7 @@ add_headers( Util CIRCUITOUS_UTIL_HEADERS
   FixedString.hpp
   InstructionBytes.hpp
   LLVMUtil.hpp
-  Logging.hpp
+  Warnings.hpp
   Overloads.hpp
   Parser.hpp
   StrongType.hpp

@@ -5,7 +5,7 @@
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Visitors.hpp>
 
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Check.hpp>
 
 #include <ostream>

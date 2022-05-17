@@ -2,7 +2,7 @@
  * Copyright (c) 2020-2021 Trail of Bits, Inc.
  */
 
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
 

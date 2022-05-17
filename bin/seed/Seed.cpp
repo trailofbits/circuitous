@@ -13,7 +13,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Lifter/Shadows.hpp>
 #include <circuitous/Fuzz/InstructionFuzzer.hpp>
 #include <circuitous/Support/Ciff.hpp>

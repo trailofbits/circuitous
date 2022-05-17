@@ -7,7 +7,7 @@
 
 #include <circuitous/Lifter/Context.hpp>
 
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Util/InstructionBytes.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS

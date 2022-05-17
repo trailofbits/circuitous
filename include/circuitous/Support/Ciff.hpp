@@ -7,7 +7,7 @@
 #include <tuple>
 
 #include <circuitous/Util/InstructionBytes.hpp>
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Util/Warnings.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <remill/Arch/Instruction.h>

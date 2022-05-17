@@ -10,7 +10,6 @@
 #include <circuitous/ADT/EGraph.hpp>
 #include <circuitous/Transforms/Pattern.hpp>
 #include <circuitous/Util/Overloads.hpp>
-#include <circuitous/Util/Logging.hpp>
 #include <circuitous/Support/Check.hpp>
 
 #include <fstream>
