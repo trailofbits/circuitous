@@ -12,6 +12,7 @@
 #include <set>
 #include <sstream>
 #include <string>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -43,23 +44,39 @@ namespace circ::shadowinst
     struct ordered_bits_t
     {
         bits_t data;
+        std::size_t size;
 
-        explicit ordered_bits_t(const bits_t &data_)
+        explicit ordered_bits_t(const bits_t &data_, std::size_t size_)
+            : size(size_)
         {
             data.reserve(data_.size());
             data.insert(data.end(), data_.begin(), data_.end());
+
+            for (std::size_t i = size; i < data.size(); ++i)
+                dcheck(!data[i], []() { return "Trying to cut non-zero bit."; });
+
+            data.resize(size_);
         }
     };
 
-    struct has_regions
+    struct answers_queries
     {
-        region_t regions;
+        bool operator==(const answers_queries &) const = default;
+    };
 
-        has_regions() = default;
+    template< typename B >
+    struct Regions_ : answers_queries
+    {
+        using self_t = Regions_< B >;
+        using bit_t = B;
+        using storage_t = std::vector< B >;
 
-        has_regions(const ordered_bits_t &bits_)
+        storage_t bits;
+        std::map< std::size_t, std::size_t > areas;
+
+        Regions_(std::size_t init) : bits(init, B{ false }) {}
+        Regions_(const ordered_bits_t &bits_) : bits(bits_.data)
         {
-            auto &bits = bits_.data;
             for (std::size_t i = 0; i < bits.size(); ++i)
             {
                 if (!bits[i])
@@ -70,56 +87,44 @@ namespace circ::shadowinst
                 for(; i < bits.size() && bits[i]; ++i)
                     ++count;
 
-                regions.emplace(offset, count);
+                areas.emplace(offset, count);
             }
         }
 
-        has_regions(const bits_t &bits) : has_regions(ordered_bits_t(bits)) {}
-        has_regions(has_regions &&) = default;
-        has_regions(const has_regions &) = default;
+        void clear()
+        {
+            bits.clear();
+            areas.clear();
+        }
 
-        has_regions &operator=(has_regions &&) = default;
-        has_regions &operator=(const has_regions &) = default;
-
-        has_regions(region_t o) : regions(std::move(o)) {}
-
-        bool operator==(const has_regions &) const = default;
-
-        std::size_t region_bitsize() const
+        std::size_t marked_size() const
         {
             std::size_t acc = 0;
-            for (auto &[from, size] : regions)
+            for (auto &[from, size] : areas)
                 acc += size;
             return acc;
         }
 
-        std::vector< uint64_t > region_idxs() const
+        std::size_t total_size() const
         {
-            std::vector<uint64_t> idxs;
-            for (auto &[from, size] : regions)
-                for (uint64_t i = 0; i < size; ++i)
-                    idxs.push_back(from + i);
-            return idxs;
+            return bits.size();
+        }
+        std::vector< std::size_t > get_marked_idxs()
+        {
+            std::vector< std::size_t > out;
+            for (std::size_t i = 0; i < bits.size(); ++i)
+                if (bits[i])
+                    out.push_back(i);
+            return out;
         }
 
-        auto begin() const { return regions.begin(); }
-        auto end() const { return regions.end(); }
-        auto size() const { return regions.size(); }
-        auto empty() const { return size() == 0; }
-
-        auto present(std::size_t idx) const
-        {
-            for (auto &[from, size] : regions)
-                if (idx >= from && idx < from + size)
-                    return true;
-
-            return false;
-        }
+        bool is_marked(std::size_t i) const { return bits[i]; }
+        bool empty() const { return areas.empty(); }
 
         std::string to_string(std::size_t indent=0) const
         {
             std::stringstream ss;
-            for (auto [from, size] : regions)
+            for (auto [from, size] : areas)
                 ss << std::string(indent * 4, ' ') << "[ "
                    << from << " , " << size
                    << " ]" << std::endl;
@@ -130,75 +135,339 @@ namespace circ::shadowinst
         auto biggest_chunk() const
         {
             std::tuple< uint64_t, uint64_t > out{ 0, 0 };
-            for (auto &[from, size] : regions)
-                if (size > std::get<1>(out))
+            for (auto &[from, size] : areas)
+                if (size > std::get< 1 >(out))
                     out = {from, size};
 
             return out;
         }
 
-        std::optional< uint64_t > get_hole() const
+        std::vector< std::size_t > get_holes() const
         {
-            std::vector< uint64_t > out;
-            for (auto &[from, size] : regions)
+            std::vector< std::size_t > holes;
+            if (total_size() <= 2)
+                return holes;
+            for (std::size_t i = 1; i < bits.size() - 1; ++i)
             {
-                auto it = regions.find(from + 2);
-                if (it == regions.end() || size != 1)
-                    continue;
-
-                if (it->second == 1)
-                    out.push_back(from + 1);
+                if (!bits[i] && bits[i - 1] && bits[i + 1])
+                    holes.push_back(i);
             }
-            if (out.size() == 1)
-                return { out[0] };
+            return holes;
+        }
+
+        using interval = std::tuple< std::size_t, std::size_t >;
+
+        self_t &mark_area(const interval &vs)
+        {
+            areas.insert(std::move(vs));
+            return *this;
+        }
+
+        self_t &mark_bits(const interval &vs)
+        {
+            const auto &[from, size] = vs;
+            for (std::size_t i = from; i - from < size; ++i)
+                bits[i] = true;
+            return *this;
+        }
+
+        void mark(const interval &vs)
+        {
+            mark_area(vs).mark_bits(vs);
+        }
+
+        bool is_applicable(const interval &vs) const
+        {
+            const auto &[from, size] = vs;
+            for (std::size_t i = from; i - from < size; ++i)
+                if (bits[i])
+                    return false;
+            return true;
+        }
+
+        bool add(const interval &vs)
+        {
+            if (!is_applicable(vs))
+                return false;
+            mark(vs);
+            return true;
+        }
+
+        std::optional< std::size_t > get_enclosing_area(std::size_t idx) const
+        {
+            if (idx >= bits.size() || !bits[idx])
+                return {};
+
+            std::size_t i = idx;
+            while (i > 0 && !bits[idx])
+                --i;
+
+            if (i != 0)
+                return { i };
+            if (bits[idx])
+                return {};
+
+            return { i };
+        }
+
+        bool empty_interval_of_size(std::size_t a, std::size_t b, std::size_t d) const
+        {
+            check(a != b);
+
+            if ( a > b ) std::swap(a, b);
+            if ( b - a != d )
+                return false;
+
+            ++a;
+            while (a != b)
+            {
+                if (bits[a])
+                    return false;
+                ++a;
+            }
+
+            return true;
+        }
+
+        bool extend_left(std::size_t from)
+        {
+            // There is no space on the left
+            if (from == 0 || bits[from - 1] || !bits[from])
+                return false;
+
+            bits[from - 1] = true;
+            auto new_size = areas[from] + 1;
+            areas.erase(from);
+            areas.emplace(from - 1, new_size);
+            return true;
+        }
+
+        bool extend_right(std::size_t from)
+        {
+            auto size = areas[from];
+            auto next = from + size;
+            if (next == bits.size() - 1 || bits[next] || !bits[from])
+                return false;
+            bits[next] = true;
+            areas[from] += 1;
+
+            return true;
+        }
+
+        bool merge_areas(std::size_t a, std::size_t b, std::size_t distance)
+        {
+            if ( a > b )
+                std::swap(a, b);
+
+            auto ax = get_enclosing_area(a);
+            auto bx = get_enclosing_area(b);
+            if (!ax || !bx)
+                return false;
+
+            if (!empty_interval_of_size(*ax + areas[*ax], *bx, distance))
+                return false;
+
+            auto end = *bx + areas[*bx];
+            areas.erase(*bx);
+            areas[*ax] = end - *ax - 1;
+            return true;
+        }
+
+        bool operator==(const Regions_ &) const = default;
+    };
+
+
+    struct accepts_queries
+    {
+        bool operator==(const accepts_queries &) const = default;
+    };
+
+    namespace query
+    {
+        template< typename T >
+        concept container_like = requires (T c)
+        {
+            c.begin();
+            c.end();
+        };
+
+        template< typename Q, typename V >
+        concept invocable = requires(Q &q, const V &v)
+        {
+            q(v);
+        };
+
+        template< typename Q, typename V >
+        concept indirectly_invocable = requires(Q &q, const V &v)
+        {
+            q(*v);
+        };
+
+        template< typename V >
+        concept accepts_queries_t = std::is_base_of_v< accepts_queries, V >;
+
+        // TODO(lukas): Otherwise it dies in the depths of template instantiations *inside*
+        //              a concept. No idea, try with later clang.
+        template< typename V >
+        concept answers_queries_t = std::is_base_of_v< answers_queries, V >;
+
+        /* dispatch */
+
+        template< typename Q, container_like C >
+        auto do_apply(Q &q, const C &c) -> decltype(do_apply(q, *c.begin()))
+        {
+            // TODO(lukas): Return type with optional would be complicated for now not neeeded.
+            check(c.begin() != c.end());
+            auto it = c.begin();
+            auto r = do_apply(q, *it);
+            ++it;
+            while (it != c.end())
+            {
+                r = q(do_apply(q, (*it)), r);
+                ++it;
+            }
+            return r;
+        }
+
+        template< typename Q, answers_queries_t V > requires(invocable< Q, V >)
+        auto do_apply(Q &q, const V &v) -> decltype (q(v))
+        {
+            return q(v);
+        }
+
+        template< typename Q, answers_queries_t V >
+        auto do_apply(Q &q, const std::optional< V > &v) -> decltype(q(*v))
+        {
+            if (!v)
+                return {};
+            return q(*v);
+        }
+
+        template< typename Q, accepts_queries_t V >
+        auto do_apply(Q &q, const std::optional< V > &v) -> decltype(v->query(q))
+        {
+            if (v)
+                return v->query(q);
             return {};
         }
 
-        // REFACTOR(lukas): Not ideal.
-        template< typename T >
-        static auto is_empty(const std::optional< T > &x)
-        -> std::enable_if_t< std::is_base_of_v< has_regions, T >, bool >
+
+        template< typename Q, accepts_queries_t V >
+        auto do_apply(Q &q, const V &v) -> decltype(v.query(q))
         {
-            return !x || x->empty();
+            return v.query(q);
         }
 
-        template< typename T >
-        static auto is_empty(const T *x)
-        -> std::enable_if_t< std::is_base_of_v< has_regions, T >, bool >
-        {
-            return !x || x->empty();
-        }
+        /* top-level apply */
 
-        void pre(uint64_t anchor, uint64_t from, uint64_t size)
+        template< typename Q, typename Head, typename ... Args >
+        auto apply(Q &&q, Head &&head, Args && ...args)
+        -> decltype(do_apply(q, std::forward< Head >(head)))
         {
-            auto original_end = anchor + regions[anchor];
-            regions.erase(anchor);
-            regions[from] = std::max(original_end - from, size);
-        }
-
-        void post(uint64_t anchor, uint64_t from, uint64_t size)
-        {
-            regions[anchor] = std::max(regions[anchor], from + size - anchor);
-        }
-
-        void add(uint64_t from, uint64_t size)
-        {
-            for (const auto &[x, y] : regions)
+            auto r = do_apply(q, std::forward< Head >(head));
+            if constexpr (sizeof ... (Args) == 0)
+                return r;
+            else
             {
-                if (x <= from && x + y >= from)
-                    return post(x, from, size);
-                if (from <= x && from + size >= x)
-                    return pre(x, from, size);
+                // NOTE(lukas): If there is not `query::apply` it will try to match
+                //              `std::apply` and error is not going to make sense.
+                auto tail = query::apply(std::forward< Q >(q), std::forward< Args >(args) ...);
+                return q(std::move(r), std::move(tail));
             }
-            regions[from] = size;
         }
 
-        void add(const has_regions &other)
+        /* combinators */
+
+        template< typename C, typename V >
+        std::optional< V > combine_r(C &&c, std::optional< V > lhs, std::optional< V > rhs)
         {
-            // It is expected both are rather small
-            for (const auto &[from, size] : other.regions)
-                add(from, size);
+            if (!rhs) return lhs;
+            if (!lhs) return rhs;
+            return std::make_optional( c(*lhs, *rhs) );
         }
+
+        template< class ... Ts > struct overloaded : Ts ... { using Ts::operator() ...; };
+        template< class ... Ts > overloaded(Ts ...) -> overloaded< Ts ... >;
+
+        static inline auto and_combine()
+        {
+            return []< typename T >(T rhs, T lhs) {
+                return combine_r(std::logical_and(), std::move(rhs), std::move(lhs));
+            };
+        }
+
+        static inline auto or_combine()
+        {
+            return []< typename T >(T rhs, T lhs) {
+                return combine_r(std::logical_or(), std::move(rhs), std::move(lhs));
+            };
+        }
+
+        template< typename C >
+        auto get_combinator(C &&c_)
+        {
+            return [c = std::forward< C >(c_)](auto r, auto l) {
+                if (!r) return l;
+                if (!l) return r;
+                return c(std::move(r), std::move(l));
+            };
+
+        }
+
+        static inline auto is_marked(std::size_t idx)
+        {
+            return overloaded
+            {
+                [=]< answers_queries_t V >(const V &region) {
+                    return std::make_optional(region.is_marked(idx));
+                },
+                or_combine()
+            };
+        }
+
+        static inline auto is_empty()
+        {
+            return overloaded
+            {
+                []< answers_queries_t V >(const V &region) {
+                    return std::make_optional(region.empty());
+                },
+                and_combine()
+            };
+        }
+
+    } // namespace query
+
+
+    struct has_regions : accepts_queries
+    {
+        using Regions = Regions_< bool >;
+        Regions regions;
+
+        has_regions(std::size_t bitsize) : regions(bitsize) {}
+        has_regions(const ordered_bits_t &bits_) : regions(bits_) {}
+        has_regions(const Regions &regions_) : regions(regions_) {}
+
+        template< typename Q >
+        auto query(Q &&q) const
+        {
+            return query::apply(std::forward< Q >(std::forward< Q >(q)), regions);
+        }
+
+        bool empty() const
+        {
+            auto x = this->query(query::is_empty());
+            dcheck(x, []() { return "Optional does not have value."; });
+            return *x;
+        }
+
+        template< typename ... Ts >
+        std::string to_string(Ts && ... ts) const
+        {
+            return regions.to_string(std::forward< Ts >(ts) ...);
+        }
+
+        bool operator==(const has_regions &) const = default;
     };
 
     // It is expected `Materialization_t` is iterable and one item corresponds to one bit.
@@ -372,6 +641,8 @@ namespace circ::shadowinst
                                                      << " != " << max_v;
             return out;
         }
+
+        bool operator==(const TranslationMap &) const = default;
     };
 
     template< typename K, typename V >
@@ -382,12 +653,16 @@ namespace circ::shadowinst
 
     struct Reg : has_regions
     {
+        using self_t = Reg;
+
         // Actual instances for given reg
         using materialized_t = std::vector< bool >;
         using reg_t = std::string;
         using TM_t = TranslationMap< reg_t, materialized_t >;
 
         using has_regions::has_regions;
+        using has_regions::query;
+        using has_regions::empty;
 
         TM_t translation_map;
         std::unordered_set< reg_t > dirty;
@@ -395,13 +670,11 @@ namespace circ::shadowinst
         std::optional< std::size_t > selector;
 
         Reg(const ordered_bits_t &bits_)
-            : has_regions(bits_), translation_map(this->region_bitsize())
+            : has_regions(bits_), translation_map(regions.marked_size())
         {}
 
-        Reg(const bits_t &bits) : Reg(ordered_bits_t(bits)) {}
-
-        Reg(const region_t &o)
-            : has_regions(o), translation_map(this->region_bitsize())
+        Reg(const Regions &o)
+            : has_regions(o), translation_map(o.marked_size())
         {}
 
         auto &tm() { return translation_map; }
@@ -418,18 +691,31 @@ namespace circ::shadowinst
             dirty.insert(reg);
         }
         void for_each_present(auto &cb) const { cb(*this); }
+
+        self_t &clear()
+        {
+            // TODO(lukas): What about semantics of `selector` and `dirty`?
+            translation_map.clear();
+            regions.clear();
+            return *this;
+        }
+
+        bool operator==(const Reg &) const = default;
     };
 
     struct Immediate : has_regions
     {
         using has_regions::has_regions;
 
+        using has_regions::query;
+
         void for_each_present(auto &cb) const { cb(*this); }
         std::string to_string(std::size_t indent=0, bool print_header=true) const;
     };
 
-    struct Address
+    struct Address : accepts_queries
     {
+        using Regions = typename has_regions::Regions;
         using maybe_reg_t = std::optional< Reg >;
         using maybe_imm_t = std::optional< Immediate >;
 
@@ -496,8 +782,6 @@ namespace circ::shadowinst
             return do_make< T >(idx, std::forward< Args >(args) ... );
         }
 
-        bool operator==(const Address &) const = default;
-
         template< typename Self, typename C >
         static void _for_each_present(Self &self, C &&c)
         {
@@ -519,9 +803,14 @@ namespace circ::shadowinst
             _for_each_present(*this, std::forward<C>(c));
         }
 
-        bool empty() const;
-        has_regions flatten_significant_regs() const;
-        bool present(std::size_t idx) const;
+        template< typename Q >
+        auto query(Q &&q) const
+        {
+            return query::apply(std::forward< Q >(q), _regs, _imms);
+        }
+
+        Regions flatten_significant_regs() const;
+        //bool is_marked(std::size_t idx) const;
         std::string to_string(std::size_t indent) const;
     };
 
@@ -539,10 +828,12 @@ namespace circ::shadowinst
     struct Shift : has_regions
     {
         using has_regions::has_regions;
+        using has_regions::query;
         void for_each_present(auto &cb) const { cb(*this); }
+        std::string to_string(std::size_t) const { not_implemented(); }
     };
 
-    struct Operand
+    struct Operand : accepts_queries
     {
         using self_t = Operand;
         using op_type = remill::Operand::Type;
@@ -566,7 +857,7 @@ namespace circ::shadowinst
         const Address   *address()   const { return std::get_if< Address >(&_data); }
         const Shift     *shift()     const { return std::get_if< Shift >(&_data); }
 
-        bool operator==(const Operand &) const = default;
+        //bool operator==(const Operand &) const = default;
 
         template< typename T, typename ... Args >
         static self_t make(Args && ... args) {
@@ -610,20 +901,17 @@ namespace circ::shadowinst
             return visit([&](const auto &x) { return x.for_each_present(cb); });
         }
 
-        bool present(std::size_t idx) const
+        template< typename Q >
+        auto query(Q &q) const
         {
-            bool out = false;
-            auto collect = [&](auto &op) { out |= op.present(idx); };
-            visit(collect);
-            return out;
+            auto fwd = [&](const auto &x) { return x.query(q); };
+            return visit(fwd);
         }
 
-        bool is_husk() const { return empty(); }
-
-        bool empty() const
+        bool is_husk() const
         {
-            auto is_empty = [](const auto &v) { return v.empty(); };
-            return visit(is_empty);
+            auto empty = [&](const auto &x) { return x.query(query::is_empty()); };
+            return *visit(empty);
         }
 
         std::string to_string(std::size_t indent = 0) const
@@ -651,8 +939,9 @@ namespace circ::shadowinst
         std::vector< std::set< uint32_t > > dirt;
 
         std::vector< Reg * > selectors;
+        std::size_t enc_bitsize;
 
-        Instruction() = default;
+        Instruction(std::size_t enc_bitsize_) : enc_bitsize(enc_bitsize_) {}
         Instruction(const Instruction &other) : operands(other.operands)
         {
             for (const auto &o_cluster : other.deps)
@@ -686,10 +975,8 @@ namespace circ::shadowinst
 
         bool present(std::size_t idx) const
         {
-            for (auto &op : operands)
-                if (op.present(idx))
-                    return true;
-
+            if (auto x = query::apply(query::is_marked(idx), operands))
+                return *x;
             return false;
         }
 

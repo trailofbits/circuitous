@@ -140,7 +140,7 @@ namespace circ::shadowinst
         llvm::Instruction *unguarded_decoder(llvm::Value *selector, Getter &get_reg) const
         {
             auto entries = s_reg.tm().mats_count();
-            auto bits = s_reg.region_bitsize();
+            auto bits = s_reg.regions.marked_size();
             check(entries <= (1 << bits))
                 << "Translation entries count do not correspond to regions size "
                 << entries << " > " << (1 << bits);
