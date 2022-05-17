@@ -412,7 +412,8 @@ namespace circ {
         auto [begin, end] = inline_flattened(sem_call, make_breakpoint);
         ir.SetInsertPoint(this->head);
 
-        auto params = build::Decoder(ctx, ir, isel).get_decoder_tree();
+        auto [params, reg_selector_constraint] =
+            build::Decoder(ctx, ir, isel).get_decoder_tree();
 
         auto mem_checks = mem::synthetize_memory(begin, end, ctx.ptr_size);
         ir.SetInsertPoint(this->head);
@@ -435,7 +436,7 @@ namespace circ {
         auto preserved = emit_preserved_checks(dst_regs, isel, state);
 
         ctxs.emplace_back(this->head,
-                          saturation_prop, timestamp_prop, params,
+                          saturation_prop, timestamp_prop, params, reg_selector_constraint,
                           mem_checks, err_checks, extra_params
                           );
         auto [dst_cond, dst_regs_checks] = handle_dst_regs_(dst_regs, isel, state);
