@@ -621,11 +621,9 @@ namespace circ
             //              scale, but the second will have set remill scale to one (artifact
             //              of xed).
             auto concrete_scale = [&]() -> uint64_t {
-                if (CurrentShade().address()->scale()->empty() &&
-                    !CurrentShade().address()->index_reg()->empty())
+                if (CurrentShade().address()->scale()->regions.empty() &&
+                    !CurrentShade().address()->index_reg()->regions.empty())
                 {
-                    check(CurrentShade().address()->index_reg()->regions ==
-                          CurrentShade().address()->base_reg()->regions);
                     if (r_op.addr.scale != 1)
                         log_error() << "Overriding scale to 1 based on shadow info.";
                     return 1ul;
