@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import threading
 import queue
+import sys
 
 from tools.tc import State, Test
 import tools.tc as TC
@@ -385,6 +386,7 @@ class Results:
             log_info("F: " + x)
         # TODO(lukas): Bleh, rework when we are certain the
         #              categories won't change much.
+        out = { "pass" : 0 , "fail" : 0, "error" : 0 }
         for x in ["pass", "fail", "error"]:
             message = "\t" + x + " : " + str(self.results[x])
             if x == "fail" and self.results[x] != 0:
@@ -393,9 +395,12 @@ class Results:
                 message = green(message)
             if x == "error" and self.results[x] != 0:
                 message = yellow(message)
+            out[x] += 1
             print(message)
+        return out
 
 
+# Return number of tests that *did not* pass.
 def execute_tests(tests, top_dir, extra_args, fragile, jobs):
     log_info("Test dir is: " + top_dir)
     os.chdir(top_dir)
@@ -448,7 +453,8 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
         except queue.Empty:
             break
         rs.process(result, name)
-    rs.report()
+    out = rs.report()
+    return out["fail"] + out["error"]
 
 
 # TODO(lukas): Mocking this one for now
@@ -538,15 +544,23 @@ def main():
         log_error("No tests selected")
         return
     log_info("Filtered " + str(len(tests)) + " tests.")
+    not_passed = None
     if args.persist:
         log_info("Creating persistent directory")
         test_dir = tempfile.mkdtemp(dir=os.getcwd())
-        execute_tests(tests, test_dir, command_args, args.fragile, args.jobs)
+        not_passed = execute_tests(tests, test_dir, command_args, args.fragile, args.jobs)
     else:
         log_info("Creating temporary directory")
         with tempfile.TemporaryDirectory(dir=os.getcwd()) as tmpdir:
-            execute_tests(tests, tmpdir, command_args, args.fragile, args.jobs)
+            not_passed = execute_tests(tests, tmpdir, command_args, args.fragile, args.jobs)
+    return not_passed
 
 
 if __name__ == "__main__":
-    main()
+    x = main()
+    if x is None:
+        sys.exit(2)
+    elif x != 0:
+        sys.exit(1)
+    else:
+        sys.exit(0)
