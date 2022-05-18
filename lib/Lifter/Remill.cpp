@@ -438,37 +438,6 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         check(op && val_to_op[val] == op);
     }
 
-    // TODO(lukas): Hack since there is no `urem` node. Adding it is a desirable
-    //              fix.
-    // Simulate urem as
-    // `a % b = a - (udiv(a, b) * b)`
-    Operation *lower_urem(llvm::Instruction *inst)
-    {
-        auto a = Fetch(inst->getParent()->getParent(), inst->getOperand(0u));
-        auto b = Fetch(inst->getParent()->getParent(), inst->getOperand(1u));
-        auto size = value_size(inst);
-
-        // div = a / b
-        auto div = impl->Create< UDiv >(size);
-        div->AddUse(a);
-        div->AddUse(b);
-
-        // mul = div * b
-        auto mul = impl->Create< Mul >(size);
-        mul->AddUse(div);
-        mul->AddUse(b);
-
-        // sub = a - mul
-        auto sub = impl->Create< Sub >(size);
-        sub->AddUse(a);
-        sub->AddUse(mul);
-
-        auto [it, _] = val_to_op.emplace(inst, sub);
-        populate_meta(inst, it->second);
-        annote_with_llvm_inst(it->second, inst);
-        return it->second;
-    }
-
     Operation *HandleLLVMOP(llvm::Function *func, llvm::Instruction *inst)
     {
         auto size = value_size(inst);
@@ -616,7 +585,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         if (val_to_op.count(val))
             return;
 
-        auto num_bits = static_cast<uint32_t>(dl.getTypeSizeInBits(val->getType()));
+        auto num_bits = static_cast< uint32_t >(dl.getTypeSizeInBits(val->getType()));
         Emplace< Undefined >(val, num_bits);
     }
 
@@ -658,10 +627,10 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         op->set_meta(circir_llvm_meta::llvm_source_dump, ss.str());
     }
 
-    template<typename T, typename ...Args>
+    template< typename T, typename ...Args >
     Operation* Emplace(llvm::Value *key, Args &&... args)
     {
-        auto [it, _] = val_to_op.emplace(key, impl->Create<T>(std::forward<Args>(args)...));
+        auto [it, _] = val_to_op.emplace(key, impl->Create< T >(std::forward< Args >(args)...));
         populate_meta(key, it->second);
         annote_with_llvm_inst(it->second, key);
         return it->second;
@@ -686,11 +655,11 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
     uint32_t advice_idx = 0;
 
-    std::unordered_map<llvm::Value *, Operation *> val_to_op;
-    std::unordered_map<llvm::Value *, Operation *> leaves;
-    std::unordered_map<uint32_t, Operation *> inst_bits;
+    std::unordered_map< llvm::Value *, Operation * > val_to_op;
+    std::unordered_map< llvm::Value *, Operation * > leaves;
+    std::unordered_map< uint32_t, Operation * > inst_bits;
 
-    std::unordered_map<std::string, Constant *> bits_to_constants;
+    std::unordered_map< std::string, Constant * > bits_to_constants;
 
   private:
     IRImporter() = delete;
