@@ -4,9 +4,7 @@
   "dependencies": [
     "doctest",
     "spdlog",
-    "glog",
-    "xed",
-    "z3",
-    "llvm-14"
+    "gap",
+    "remill"
   ]
 }
