@@ -20,6 +20,19 @@
         }
     },
     {
+        "name": "ninja-osx-cxx-common-rel",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja release with cxx-common",
+        "description": "Configure with cxx-common toolchain for x64-osx-rel",
+        "cacheVariables": {
+            "VCPKG_TARGET_TRIPLET": "x64-osx-rel",
+            "VCPKG_HOST_TRIPLET": "x64-osx-rel",
+            "VCPKG_OVERLAY_TRIPLETS": "$env{CXX_COMMON_ROOT}/triplets",
+            "VCPKG_OVERLAY_PORTS": "$env{CXX_COMMON_ROOT}/ports",
+            "CMAKE_BUILD_TYPE": "Release"
+        }
+    },
+    {
         "name": "ninja-multi-osx-cxx-common",
         "inherits": "ninja-multi-cxx-common",
         "displayName": "Ninja Multi-Config osx with cxx-common",
