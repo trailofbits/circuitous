@@ -395,7 +395,7 @@ class Results:
                 message = green(message)
             if x == "error" and self.results[x] != 0:
                 message = yellow(message)
-            out[x] += 1
+            out[x] += self.results[x]
             print(message)
         return out
 
