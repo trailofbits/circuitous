@@ -588,10 +588,11 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             return;
 
         auto num_bits = value_size(val);
-        llvm::SmallString<128> val_bits;
+        llvm::SmallString< 64 > val_bits;
 
         val_bits.reserve(num_bits);
-        ap_val.toStringUnsigned(bits, 2);
+        ap_val.toStringUnsigned(val_bits, 2);
+
         while (val_bits.size() < num_bits)
         {
             val_bits.insert(val_bits.begin(), '0');
@@ -603,8 +604,8 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         if (!bits_op)
         {
             CHECK(num_bits == bits_str.size());
-            bits_op = impl->Create<Constant>(std::move(bits_str),
-                                             static_cast<unsigned>(num_bits));
+            bits_op = impl->Create< Constant >(std::move(bits_str),
+                                               static_cast< unsigned >(num_bits));
             annote_with_llvm_inst(bits_op, val);
         }
         val_to_op[val] = bits_op;
@@ -685,7 +686,6 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
     uint32_t advice_idx = 0;
 
-    llvm::SmallString<128> bits;
     std::unordered_map<llvm::Value *, Operation *> val_to_op;
     std::unordered_map<llvm::Value *, Operation *> leaves;
     std::unordered_map<uint32_t, Operation *> inst_bits;
