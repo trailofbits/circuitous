@@ -62,7 +62,11 @@ namespace circ
         void set(enc_t e) { _enc = std::make_optional( std::move(e) ); }
         void set(lifted_t l) { _lifted = std::make_optional( std::move(l) ); }
 
-        void make_fuzz(CtxRef & ctx) { set(fuzz_operands(*ctx.arch(), rinst())); }
+        void make_fuzz(CtxRef & ctx)
+        {
+            set(fuzz_operands(*ctx.arch(), rinst()));
+            shadow().distribute_selectors();
+        }
 
         template< typename ILifter >
         void make_lifted(CtxRef &ctx) {
