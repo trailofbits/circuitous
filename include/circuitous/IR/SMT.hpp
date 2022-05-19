@@ -166,10 +166,6 @@ namespace circ
     z3::expr Visit(UDiv *op) { return record(op, z3::udiv(lhs(op), rhs(op))); }
     z3::expr Visit(SDiv *op) { return record(op, lhs(op) / rhs(op)); }
 
-    z3::expr Visit(CAnd *op) { return record(op, lhs(op) & rhs(op)); }
-    z3::expr Visit(COr *op)  { return record(op, lhs(op) | rhs(op)); }
-    z3::expr Visit(CXor *op) { return record(op, lhs(op) ^ rhs(op)); }
-
     z3::expr Visit(And *op)
     {
       return record(op, this->accumulate(op->operands, std::bit_and()));
@@ -237,10 +233,6 @@ namespace circ
     z3::expr Visit(UDiv *op) { return uninterpreted(op, "udiv"); }
     z3::expr Visit(SDiv *op) { return uninterpreted(op, "sdiv"); }
 
-    z3::expr Visit(CAnd *op) { return uninterpreted(op, "cand"); }
-    z3::expr Visit(COr *op)  { return uninterpreted(op, "cor"); }
-    z3::expr Visit(CXor *op) { return uninterpreted(op, "cxor"); }
-
     z3::expr Visit(And *op) { return uninterpreted(op, "and"); }
     z3::expr Visit(Or *op)  { return uninterpreted(op, "or"); }
 
@@ -273,8 +265,6 @@ namespace circ
     z3::expr Visit(Concat *op) { return uninterpreted(op, "Concat"); }
     z3::expr Visit(Select *op) { return uninterpreted(op, "Select." + std::to_string(op->bits)); }
     z3::expr Visit(Parity *op) { return uninterpreted(op, "Parity"); }
-
-    z3::expr Visit(BSelect *op) { return uninterpreted(op, "BSelect"); }
 
     z3::expr Visit(RegConstraint *op)       { return uninterpreted(op, "RegisterConstraint"); }
     z3::expr Visit(PreservedConstraint *op) { return uninterpreted(op, "PreservedConstraint"); }
@@ -331,14 +321,6 @@ namespace circ
       }
 
       return record(op, result);
-    }
-
-    z3::expr Visit(BSelect *op)
-    {
-      auto cond = Dispatch(op->operands[0]);
-      auto first = Dispatch(op->operands[1]);
-      auto second = Dispatch(op->operands[2]);
-      return record(op, z3::ite(cond == true_bv(), first, second));
     }
 
     z3::expr Visit(Parity *op)
