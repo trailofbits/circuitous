@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <gap/Support/SourceLocation.hpp>
+#include <gap/core/source_location.hpp>
 #include <gap/Support/Log.hpp>
 
 namespace circ

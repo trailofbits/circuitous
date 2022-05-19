@@ -11,7 +11,7 @@
 #include <unordered_map>
 #include <vector>
 
-#include <gap/Support/SourceLocation.hpp>
+#include <gap/core/source_location.hpp>
 
 // Really simple framework that is built on top of two concepts
 //  * There are `Sink`s that are configurable & local per library/component etc.
