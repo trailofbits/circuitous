@@ -1,18 +1,11 @@
 # Copyright (c) 2020-2021 Trail of Bits, Inc.
 cmake_minimum_required( VERSION 3.23 )
 
-#
-# Use gap library
-#
-find_package( gap CONFIG REQUIRED )
+list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" )
+include( vcpkg_setup )
 
 set_property( GLOBAL PROPERTY USE_FOLDERS ON )
 
-# prevent in source builds check
-include( prevent_in_source_builds )
-
-# general project options
-include( project_settings )
 
 # check if circuitous is being used directly or via add_subdirectory,
 # but allow overriding
@@ -24,10 +17,6 @@ if( NOT DEFINED CIRCUITOUS_MASTER_PROJECT )
     endif()
 endif()
 
-list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" )
-
-include( vcpkg_setup )
-find_package( remill COMPONENTS VCPKG_DEPS QUIET )
 
 # Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
 if ( POLICY CMP0025 )
@@ -44,6 +33,17 @@ project( circuitous
   DESCRIPTION "Binary to circuit lifter tool"
   HOMEPAGE_URL "https://github.com/trailofbits/circuitous.git"
 )
+
+#
+# Use gap library
+#
+find_package( gap CONFIG REQUIRED )
+
+# prevent in source builds check
+include( prevent_in_source_builds )
+
+# general project options
+include( project_settings )
 
 include( find_clang )
 FindAndSelectClangCompiler()
