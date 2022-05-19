@@ -386,7 +386,8 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             return VisitGenericIntrinsic< AdviceConstraint >(call, fn);
         }
         if (irops::Or::is(fn)) {
-            return VisitGenericIntrinsic< Or >(call, fn);
+            // TODO(lukas): Size should be specified by intrinsic.
+            return VisitGenericIntrinsic< Or >(call, fn, 1u);
         }
         if (irops::DecoderResult::is(fn)) {
             return VisitGenericIntrinsic< DecoderResult >(call, fn);
@@ -397,7 +398,8 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
                     irops::memory::size(impl->ptr_size), id);
         }
         if (irops::And::is(fn)) {
-            return VisitGenericIntrinsic< And >(call, fn);
+            // TODO(lukas): Size should be specified by intrinsic.
+            return VisitGenericIntrinsic< And >(call, fn, 1u);
         }
         if (irops::ReadConstraint::is(fn)) {
             return VisitGenericIntrinsic< ReadConstraint >(call, fn);
@@ -438,67 +440,93 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         check(op && val_to_op[val] == op);
     }
 
+    template< typename T >
+    T *llvm_inst_operands(T *self, llvm::Instruction *inst, llvm::Function *func)
+    {
+        for (const auto &op : inst->operand_values())
+            self->AddUse(Fetch(func, op));
+        return self;
+    }
+
+    Select *llvm_inst_operands(Select *select, llvm::Instruction *inst, llvm::Function *func)
+    {
+        std::vector< Operation * > converted;
+        for (const auto &op : inst->operand_values())
+            converted.push_back(Fetch(func, op));
+
+        check(converted.size() == 3);
+        // We know there are 3 operands, however true result is first
+        select->AddUse(converted[0]);
+        select->AddUse(converted[2]);
+        select->AddUse(converted[1]);
+        return select;
+    }
+
+    template< typename T, typename ... Args >
+    Operation *emplace_llvm_op(llvm::Instruction *inst, llvm::Function *func, Args && ... args)
+    {
+        auto self = Emplace< T >(inst, std::forward< Args >(args)...);
+        return llvm_inst_operands(self, inst, func);
+    }
+
     Operation *HandleLLVMOP(llvm::Function *func, llvm::Instruction *inst)
     {
-        auto size = value_size(inst);
-
-        auto handle_predicate = [&](llvm::Instruction *inst_) -> Operation * {
+        auto s = value_size(inst);
+        auto handle_predicate = [&](llvm::Instruction *inst_) -> Operation *
+        {
             auto cmp = llvm::dyn_cast< llvm::CmpInst >( inst_ );
-            CHECK(cmp);
+            check(cmp);
 
             switch (cmp->getPredicate()) {
-                case llvm::CmpInst::ICMP_EQ:  return Emplace<Icmp_eq>(inst, size);
-                case llvm::CmpInst::ICMP_NE:  return Emplace<Icmp_ne>(inst, size);
-                case llvm::CmpInst::ICMP_ULT: return Emplace<Icmp_ult>(inst, size);
-                case llvm::CmpInst::ICMP_SLT: return Emplace<Icmp_slt>(inst, size);
-                case llvm::CmpInst::ICMP_UGT: return Emplace<Icmp_ugt>(inst, size);
-                case llvm::CmpInst::ICMP_UGE:  return Emplace<Icmp_uge>(inst, size);
-                case llvm::CmpInst::ICMP_ULE:  return Emplace<Icmp_ule>(inst, size);
-                case llvm::CmpInst::ICMP_SGT:  return Emplace<Icmp_sgt>(inst, size);
-                case llvm::CmpInst::ICMP_SGE:  return Emplace<Icmp_sge>(inst, size);
-                case llvm::CmpInst::ICMP_SLE:  return Emplace<Icmp_sle>(inst, size);
+                case llvm::CmpInst::ICMP_EQ:  return emplace_llvm_op<Icmp_eq>(inst, func, s);
+                case llvm::CmpInst::ICMP_NE:  return emplace_llvm_op<Icmp_ne>(inst, func, s);
+                case llvm::CmpInst::ICMP_ULT: return emplace_llvm_op<Icmp_ult>(inst, func, s);
+                case llvm::CmpInst::ICMP_SLT: return emplace_llvm_op<Icmp_slt>(inst, func, s);
+                case llvm::CmpInst::ICMP_UGT: return emplace_llvm_op<Icmp_ugt>(inst, func, s);
+                case llvm::CmpInst::ICMP_UGE:  return emplace_llvm_op<Icmp_uge>(inst, func, s);
+                case llvm::CmpInst::ICMP_ULE:  return emplace_llvm_op<Icmp_ule>(inst, func, s);
+                case llvm::CmpInst::ICMP_SGT:  return emplace_llvm_op<Icmp_sgt>(inst, func, s);
+                case llvm::CmpInst::ICMP_SGE:  return emplace_llvm_op<Icmp_sge>(inst, func, s);
+                case llvm::CmpInst::ICMP_SLE:  return emplace_llvm_op<Icmp_sle>(inst, func, s);
                 default: unreachable() << "Cannot lower llvm predicate " << cmp->getPredicate();
             }
         };
 
         auto op_code = inst->getOpcode();
 
-        auto handle_op = [&]() {
+        auto handle_op = [&]()
+        {
             switch (op_code) {
-                case llvm::Instruction::OtherOps::Select: return Emplace<BSelect>(inst, size);
-                case llvm::BinaryOperator::Add: return Emplace<Add>(inst, size);
-                case llvm::BinaryOperator::Sub: return Emplace<Sub>(inst, size);
-                case llvm::BinaryOperator::Mul: return Emplace<Mul>(inst, size);
+                case llvm::Instruction::OtherOps::Select:
+                    return emplace_llvm_op<Select>(inst, func, 1u, s);
+                case llvm::BinaryOperator::Add: return emplace_llvm_op<Add>(inst, func, s);
+                case llvm::BinaryOperator::Sub: return emplace_llvm_op<Sub>(inst, func, s);
+                case llvm::BinaryOperator::Mul: return emplace_llvm_op<Mul>(inst, func, s);
 
-                case llvm::BinaryOperator::UDiv: return Emplace<UDiv>(inst, size);
-                case llvm::BinaryOperator::SDiv: return Emplace<SDiv>(inst, size);
+                case llvm::BinaryOperator::UDiv: return emplace_llvm_op<UDiv>(inst, func, s);
+                case llvm::BinaryOperator::SDiv: return emplace_llvm_op<SDiv>(inst, func, s);
 
-                case llvm::BinaryOperator::And: return Emplace<CAnd>(inst, size);
-                case llvm::BinaryOperator::Or: return Emplace<COr>(inst, size);
-                case llvm::BinaryOperator::Xor: return Emplace<CXor>(inst, size);
+                case llvm::BinaryOperator::And: return emplace_llvm_op<And>(inst, func, s);
+                case llvm::BinaryOperator::Or: return emplace_llvm_op<Or>(inst, func, s);
+                case llvm::BinaryOperator::Xor: return emplace_llvm_op<Xor>(inst, func, s);
 
-                case llvm::BinaryOperator::Shl: return Emplace<Shl>(inst, size);
-                case llvm::BinaryOperator::LShr: return Emplace<LShr>(inst, size);
-                case llvm::BinaryOperator::AShr: return Emplace<AShr>(inst, size);
+                case llvm::BinaryOperator::Shl: return emplace_llvm_op<Shl>(inst, func, s);
+                case llvm::BinaryOperator::LShr: return emplace_llvm_op<LShr>(inst, func, s);
+                case llvm::BinaryOperator::AShr: return emplace_llvm_op<AShr>(inst, func, s);
 
-                case llvm::BinaryOperator::Trunc: return Emplace<Trunc>(inst, size);
-                case llvm::BinaryOperator::ZExt: return Emplace<ZExt>(inst, size);
-                case llvm::BinaryOperator::SExt: return Emplace<SExt>(inst, size);
+                case llvm::BinaryOperator::Trunc: return emplace_llvm_op<Trunc>(inst, func, s);
+                case llvm::BinaryOperator::ZExt: return emplace_llvm_op<ZExt>(inst, func, s);
+                case llvm::BinaryOperator::SExt: return emplace_llvm_op<SExt>(inst, func, s);
                 case llvm::BinaryOperator::ICmp: return handle_predicate(inst);
-                case llvm::BinaryOperator::URem: return Emplace<URem>(inst, size);
-                case llvm::BinaryOperator::SRem: return Emplace<SRem>(inst, size);
+                case llvm::BinaryOperator::URem: return emplace_llvm_op<URem>(inst, func, s);
+                case llvm::BinaryOperator::SRem: return emplace_llvm_op<SRem>(inst, func, s);
 
                 default :
                     unreachable() << "Cannot lower llvm inst: "
                                   << llvm::Instruction::getOpcodeName(op_code);
             }
         };
-
-        auto op = handle_op();
-        for (const auto &op_ : inst->operand_values())
-            op->AddUse(Fetch(func, op_));
-
-        return op;
+        return handle_op();
     }
 
     void VisitSelect(llvm::Function *func, llvm::Instruction *val)
@@ -628,12 +656,13 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
     }
 
     template< typename T, typename ...Args >
-    Operation* Emplace(llvm::Value *key, Args &&... args)
+    T* Emplace(llvm::Value *key, Args &&... args)
     {
-        auto [it, _] = val_to_op.emplace(key, impl->Create< T >(std::forward< Args >(args)...));
-        populate_meta(key, it->second);
-        annote_with_llvm_inst(it->second, key);
-        return it->second;
+        auto op = impl->Create< T >(std::forward< Args >(args) ... );
+        val_to_op.emplace(key, op);
+        populate_meta(key, op);
+        annote_with_llvm_inst(op, key);
+        return op;
     }
 
     template<bool allow_failure=false>

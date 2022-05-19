@@ -185,12 +185,6 @@ namespace circ::print::verilog
             return ss.str();
         }
 
-        std::string ternary(BSelect *op)
-        {
-            auto lhs = ternary_stmt(op->operands[0], op->operands[1], op->operands[2]);
-            return make_wire(op, std::move(lhs));
-        }
-
         std::string mux(Select *op)
         {
             auto selector = get(op->selector());
@@ -308,15 +302,13 @@ namespace circ::print::verilog
                 case Icmp_ule::kind: return "<=";
                 case Icmp_sle::kind: return "<=";
 
-                case COr::kind:
                 case Or::kind:
                     return "|";
-                case CAnd::kind:
                 case VerifyInstruction::kind:
                 case And::kind:
                 case DecoderResult::kind:
                     return "&";
-                case CXor::kind: return "^";
+                case Xor::kind: return "^";
                 case Concat::kind:
                     return ",";
                 default:
@@ -508,11 +500,7 @@ namespace circ::print::verilog
         std::string Visit(Icmp_sge *op) { return make(szip(), op); }
         std::string Visit(Icmp_sle *op) { return make(szip(), op); }
 
-        std::string Visit(BSelect *op) { return ternary(op); }
-
-        std::string Visit(CAnd *op) { return make(zip(), op); }
-        std::string Visit(COr *op)  { return make(zip(), op); }
-        std::string Visit(CXor *op) { return make(zip(), op); }
+        std::string Visit(Xor *op) { return make(zip(), op); }
 
         /* Leaves */
         std::string Visit(Constant *op)

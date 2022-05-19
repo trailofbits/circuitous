@@ -230,13 +230,6 @@ namespace circ::run {
     auto rhs(Operation *op) { return *self().get(op, 1); }
     bool is_zero(const llvm::APInt &i) { return i.isNullValue(); }
 
-    void Visit(BSelect *op_) {
-      auto sel = [&](auto op) {
-        return (self().get(op, 0)->getBoolValue()) ? self().get(op, 1) : self().get(op, 2);
-      };
-      this->account(op_, sel);
-    }
-
     void Visit(Add *op) { safe(op, [&](auto o){ return lhs(o) + rhs(o); } ); }
     void Visit(Sub *op) { safe(op, [&](auto o){ return lhs(o) - rhs(o); } ); }
     void Visit(Mul *op) { safe(op, [&](auto o){ return lhs(o) * rhs(o); } ); }
@@ -254,11 +247,7 @@ namespace circ::run {
       safe(op, div);
     }
 
-    void Visit(CAnd *op) { safe(op, [&](auto o){ return lhs(o) & rhs(o); } ); }
-    void Visit(COr *op) { safe(op, [&](auto o){ return lhs(o) | rhs(o); } ); }
-    void Visit(CXor *op) { safe(op, [&](auto o){ return lhs(o) ^ rhs(o); } ); }
-
-
+    void Visit(Xor *op) { safe(op, [&](auto o){ return lhs(o) ^ rhs(o); } ); }
 
     void Visit(Shl *op) { safe(op, [&](auto o){ return lhs(o) << rhs(o); } ); }
     void Visit(LShr *op) { safe(op, [&](auto o){ return lhs(o).lshr(rhs(o)); } ); }

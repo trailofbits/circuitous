@@ -136,13 +136,12 @@ void OpSem<S>::Visit(PopulationCount *op)
 template<typename S>
 void OpSem<S>::Visit(Or *op)
 {
-    auto or_ = [&](Or *or_) {
-        for (const auto &child : or_->operands) {
-            if (self().get(child) == this->TrueVal()) {
-                return this->TrueVal();
-            }
-        }
-        return this->FalseVal();
+    auto or_ = [&](Or *op_)
+    {
+        auto out = *self().get(op_->operands[0]);
+        for (std::size_t i = 1; i < op_->operands.size(); ++i)
+            out |= *self().get(op_->operands[i]);
+        return out;
     };
     return safe(op, or_);
 }
@@ -150,13 +149,12 @@ void OpSem<S>::Visit(Or *op)
 template<typename S>
 void OpSem<S>::Visit(And *op)
 {
-    auto and_ = [&](And *or_) {
-        for (const auto &child : or_->operands) {
-            if (self().get(child) == this->FalseVal()) {
-                return this->FalseVal();
-            }
-        }
-        return this->TrueVal();
+    auto and_ = [&](And *op_)
+    {
+        auto out = *self().get(op_->operands[0]);
+        for (std::size_t i = 1; i < op_->operands.size(); ++i)
+            out &= *self().get(op_->operands[i]);
+        return out;
     };
     return safe(op, and_);
 }
