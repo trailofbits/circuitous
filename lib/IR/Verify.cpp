@@ -363,8 +363,6 @@ namespace circ
                     case ZExt::kind:
                     case SExt::kind:
                         return exactly(1, op);
-                    case BSelect::kind:
-                        return exactly(3, op);
                     default:
                         return exactly(2, op);
                 }
@@ -523,7 +521,7 @@ namespace circ
             auto allowed_nodes = collect_kinds< DecodeCondition, Constant,
                                                 DecoderResult, Extract,
                                                 InputInstructionBits, And, Advice, Icmp_eq,
-                                                Or, CXor >();
+                                                Or, Xor >();
             for (auto root : circuit->Attr< DecoderResult >())
                 verify_constrained_subtree(root, root, allowed_nodes);
         }

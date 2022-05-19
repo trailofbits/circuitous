@@ -97,13 +97,6 @@ namespace circ::smt
     else if (name == "sdiv")
       return circuit->Create< SDiv >(bv);
 
-    else if (name == "cand")
-      return circuit->Create< CAnd >(bv);
-    else if (name == "cor")
-      return circuit->Create< COr >(bv);
-    else if (name == "cxor")
-      return circuit->Create< CXor >(bv);
-
     else if (name == "shl")
       return circuit->Create< Shl >(bv);
     else if (name == "lshr")
@@ -157,9 +150,6 @@ namespace circ::smt
     }
     else if (name == "Parity")
       return circuit->Create< Parity >();
-
-    else if (name == "BSelect")
-      return circuit->Create< BSelect >(bv);
 
     else if (name == "ReadConstraint")
       return circuit->Create< ReadConstraint >();
