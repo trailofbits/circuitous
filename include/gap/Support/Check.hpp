@@ -10,7 +10,7 @@
 #include <string>
 
 #include <gap/Support/Log.hpp>
-#include <gap/Support/SourceLocation.hpp>
+#include <gap/core/source_location.hpp>
 
 namespace gap {
 
