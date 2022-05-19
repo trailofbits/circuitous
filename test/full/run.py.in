@@ -17,10 +17,10 @@ import defs.fetch_defs
 
 import tools.model_test as mp
 
-circuitous_prefix = os.environ.get("CIRCUITOUS_BUILD_DIR", "../../build")
+circuitous_prefix = "@PROJECT_BINARY_DIR@/bin"
 
-circuitous_run=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-run"))
-circuitous_lift=os.path.abspath(os.path.join(circuitous_prefix, "circuitous-lift"))
+circuitous_run=os.path.abspath(os.path.join(circuitous_prefix, "run/circuitous-run"))
+circuitous_lift=os.path.abspath(os.path.join(circuitous_prefix, "lift/circuitous-lift"))
 top_level_dir=None
 
 dbg_verbose = False
