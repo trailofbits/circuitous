@@ -10,4 +10,6 @@ add_headers( Support CIRCUITOUS_SUPPORT_HEADERS
 add_circuitous_header_library( support
   HEADERS
     ${CIRCUITOUS_SUPPORT_HEADERS}
+  LINK_LIBS
+    circuitous::gap
 )
