@@ -3,6 +3,7 @@
 add_subdirectory( ADT )
 add_subdirectory( Dbg )
 add_subdirectory( Fuzz )
+add_subdirectory( Gap )
 add_subdirectory( IR )
 add_subdirectory( Lifter )
 add_subdirectory( Printers )
