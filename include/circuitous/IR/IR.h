@@ -488,21 +488,9 @@ namespace circ
     declare_llvm_op(SRem, 21);
     declare_llvm_op(URem, 22);
 
-    struct BSelect final : Operation, make_kind< Computational, tag_fragment< 23 > >
-    {
-        static constexpr uint32_t kind = apply(Operation::kind);
-        BSelect(unsigned size_) : Operation(size_, kind) {}
-        static std::string op_code_str() { return "BSelect"; }
-        std::string Name() const override { return "BSelect"; }
-
-        Operation *cond() { return operands[0]; }
-        Operation *true_v() { return operands[1]; }
-        Operation *false_v() { return operands[2]; }
-    };
-
-    declare_llvm_op(CAnd, 301);
-    declare_llvm_op(COr, 302);
-    declare_llvm_op(CXor, 303);
+    declare_llvm_op(Xor, 23);
+    declare_llvm_op(And, 24);
+    declare_llvm_op(Or, 25);
 
     #undef declare_llvm_op
 
@@ -510,9 +498,8 @@ namespace circ
         Add, Sub, Mul, UDiv, SDiv, Shl, LShr, AShr, Trunc, ZExt, SExt,
         Icmp_ult, Icmp_slt, Icmp_ugt, Icmp_eq, Icmp_ne, Icmp_uge, Icmp_ule,
         Icmp_sgt, Icmp_sge, Icmp_sle,
-        BSelect,
-        CAnd, COr, CXor,
-        SRem, URem
+        SRem, URem,
+        Xor, And, Or
     >;
 
     /* Hidden */
@@ -644,9 +631,7 @@ namespace circ
 
     make_bool_op(DecodeCondition, 0);
     make_bool_op(VerifyInstruction, 1);
-    make_bool_op(Or, 2);
     make_bool_op(OnlyOneCondition, 3);
-    make_bool_op(And, 4);
     make_bool_op(DecoderResult, 5);
 
     #undef make_bool_op
@@ -660,8 +645,7 @@ namespace circ
         DecoderResult,
         ReadConstraint, WriteConstraint, UnusedConstraint,
         VerifyInstruction, OnlyOneCondition,
-        AdviceConstraint, Select, And,
-        Or
+        AdviceConstraint, Select
     >;
 
     using subnode_list_t = tl::merge< generic_list_t, llvm_ops_t, leaf_values_ts >;
