@@ -228,10 +228,3 @@ jobs:
       working-directory: ${{ steps.paths.outputs.build }}/circuitous
       run: |
         ctest
-
-    - name: Run functional tests
-      working-directory: ${{ steps.paths.outputs.src }}/circuitous/test
-      env:
-        CIRCUITOUS_BUILD_DIR: ${{ steps.paths.outputs.build }}/circuitous
-      run: |
-        python3 ./full/run.py --tag min --jobs $(nproc)
