@@ -433,6 +433,10 @@ namespace circ
         std::string Name() const override { return "unused_constraint"; }
     };
 
+    using constraint_opts_ts = tl::TL< RegConstraint, AdviceConstraint,
+                                       PreservedConstraint, CopyConstraint,
+                                       WriteConstraint, RegConstraint, UnusedConstraint >;
+
     // TODO(lukas): It would be nice to move these to struct defs
     static inline bool constrained_by(Operation *v, Operation *c)
     {
@@ -515,6 +519,8 @@ namespace circ
         explicit InputImmediate(unsigned size_) : Operation(size_, kind) {}
     };
 
+    using hidden_values_ts = tl::TL< InputImmediate >;
+
     /* BitManips */
 
     struct Extract final : Operation, make_kind< BitManip, tag_fragment< 0 > >
@@ -551,6 +557,8 @@ namespace circ
         static std::string op_code_str() { return "concat"; }
         std::string Name() const override { return "concat"; }
     };
+
+    using bit_manips_ts = tl::TL< Extract, Concat >;
 
     /* BitOps */
 
@@ -595,6 +603,9 @@ namespace circ
         std::string Name() const override { return "parity"; }
     };
 
+    using bit_ops_ts = tl::TL< PopulationCount, CountLeadingZeroes,
+                               CountTrailingZeroes, Not, Parity >;
+
     /* Without category */
 
     struct Select : Operation, make_kind< Uncat, tag_fragment< 0 > >
@@ -620,6 +631,8 @@ namespace circ
         uint32_t bits = 0;
     };
 
+    using uncategorized_ops_ts = tl::TL< Select >;
+
     #define make_bool_op(cls, idx) \
     struct cls final : Operation, make_kind< BoolOp, tag_fragment< idx > > \
     { \
@@ -635,6 +648,9 @@ namespace circ
     make_bool_op(DecoderResult, 5);
 
     #undef make_bool_op
+
+    using bool_ops_ts = tl::TL< DecodeCondition, VerifyInstruction, OnlyOneCondition,
+                                DecoderResult >;
 
     using generic_list_t =
     tl::TL<
