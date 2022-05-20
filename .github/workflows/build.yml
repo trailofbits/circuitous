@@ -201,6 +201,7 @@ jobs:
           -G Ninja \
           -S . \
           -B ${{ steps.paths.outputs.build }}/circuitous \
+          -DVCPKG_MANIFEST_MODE=OFF \
           -DCMAKE_VERBOSE_MAKEFILE=true \
           -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
           -DVCPKG_ROOT="${{ steps.cxxcommon.outputs.path }}" \
