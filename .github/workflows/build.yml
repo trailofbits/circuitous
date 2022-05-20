@@ -95,89 +95,99 @@ jobs:
         image_tag: ${{ matrix.image.tag }}
         destination: ${{ steps.paths.outputs.install }}
 
-    # setup gap
-    - name: Clone the gap repository
+    # TODO(Heno) temporary download cxx-common ports
+    - name: Clone the cxx-common ports
+      id: cxx-common-ports
       uses: actions/checkout@v3
       with:
-        repository: 'lifting-bits/gap'
-        path: ${{ steps.paths.outputs.src }}/gap
-        submodules: true
+        repository: 'lifting-bits/cxx-common'
+        path: ${{ steps.paths.outputs.src }}/cxx-common-ports
+        ref: 'port-files'
         fetch-depth: 1
 
-    # setup vcpkg for gap
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v10
-      with:
-        vcpkgDirectory: ${{ steps.paths.outputs.install }}/vcpkg
-        vcpkgGitCommitId: '${{ env.VCPKG_COMMIT_ID }}'
-        vcpkgJsonGlob: vcpkg.json
+    # # setup gap
+    # - name: Clone the gap repository
+    #   uses: actions/checkout@v3
+    #   with:
+    #     repository: 'lifting-bits/gap'
+    #     path: ${{ steps.paths.outputs.src }}/gap
+    #     submodules: true
+    #     fetch-depth: 1
 
-    - name: Configure gap
-      working-directory: ${{ steps.paths.outputs.src }}/gap
-      env:
-        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
-      run: |
-        cmake \
-          -G Ninja \
-          -S . \
-          -B ${{ steps.paths.outputs.build }}/gap \
-          -DCMAKE_VERBOSE_MAKEFILE=true \
-          -DGAP_ENABLE_COROUTINES=OFF \
-          -DENABLE_TESTING=OFF \
-          -DENABLE_EXAMPLES=OFF \
-          -DVCPKG_ROOT=${{ steps.paths.outputs.install }}/vcpkg \
-          -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/gap
+    # # setup vcpkg for gap
+    # - name: Setup vcpkg
+    #   uses: lukka/run-vcpkg@v10
+    #   with:
+    #     vcpkgDirectory: ${{ steps.paths.outputs.install }}/vcpkg
+    #     vcpkgGitCommitId: '${{ env.VCPKG_COMMIT_ID }}'
+    #     vcpkgJsonGlob: vcpkg.json
 
-    - name: Build gap
-      working-directory: ${{ steps.paths.outputs.src }}/gap
-      env:
-        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
-      run: |
-        cmake --build ${{ steps.paths.outputs.build }}/gap -j $(nproc)
+    # - name: Configure gap
+    #   working-directory: ${{ steps.paths.outputs.src }}/gap
+    #   env:
+    #     CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+    #   run: |
+    #     cmake \
+    #       -G Ninja \
+    #       -S . \
+    #       -B ${{ steps.paths.outputs.build }}/gap \
+    #       -DCMAKE_VERBOSE_MAKEFILE=true \
+    #       -DGAP_ENABLE_COROUTINES=OFF \
+    #       -DENABLE_TESTING=OFF \
+    #       -DENABLE_EXAMPLES=OFF \
+    #       -DVCPKG_ROOT=${{ steps.paths.outputs.install }}/vcpkg \
+    #       -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/gap
 
-    - name: Install gap
-      working-directory: ${{ steps.paths.outputs.src }}/gap
-      env:
-        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
-      run: |
-        cmake --build ${{ steps.paths.outputs.build }}/gap --target install
+    # - name: Build gap
+    #   working-directory: ${{ steps.paths.outputs.src }}/gap
+    #   env:
+    #     CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+    #   run: |
+    #     cmake --build ${{ steps.paths.outputs.build }}/gap -j $(nproc)
 
-    # setup remill
-    - name: Clone the remill repository
-      uses: actions/checkout@v3
-      with:
-        repository: 'lifting-bits/remill'
-        path: ${{ steps.paths.outputs.src }}/remill
-        submodules: true
-        fetch-depth: 1
+    # - name: Install gap
+    #   working-directory: ${{ steps.paths.outputs.src }}/gap
+    #   env:
+    #     CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+    #   run: |
+    #     cmake --build ${{ steps.paths.outputs.build }}/gap --target install
 
-    - name: Configure remill
-      working-directory: ${{ steps.paths.outputs.src }}/remill
-      env:
-        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
-      run: |
-        cmake \
-          -G Ninja \
-          -S . \
-          -B ${{ steps.paths.outputs.build }}/remill \
-          -DCMAKE_VERBOSE_MAKEFILE=true \
-          -DVCPKG_ROOT=${{ steps.cxxcommon.outputs.path }} \
-          -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
-          -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/remill
+    # # setup remill
+    # - name: Clone the remill repository
+    #   uses: actions/checkout@v3
+    #   with:
+    #     repository: 'lifting-bits/remill'
+    #     path: ${{ steps.paths.outputs.src }}/remill
+    #     submodules: true
+    #     fetch-depth: 1
 
-    - name: Build remill
-      working-directory: ${{ steps.paths.outputs.src }}/remill
-      env:
-        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
-      run: |
-        cmake --build ${{ steps.paths.outputs.build }}/remill -j $(nproc)
+    # - name: Configure remill
+    #   working-directory: ${{ steps.paths.outputs.src }}/remill
+    #   env:
+    #     CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+    #   run: |
+    #     cmake \
+    #       -G Ninja \
+    #       -S . \
+    #       -B ${{ steps.paths.outputs.build }}/remill \
+    #       -DCMAKE_VERBOSE_MAKEFILE=true \
+    #       -DVCPKG_ROOT=${{ steps.cxxcommon.outputs.path }} \
+    #       -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
+    #       -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/remill
 
-    - name: Install remill
-      working-directory: ${{ steps.paths.outputs.src }}/remill
-      env:
-        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
-      run: |
-        cmake --build ${{ steps.paths.outputs.build }}/remill --target install
+    # - name: Build remill
+    #   working-directory: ${{ steps.paths.outputs.src }}/remill
+    #   env:
+    #     CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+    #   run: |
+    #     cmake --build ${{ steps.paths.outputs.build }}/remill -j $(nproc)
+
+    # - name: Install remill
+    #   working-directory: ${{ steps.paths.outputs.src }}/remill
+    #   env:
+    #     CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+    #   run: |
+    #     cmake --build ${{ steps.paths.outputs.build }}/remill --target install
 
     # setup circuitous
     - name: Clone the circuitous repository
@@ -196,36 +206,47 @@ jobs:
     - name: Configure circuitous
       working-directory: ${{ steps.paths.outputs.src }}/circuitous
       shell: bash
+      env:
+        CXX_COMMON_ROOT: ${{ steps.paths.outputs.src }}/cxx-common-ports
       run: |
-        cmake \
-          -G Ninja \
-          -S . \
-          -B ${{ steps.paths.outputs.build }}/circuitous \
-          -DVCPKG_MANIFEST_MODE=OFF \
+        cmake --preset ninja-multi-linux-cxx-common \
           -DCMAKE_VERBOSE_MAKEFILE=true \
-          -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
-          -DVCPKG_ROOT="${{ steps.cxxcommon.outputs.path }}" \
-          -Dremill_DIR:PATH=${{ steps.paths.outputs.install }}/remill/lib/cmake/remill/ \
           -DGAP_ENABLE_COROUTINES=OFF \
-          -Dgap_DIR:PATH=${{ steps.paths.outputs.install }}/gap/lib/cmake/gap/ \
           -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/circuitous
 
-    - name: Build circuitous
-      working-directory: ${{ steps.paths.outputs.build }}/circuitous
-      env:
-        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+    # - name: Configure circuitous
+    #   working-directory: ${{ steps.paths.outputs.src }}/circuitous
+    #   shell: bash
+    #   run: |
+    #     cmake \
+    #       -G Ninja \
+    #       -S . \
+    #       -B ${{ steps.paths.outputs.build }}/circuitous \
+    #       -DVCPKG_MANIFEST_MODE=OFF \
+    #       -DCMAKE_VERBOSE_MAKEFILE=true \
+    #       -DVCPKG_TARGET_TRIPLET=x64-linux-rel \
+    #       -DVCPKG_ROOT="${{ steps.cxxcommon.outputs.path }}" \
+    #       -Dremill_DIR:PATH=${{ steps.paths.outputs.install }}/remill/lib/cmake/remill/ \
+    #       -DGAP_ENABLE_COROUTINES=OFF \
+    #       -Dgap_DIR:PATH=${{ steps.paths.outputs.install }}/gap/lib/cmake/gap/ \
+    #       -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/circuitous
 
-      run: |
-        cmake --build ${{ steps.paths.outputs.build }}/circuitous -j $(nproc)
+    # - name: Build circuitous
+    #   working-directory: ${{ steps.paths.outputs.build }}/circuitous
+    #   env:
+    #     CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
 
-    - name: Install circuitous
-      working-directory: ${{ steps.paths.outputs.build }}/circuitous
-      env:
-        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
-      run: |
-        cmake --build ${{ steps.paths.outputs.build }}/circuitous --target install
+    #   run: |
+    #     cmake --build ${{ steps.paths.outputs.build }}/circuitous -j $(nproc)
 
-    - name: Run circuitous unittests
-      working-directory: ${{ steps.paths.outputs.build }}/circuitous
-      run: |
-        ctest
+    # - name: Install circuitous
+    #   working-directory: ${{ steps.paths.outputs.build }}/circuitous
+    #   env:
+    #     CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
+    #   run: |
+    #     cmake --build ${{ steps.paths.outputs.build }}/circuitous --target install
+
+    # - name: Run circuitous unittests
+    #   working-directory: ${{ steps.paths.outputs.build }}/circuitous
+    #   run: |
+    #     ctest
