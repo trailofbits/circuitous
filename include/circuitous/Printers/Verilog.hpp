@@ -703,7 +703,7 @@ namespace circ::print::verilog
 
         void declare_in_args(Operation *op)
         {
-            if (is_of< Circuit >(op))
+            if (isa< Circuit >(op))
             {
                 declare_in_args< OutputRegister, InputRegister,
                                   InputErrorFlag, OutputErrorFlag,
@@ -796,7 +796,7 @@ namespace circ::print::verilog
 
     static inline std::string get_module_name(Operation *op)
     {
-        check(!is_of< LeafValue >(op));
+        check(!isa< LeafValue >(op));
         switch (op->op_code) {
             case Circuit::kind: return "full_circuit";
             default : return op_code_str(op->op_code) + "_" + std::to_string(op->size);

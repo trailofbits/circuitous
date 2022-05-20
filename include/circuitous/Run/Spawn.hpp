@@ -261,7 +261,7 @@ namespace circ::run
                 return;
             }
             // This node is not used in current context, just skip.
-            if (!collector->op_to_ctxs[op].count(current) && !is_of< LeafValue >(op))
+            if (!collector->op_to_ctxs[op].count(current) && !isa< LeafValue >(op))
             {
                 log_dbg() << "Assign:" << pretty_print< false >(op)
                           << "node not in the current context, do not set value.";

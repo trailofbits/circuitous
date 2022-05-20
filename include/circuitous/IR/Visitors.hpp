@@ -59,7 +59,7 @@ namespace circ
         auto Visit_(operation_t op, Args && ...args)
         {
 
-            if (is_specialization< T >(op->op_code))
+            if (isa< T >(op->op_code))
             {
                 auto casted = dynamic_cast< adjust_constness_t< T * > >(op);
                 return self().Visit(casted, std::forward< Args >(args) ... );
@@ -120,7 +120,7 @@ namespace circ
         template< typename T, typename ...Tail, typename ...Args >
         auto Visit_(uint32_t kind, Args &&... args)
         {
-            if (is_specialization< T >(kind))
+            if (isa< T >(kind))
                 return self().Visit(static_cast< T * >(nullptr), std::forward< Args >(args)...);
 
             if constexpr (sizeof...(Tail) != 0) {
