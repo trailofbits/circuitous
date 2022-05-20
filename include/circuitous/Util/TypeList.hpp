@@ -63,6 +63,25 @@ namespace circ::tl {
       }
     }
 
+    template< typename Acc, typename H, typename ... Tail >
+    bool contains(Acc &&acc)
+    {
+      if (acc.template operator()< H >())
+        return true;
+      if constexpr (sizeof ... (Tail) != 0)
+        return contains< Acc, Tail ... >(std::forward< Acc >(acc));
+      else
+        return false;
+    }
+
+    template< typename ... Es, typename Acc >
+    bool contains(tl::TL< Es ... >, Acc &&acc)
+    {
+        if constexpr (sizeof ... (Es) == 0)
+          return false;
+        else
+          return contains< Acc, Es ... >(std::forward< Acc >(acc));
+    }
 
   } // namespace detail
 
@@ -84,6 +103,9 @@ namespace circ::tl {
 
   template< typename ...Ts >
   using make_list = TL< Ts ... >;
+
+  template< typename L, typename Acc >
+  bool contains(Acc &&acc) { return detail::contains(L{}, std::forward< Acc >(acc)); }
 
   namespace test {
 
