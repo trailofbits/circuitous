@@ -4,7 +4,31 @@
   "dependencies": [
     "doctest",
     "spdlog",
-    "gap",
-    "remill"
-  ]
+    "gap"
+  ],
+  "default-features": [
+    "cxx-common-llvm-14"
+  ],
+  "features": {
+    "system-llvm": {
+      "description": "Build with system llvm",
+      "dependencies": [
+        {
+          "name": "remill",
+          "default-features": false,
+          "features": ["system-llvm"]
+        }
+      ]
+    },
+    "cxx-common-llvm-14": {
+      "description": "Build with cxx-common llvm-14 port",
+      "dependencies": [
+        {
+          "name": "remill",
+          "default-features": false,
+          "features": ["cxx-common-llvm-14"]
+        }
+      ]
+    }
+  }
 }
