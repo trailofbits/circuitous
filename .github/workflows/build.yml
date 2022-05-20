@@ -207,8 +207,11 @@ jobs:
       working-directory: ${{ steps.paths.outputs.src }}/circuitous
       shell: bash
       env:
+        # TODO(Heno): use ports from
         CXX_COMMON_ROOT: ${{ steps.paths.outputs.src }}/cxx-common-ports
+        CMAKE_PREFIX_PATH: :$CMAKE_PREFIX_PATH
       run: |
+        ls ${{ steps.cxxcommon.outputs.path }}
         cmake --preset ninja-multi-linux-cxx-common \
           -DCMAKE_VERBOSE_MAKEFILE=true \
           -DGAP_ENABLE_COROUTINES=OFF \
