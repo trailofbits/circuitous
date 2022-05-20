@@ -103,7 +103,7 @@ namespace circ
             auto expected = op->operands[0];
             auto extracted = op->operands[1];
 
-            check(is_of< Constant >(expected) && is_of< Extract >(extracted));
+            check(isa< Constant >(expected) && isa< Extract >(extracted));
             const auto &constant = static_cast< const Constant & >(*expected);
             const auto &extract = static_cast< const Extract & >(*extracted);
             enc.define(extract.low_bit_inc, extract.high_bit_exc - 1, convert(constant.bits));
@@ -220,7 +220,7 @@ namespace circ
         Operation *out = nullptr;
         for (auto op : root->operands)
         {
-            if (is_of< DecoderResult >(op))
+            if (isa< DecoderResult >(op))
             {
                 check(!out);
                 out = op;
@@ -354,10 +354,10 @@ namespace circ
                     return not_exactly(0, op);
             }
 
-            if (is_specialization< LeafValue >(op->op_code))
+            if (isa< leaf_values_ts >(op->op_code))
                 return exactly(0, op);
 
-            if (is_specialization<Computational>(op->op_code)) {
+            if (isa< llvm_ops_t >(op->op_code)) {
                 switch (op->op_code) {
                     case Trunc::kind:
                     case ZExt::kind:
@@ -487,7 +487,7 @@ namespace circ
             {
                 std::vector< Operation * > decoder_results;
                 for (auto op : ctx->operands)
-                    if (is_of< DecoderResult >(op))
+                    if (isa< DecoderResult >(op))
                         decoder_results.push_back(op);
                 if (decoder_results.size() == 0)
                 {
