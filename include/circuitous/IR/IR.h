@@ -67,27 +67,39 @@ namespace circ
         {}
     };
 
-    template< typename T >
-    bool is_specialization(uint32_t derived)
+    template< class O >
+    concept is_operation_type = std::is_base_of_v< Operation, O >;
+
+    template< class T >
+    concept is_type_list = requires (T t)
     {
-        auto relevant = derived & T::mask;
-        return relevant == T::kind;
+        { tl::TL{ t } } -> std::same_as< T >;
+    };
+
+    template< typename T >
+    bool isa(Operation::kind_t rkind) { return T::kind == rkind; }
+
+    template< typename T >
+    bool isa(Operation *op) { return isa< T >(op->op_code); }
+
+    template< typename TypeList >
+    bool is_in(Operation::kind_t rkind)
+    {
+        auto accept = [&]< typename T >() { return isa< T >(rkind); };
+        return tl::contains< TypeList >(accept);
     }
+
+    template< typename T > requires (is_type_list< T >)
+    bool isa(Operation::kind_t rkind) { return is_in< T >(rkind); }
 
     template< typename ...Ts >
     bool is_one_of(Operation *op)
     {
-        return (is_specialization<Ts>(op->op_code) || ...);
+        return (isa< Ts >(op->op_code) || ...);
     }
 
     template< typename ... Ts >
     bool is_one_of(Operation *op, tl::TL< Ts ... >) { return is_one_of< Ts ... >(op); }
-
-    template< typename T >
-    bool is_of(Operation *op)
-    {
-        return (op->op_code & T::mask) == T::apply(0u);
-    }
 
     template< typename T, typename ... Ts >
     void collect_kinds(std::unordered_set< Operation::kind_t > &seen)
