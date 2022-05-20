@@ -32,6 +32,7 @@ build/*
 builds/*
 install/*
 test/full/tmp*
+vcpkg_installed/*
 
 *.o
 *.ll
