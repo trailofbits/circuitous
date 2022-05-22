@@ -20,17 +20,91 @@
         }
     },
     {
-        "name": "ninja-osx-cxx-common-rel",
+        "name": "release",
+        "description": "Configure release build",
+        "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    },
+    {
+        "name": "debug",
+        "description": "Configure debug build",
+        "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" }
+    },
+    {
+        "name": "cxx-common",
+        "hidden": true,
+        "description": "Configure with cxx-common toolchain",
+        "cacheVariables": {
+            "VCPKG_OVERLAY_TRIPLETS": "$env{CXX_COMMON_ROOT}/triplets",
+            "VCPKG_OVERLAY_PORTS": "$env{CXX_COMMON_ROOT}/ports"
+        }
+    },
+    {
+        "name": "x64-osx-rel",
+        "hidden": true,
+        "description": "Configure with x64-osx-rel triplet",
+        "inherits": "cxx-common",
+        "cacheVariables": {
+            "VCPKG_TARGET_TRIPLET": "x64-osx-rel",
+            "VCPKG_HOST_TRIPLET": "x64-osx-rel"
+        }
+    },
+    {
+        "name": "x64-osx-deb",
+        "hidden": true,
+        "description": "Configure with x64-osx-deb triplet",
+        "inherits": "cxx-common",
+        "cacheVariables": {
+            "VCPKG_TARGET_TRIPLET": "x64-osx-deb",
+            "VCPKG_HOST_TRIPLET": "x64-osx-deb"
+        }
+    },
+    {
+        "name": "x64-linux-rel",
+        "hidden": true,
+        "description": "Configure with x64-linux-rel triplet",
+        "inherits": "cxx-common",
+        "cacheVariables": {
+            "VCPKG_TARGET_TRIPLET": "x64-linux-rel",
+            "VCPKG_HOST_TRIPLET": "x64-linux-rel"
+        }
+    },
+    {
+        "name": "x64-linux-deb",
+        "hidden": true,
+        "description": "Configure with x64-linux-deb triplet",
+        "inherits": "cxx-common",
+        "cacheVariables": {
+            "VCPKG_TARGET_TRIPLET": "x64-linux-deb",
+            "VCPKG_HOST_TRIPLET": "x64-linux-deb"
+        }
+    },
+    {
+        "name": "ninja-cxx-common-x64-osx-rel",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja release with cxx-common",
         "description": "Configure with cxx-common toolchain for x64-osx-rel",
-        "cacheVariables": {
-            "VCPKG_TARGET_TRIPLET": "x64-osx-rel",
-            "VCPKG_HOST_TRIPLET": "x64-osx-rel",
-            "VCPKG_OVERLAY_TRIPLETS": "$env{CXX_COMMON_ROOT}/triplets",
-            "VCPKG_OVERLAY_PORTS": "$env{CXX_COMMON_ROOT}/ports",
-            "CMAKE_BUILD_TYPE": "Release"
-        }
+        "inherits": [ "release", "x64-osx-rel" ]
+    },
+    {
+        "name": "ninja-cxx-common--x64-osx-deb",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja release with cxx-common",
+        "description": "Configure with cxx-common toolchain for x64-osx-deb",
+        "inherits": [ "debug", "x64-osx-deb" ]
+    },
+    {
+        "name": "ninja-cxx-common-x64-linux-rel",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja release with cxx-common",
+        "description": "Configure with cxx-common toolchain for x64-linux-rel",
+        "inherits": [ "release", "x64-linux-rel" ]
+    },
+    {
+        "name": "ninja-cxx-common--x64-linux-deb",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja release with cxx-common",
+        "description": "Configure with cxx-common toolchain for x64-linux-deb",
+        "inherits": [ "debug", "x64-linux-deb" ]
     },
     {
         "name": "ninja-multi-osx-cxx-common",
