@@ -211,8 +211,8 @@ jobs:
         CXX_COMMON_ROOT: ${{ steps.paths.outputs.src }}/cxx-common-ports
         CMAKE_PREFIX_PATH: :$CMAKE_PREFIX_PATH
       run: |
-        ls ${{ steps.cxxcommon.outputs.path }}
         cmake --preset ninja-cxx-common-x64-linux-rel \
+          -G Ninja \
           -DCMAKE_VERBOSE_MAKEFILE=true \
           -DGAP_ENABLE_COROUTINES=OFF \
           -DCMAKE_INSTALL_PREFIX=${{ steps.paths.outputs.install }}/circuitous
