@@ -33,6 +33,7 @@
         "name": "cxx-common",
         "hidden": true,
         "description": "Configure with cxx-common toolchain",
+        "generator": "Ninja",
         "cacheVariables": {
             "VCPKG_OVERLAY_TRIPLETS": "$env{CXX_COMMON_ROOT}/triplets",
             "VCPKG_OVERLAY_PORTS": "$env{CXX_COMMON_ROOT}/ports"
