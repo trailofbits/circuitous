@@ -91,6 +91,8 @@ void print_topology(std::ostream &os, Operation *op, unsigned max_depth,
       break;
     case Circuit::kind:
       return print_topology(os, op->operands[0], max_depth + 1u, accept);
+    default:
+      unreachable() << "Printer failed.";
   }
 }
 

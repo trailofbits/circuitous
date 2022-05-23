@@ -63,7 +63,7 @@ bool Operation::Equals(const Operation *that) const {
 }
 
 std::string Operation::Name() const {
-  unreachable() << op_code << " does not provide Name() method override.";
+  unreachable() << util::to_underlying(op_code) << " does not provide Name() method override.";
 }
 
 #define STREAM_NAME(cls, ...) \
