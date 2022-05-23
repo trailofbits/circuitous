@@ -53,8 +53,6 @@ void print_topology(std::ostream &os, Operation *op, unsigned max_depth,
       os << ')';
       break;
     case RegConstraint::kind:
-    case PreservedConstraint::kind:
-    case CopyConstraint::kind:
     case DecodeCondition::kind:
       os << "(=";
       for (auto sub_op : op->operands) {

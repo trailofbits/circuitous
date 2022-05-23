@@ -273,8 +273,6 @@ namespace circ::print::verilog
             switch (op->op_code) {
                 case AdviceConstraint::kind:
                 case RegConstraint::kind:
-                case PreservedConstraint::kind:
-                case CopyConstraint::kind:
                 case DecodeCondition::kind:
                     return "==";
                 case Add::kind: return "+";
@@ -364,8 +362,6 @@ namespace circ::print::verilog
 
         std::string Visit(AdviceConstraint *op)    { return make(zip(), op); }
         std::string Visit(RegConstraint *op)       { return make(zip(), op); }
-        std::string Visit(PreservedConstraint *op) { return make(zip(), op); }
-        std::string Visit(CopyConstraint *op)      { return make(zip(), op); }
 
         std::string make_extract(const std::string &from, uint64_t high_inc, uint64_t low_inc)
         {

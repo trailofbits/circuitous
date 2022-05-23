@@ -63,8 +63,6 @@ namespace circ::eqsat {
 
     OpTemplate Visit(RegConstraint *op)       { return opcode(op); }
     OpTemplate Visit(AdviceConstraint *op)    { return opcode(op); }
-    OpTemplate Visit(PreservedConstraint *op) { return opcode(op); }
-    OpTemplate Visit(CopyConstraint *op)      { return opcode(op); }
     OpTemplate Visit(WriteConstraint *op)     { return opcode(op); }
     OpTemplate Visit(ReadConstraint *op)      { return opcode(op); }
     OpTemplate Visit(UnusedConstraint *op)    { return opcode(op); }
@@ -537,8 +535,6 @@ namespace circ::eqsat {
       return llvm::StringSwitch< Operation* >(op.op_code_name)
         .Case("register_constraint",  circuit->Create< RegConstraint >())
         .Case("advice_constraint",    circuit->Create< AdviceConstraint >())
-        .Case("preserved_constraint", circuit->Create< PreservedConstraint >())
-        .Case("copy_constraint",      circuit->Create< CopyConstraint >())
         .Case("write_constraint",     circuit->Create< WriteConstraint >())
         .Case("read_constraint",      circuit->Create< ReadConstraint >())
         .Case("unused_constraint",    circuit->Create< UnusedConstraint >())
