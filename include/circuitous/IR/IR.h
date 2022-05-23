@@ -143,6 +143,17 @@ namespace circ
         {}
     };
 
+    template< typename R >
+    std::optional< Operation::kind_t > reconstruct_kind(R r)
+    {
+       if (r > util::to_underlying(Operation::kind_t::kFirst) &&
+           r < util::to_underlying(Operation::kind_t::kLast))
+       {
+           return { static_cast< Operation::kind_t >(r) };
+       }
+       return {};
+    }
+
     template< class O >
     concept is_operation_type = std::is_base_of_v< Operation, O >;
 
