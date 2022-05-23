@@ -30,37 +30,7 @@ namespace {
     return ss.str();
   }
 
-  template<typename T>
-  bool RegEquals(const T& self, const Operation *that_) {
-    if (&self == that_) {
-      return true;
-    }
-    if (auto that = dynamic_cast<const T *>(that_)) {
-      return self.reg_name == that->reg_name;
-    }
-    return self.Operation::Equals(that_);
-  }
-
 }  // namespace
-
-bool Operation::Equals(const Operation *that) const {
-  if (this == that) {
-    return true;
-  }
-
-  const auto num_ops = operands.size();
-  if (op_code != that->op_code || size != that->size ||
-      num_ops != that->operands.size()) {
-    return false;
-  }
-
-  for (auto i = 0u; i < num_ops; ++i) {
-    if (!operands[i]->Equals(that->operands[i])) {
-      return false;
-    }
-  }
-  return true;
-}
 
 std::string Operation::Name() const {
   unreachable() << util::to_underlying(op_code) << " does not provide Name() method override.";
@@ -80,29 +50,6 @@ std::string Constant::Name() const {
     ss << bits[size - i - 1];
   }
   return ss.str();
-}
-
-bool Constant::Equals(const Operation *that_) const {
-  if (auto that = dynamic_cast<const Constant *>(that_)) {
-    return bits == that->bits;
-  }
-  return this->Operation::Equals(that_);
-}
-
-bool Extract::Equals(const Operation *that_) const {
-  if (this == that_) {
-    return true;
-  }
-  if (auto that = dynamic_cast<const Extract *>(that_); that) {
-    return size == that->size && high_bit_exc == that->high_bit_exc &&
-           low_bit_inc == that->low_bit_inc &&
-           operands[0]->Equals(that->operands[0]);
-  }
-  return this->Operation::Equals(that_);
-}
-
-bool InputImmediate::Equals(const Operation *other) const {
-  return this->Operation::Equals(other);
 }
 
 uint32_t Memory::expected_size(uint32_t ptr_size) {
