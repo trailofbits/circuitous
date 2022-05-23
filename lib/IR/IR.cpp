@@ -21,27 +21,9 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ {
 
-namespace {
-
-  template<typename ...Args>
-  std::string StreamName(Args &&... args) {
-    std::stringstream ss;
-    (ss << ... << args);
-    return ss.str();
-  }
-
-}  // namespace
-
 std::string Operation::Name() const {
   unreachable() << util::to_underlying(op_code) << " does not provide Name() method override.";
 }
-
-#define STREAM_NAME(cls, ...) \
-  std::string cls::Name(void) const { \
-    std::stringstream ss; \
-    ss << __VA_ARGS__; \
-    return ss.str(); \
-  }
 
 std::string Constant::Name() const {
   std::stringstream ss;
