@@ -112,7 +112,6 @@ namespace circ
 
         virtual std::string Name() const;
         static std::string op_code_str() { not_implemented(); }
-        virtual bool Equals(const Operation *that) const;
 
         auto &operator[](std::size_t idx) { return operands[idx]; }
         const auto &operator[](std::size_t idx) const { return operands[idx]; }
@@ -265,7 +264,6 @@ namespace circ
 
         static std::string op_code_str() { return "register"; }
         std::string Name() const override { return "register." + reg_name; }
-        bool Equals(const Operation *other) const override { not_implemented(); }
 
         std::string reg_name;
     };
@@ -336,7 +334,6 @@ namespace circ
             bits(std::move(bits_))
         {}
 
-        bool Equals(const Operation *that) const override;
         static std::string op_code_str() { return "constant"; }
         std::string Name() const override;
 
@@ -570,7 +567,6 @@ namespace circ
 
         static std::string op_code_str() { return "input_immediate"; }
         std::string Name() const override { return "input_immediate"; }
-        bool Equals(const Operation *that) const override;
     };
 
     using hidden_values_ts = tl::TL< InputImmediate >;
@@ -590,7 +586,6 @@ namespace circ
           return ss.str();
         }
 
-        bool Equals(const Operation *that) const override;
 
         uint32_t extracted_size() const { return high_bit_exc - low_bit_inc; }
 
