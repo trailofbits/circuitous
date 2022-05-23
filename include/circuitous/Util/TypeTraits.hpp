@@ -35,4 +35,10 @@ namespace circ::util
                               sizeof ... (Args) == 1;
 
 
+    // TODO(lukas): Remove once c++23 is available since it will be in `std::`.
+    template< typename E > requires (std::is_enum_v< E >)
+    auto to_underlying(E e) -> std::underlying_type_t< E >
+    {
+        return static_cast< std::underlying_type_t< E > >(e);
+    }
 } // namespace circ::util
