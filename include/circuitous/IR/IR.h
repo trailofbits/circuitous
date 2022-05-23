@@ -227,7 +227,6 @@ namespace circ
 
         static std::string op_code_str() { return "in." + parent_t::op_code_str(); }
         std::string Name() const override { return "In." + parent_t::Name(); }
-        std::string raw_name() const { return parent_t::Name(); }
     };
 
     template< class Next, Operation::kind_t k >
@@ -246,7 +245,6 @@ namespace circ
 
         static std::string op_code_str() { return "out." + parent_t::op_code_str(); }
         std::string Name() const override { return "Out." + parent_t::Name(); }
-        std::string raw_name() const { return parent_t::Name(); }
     };
 
     /* I/O & Leaf nodes */
