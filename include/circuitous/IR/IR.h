@@ -21,6 +21,8 @@
 
 namespace circ
 {
+    struct CircuitStorage;
+
     // A general instruction.
     struct Operation : public Node< Operation >, HasStringMeta
     {
@@ -112,21 +114,6 @@ namespace circ
         auto &operator[](std::size_t idx) { return operands[idx]; }
         const auto &operator[](std::size_t idx) const { return operands[idx]; }
 
-        // `id` should be unique in a given circuit.
-        uint64_t id() const { return _id; }
-
-
-        // Size in bits of this instruction's "result" value. For example, a zero-
-        // extension will represent the size of the output value.
-        const unsigned size;
-
-        // The "opcode" of this.
-        const kind_t op_code;
-
-        // Must be set manually after ctor is called.
-        uint64_t _id = 0;
-
-
         template< typename Vis >
         void Traverse(Vis &vis)
         {
@@ -139,6 +126,23 @@ namespace circ
         explicit Operation(unsigned size_, Operation::kind_t op_code_)
             : size(size_), op_code(op_code_)
         {}
+
+      public:
+        // `id` should be unique in a given circuit.
+        uint64_t id() const { return _id; }
+
+        // Size in bits of this instruction's "result" value. For example, a zero-
+        // extension will represent the size of the output value.
+        const unsigned size;
+
+        // The "opcode" of this.
+        const kind_t op_code;
+
+      private:
+        friend CircuitStorage;
+
+        // Must be set manually after ctor is called.
+        uint64_t _id = 0;
     };
 
     template< typename R >
