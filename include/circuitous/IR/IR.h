@@ -6,6 +6,7 @@
 
 #include <circuitous/Util/UseDef.h>
 #include <circuitous/Util/TypeList.hpp>
+#include <circuitous/Util/TypeTraits.hpp>
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/IR/Metadata.hpp>
 
@@ -24,9 +25,82 @@ namespace circ
     struct Operation : public Node< Operation >, HasStringMeta
     {
       public:
-        using kind_t = uint32_t;
+        enum class kind_t : uint32_t
+        {
+            kOperation = 0,
+            kCircuit = 1,
 
-        static constexpr uint32_t kind = 0;
+            kInputRegister,
+            kOutputRegister,
+
+            kInputErrorFlag,
+            kOutputErrorFlag,
+
+            kInputTimestamp,
+            kOutputTimestamp,
+
+            kUndefined,
+            kMemory,
+            kConstant,
+            kAdvice,
+            kInputInstructionBits,
+
+            kRegConstraint,
+            kAdviceConstraint,
+            kPreservedConstraint,
+            kCopyConstraint,
+            kWriteConstraint,
+            kReadConstraint,
+            kUnusedConstraint,
+
+            // LLVM
+            kAdd,
+            kSub,
+            kMul,
+            kUDiv,
+            kSDiv,
+            kShl,
+            kLShr,
+            kAShr,
+            kTrunc,
+            kZExt,
+            kSExt,
+            kIcmp_ult,
+            kIcmp_slt,
+            kIcmp_ugt,
+            kIcmp_eq,
+            kIcmp_ne,
+            kIcmp_uge,
+            kIcmp_ule,
+            kIcmp_sgt,
+            kIcmp_sge,
+            kIcmp_sle,
+            kSRem,
+            kURem,
+            kXor,
+            kAnd,
+            kOr,
+
+            kInpuImmediate,
+
+            kExtract,
+            kConcat,
+            kPopulationCount,
+            kCountTrailingZeroes,
+            kCountLeadingZeroes,
+            kParity,
+            kNot,
+
+            kSelect,
+
+            // Condition
+            kDecodeCondition,
+            kDecoderResult,
+            kOnlyOneCondition,
+            kVerifyInstruction,
+        };
+
+        static constexpr kind_t kind = kind_t::kOperation;
         static constexpr uint32_t bool_size = 1u;
 
         virtual ~Operation() = default;
@@ -44,10 +118,10 @@ namespace circ
 
         // Size in bits of this instruction's "result" value. For example, a zero-
         // extension will represent the size of the output value.
-        const unsigned size{0};
+        const unsigned size;
 
         // The "opcode" of this.
-        const unsigned op_code{0};
+        const kind_t op_code;
 
         // Must be set manually after ctor is called.
         uint64_t _id = 0;
@@ -62,7 +136,7 @@ namespace circ
 
       protected:
         // Please note, that id is not set.
-        explicit Operation(unsigned size_, unsigned op_code_)
+        explicit Operation(unsigned size_, Operation::kind_t op_code_)
             : size(size_), op_code(op_code_)
         {}
     };
@@ -75,6 +149,7 @@ namespace circ
     {
         { tl::TL{ t } } -> std::same_as< T >;
     };
+
 
     template< typename T >
     bool isa(Operation::kind_t rkind) { return T::kind == rkind; }
@@ -117,81 +192,39 @@ namespace circ
         return out;
     }
 
-    template< typename Base, Base root_, uint8_t position_ >
-    struct kind_fragment
-    {
-        static constexpr Base root = root_;
-        static constexpr uint8_t position = position_;
-
-        static constexpr uint32_t apply(uint32_t to)
-        {
-            return ( static_cast< uint32_t >( root ) << position ) + to;
-        }
-
-        static constexpr uint32_t mask = static_cast< uint32_t >( Base{0} - 1 ) << position;
-        static constexpr uint32_t kind = apply(0u);
-    };
-
-    template< uint8_t root > using type_fragment = kind_fragment< uint8_t, root, 24 >;
-    template< uint16_t root > using tag_fragment = kind_fragment< uint16_t, root, 8 >;
-    template< uint8_t root > using meta_fragment = kind_fragment< uint8_t, root, 0 >;
-
-    template< typename ... Fragments >
-    struct make_kind_ : Fragments ...
-    {
-        template< typename T, typename ...Ts >
-        static constexpr uint32_t _apply(uint32_t to)
-        {
-            uint32_t tmp = T::apply(to);
-
-            if constexpr (sizeof...(Ts) != 0)
-                return _apply<Ts...>(tmp);
-            else
-                return tmp;
-        }
-
-        static constexpr uint32_t apply(uint32_t to)
-        {
-            return _apply< Fragments... >(to);
-        }
-
-        static constexpr uint32_t mask = ( Fragments::mask | ... | 0u );
-        static constexpr uint32_t kind = apply(0u);
-    };
-
-    template< typename Type, typename Tag, typename Meta = meta_fragment< 3 > >
-    using make_kind = make_kind_< Type, Tag, Meta >;
-
-    using LeafValue = type_fragment< 0x1 >;
-    using HiddenValue = type_fragment< 0x2 >;
-    using BitManip = type_fragment< 0x3 >;
-    using BitOp = type_fragment< 0x4 >;
-
-    using Computational = type_fragment< 0x5 >;
-
-    using Constraint = type_fragment< 0x6 >;
-    using Uncat = type_fragment< 0x7 >;
-    using BoolOp = type_fragment< 0x9 >;
-
-    using Root = type_fragment< 0xf >;
-
     /* Leaves */
 
-    template< template< typename > class T >
-    struct Input : T< meta_fragment< 0 > >
+    template< class Next, Operation::kind_t k >
+    struct Input : Next
     {
-        using parent_t = T< meta_fragment< 0 > >;
+        using parent_t = Next;
         using parent_t::parent_t;
+
+        static inline constexpr Operation::kind_t kind = k;
+
+        template< typename ... Args >
+            requires (!util::is_copy_ctor_of< Input< Next, k >, Args ... >)
+        Input(Args && ... args) : Next(kind, std::forward< Args >(args) ... ) {}
+
         static std::string op_code_str() { return "in." + parent_t::op_code_str(); }
         std::string Name() const override { return "In." + parent_t::Name(); }
         std::string raw_name() const { return parent_t::Name(); }
     };
 
-    template< template< typename > class T >
-    struct Output : T< meta_fragment< 1 > >
+    template< class Next, Operation::kind_t k >
+    struct Output : Next
     {
-        using parent_t = T< meta_fragment< 1 > >;
+        using parent_t = Next;
         using parent_t::parent_t;
+
+        static inline constexpr Operation::kind_t kind = k;
+
+        template< typename ... Args >
+            requires (!util::is_copy_ctor_of< Output< Next, k >, Args ... >)
+        Output(Args && ... args) : Next(kind, std::forward< Args >(args) ... ) {}
+
+        Output(const Output &) = default;
+
         static std::string op_code_str() { return "out." + parent_t::op_code_str(); }
         std::string Name() const override { return "Out." + parent_t::Name(); }
         std::string raw_name() const { return parent_t::Name(); }
@@ -199,15 +232,16 @@ namespace circ
 
     /* I/O & Leaf nodes */
 
-    template< typename meta_fragment_ >
-    struct Register : Operation, make_kind< LeafValue, tag_fragment< 3 >, meta_fragment_ >
+    struct Register : Operation
     {
-        using make_kind< LeafValue, tag_fragment< 3 >, meta_fragment_ >::apply;
-        static constexpr uint32_t kind = apply(Operation::kind);
+      protected:
 
-        Register(const std::string &rn_, uint32_t size_)
+        Register(Operation::kind_t kind, const std::string &rn_, uint32_t size_)
             : Operation(size_, kind), reg_name(rn_)
         {}
+        Register(const Register &) = default;
+
+      public:
 
         static std::string op_code_str() { return "register"; }
         std::string Name() const override { return "register." + reg_name; }
@@ -216,52 +250,50 @@ namespace circ
         std::string reg_name;
     };
 
-    using InputRegister = Input< Register >;
-    using OutputRegister = Output< Register >;
+    using InputRegister = Input< Register, Operation::kind_t::kInputRegister >;
+    using OutputRegister = Output< Register, Operation::kind_t::kOutputRegister >;
 
-    template< typename meta_fragment_ >
-    struct ErrorFlag : Operation, make_kind< LeafValue, tag_fragment< 4 >, meta_fragment_ >
+    struct ErrorFlag : Operation
     {
-        using make_kind< LeafValue, tag_fragment< 4 >, meta_fragment_ >::apply;
-        static constexpr uint32_t kind = apply(Operation::kind);
+      protected:
+        ErrorFlag(Operation::kind_t kind, uint32_t size_) : Operation(size_, kind) {}
 
-        ErrorFlag(uint32_t size_ = 1u) : Operation(size_, kind) {}
+      public:
 
         static std::string op_code_str() { return "error_flag"; }
         std::string Name() const override { return "error_flag"; }
     };
 
-    using InputErrorFlag = Input< ErrorFlag >;
-    using OutputErrorFlag = Output< ErrorFlag >;
+    using InputErrorFlag = Input< ErrorFlag, Operation::kind_t::kInputErrorFlag >;
+    using OutputErrorFlag = Output< ErrorFlag, Operation::kind_t::kOutputErrorFlag >;
 
-    template< typename meta_fragment_ >
-    struct Timestamp : Operation, make_kind< LeafValue, tag_fragment< 7 >, meta_fragment_ >
+    struct Timestamp : Operation
     {
-        using make_kind< LeafValue, tag_fragment< 7 >, meta_fragment_ >::apply;
-        static constexpr uint32_t kind = apply(Operation::kind);
-
-        Timestamp(uint32_t size_ = 64u) : Operation(size_, kind) {}
+      protected:
+        Timestamp(Operation::kind_t kind, uint32_t size_) : Operation(size_, kind) {}
+      public:
 
         static std::string op_code_str() { return "timestamp"; }
         std::string Name() const override { return "timestamp"; }
     };
 
-    using InputTimestamp = Input< Timestamp >;
-    using OutputTimestamp = Output< Timestamp >;
+    using InputTimestamp = Input< Timestamp, Operation::kind_t::kInputTimestamp >;
+    using OutputTimestamp = Output< Timestamp, Operation::kind_t::kOutputTimestamp >;
 
     // An undefined value.
-    struct Undefined final : Operation, make_kind< LeafValue, tag_fragment< 2 > >
+    struct Undefined final : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kUndefined;
 
         explicit Undefined(unsigned size_) : Operation(size_, kind) {}
+
         static std::string op_code_str() { return "undefined"; }
         std::string Name() const override { return "undefined"; }
     };
 
-    struct Memory : Operation, make_kind< LeafValue, tag_fragment< 8 > >
+    struct Memory : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kMemory;
 
         explicit Memory(unsigned size_, uint32_t mem_idx_)
             : Operation(size_, kind), mem_idx(mem_idx_) {}
@@ -274,9 +306,9 @@ namespace circ
         uint32_t mem_idx = 0;
     };
 
-    struct Constant final : Operation, make_kind< LeafValue, tag_fragment< 1 > >
+    struct Constant final : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kConstant;
 
         explicit Constant(std::string bits_, unsigned size_)
             : Operation(size_, kind),
@@ -292,9 +324,9 @@ namespace circ
         const std::string bits;
     };
 
-    struct Advice final : Operation, make_kind< LeafValue, tag_fragment< 5 > >
+    struct Advice final : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kAdvice;
 
         inline explicit Advice(unsigned size_, uint32_t advice_idx_)
             : Operation(size_, kind), advice_idx(advice_idx_)
@@ -307,9 +339,10 @@ namespace circ
     };
 
     // Input bits that
-    struct InputInstructionBits : Operation, make_kind< LeafValue, tag_fragment< 6 > >
+    struct InputInstructionBits : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kInputInstructionBits;
+
         explicit InputInstructionBits(unsigned size_) : Operation(size_, kind) {}
 
         static std::string op_code_str() { return "instruction_bits"; }
@@ -371,10 +404,12 @@ namespace circ
 
     // A comparison between the proposed output value of a register, and the
     // output register itself.
-    struct RegConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 0 > >
+    struct RegConstraint final : EnforceCtx
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kRegConstraint;
+
         RegConstraint() : EnforceCtx(this->bool_size, kind) {}
+
         static std::string op_code_str() { return "register_constraint"; }
         std::string Name() const override
         {
@@ -384,10 +419,12 @@ namespace circ
 
     // A comparison between the proposed output value of a register, and the
     // output register itself.
-    struct AdviceConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 1 > >
+    struct AdviceConstraint final : EnforceCtx
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kAdviceConstraint;
+
         AdviceConstraint() : EnforceCtx(this->bool_size, kind) {}
+
         static std::string op_code_str() { return "advice_constraint"; }
         std::string Name() const override
         {
@@ -396,10 +433,12 @@ namespace circ
     };
 
     // Says that we are preserving the value of a register.
-    struct PreservedConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 2 > >
+    struct PreservedConstraint final : EnforceCtx
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kPreservedConstraint;
+
         PreservedConstraint() : EnforceCtx(this->bool_size, kind) {}
+
         static std::string op_code_str() { return "preserved_constraint"; }
         std::string Name() const override
         {
@@ -408,26 +447,32 @@ namespace circ
     };
 
     // Says that we are moving one register to a different register.
-    struct CopyConstraint final : EnforceCtx, make_kind< Constraint, tag_fragment< 3 > >
+    struct CopyConstraint final : EnforceCtx
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kCopyConstraint;
+
         CopyConstraint() : EnforceCtx(this->bool_size, kind) {}
+
         static std::string op_code_str() { return "copy_constraint"; }
         std::string Name() const override { return "copy_constraint." + EnforceCtx::suffix_(); }
     };
 
-    struct WriteConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 4 > >
+    struct WriteConstraint : MemoryConstraint
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kWriteConstraint;
+
         WriteConstraint() : MemoryConstraint(this->bool_size, kind) {}
+
         static std::string op_code_str() { return "write_constraint"; }
         std::string Name() const override { return "write_constraint"; }
     };
 
-    struct ReadConstraint : MemoryConstraint, make_kind< Constraint, tag_fragment< 5 > >
+    struct ReadConstraint : MemoryConstraint
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kReadConstraint;
+
         ReadConstraint() : MemoryConstraint(this->bool_size, kind) {}
+
         static std::string op_code_str() { return "read_constraint"; }
         std::string Name() const override { return "read_constraint"; }
 
@@ -437,10 +482,12 @@ namespace circ
         }
     };
 
-    struct UnusedConstraint : Operation, make_kind< Constraint, tag_fragment< 6 > >
+    struct UnusedConstraint : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kUnusedConstraint;
+
         UnusedConstraint() : Operation(this->bool_size, kind) {}
+
         static std::string op_code_str() { return "unused_constraint"; }
         std::string Name() const override { return "unused_constraint"; }
     };
@@ -469,7 +516,7 @@ namespace circ
     #define declare_llvm_op(cls, idx) \
     struct cls final : Operation, make_kind< Computational, tag_fragment< idx > > \
     { \
-        static constexpr uint32_t kind = apply(Operation::kind); \
+        static constexpr Operation::kind_t kind = Operation::kind_t::k##cls; \
         cls(unsigned size_) : Operation(size_, kind) {} \
         static std::string op_code_str() { return #cls; } \
         std::string Name() const override { return #cls; } \
@@ -520,9 +567,9 @@ namespace circ
 
     /* Hidden */
 
-    struct InputImmediate : Operation, make_kind< HiddenValue, tag_fragment< 0 > >
+    struct InputImmediate : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kInpuImmediate;
 
         static std::string op_code_str() { return "input_immediate"; }
         std::string Name() const override { return "input_immediate"; }
@@ -535,9 +582,9 @@ namespace circ
 
     /* BitManips */
 
-    struct Extract final : Operation, make_kind< BitManip, tag_fragment< 0 > >
+    struct Extract final : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kExtract;
 
         static std::string op_code_str() { return "extract"; }
         std::string Name() const override
@@ -562,10 +609,12 @@ namespace circ
     };
 
 
-    struct Concat final : Operation, make_kind< BitManip, tag_fragment< 1 > >
+    struct Concat final : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kConcat;
+
         Concat(uint32_t size_) : Operation(size_, kind) {}
+
         static std::string op_code_str() { return "concat"; }
         std::string Name() const override { return "concat"; }
     };
@@ -574,41 +623,50 @@ namespace circ
 
     /* BitOps */
 
-    struct PopulationCount final : Operation, make_kind< BitOp, tag_fragment< 0 > >
+    struct PopulationCount final : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kPopulationCount;
+
         explicit PopulationCount(unsigned size_) : Operation(size_, kind) {}
+
         static std::string op_code_str() { return "pop_count"; }
         std::string Name() const override { return "pop_count"; }
     };
 
-    struct CountLeadingZeroes final : Operation, make_kind< BitOp, tag_fragment< 1 > >
+    struct CountLeadingZeroes final : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kCountLeadingZeroes;
+
         explicit CountLeadingZeroes(unsigned size_) : Operation(size_, kind) {}
+
         static std::string op_code_str() { return "count_lead_zeroes"; }
         std::string Name() const override { return "count_lead_zeroes"; }
     };
 
-    struct CountTrailingZeroes final : Operation, make_kind< BitOp, tag_fragment< 2 > >
+    struct CountTrailingZeroes final : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kCountTrailingZeroes;
+
         explicit CountTrailingZeroes(unsigned size_) : Operation(size_, kind) {}
+
         static std::string op_code_str() { return "count_trailing_zeroes"; }
         std::string Name() const override { return "count_trailing_zeroes"; }
     };
 
-    struct Not final : Operation, make_kind< BitOp, tag_fragment< 3 > >
+    struct Not final : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kNot;
+
         explicit Not(unsigned size_) : Operation(size_, kind) {}
+
         static std::string op_code_str() { return "not"; }
         std::string Name() const override { return "not"; }
     };
 
-    struct Parity final : Operation, make_kind< BitOp, tag_fragment< 4 > >
+    struct Parity final : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kParity;
+
         explicit Parity() : Operation(1, kind) {}
 
         static std::string op_code_str() { return "parity"; }
@@ -620,9 +678,9 @@ namespace circ
 
     /* Without category */
 
-    struct Select : Operation, make_kind< Uncat, tag_fragment< 0 > >
+    struct Select : Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kSelect;
 
         explicit Select(uint32_t bits_, uint32_t size_)
             : Operation(size_, kind), bits(bits_)
@@ -646,9 +704,9 @@ namespace circ
     using uncategorized_ops_ts = tl::TL< Select >;
 
     #define make_bool_op(cls, idx) \
-    struct cls final : Operation, make_kind< BoolOp, tag_fragment< idx > > \
+    struct cls final : Operation \
     { \
-      static constexpr uint32_t kind = apply(Operation::kind); \
+      static constexpr Operation::kind_t kind = Operation::kind_t::k##cls; \
       cls() : Operation(this->bool_size, kind) {} \
       static std::string op_code_str() { return #cls; } \
       std::string Name() const override { return #cls; } \
