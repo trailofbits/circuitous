@@ -10,9 +10,9 @@
 namespace circ
 {
 
-    struct Circuit : CircuitStorage, Operation, make_kind< Root, tag_fragment< 0 > >
+    struct Circuit : CircuitStorage, Operation
     {
-        static constexpr uint32_t kind = apply(Operation::kind);
+        static constexpr Operation::kind_t kind = Operation::kind_t::kCircuit;
         virtual ~Circuit() = default;
 
         using circuit_ptr_t = std::unique_ptr<Circuit>;
