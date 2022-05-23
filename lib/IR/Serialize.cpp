@@ -29,7 +29,7 @@ namespace {
             Reference = 0xff
         };
 
-        using raw_op_code_t = uint32_t;
+        using raw_op_code_t = std::underlying_type_t< Operation::kind_t >;
         using raw_id_t = uint64_t;
 
         static std::string to_string(const Selector &sel)
@@ -74,9 +74,7 @@ namespace {
             {
                 Write(Selector::Operation);
                 Write(op->id());
-                check(0u < op->op_code) << "Weird opcode" << op->op_code;
-                raw_op_code_t op_code = op->op_code;
-                Write(op_code);
+                Write(op->op_code);
                 written.insert(op->id());
                 this->Dispatch(op);
             } else {
@@ -92,6 +90,11 @@ namespace {
 
         void Write(uint8_t byte) { os << byte; }
         void Write(int8_t byte) { os << static_cast< uint8_t >(byte); }
+
+        void Write(Operation::kind_t kind)
+        {
+            Write(util::to_underlying(kind));
+        }
 
         template< typename T >
         void Write(const UseList< T > &elems)
@@ -148,10 +151,10 @@ namespace {
         void Visit(Select *op) { write(op->size, op->bits, op->operands); }
         void Visit(Memory *op) { write(op->size, op->mem_idx); }
         void Visit(Advice *op) { write(op->size, op->advice_idx); }
-        void Visit(InputErrorFlag *op) {}
-        void Visit(OutputErrorFlag *op) {}
-        void Visit(InputTimestamp *op) {}
-        void Visit(OutputTimestamp *op) {}
+        void Visit(InputErrorFlag *op)  { write(op->size); }
+        void Visit(OutputErrorFlag *op) { write(op->size); }
+        void Visit(InputTimestamp *op)  { write(op->size); }
+        void Visit(OutputTimestamp *op) { write(op->size); }
     };
 
 
@@ -248,6 +251,16 @@ namespace {
             byte = static_cast< int8_t >(b);
         }
 
+        void Read(Operation::kind_t &kind)
+        {
+            raw_op_code_t raw = 0;
+            Read(raw);
+            auto maybe_kind = reconstruct_kind(raw);
+            // TODO(lukas): We cannot recover right now.
+            check(maybe_kind, [&]() { return "Cannot deserialize " + std::to_string(raw); });
+            kind = *maybe_kind;
+        }
+
         template< typename ...Args >
         std::tuple< Args ... > read()
         {
@@ -271,7 +284,7 @@ namespace {
           auto [sel] = read< Selector >();
 
           if (sel == Selector::Operation) {
-              auto [hash, op_code] = read< raw_id_t, raw_op_code_t >();
+              auto [hash, op_code] = read< raw_id_t, Operation::kind_t >();
 
               auto op = Decode(hash, op_code);
               id_to_op[hash] = op;
@@ -304,7 +317,7 @@ namespace {
                           << ". Most likely cause is missing impl.";
         }
 
-        Operation *Decode(raw_id_t id, raw_op_code_t op_code)
+        Operation *Decode(raw_id_t id, Operation::kind_t op_code)
         {
             return this->Dispatch(op_code, id);
         }
@@ -398,21 +411,27 @@ namespace {
             return op;
         }
 
+        template< typename T >
+        auto make_leaf(uint64_t id)
+        {
+            auto [size] = read< unsigned >();
+            return circuit->Adopt< T >(id, size);
+        }
+
         Operation *Visit(InputErrorFlag *, uint64_t id)
         {
-            return circuit->Adopt<InputErrorFlag>(id);
+            return make_leaf< InputErrorFlag >(id);
         }
-        Operation *Visit(OutputErrorFlag *, uint64_t id)
-        {
-            return circuit->Adopt<OutputErrorFlag>(id);
+        Operation *Visit(OutputErrorFlag *, uint64_t id) {
+            return make_leaf< OutputErrorFlag >(id);
         }
         Operation *Visit(InputTimestamp *, uint64_t id)
         {
-            return circuit->Adopt<InputTimestamp>(id);
+            return make_leaf< InputTimestamp >(id);
         }
         Operation *Visit(OutputTimestamp *, uint64_t id)
         {
-            return circuit->Adopt<OutputTimestamp>(id);
+            return make_leaf< OutputTimestamp >(id);
         }
 
         template< typename T >

@@ -279,7 +279,8 @@ namespace circ
 
         void log_operand_mismatch(Operation *op)
         {
-            res.add_error() << to_string(op->op_code) << " has "
+            res.add_error() << op_code_str(op->op_code)
+                            << " has "
                             << op->operands.Size() << " operands which is invalid.\n"
                             << log_src_dump(op, "\t")
                             << "Error entry end.\n";
@@ -352,6 +353,8 @@ namespace circ
                 case And::kind:
                 case DecoderResult::kind:
                     return not_exactly(0, op);
+                default:
+                    break;
             }
 
             if (isa< leaf_values_ts >(op->op_code))
@@ -367,7 +370,7 @@ namespace circ
                         return exactly(2, op);
                 }
             }
-            unreachable() << "Cannot verify kind: " << to_string(op->op_code);
+            unreachable() << "Cannot verify kind: " << op_code_str(op->op_code);
         }
 
         self_t &verify_arity(Operation *op, bool recursive)
