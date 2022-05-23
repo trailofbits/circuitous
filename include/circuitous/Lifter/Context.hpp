@@ -92,7 +92,10 @@ namespace circ {
           gv_to_erase.push_back(&gv);
         }
       }
-      for (auto gv : gv_to_erase) { gv->eraseFromParent(); }
+      for (auto gv : gv_to_erase) {
+        gv->replaceAllUsesWith(llvm::UndefValue::get(gv->getType()));
+        gv->eraseFromParent();
+      }
     }
 
     bool is_allowed(const std::string &name) {
