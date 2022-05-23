@@ -27,8 +27,9 @@ namespace circ
       public:
         enum class kind_t : uint32_t
         {
-            kOperation = 0,
-            kCircuit = 1,
+            kFirst = 0,
+            kOperation = 1,
+            kCircuit = 2,
 
             kInputRegister,
             kOutputRegister,
@@ -98,6 +99,7 @@ namespace circ
             kDecoderResult,
             kOnlyOneCondition,
             kVerifyInstruction,
+            kLast
         };
 
         static constexpr kind_t kind = kind_t::kOperation;
