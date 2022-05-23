@@ -508,7 +508,7 @@ namespace circ
 
     /* LLVMOP */
 
-    #define declare_llvm_op(cls, idx) \
+    #define circuitous_declare_llvm_op(cls, idx) \
     struct cls final : Operation \
     { \
         static constexpr Operation::kind_t kind = Operation::kind_t::k##cls; \
@@ -517,40 +517,40 @@ namespace circ
         std::string Name() const override { return #cls; } \
     }
 
-    declare_llvm_op(Add, 0);
-    declare_llvm_op(Sub, 1);
-    declare_llvm_op(Mul, 2);
+    circuitous_declare_llvm_op(Add, 0);
+    circuitous_declare_llvm_op(Sub, 1);
+    circuitous_declare_llvm_op(Mul, 2);
 
-    declare_llvm_op(UDiv, 3);
-    declare_llvm_op(SDiv, 4);
+    circuitous_declare_llvm_op(UDiv, 3);
+    circuitous_declare_llvm_op(SDiv, 4);
 
-    declare_llvm_op(Shl, 5);
-    declare_llvm_op(LShr, 6);
-    declare_llvm_op(AShr, 7);
+    circuitous_declare_llvm_op(Shl, 5);
+    circuitous_declare_llvm_op(LShr, 6);
+    circuitous_declare_llvm_op(AShr, 7);
 
-    declare_llvm_op(Trunc, 8);
-    declare_llvm_op(ZExt, 9);
-    declare_llvm_op(SExt, 10);
+    circuitous_declare_llvm_op(Trunc, 8);
+    circuitous_declare_llvm_op(ZExt, 9);
+    circuitous_declare_llvm_op(SExt, 10);
 
-    declare_llvm_op(Icmp_ult, 11);
-    declare_llvm_op(Icmp_slt, 12);
-    declare_llvm_op(Icmp_ugt, 13);
-    declare_llvm_op(Icmp_eq, 14);
-    declare_llvm_op(Icmp_ne, 15);
-    declare_llvm_op(Icmp_uge, 16);
-    declare_llvm_op(Icmp_ule, 17);
-    declare_llvm_op(Icmp_sgt, 18);
-    declare_llvm_op(Icmp_sge, 19);
-    declare_llvm_op(Icmp_sle, 20);
+    circuitous_declare_llvm_op(Icmp_ult, 11);
+    circuitous_declare_llvm_op(Icmp_slt, 12);
+    circuitous_declare_llvm_op(Icmp_ugt, 13);
+    circuitous_declare_llvm_op(Icmp_eq, 14);
+    circuitous_declare_llvm_op(Icmp_ne, 15);
+    circuitous_declare_llvm_op(Icmp_uge, 16);
+    circuitous_declare_llvm_op(Icmp_ule, 17);
+    circuitous_declare_llvm_op(Icmp_sgt, 18);
+    circuitous_declare_llvm_op(Icmp_sge, 19);
+    circuitous_declare_llvm_op(Icmp_sle, 20);
 
-    declare_llvm_op(SRem, 21);
-    declare_llvm_op(URem, 22);
+    circuitous_declare_llvm_op(SRem, 21);
+    circuitous_declare_llvm_op(URem, 22);
 
-    declare_llvm_op(Xor, 23);
-    declare_llvm_op(And, 24);
-    declare_llvm_op(Or, 25);
+    circuitous_declare_llvm_op(Xor, 23);
+    circuitous_declare_llvm_op(And, 24);
+    circuitous_declare_llvm_op(Or, 25);
 
-    #undef declare_llvm_op
+    #undef circuitous_declare_llvm_op
 
     using llvm_ops_t = tl::TL<
         Add, Sub, Mul, UDiv, SDiv, Shl, LShr, AShr, Trunc, ZExt, SExt,
@@ -731,7 +731,7 @@ namespace circ
 
     using uncategorized_ops_ts = tl::TL< Select, ExternalComputation >;
 
-    #define make_bool_op(cls, idx) \
+    #define circuitous_make_bool_op(cls, idx) \
     struct cls final : Operation \
     { \
       static constexpr Operation::kind_t kind = Operation::kind_t::k##cls; \
@@ -740,12 +740,12 @@ namespace circ
       std::string Name() const override { return #cls; } \
     }
 
-    make_bool_op(DecodeCondition, 0);
-    make_bool_op(VerifyInstruction, 1);
-    make_bool_op(OnlyOneCondition, 3);
-    make_bool_op(DecoderResult, 5);
+    circuitous_make_bool_op(DecodeCondition, 0);
+    circuitous_make_bool_op(VerifyInstruction, 1);
+    circuitous_make_bool_op(OnlyOneCondition, 3);
+    circuitous_make_bool_op(DecoderResult, 5);
 
-    #undef make_bool_op
+    #undef circuitous_make_bool_op
 
     using bool_ops_ts = tl::TL< DecodeCondition, VerifyInstruction, OnlyOneCondition,
                                 DecoderResult >;
