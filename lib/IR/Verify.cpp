@@ -333,8 +333,6 @@ namespace circ
                 case UnusedConstraint::kind:
                     return exactly(1, op);
                 case RegConstraint::kind:
-                case PreservedConstraint::kind:
-                case CopyConstraint::kind:
                 case DecodeCondition::kind:
                 case AdviceConstraint::kind:
                     return exactly(2, op);
