@@ -46,7 +46,9 @@ namespace circ
         if constexpr (sizeof...(Tail) != 0) {
             return runtime_find_< F, Tail ... >(rkind, f);
         } else {
-            unreachable() << "runtime find on: " << to_string(rkind) << " failed";
+            unreachable() << "runtime find on: "
+                          << std::to_string(util::to_underlying(rkind))
+                          << " failed";
         }
     }
 
@@ -65,34 +67,18 @@ namespace circ
             return raw_t::op_code_str();
         };
 
-        static std::unordered_map< uint32_t, std::string > cache;
+        static std::unordered_map< Operation::kind_t, std::string > cache;
         if (!cache.count(rkind))
             cache[rkind] = runtime_find(all_nodes_list_t{}, rkind, get_name);
 
         return cache[rkind];
     }
 
-
-    // TODO(lukas): This is just a hotfix, ideally we want the type list
-    //              will all the nodes to carry names.
-    static inline std::string fragment_as_str(uint32_t kind)
-    {
-        std::stringstream ss;
-        ss << op_code_str(kind);
-        return ss.str();
-    }
-
-    template<typename Kind>
-    static inline std::string to_string(Kind kind)
-    {
-        return fragment_as_str(kind);
-    }
-
     template< bool with_meta = true >
     static inline std::string pretty_print(const Operation *op)
     {
         std::stringstream ss;
-        ss << op->id() << ": " << to_string(op->op_code);
+        ss << op->id() << ": " << op_code_str(op->op_code);
         if constexpr (with_meta)
         {
             if (op->meta_size())
