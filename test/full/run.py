@@ -137,12 +137,14 @@ class Lifter(SimulateCWDMixin):
         args = [self.binary,
                 "--os", "macos",
                 "--log-dir", self.test_dir,
-                "--quiet",
                 "--bytes-in", bytes,
                 "--json-out", self.locate("out.json"),
                 "--ir-out", self.locate(self.circuit_name(bytes))]
         if dbg_verbose:
             args += ["--dot-out", self.locate(self.circuit_name(bytes) + ".dot")]
+            args += ["--dbg"]
+        else:
+            args += ["--quiet"]
         args += extra_args
         pipes = subprocess.Popen(args,
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE,
