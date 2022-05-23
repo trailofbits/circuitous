@@ -267,8 +267,6 @@ namespace circ
     z3::expr Visit(Parity *op) { return uninterpreted(op, "Parity"); }
 
     z3::expr Visit(RegConstraint *op)       { return uninterpreted(op, "RegisterConstraint"); }
-    z3::expr Visit(PreservedConstraint *op) { return uninterpreted(op, "PreservedConstraint"); }
-    z3::expr Visit(CopyConstraint *op)      { return uninterpreted(op, "CopyConstraint"); }
     z3::expr Visit(AdviceConstraint *op)    { return uninterpreted(op, "AdviceConstraint"); }
     z3::expr Visit(OnlyOneCondition *op)    { return uninterpreted(op, "OnlyOne"); }
     z3::expr Visit(DecodeCondition *op)     { return uninterpreted(op, "Decode"); }
@@ -335,8 +333,6 @@ namespace circ
     }
 
     z3::expr Visit(RegConstraint *op)       { return record(op, to_bv(lhs(op) == rhs(op))); }
-    z3::expr Visit(PreservedConstraint *op) { return record(op, to_bv(lhs(op) == rhs(op))); }
-    z3::expr Visit(CopyConstraint *op)      { return record(op, to_bv(lhs(op) == rhs(op))); }
     z3::expr Visit(AdviceConstraint *op)    { return record(op, to_bv(lhs(op) == rhs(op))); }
     z3::expr Visit(DecodeCondition *op)     { return record(op, to_bv(lhs(op) == rhs(op))); }
 

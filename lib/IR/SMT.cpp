@@ -71,10 +71,6 @@ namespace circ::smt
 
     else if (name == "RegisterConstraint")
       return circuit->Create< RegConstraint >();
-    else if (name == "PreservedConstraint")
-      return circuit->Create< PreservedConstraint >();
-    else if (name == "CopyConstraint")
-      return circuit->Create< CopyConstraint >();
     else if (name == "AdviceConstraint")
       return circuit->Create< AdviceConstraint >();
 

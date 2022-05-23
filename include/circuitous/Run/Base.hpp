@@ -379,8 +379,6 @@ namespace circ::run {
     // Condition semantics
     void Visit(DecodeCondition *op);
     void Visit(RegConstraint *op);
-    void Visit(PreservedConstraint *op);
-    void Visit(CopyConstraint *op);
     void Visit(AdviceConstraint *op);
 
     void Visit(VerifyInstruction *op);

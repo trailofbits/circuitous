@@ -463,8 +463,6 @@ namespace {
 
         DECODE_CONDITION(AdviceConstraint)
         DECODE_CONDITION(RegConstraint)
-        DECODE_CONDITION(PreservedConstraint)
-        DECODE_CONDITION(CopyConstraint)
         DECODE_CONDITION(ReadConstraint)
         DECODE_CONDITION(WriteConstraint)
         DECODE_CONDITION(UnusedConstraint)
