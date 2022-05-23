@@ -69,13 +69,13 @@ namespace circ
 
             // TODO(lukas): This can be synthetized, see how Serializer does that,
             //              but not sure if it is worth.
-            void Visit(InputRegister *op)        { add_entry(op->raw_name(), op); }
-            void Visit(InputErrorFlag *op)       { add_entry(op->raw_name(), op); }
-            void Visit(InputTimestamp *op)       { add_entry(op->raw_name(), op); }
+            void Visit(InputRegister *op)        { add_entry(op->parent_t::Name(), op); }
+            void Visit(InputErrorFlag *op)       { add_entry(op->parent_t::Name(), op); }
+            void Visit(InputTimestamp *op)       { add_entry(op->parent_t::Name(), op); }
 
-            void Visit(OutputRegister *op)        { add_entry(op->raw_name(), op); }
-            void Visit(OutputErrorFlag *op)       { add_entry(op->raw_name(), op); }
-            void Visit(OutputTimestamp *op)       { add_entry(op->raw_name(), op); }
+            void Visit(OutputRegister *op)        { add_entry(op->parent_t::Name(), op); }
+            void Visit(OutputErrorFlag *op)       { add_entry(op->parent_t::Name(), op); }
+            void Visit(OutputTimestamp *op)       { add_entry(op->parent_t::Name(), op); }
 
             void Visit(InputInstructionBits *op) { add_entry(op->Name(), op); }
             void Visit(Advice *op)               { add_entry(op->Name(), op); }
