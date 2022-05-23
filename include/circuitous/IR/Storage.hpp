@@ -181,25 +181,6 @@ namespace circ
             return out;
         }
 
-        // Create copy without operands of node `original`.
-        template< typename T >
-        T *Fork(T *original)
-        {
-            T copy{*original};
-            copy._id = ++ids;
-            copy.operands.clear();
-            return Attr< T >().Adopt(std::move(copy));
-        }
-
-        Operation *Fork(Operation *op)
-        {
-            Operation *out;
-            auto fork = [&](auto op) { out = this->Fork(op); };
-
-            this->match(op, fork);
-            return out;
-        }
-
         // TODO(lukas) : Return optional to signal failure.
         template< typename What >
         auto fetch_singular()
