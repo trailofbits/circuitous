@@ -514,7 +514,7 @@ namespace circ
     /* LLVMOP */
 
     #define declare_llvm_op(cls, idx) \
-    struct cls final : Operation, make_kind< Computational, tag_fragment< idx > > \
+    struct cls final : Operation \
     { \
         static constexpr Operation::kind_t kind = Operation::kind_t::k##cls; \
         cls(unsigned size_) : Operation(size_, kind) {} \
