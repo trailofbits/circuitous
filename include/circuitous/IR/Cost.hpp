@@ -34,7 +34,7 @@ struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
 
   using args_occurences_t = std::unordered_map< const arg_details_t, uint64_t, hash >;
   // Maps kind -> number of times it was seen
-  using operation_occurences_t = std::map< uint32_t, args_occurences_t >;
+  using operation_occurences_t = std::map< Operation::kind_t, args_occurences_t >;
   operation_occurences_t nodes;
 
   arg_details_t get_arg_detail(Operation *op) {
@@ -51,7 +51,7 @@ struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
     return out;
   }
 
-  uint64_t total_count(uint32_t rkind) {
+  uint64_t total_count(Operation::kind_t rkind) {
     return total_count(nodes[rkind]);
   }
 
@@ -113,7 +113,9 @@ struct Printer {
   static void Print(OS &os, const Collector &self) {
     os << "Node counts:" << std::endl;
     for (auto &[op_code, occurencies] : self.nodes) {
-      os << " " << to_string(op_code) << " " << self.total_count(occurencies) << std::endl;
+      os << " " << op_code_str(op_code)
+         << " " << self.total_count(occurencies)
+         << std::endl;
       print_occurences(os, occurencies, "\t");
     }
     os << std::endl;
@@ -149,7 +151,7 @@ struct Printer {
 
       int64_t changed_by = static_cast< int64_t >(updated) - static_cast< int64_t >(orig);
 
-      os << " " << to_string(what) << "( ";
+      os << " " << op_code_str(what) << "( ";
       if (changed_by > 0) os << red(changed_by);
       if (changed_by < 0) os << green(changed_by);
       os << " )" << std::endl;

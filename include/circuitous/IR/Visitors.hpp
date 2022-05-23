@@ -118,7 +118,7 @@ namespace circ
         Derived &self() { return static_cast< Derived & >(*this); }
 
         template< typename T, typename ...Tail, typename ...Args >
-        auto Visit_(uint32_t kind, Args &&... args)
+        auto Visit_(Operation::kind_t kind, Args &&... args)
         {
             if (isa< T >(kind))
                 return self().Visit(static_cast< T * >(nullptr), std::forward< Args >(args)...);
@@ -126,12 +126,14 @@ namespace circ
             if constexpr (sizeof...(Tail) != 0) {
                 return this->Visit_< Tail ... >(kind, std::forward< Args >(args)...);
             } else {
-                unreachable() << "Kind: " << kind << " does not correspond to known Operation!";
+                unreachable() << "Kind: "
+                              << std::to_string(util::to_underlying(kind))
+                              << " does not correspond to known Operation!";
             }
         }
 
         template< typename ... Args >
-        auto Dispatch(uint32_t kind, Args &&...args)
+        auto Dispatch(Operation::kind_t kind, Args &&...args)
         {
             return this->Visit_< Ops ... >(kind, std::forward< Args >(args)...);
         }
