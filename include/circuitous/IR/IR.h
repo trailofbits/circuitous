@@ -48,8 +48,6 @@ namespace circ
 
             kRegConstraint,
             kAdviceConstraint,
-            kPreservedConstraint,
-            kCopyConstraint,
             kWriteConstraint,
             kReadConstraint,
             kUnusedConstraint,
@@ -445,31 +443,6 @@ namespace circ
         }
     };
 
-    // Says that we are preserving the value of a register.
-    struct PreservedConstraint final : EnforceCtx
-    {
-        static constexpr Operation::kind_t kind = Operation::kind_t::kPreservedConstraint;
-
-        PreservedConstraint() : EnforceCtx(this->bool_size, kind) {}
-
-        static std::string op_code_str() { return "preserved_constraint"; }
-        std::string Name() const override
-        {
-            return "preserved_constraint." + EnforceCtx::suffix_();
-        }
-    };
-
-    // Says that we are moving one register to a different register.
-    struct CopyConstraint final : EnforceCtx
-    {
-        static constexpr Operation::kind_t kind = Operation::kind_t::kCopyConstraint;
-
-        CopyConstraint() : EnforceCtx(this->bool_size, kind) {}
-
-        static std::string op_code_str() { return "copy_constraint"; }
-        std::string Name() const override { return "copy_constraint." + EnforceCtx::suffix_(); }
-    };
-
     struct WriteConstraint : MemoryConstraint
     {
         static constexpr Operation::kind_t kind = Operation::kind_t::kWriteConstraint;
@@ -506,7 +479,6 @@ namespace circ
     };
 
     using constraint_opts_ts = tl::TL< RegConstraint, AdviceConstraint,
-                                       PreservedConstraint, CopyConstraint,
                                        WriteConstraint, RegConstraint, UnusedConstraint >;
 
     // TODO(lukas): It would be nice to move these to struct defs
@@ -516,7 +488,7 @@ namespace circ
             case OutputErrorFlag::kind:
             case OutputTimestamp::kind:
             case OutputRegister::kind :
-                return is_one_of<RegConstraint, PreservedConstraint, CopyConstraint>(c);
+                return is_one_of< RegConstraint >(c);
             case Advice::kind : return is_one_of<AdviceConstraint>(c);
             case Memory::kind :
                 return is_one_of<ReadConstraint, WriteConstraint, UnusedConstraint>(c);
@@ -740,7 +712,7 @@ namespace circ
         Not, Concat,
         CountLeadingZeroes, CountTrailingZeroes, Extract, PopulationCount,
         Parity, InputImmediate,
-        RegConstraint, PreservedConstraint, CopyConstraint, DecodeCondition,
+        RegConstraint, DecodeCondition,
         DecoderResult,
         ReadConstraint, WriteConstraint, UnusedConstraint,
         VerifyInstruction, OnlyOneCondition,
