@@ -99,6 +99,9 @@ namespace circ
             kDecoderResult,
             kOnlyOneCondition,
             kVerifyInstruction,
+
+            kExternalComputation,
+
             kLast
         };
 
@@ -694,7 +697,39 @@ namespace circ
         uint32_t bits = 0;
     };
 
-    using uncategorized_ops_ts = tl::TL< Select >;
+    struct ExternalComputation : Operation
+    {
+        static constexpr Operation::kind_t kind = Operation::kind_t::kParity;
+
+        enum class submodule_t : uint32_t
+        {
+            Syscalls = 0,
+        };
+
+        static std::string to_string(submodule_t sm)
+        {
+            switch (sm)
+            {
+                case submodule_t::Syscalls : return "syscalls";
+            }
+        }
+
+        explicit ExternalComputation(uint32_t size, submodule_t sm)
+            : Operation(size, kind), submodule_type(sm)
+        {}
+
+        static std::string op_code_str() { return "external_computations"; }
+        std::string Name() const override
+        {
+            std::stringstream ss;
+            ss << this->ExternalComputation::op_code_str() << "." << to_string(submodule_type);
+            return ss.str();
+        }
+
+        submodule_t submodule_type;
+    };
+
+    using uncategorized_ops_ts = tl::TL< Select, ExternalComputation >;
 
     #define make_bool_op(cls, idx) \
     struct cls final : Operation \
