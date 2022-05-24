@@ -21,8 +21,6 @@ namespace circ {
                     const std::unordered_map<Operation *, std::string> & = {});
 
     void print_json(std::ostream &os, Circuit *circuit);
-    void print_topology(std::ostream &os, Operation *op, unsigned max_depth,
-                       std::function<bool(Operation *)> accept);
     void print_smt(std::ostream &os, Circuit *circuit);
     void print_bitblasted_smt(std::ostream &os, Circuit *circuit);
     void print_verilog(std::ostream &os, const std::string &name, Circuit *circuit);
