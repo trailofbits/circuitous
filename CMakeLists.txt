@@ -89,9 +89,7 @@ target_link_libraries(circuitous_lifter PUBLIC circuitous_settings)
 
 add_library(circuitous_printers STATIC
   lib/Printers/DOT.cpp
-  lib/Printers/Python.cpp
   lib/Printers/JSON.cpp
-  lib/Printers/Topology.cpp
   lib/Printers/Printers.cpp
   lib/Printers/SMT.cpp
 )
