@@ -324,7 +324,7 @@ struct Acceptor
         if (!allowed_iform(rinst.function))
             return false;
 
-        auto nshadow = circ::InstructionFuzzer{ rinst.arch, rinst }.FuzzOps();
+        auto nshadow = circ::InstructionFuzzer{ rinst.arch, rinst }.fuzz_ops();
         if (already_parsed(nshadow, rinst))
             return false;
 
