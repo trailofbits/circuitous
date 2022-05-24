@@ -65,8 +65,8 @@ namespace circ
             return it->get();
         }
 
-        auto Size() const { return defs.size(); }
-        bool Empty() const noexcept { return defs.size() == 0; }
+        std::size_t size() const { return defs.size(); }
+        bool empty() const noexcept { return defs.size() == 0; }
 
         value_type operator[](uint32_t idx) { return std::next(defs.begin(), idx)->get(); }
 
@@ -95,17 +95,14 @@ namespace circ
     template< typename T >
     struct Use
     {
-      T *user;
-      T *use;
+        T *user;
+        T *use;
     };
 
     template< typename T >
     struct UseList : std::vector< T * >
     {
-      using impl = std::vector< T * >;
-
-      auto Size() const { return this->size(); }
-      auto Empty() const { return this->empty(); }
+        using impl = std::vector< T * >;
     };
 
     // Value can be used by others, `users` are used to travel up the data flow.
