@@ -89,7 +89,7 @@ namespace circ
     CircuitPtr run_pass(const Pass &pass, CircuitPtr &&circuit)
     {
       auto result = pass->run(std::move(circuit));
-      result->RemoveUnused();
+      result->remove_unused();
       return result;
     }
 

@@ -157,7 +157,7 @@ namespace print {
   template<typename Next>
   struct FullNames_ : Next {
     static inline constexpr const char separator = ' ';
-    std::string Op(Operation *op) { return op->Name(); }
+    std::string Op(Operation *op) { return op->name(); }
   };
 
   struct FullNames : FullNames_<WithCache<Topology<FullNames>>> {};
@@ -236,7 +236,7 @@ struct Collector : Collectors ... {
   std::deque<entry_t> todo;
 
   self_t &Run(Circuit *circuit) {
-    for (auto x : circuit->Attr<VerifyInstruction>()) {
+    for (auto x : circuit->attr<VerifyInstruction>()) {
       (Collectors::Root(x), ...);
       todo.push_back({x, nullptr});
     }

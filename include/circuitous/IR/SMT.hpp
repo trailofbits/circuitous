@@ -33,7 +33,7 @@ namespace circ
   struct BaseSMTVisitor : Visitor< Derived >
   {
     using Base = Visitor< Derived >;
-    using Base::Dispatch;
+    using Base::dispatch;
 
     BaseSMTVisitor(auto ptr_size_) : ptr_size(ptr_size_), consts(ctx) {}
 
@@ -42,7 +42,7 @@ namespace circ
       z3::expr_vector args(ctx);
       z3::sort_vector args_sorts(ctx);
       for (const auto &arg : op->operands) {
-        args.push_back(Dispatch(arg));
+        args.push_back(dispatch(arg));
         args_sorts.push_back(args.back().get_sort());
       }
 
@@ -66,22 +66,22 @@ namespace circ
 
     z3::expr constant(Operation *op)
     {
-      return constant(op, op->Name());
+      return constant(op, op->name());
     }
 
-    z3::expr lhs(Operation *op) { return Dispatch(op->operands[0]); };
-    z3::expr rhs(Operation *op) { return Dispatch(op->operands[1]); };
+    z3::expr lhs(Operation *op) { return dispatch(op->operands[0]); };
+    z3::expr rhs(Operation *op) { return dispatch(op->operands[1]); };
 
     z3::expr accumulate(const auto &operands, const auto &fn)
     {
-      auto dispatched = [&, fn] (const auto &lhs, auto rhs) { return fn(lhs, Dispatch(rhs)); };
-      auto init = Dispatch(operands[0]);
+      auto dispatched = [&, fn] (const auto &lhs, auto rhs) { return fn(lhs, dispatch(rhs)); };
+      auto init = dispatch(operands[0]);
       return std::accumulate(std::next(operands.begin()), operands.end(), init, dispatched);
     }
 
-    z3::expr Visit(Operation *op)
+    z3::expr visit(Operation *op)
     {
-      log_kill() << "Unhandled operation: " << op->Name();
+      log_kill() << "Unhandled operation: " << op->name();
     }
 
     z3::expr& record(Operation *op, z3::expr e)
@@ -100,34 +100,34 @@ namespace circ
   struct IRToSMTConstantsVisitor : BaseSMTVisitor< Derived >
   {
     using Base = BaseSMTVisitor< Derived >;
-    using Base::Dispatch;
-    using Base::Visit;
+    using Base::dispatch;
+    using Base::visit;
     using Base::constant;
     using Base::ctx;
     using Base::record;
 
     using Base::Base;
 
-    z3::expr Visit(InputInstructionBits *op) { return constant(op, "InputBits"); }
-    z3::expr Visit(InputRegister *op) { return constant(op); }
-    z3::expr Visit(OutputRegister *op) { return constant(op); }
+    z3::expr visit(InputInstructionBits *op) { return constant(op, "InputBits"); }
+    z3::expr visit(InputRegister *op) { return constant(op); }
+    z3::expr visit(OutputRegister *op) { return constant(op); }
 
-    z3::expr Visit(Advice *op) { return constant(op, op->Name()); }
+    z3::expr visit(Advice *op) { return constant(op, op->name()); }
 
-    z3::expr Visit(PopulationCount *op)     { return constant(op, "Population"); }
-    z3::expr Visit(CountLeadingZeroes *op)  { return constant(op, "LeadingZeros"); }
-    z3::expr Visit(CountTrailingZeroes *op) { return constant(op, "TrailingZeros"); }
+    z3::expr visit(PopulationCount *op)     { return constant(op, "Population"); }
+    z3::expr visit(CountLeadingZeroes *op)  { return constant(op, "LeadingZeros"); }
+    z3::expr visit(CountTrailingZeroes *op) { return constant(op, "TrailingZeros"); }
 
-    z3::expr Visit(InputTimestamp *op)  { return constant(op); }
-    z3::expr Visit(OutputTimestamp *op) { return constant(op); }
-    z3::expr Visit(InputErrorFlag *op)  { return constant(op); }
-    z3::expr Visit(OutputErrorFlag *op) { return constant(op); }
+    z3::expr visit(InputTimestamp *op)  { return constant(op); }
+    z3::expr visit(OutputTimestamp *op) { return constant(op); }
+    z3::expr visit(InputErrorFlag *op)  { return constant(op); }
+    z3::expr visit(OutputErrorFlag *op) { return constant(op); }
 
-    z3::expr Visit(Memory *op)  { return constant(op, "Memory"); }
+    z3::expr visit(Memory *op)  { return constant(op, "Memory"); }
 
-    z3::expr Visit(Undefined *op) { return constant(op); }
+    z3::expr visit(Undefined *op) { return constant(op); }
 
-    z3::expr Visit(Constant *op)
+    z3::expr visit(Constant *op)
     {
       auto bits = std::make_unique<bool[]>(op->size);
       std::size_t idx = 0;
@@ -142,8 +142,8 @@ namespace circ
   struct IRToSMTOpsVisitor : IRToSMTConstantsVisitor< Derived >
   {
     using Base = IRToSMTConstantsVisitor< Derived >;
-    using Base::Dispatch;
-    using Base::Visit;
+    using Base::dispatch;
+    using Base::visit;
     using Base::ctx;
     using Base::lhs;
     using Base::rhs;
@@ -159,126 +159,126 @@ namespace circ
     z3::expr true_bv() { return ctx.bv_val(1, 1); }
     z3::expr false_bv() { return ctx.bv_val(0, 1); }
 
-    z3::expr Visit(Add *op) { return record(op, lhs(op) + rhs(op)); }
-    z3::expr Visit(Sub *op) { return record(op, lhs(op) - rhs(op)); }
-    z3::expr Visit(Mul *op) { return record(op, lhs(op) * rhs(op)); }
+    z3::expr visit(Add *op) { return record(op, lhs(op) + rhs(op)); }
+    z3::expr visit(Sub *op) { return record(op, lhs(op) - rhs(op)); }
+    z3::expr visit(Mul *op) { return record(op, lhs(op) * rhs(op)); }
 
-    z3::expr Visit(UDiv *op) { return record(op, z3::udiv(lhs(op), rhs(op))); }
-    z3::expr Visit(SDiv *op) { return record(op, lhs(op) / rhs(op)); }
+    z3::expr visit(UDiv *op) { return record(op, z3::udiv(lhs(op), rhs(op))); }
+    z3::expr visit(SDiv *op) { return record(op, lhs(op) / rhs(op)); }
 
-    z3::expr Visit(And *op)
+    z3::expr visit(And *op)
     {
       return record(op, this->accumulate(op->operands, std::bit_and()));
     }
-    z3::expr Visit(Or *op)
+    z3::expr visit(Or *op)
     {
       return record(op, this->accumulate(op->operands, std::bit_or()));
     }
 
-    z3::expr Visit(Shl *op)  { return record(op, z3::shl(lhs(op), rhs(op))); }
-    z3::expr Visit(LShr *op) { return record(op, z3::lshr(lhs(op), rhs(op))); }
-    z3::expr Visit(AShr *op) { return record(op, z3::ashr(lhs(op), rhs(op))); }
+    z3::expr visit(Shl *op)  { return record(op, z3::shl(lhs(op), rhs(op))); }
+    z3::expr visit(LShr *op) { return record(op, z3::lshr(lhs(op), rhs(op))); }
+    z3::expr visit(AShr *op) { return record(op, z3::ashr(lhs(op), rhs(op))); }
 
-    z3::expr Visit(Trunc *op) { return record(op, lhs(op).extract(op->size - 1, 0)); }
+    z3::expr visit(Trunc *op) { return record(op, lhs(op).extract(op->size - 1, 0)); }
 
-    z3::expr Visit(ZExt *op)
+    z3::expr visit(ZExt *op)
     {
       auto diff = op->size - op->operands[0]->size;
       return record(op, z3::zext(lhs(op), diff));
     }
 
-    z3::expr Visit(SExt *op)
+    z3::expr visit(SExt *op)
     {
       auto diff = op->size - op->operands[0]->size;
       return record(op, z3::sext(lhs(op), diff));
     }
 
-    z3::expr Visit(Icmp_ult *op) { return record(op, to_bv(z3::ult(lhs(op), rhs(op)))); }
-    z3::expr Visit(Icmp_slt *op) { return record(op, to_bv(z3::slt(lhs(op), rhs(op)))); }
-    z3::expr Visit(Icmp_ugt *op) { return record(op, to_bv(z3::ugt(lhs(op), rhs(op)))); }
-    z3::expr Visit(Icmp_eq *op)  { return record(op, to_bv(lhs(op) == rhs(op))); }
-    z3::expr Visit(Icmp_ne *op)  { return record(op, to_bv(lhs(op) != rhs(op))); }
-    z3::expr Visit(Icmp_uge *op) { return record(op, to_bv(z3::uge(lhs(op), rhs(op)))); }
-    z3::expr Visit(Icmp_ule *op) { return record(op, to_bv(z3::ule(lhs(op), rhs(op)))); }
-    z3::expr Visit(Icmp_sgt *op) { return record(op, to_bv(lhs(op) > rhs(op))); }
-    z3::expr Visit(Icmp_sge *op) { return record(op, to_bv(lhs(op) >= rhs(op))); }
-    z3::expr Visit(Icmp_sle *op) { return record(op, to_bv(z3::sle(lhs(op), rhs(op)))); }
+    z3::expr visit(Icmp_ult *op) { return record(op, to_bv(z3::ult(lhs(op), rhs(op)))); }
+    z3::expr visit(Icmp_slt *op) { return record(op, to_bv(z3::slt(lhs(op), rhs(op)))); }
+    z3::expr visit(Icmp_ugt *op) { return record(op, to_bv(z3::ugt(lhs(op), rhs(op)))); }
+    z3::expr visit(Icmp_eq *op)  { return record(op, to_bv(lhs(op) == rhs(op))); }
+    z3::expr visit(Icmp_ne *op)  { return record(op, to_bv(lhs(op) != rhs(op))); }
+    z3::expr visit(Icmp_uge *op) { return record(op, to_bv(z3::uge(lhs(op), rhs(op)))); }
+    z3::expr visit(Icmp_ule *op) { return record(op, to_bv(z3::ule(lhs(op), rhs(op)))); }
+    z3::expr visit(Icmp_sgt *op) { return record(op, to_bv(lhs(op) > rhs(op))); }
+    z3::expr visit(Icmp_sge *op) { return record(op, to_bv(lhs(op) >= rhs(op))); }
+    z3::expr visit(Icmp_sle *op) { return record(op, to_bv(z3::sle(lhs(op), rhs(op)))); }
 
-    z3::expr Visit(Extract *op)
+    z3::expr visit(Extract *op)
     {
-      auto val = Dispatch(op->operands[0]);
+      auto val = dispatch(op->operands[0]);
       auto hi = op->high_bit_exc - 1;
       auto lo = op->low_bit_inc;
       return record(op, val.extract(hi, lo));
     }
 
-    z3::expr Visit(InputImmediate *op)
+    z3::expr visit(InputImmediate *op)
     {
-      return record(op, Dispatch(op->operands[0]));
+      return record(op, dispatch(op->operands[0]));
     }
   };
 
   struct IRToSMTVisitor : IRToSMTConstantsVisitor<IRToSMTVisitor>
   {
     using Base = IRToSMTConstantsVisitor<IRToSMTVisitor>;
-    using Base::Dispatch;
-    using Base::Visit;
+    using Base::dispatch;
+    using Base::visit;
 
     using Base::Base;
 
-    z3::expr Visit(Add *op) { return uninterpreted(op, "add"); }
-    z3::expr Visit(Sub *op) { return uninterpreted(op, "sub"); }
-    z3::expr Visit(Mul *op) { return uninterpreted(op, "mul"); }
+    z3::expr visit(Add *op) { return uninterpreted(op, "add"); }
+    z3::expr visit(Sub *op) { return uninterpreted(op, "sub"); }
+    z3::expr visit(Mul *op) { return uninterpreted(op, "mul"); }
 
-    z3::expr Visit(UDiv *op) { return uninterpreted(op, "udiv"); }
-    z3::expr Visit(SDiv *op) { return uninterpreted(op, "sdiv"); }
+    z3::expr visit(UDiv *op) { return uninterpreted(op, "udiv"); }
+    z3::expr visit(SDiv *op) { return uninterpreted(op, "sdiv"); }
 
-    z3::expr Visit(And *op) { return uninterpreted(op, "and"); }
-    z3::expr Visit(Or *op)  { return uninterpreted(op, "or"); }
+    z3::expr visit(And *op) { return uninterpreted(op, "and"); }
+    z3::expr visit(Or *op)  { return uninterpreted(op, "or"); }
 
-    z3::expr Visit(Shl *op)  { return uninterpreted(op, "shl"); }
-    z3::expr Visit(LShr *op) { return uninterpreted(op, "lshr"); }
-    z3::expr Visit(AShr *op) { return uninterpreted(op, "ashr"); }
+    z3::expr visit(Shl *op)  { return uninterpreted(op, "shl"); }
+    z3::expr visit(LShr *op) { return uninterpreted(op, "lshr"); }
+    z3::expr visit(AShr *op) { return uninterpreted(op, "ashr"); }
 
-    // z3::expr Visit(Trunc *op) { return uninterpreted(op, "trunc"); }
-    z3::expr Visit(ZExt *op)  { return uninterpreted(op, "zext"); }
-    z3::expr Visit(SExt *op)  { return uninterpreted(op, "sext"); }
+    // z3::expr visit(Trunc *op) { return uninterpreted(op, "trunc"); }
+    z3::expr visit(ZExt *op)  { return uninterpreted(op, "zext"); }
+    z3::expr visit(SExt *op)  { return uninterpreted(op, "sext"); }
 
-    z3::expr Visit(Icmp_ult *op) { return uninterpreted(op, "ult"); }
-    z3::expr Visit(Icmp_slt *op) { return uninterpreted(op, "slt"); }
-    z3::expr Visit(Icmp_ugt *op) { return uninterpreted(op, "ugt"); }
-    z3::expr Visit(Icmp_eq *op)  { return uninterpreted(op, "eq"); }
-    z3::expr Visit(Icmp_ne *op)  { return uninterpreted(op, "ne"); }
-    z3::expr Visit(Icmp_uge *op) { return uninterpreted(op, "uge"); }
-    z3::expr Visit(Icmp_ule *op) { return uninterpreted(op, "ule"); }
-    z3::expr Visit(Icmp_sgt *op) { return uninterpreted(op, "sgt"); }
-    z3::expr Visit(Icmp_sge *op) { return uninterpreted(op, "sge"); }
-    z3::expr Visit(Icmp_sle *op) { return uninterpreted(op, "sle"); }
+    z3::expr visit(Icmp_ult *op) { return uninterpreted(op, "ult"); }
+    z3::expr visit(Icmp_slt *op) { return uninterpreted(op, "slt"); }
+    z3::expr visit(Icmp_ugt *op) { return uninterpreted(op, "ugt"); }
+    z3::expr visit(Icmp_eq *op)  { return uninterpreted(op, "eq"); }
+    z3::expr visit(Icmp_ne *op)  { return uninterpreted(op, "ne"); }
+    z3::expr visit(Icmp_uge *op) { return uninterpreted(op, "uge"); }
+    z3::expr visit(Icmp_ule *op) { return uninterpreted(op, "ule"); }
+    z3::expr visit(Icmp_sgt *op) { return uninterpreted(op, "sgt"); }
+    z3::expr visit(Icmp_sge *op) { return uninterpreted(op, "sge"); }
+    z3::expr visit(Icmp_sle *op) { return uninterpreted(op, "sle"); }
 
-    z3::expr Visit(Not *op) { return uninterpreted(op, "not"); }
+    z3::expr visit(Not *op) { return uninterpreted(op, "not"); }
 
-    z3::expr Visit(Extract *op)
+    z3::expr visit(Extract *op)
     {
       return uninterpreted(op, "Extract." + std::to_string(op->low_bit_inc) + "." + std::to_string(op->high_bit_exc));
     }
 
-    z3::expr Visit(Concat *op) { return uninterpreted(op, "Concat"); }
-    z3::expr Visit(Select *op) { return uninterpreted(op, "Select." + std::to_string(op->bits)); }
-    z3::expr Visit(Parity *op) { return uninterpreted(op, "Parity"); }
+    z3::expr visit(Concat *op) { return uninterpreted(op, "Concat"); }
+    z3::expr visit(Select *op) { return uninterpreted(op, "Select." + std::to_string(op->bits)); }
+    z3::expr visit(Parity *op) { return uninterpreted(op, "Parity"); }
 
-    z3::expr Visit(RegConstraint *op)       { return uninterpreted(op, "RegisterConstraint"); }
-    z3::expr Visit(AdviceConstraint *op)    { return uninterpreted(op, "AdviceConstraint"); }
-    z3::expr Visit(OnlyOneCondition *op)    { return uninterpreted(op, "OnlyOne"); }
-    z3::expr Visit(DecodeCondition *op)     { return uninterpreted(op, "Decode"); }
-    z3::expr Visit(VerifyInstruction *op)   { return uninterpreted(op, "Verify"); }
+    z3::expr visit(RegConstraint *op)       { return uninterpreted(op, "RegisterConstraint"); }
+    z3::expr visit(AdviceConstraint *op)    { return uninterpreted(op, "AdviceConstraint"); }
+    z3::expr visit(OnlyOneCondition *op)    { return uninterpreted(op, "OnlyOne"); }
+    z3::expr visit(DecodeCondition *op)     { return uninterpreted(op, "Decode"); }
+    z3::expr visit(VerifyInstruction *op)   { return uninterpreted(op, "Verify"); }
 
-    z3::expr Visit(ReadConstraint *op)      { return uninterpreted(op, "ReadConstraint"); }
-    z3::expr Visit(WriteConstraint *op)     { return uninterpreted(op, "WriteConstraint"); }
-    z3::expr Visit(UnusedConstraint *op)    { return uninterpreted(op, "UnusedConstraint"); }
+    z3::expr visit(ReadConstraint *op)      { return uninterpreted(op, "ReadConstraint"); }
+    z3::expr visit(WriteConstraint *op)     { return uninterpreted(op, "WriteConstraint"); }
+    z3::expr visit(UnusedConstraint *op)    { return uninterpreted(op, "UnusedConstraint"); }
 
-    z3::expr Visit(InputImmediate *op) { return uninterpreted(op, "InputImmediate"); }
+    z3::expr visit(InputImmediate *op) { return uninterpreted(op, "InputImmediate"); }
 
-    z3::expr Visit(Circuit *op)
+    z3::expr visit(Circuit *op)
     {
       return uninterpreted(op, "Circuit", ctx.bool_sort());
     }
@@ -287,24 +287,24 @@ namespace circ
   struct IRToBitBlastableSMTVisitor : IRToSMTOpsVisitor< IRToBitBlastableSMTVisitor >
   {
     using Base = IRToSMTOpsVisitor<  IRToBitBlastableSMTVisitor >;
-    using Base::Dispatch;
-    using Base::Visit;
+    using Base::dispatch;
+    using Base::visit;
 
     using Base::Base;
 
-    z3::expr Visit(Concat *op)
+    z3::expr visit(Concat *op)
     {
       z3::expr_vector vec(ctx);
       for (auto o : op->operands) {
-        vec.push_back(Dispatch(o));
+        vec.push_back(dispatch(o));
       }
       return record(op, z3::concat(vec));
     }
 
-    z3::expr Visit(Select *op)
+    z3::expr visit(Select *op)
     {
-      auto index = Dispatch(op->operands[0]);
-      auto value = Dispatch(op->operands[1]);
+      auto index = dispatch(op->operands[0]);
+      auto value = dispatch(op->operands[1]);
 
       auto bw = index.get_sort().bv_size();
       auto current = ctx.bv_val(0, bw);
@@ -313,7 +313,7 @@ namespace circ
 
       z3::expr result = z3::ite(current == index, value, undef);
       for (auto i = 2U; i < op->operands.size(); ++i) {
-        value = Dispatch(op->operands[i]);
+        value = dispatch(op->operands[i]);
         current = ctx.bv_val(i - 1, bw);
         result = z3::ite(current == index, value, result);
       }
@@ -321,9 +321,9 @@ namespace circ
       return record(op, result);
     }
 
-    z3::expr Visit(Parity *op)
+    z3::expr visit(Parity *op)
     {
-      auto operand = Dispatch(op->operands[0]);
+      auto operand = dispatch(op->operands[0]);
       auto operand_size = operand.get_sort().bv_size();
       auto sum = operand.extract(0, 0);
       for (auto i = 1U; i < operand_size; ++i) {
@@ -332,9 +332,9 @@ namespace circ
       return record(op, sum);
     }
 
-    z3::expr Visit(RegConstraint *op)       { return record(op, to_bv(lhs(op) == rhs(op))); }
-    z3::expr Visit(AdviceConstraint *op)    { return record(op, to_bv(lhs(op) == rhs(op))); }
-    z3::expr Visit(DecodeCondition *op)     { return record(op, to_bv(lhs(op) == rhs(op))); }
+    z3::expr visit(RegConstraint *op)       { return record(op, to_bv(lhs(op) == rhs(op))); }
+    z3::expr visit(AdviceConstraint *op)    { return record(op, to_bv(lhs(op) == rhs(op))); }
+    z3::expr visit(DecodeCondition *op)     { return record(op, to_bv(lhs(op) == rhs(op))); }
 
     auto deconstruct_memory(const z3::expr &memory)
     {
@@ -345,46 +345,46 @@ namespace circ
       return irops::memory::parse< z3::expr >(memory, extractor, ptr_size);
     }
 
-    z3::expr Visit(ReadConstraint *op) {
-      auto parsed = deconstruct_memory(Dispatch(op->hint_arg()));
+    z3::expr visit(ReadConstraint *op) {
+      auto parsed = deconstruct_memory(dispatch(op->hint_arg()));
       auto used =  parsed.used() == true_bv();
       auto mode =  parsed.mode() == false_bv();
       auto id =    parsed.id() == ctx.bv_val(static_cast< unsigned int >(op->id()), 4);
-      auto size =  parsed.size() == Dispatch(op->size_arg());
-      auto addr =  parsed.addr() == Dispatch(op->addr_arg());
-      auto value = parsed.value() == Dispatch(op->val_arg());
-      auto ts =    parsed.timestamp() == Dispatch(op->ts_arg());
+      auto size =  parsed.size() == dispatch(op->size_arg());
+      auto addr =  parsed.addr() == dispatch(op->addr_arg());
+      auto value = parsed.value() == dispatch(op->val_arg());
+      auto ts =    parsed.timestamp() == dispatch(op->ts_arg());
       return record(op, to_bv(used && mode && id && size && addr && value && ts));
     }
-    z3::expr Visit(WriteConstraint *op) {
-      auto parsed = deconstruct_memory(Dispatch(op->hint_arg()));
+    z3::expr visit(WriteConstraint *op) {
+      auto parsed = deconstruct_memory(dispatch(op->hint_arg()));
       auto used = parsed.used() == true_bv();
       auto mode = parsed.mode() == true_bv();
       auto id =   parsed.id() == ctx.bv_val(static_cast< unsigned int >(op->id()), 4);
-      auto size = parsed.size() == Dispatch(op->size_arg());
-      auto addr = parsed.addr() == Dispatch(op->addr_arg());
-      auto ts =   parsed.timestamp() == Dispatch(op->ts_arg());
+      auto size = parsed.size() == dispatch(op->size_arg());
+      auto addr = parsed.addr() == dispatch(op->addr_arg());
+      auto ts =   parsed.timestamp() == dispatch(op->ts_arg());
       return record(op, to_bv(used && mode && id && size & addr && ts));
     }
-    z3::expr Visit(UnusedConstraint *op) { not_implemented(); }
+    z3::expr visit(UnusedConstraint *op) { not_implemented(); }
 
-    z3::expr Visit(OnlyOneCondition *op)
+    z3::expr visit(OnlyOneCondition *op)
     {
       auto size = static_cast< unsigned int >((op->operands.size() / 2) + 1);
       auto total = ctx.bv_val(0, size);
       for (auto x : op->operands)
-        total = total + z3::zext(Dispatch(x), size - x->size);
+        total = total + z3::zext(dispatch(x), size - x->size);
       return record(op, to_bv(total == ctx.bv_val(1, size)));
     }
 
-    z3::expr Visit(VerifyInstruction *op)
+    z3::expr visit(VerifyInstruction *op)
     {
       return record(op, accumulate(op->operands, std::bit_and()));
     }
 
-    z3::expr Visit(Circuit *op)
+    z3::expr visit(Circuit *op)
     {
-      auto expr = Dispatch(op->operands[0]);
+      auto expr = dispatch(op->operands[0]);
 
       z3::sort_vector args_sorts(ctx);
       for (const auto &con : consts) {
@@ -590,7 +590,7 @@ namespace circ
   static inline CircuitStats get_stats(Circuit *circuit)
   {
       auto visitor = IRToBitBlastableSMTVisitor(circuit->ptr_size);
-      auto expr = visitor.Visit(circuit);
+      auto expr = visitor.visit(circuit);
       auto &ctx = visitor.ctx;
 
       CircuitStats stats;

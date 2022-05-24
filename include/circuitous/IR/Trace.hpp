@@ -17,7 +17,7 @@ namespace circ
     {
         static inline auto parse_map_comparator = [](const auto &lhs, const auto &rhs)
         {
-            return std::less< std::string >{}(lhs->Name(), rhs->Name());
+            return std::less< std::string >{}(lhs->name(), rhs->name());
         };
 
         // [ from, size, raw_name ]
@@ -55,9 +55,9 @@ namespace circ
             std::map< std::string, std::vector< Operation * > > fields;
             uint32_t total_size;
 
-            Derived &add(Operation *op) { this->Dispatch(op); return *this; }
+            Derived &add(Operation *op) { this->dispatch(op); return *this; }
 
-            void Visit(Operation *op) { unreachable() << "..."; }
+            void visit(Operation *op) { unreachable() << "..."; }
 
             Trace take() { return Trace(std::move(fields), std::move(total_size)); }
         };
@@ -65,21 +65,21 @@ namespace circ
         struct Builder : BuilderBase< Builder >
         {
             using parent_t = BuilderBase< Builder >;
-            using parent_t::Visit;
+            using parent_t::visit;
 
             // TODO(lukas): This can be synthetized, see how Serializer does that,
             //              but not sure if it is worth.
-            void Visit(InputRegister *op)        { add_entry(op->parent_t::Name(), op); }
-            void Visit(InputErrorFlag *op)       { add_entry(op->parent_t::Name(), op); }
-            void Visit(InputTimestamp *op)       { add_entry(op->parent_t::Name(), op); }
+            void visit(InputRegister *op)        { add_entry(op->parent_t::name(), op); }
+            void visit(InputErrorFlag *op)       { add_entry(op->parent_t::name(), op); }
+            void visit(InputTimestamp *op)       { add_entry(op->parent_t::name(), op); }
 
-            void Visit(OutputRegister *op)        { add_entry(op->parent_t::Name(), op); }
-            void Visit(OutputErrorFlag *op)       { add_entry(op->parent_t::Name(), op); }
-            void Visit(OutputTimestamp *op)       { add_entry(op->parent_t::Name(), op); }
+            void visit(OutputRegister *op)        { add_entry(op->parent_t::name(), op); }
+            void visit(OutputErrorFlag *op)       { add_entry(op->parent_t::name(), op); }
+            void visit(OutputTimestamp *op)       { add_entry(op->parent_t::name(), op); }
 
-            void Visit(InputInstructionBits *op) { add_entry(op->Name(), op); }
-            void Visit(Advice *op)               { add_entry(op->Name(), op); }
-            void Visit(Memory *op)               { add_entry(op->Name(), op); }
+            void visit(InputInstructionBits *op) { add_entry(op->name(), op); }
+            void visit(Advice *op)               { add_entry(op->name(), op); }
+            void visit(Memory *op)               { add_entry(op->name(), op); }
 
             void add_entry(const std::string &name, Operation *op)
             {
@@ -90,8 +90,8 @@ namespace circ
             template< typename Op >
             void _add_all(Circuit *circuit)
             {
-                for (auto op : circuit->Attr< Op >())
-                    this->Dispatch(op);
+                for (auto op : circuit->attr< Op >())
+                    this->dispatch(op);
             }
 
             template< typename T, typename ... Ts >

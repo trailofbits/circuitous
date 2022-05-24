@@ -35,7 +35,7 @@ namespace circ
                 : os(os_), node_values(vals) {}
 
             void PrintOperands(Operation *op) {
-                if (!op->operands.Empty()) {
+                if (!op->operands.empty()) {
                     os << "</TR><TR>";
                     for (auto sub_op : op->operands) {
                         os << "<TD port=\"s";
@@ -52,26 +52,26 @@ namespace circ
 
             void PrintNodeName(Operation *op) {
                 os << "o" << op->id() << " " << kBeginDOTNode << "<TD port=\"id\"";
-                if (!op->operands.Empty()) {
-                    os << " colspan=\"" << op->operands.Size() << "\"";
+                if (!op->operands.empty()) {
+                    os << " colspan=\"" << op->operands.size() << "\"";
                 }
-                os << ">" << op->Name();
+                os << ">" << op->name();
                 if (node_values.count(op)) {
                     os << " = " << node_values.find(op)->second;
                 }
                 os << "</TD>";
             }
 
-            void Visit(Operation *op) {
-                op->Traverse(*this);
+            void visit(Operation *op) {
+                op->traverse(*this);
                 PrintNodeName(op);
                 PrintOperands(op);
             }
 
-            void Visit(Circuit *op) {
+            void visit(Circuit *op) {
                 os << "digraph {\n"
                     << "node [shape=plain];\n";
-                op->Traverse(*this);
+                op->traverse(*this);
                 PrintNodeName(op);
                 PrintOperands(op);
                 os << "}\n";
@@ -116,10 +116,10 @@ namespace circ::dot
 
             if (auto lop = dynamic_cast<Add *>(op)) {
                 os << NodeID(op) << " [fillcolor=red;style=filled;label = " << '"'
-                    << "{ " << AsID(NodeID(op)) << " " << op->Name();
+                    << "{ " << AsID(NodeID(op)) << " " << op->name();
             } else {
                 os << NodeID(op) << " [label = " << '"'
-                    << "{ " << AsID(NodeID(op)) << " " << op->Name();
+                    << "{ " << AsID(NodeID(op)) << " " << op->name();
             }
             if (node_values.count(op)) {
                 os << " " << node_values.find(op)->second << " ";
@@ -145,17 +145,17 @@ namespace circ::dot
             os << "node [shape=record];";
         }
 
-        void Visit(Operation *op) {
-            op->Traverse(*this);
+        void visit(Operation *op) {
+            op->traverse(*this);
             Node(op);
             for (std::size_t i = 0; i < op->operands.size(); ++i) {
                 Edge(op, op->operands[i], i);
             }
         }
 
-        void Visit(Circuit *op) {
+        void visit(Circuit *op) {
             Init();
-            op->Traverse(*this);
+            op->traverse(*this);
             Node(op);
             for (std::size_t i = 0; i < op->operands.size(); ++i) {
                 Edge(op, op->operands[i], i);
@@ -175,6 +175,6 @@ namespace circ
                   const std::unordered_map<Operation *, std::string> &node_values)
     {
       circ::dot::Printer dot_os(os, node_values);
-      dot_os.Visit(circuit);
+      dot_os.visit(circuit);
     }
 } // namespace circ

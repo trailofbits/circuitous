@@ -61,13 +61,13 @@ struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
     ++entry->second;
   }
 
-  void Visit(Operation *op) {
+  void visit(Operation *op) {
     Process(op);
-    op->Traverse(*this);
+    op->traverse(*this);
   }
 
   void Run(Operation *op) {
-    Dispatch(op);
+    dispatch(op);
   }
 
   auto Export() { return *this; }

@@ -13,28 +13,28 @@ namespace circ
 {
     // Visitors to allow some structured work on the operation tree.
     // There are several methods provided:
-    // `Dispatch()` - top-level to be called in user code to start the walk
-    // `Visit_()` - tries to match it's argument to any known operation and if it matches
-    //              casts it and calls `Visit(X)`. If not type is matched, calls
-    //              `DefaultVisit()` instead.
-    // `DefaultVisit()` - method to be called if no type was matched in `Visit_`.
-    // `Visit(X)` - method that is called with correctly casted type. Usually implemented
+    // `dispatch()` - top-level to be called in user code to start the walk
+    // `visit_()` - tries to match it's argument to any known operation and if it matches
+    //              casts it and calls `visit(X)`. If not type is matched, calls
+    //              `default_visit()` instead.
+    // `default_visit()` - method to be called if no type was matched in `visit_`.
+    // `visit(X)` - method that is called with correctly casted type. Usually implemented
     //              in user code.
-    // For recursive traversal there is `Operation::Traverse()`.
-    // `IsConst` tells the class whether `Visit(X)` is operating on `const Operation *` or
+    // For recursive traversal there is `Operation::traverse()`.
+    // `IsConst` tells the class whether `visit(X)` is operating on `const Operation *` or
     // only `Operation *`.
     template< typename Derived, bool IsConst, typename List > struct VisitorBase;
 
     // Slightly different implementation, as it operates on tags rather than objects
     // themselves (e.g. `uint32_t` vs `Operation *`.
-    // Specialized `Visit(X)` methods are however still of type
-    // `Visit( X *, Args && ... )`, however the first pointer is **nullptr** and serves
+    // Specialized `visit(X)` methods are however still of type
+    // `visit( X *, Args && ... )`, however the first pointer is **nullptr** and serves
     // as type dispatch. Do not dereference it.
     template< typename Derived, typename List > struct DVisitorBase {};
 
-    // `DefaultVisit` simply calls `Visit(Operation *op)`.
+    // `default_visit` simply calls `visit(Operation *op)`.
     template< typename Derived, bool IsConst, typename List > struct Visitor_ {};
-    // `DefaultVisit` calls `unreachable()`.
+    // `default_visit` calls `unreachable()`.
     template< typename Derived, bool IsConst, typename List > struct NonDefaultingVisitor_ {};
 
 
@@ -49,26 +49,26 @@ namespace circ
         const Derived &self() const { return static_cast< const Derived & >(*this); }
 
         template< typename ... Args >
-        auto Dispatch(operation_t op, Args && ... args)
+        auto dispatch(operation_t op, Args && ... args)
         {
-            return this->Visit_< Ops ... >(op, std::forward< Args >(args)...);
+            return this->visit_< Ops ... >(op, std::forward< Args >(args)...);
         }
 
         // This method is not supposed to be overwritten by Derived class!
         template< typename T, typename ... Tail, typename ... Args >
-        auto Visit_(operation_t op, Args && ...args)
+        auto visit_(operation_t op, Args && ...args)
         {
 
             if (isa< T >(op->op_code))
             {
                 auto casted = dynamic_cast< adjust_constness_t< T * > >(op);
-                return self().Visit(casted, std::forward< Args >(args) ... );
+                return self().visit(casted, std::forward< Args >(args) ... );
             }
 
             if constexpr (sizeof ... (Tail) != 0) {
-                return this->Visit_< Tail ... >(op, std::forward< Args >(args)...);
+                return this->visit_< Tail ... >(op, std::forward< Args >(args)...);
             } else {
-                return self().DefaultVisit(op, std::forward< Args >(args) ...);
+                return self().default_visit(op, std::forward< Args >(args) ...);
             }
         }
     };
@@ -81,9 +81,9 @@ namespace circ
         using operation_t = typename parent_t::operation_t;
 
         template< typename ... Args >
-        auto DefaultVisit(operation_t op, Args && ... args)
+        auto default_visit(operation_t op, Args && ... args)
         {
-            return this->self().Visit(op, std::forward< Args >(args) ...);
+            return this->self().visit(op, std::forward< Args >(args) ...);
         }
     };
 
@@ -97,13 +97,13 @@ namespace circ
         using parent_t = VisitorBase< Derived, IsConst, tl::TL< Ops ... > >;
         using operation_t = typename parent_t::operation_t;
 
-        using parent_t::Visit_;
+        using parent_t::visit_;
 
         template< typename ... Args >
-        auto DefaultVisit(operation_t op, Args && ... args )
-        -> decltype(this->template Visit_< Ops ... >(op, std::forward< Args >(args) ...))
+        auto default_visit(operation_t op, Args && ... args )
+        -> decltype(this->template visit_< Ops ... >(op, std::forward< Args >(args) ...))
         {
-            unreachable() << "Missing Visitor::Visit(X) for " << pretty_print(op);
+            unreachable() << "Missing Visitor::visit(X) for " << pretty_print(op);
         }
     };
 
@@ -118,13 +118,13 @@ namespace circ
         Derived &self() { return static_cast< Derived & >(*this); }
 
         template< typename T, typename ...Tail, typename ...Args >
-        auto Visit_(Operation::kind_t kind, Args &&... args)
+        auto visit_(Operation::kind_t kind, Args &&... args)
         {
             if (isa< T >(kind))
-                return self().Visit(static_cast< T * >(nullptr), std::forward< Args >(args)...);
+                return self().visit(static_cast< T * >(nullptr), std::forward< Args >(args)...);
 
             if constexpr (sizeof...(Tail) != 0) {
-                return this->Visit_< Tail ... >(kind, std::forward< Args >(args)...);
+                return this->visit_< Tail ... >(kind, std::forward< Args >(args)...);
             } else {
                 unreachable() << "Kind: "
                               << std::to_string(util::to_underlying(kind))
@@ -133,9 +133,9 @@ namespace circ
         }
 
         template< typename ... Args >
-        auto Dispatch(Operation::kind_t kind, Args &&...args)
+        auto dispatch(Operation::kind_t kind, Args &&...args)
         {
-            return this->Visit_< Ops ... >(kind, std::forward< Args >(args)...);
+            return this->visit_< Ops ... >(kind, std::forward< Args >(args)...);
         }
     };
 
@@ -148,12 +148,12 @@ namespace circ
         using parent_t = Visitor< Derived, IsConst >;
         using operation_t = typename parent_t::operation_t;
 
-        auto Dispatch(operation_t op)
+        auto dispatch(operation_t op)
         {
             if (seen_ops.count(op))
                 return;
             seen_ops.insert(op);
-            return this->parent_t::Dispatch(op);
+            return this->parent_t::dispatch(op);
         }
 
         void reset() { seen_ops.clear(); }

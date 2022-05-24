@@ -128,7 +128,7 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context, llvm::Value *v
             auto &entry_block = context->getEntryBlock();
             ce_inst->insertBefore(&*entry_block.getFirstInsertionPt());
             ce->replaceAllUsesWith(ce_inst);
-            CHECK(val == ce_inst);
+            check(val == ce_inst);
             return self->Visit(context, val);  // Revisit.
         }
         if (auto ci = llvm::dyn_cast<llvm::ConstantInt>(val))
@@ -191,14 +191,14 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
     auto inst_bits_node()
     {
-        CHECK(impl->Attr<InputInstructionBits>().Size() == 1);
-        return *impl->Attr<InputInstructionBits>().begin();
+        check(impl->attr< InputInstructionBits >().size() == 1);
+        return *impl->attr< InputInstructionBits >().begin();
     }
 
     Operation *extract_argument(llvm::CallInst *call, llvm::Function *fn)
     {
         auto args = call_args(call);
-        CHECK(args.size() <= 1);
+        check(args.size() <= 1);
         return (args.size() == 0) ? inst_bits_node() : Fetch(fn, args[0]);
     }
 
@@ -220,8 +220,8 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             std::deque< Operation * > partials;
             while (true) {
                 uint32_t y = std::min(from + (step - from % step), to);
-                auto op = impl->Create< Extract >(from, y);
-                op->AddUse(arg);
+                auto op = impl->create< Extract >(from, y);
+                op->add_use(arg);
                 partials.push_front(op);
                 if (y == to) {
                     return partials;
@@ -244,7 +244,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         // expect `00000012` therefore we must reorder them and then concat.
         auto full = Emplace< Concat >(call, size);
         for (auto x : partials) {
-            full->AddUse(x);
+            full->add_use(x);
         }
         return full;
     }
@@ -261,9 +261,9 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
         auto args = call_args(call);
         if (!args.empty()) {
-            op->AddUse(Fetch(call->getParent()->getParent(), args[0]));
+            op->add_use(Fetch(call->getParent()->getParent(), args[0]));
         } else {
-            op->AddUse(arg);
+            op->add_use(arg);
         }
         return op;
     }
@@ -274,7 +274,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
     {
         auto out = Emplace< O >(call, std::forward<Args>(args)...);
         for (auto arg : call_args(call))
-            out->AddUse(Fetch(call->getParent()->getParent(), arg));
+            out->add_use(Fetch(call->getParent()->getParent(), arg));
         return out;
     }
 
@@ -312,13 +312,13 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             case llvm::Intrinsic::ctlz :
             {
                 auto out = Emplace< CountLeadingZeroes >(call, value_size(call));
-                out->AddUse(call_arg(call, 0u));
+                out->add_use(call_arg(call, 0u));
                 return out;
             }
             case llvm::Intrinsic::cttz :
             {
                 auto out = Emplace< CountTrailingZeroes >(call, value_size(call));
-                out->AddUse(call_arg(call, 0u));
+                out->add_use(call_arg(call, 0u));
                 return out;
             }
             default:
@@ -428,7 +428,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             return;
 
         auto func = val->getCalledFunction();
-        CHECK(func) << "Cannot find called function used in call: "
+        check(func) << "Cannot find called function used in call: "
                     << remill::LLVMThingToString(val);
 
         Operation *op = nullptr;
@@ -444,7 +444,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
     T *llvm_inst_operands(T *self, llvm::Instruction *inst, llvm::Function *func)
     {
         for (const auto &op : inst->operand_values())
-            self->AddUse(Fetch(func, op));
+            self->add_use(Fetch(func, op));
         return self;
     }
 
@@ -456,9 +456,9 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
         check(converted.size() == 3);
         // We know there are 3 operands, however true result is first
-        select->AddUse(converted[0]);
-        select->AddUse(converted[2]);
-        select->AddUse(converted[1]);
+        select->add_use(converted[0]);
+        select->add_use(converted[2]);
+        select->add_use(converted[1]);
         return select;
     }
 
@@ -600,8 +600,8 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         auto &bits_op = bits_to_constants[bits_str];
         if (!bits_op)
         {
-            CHECK(num_bits == bits_str.size());
-            bits_op = impl->Create< Constant >(std::move(bits_str),
+            check(num_bits == bits_str.size());
+            bits_op = impl->create< Constant >(std::move(bits_str),
                                                static_cast< unsigned >(num_bits));
             annote_with_llvm_inst(bits_op, val);
         }
@@ -628,7 +628,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
     void conjure_instbits(uint32_t size)
     {
-       inst_bits[size] = impl->Create< InputInstructionBits >(size);
+       inst_bits[size] = impl->create< InputInstructionBits >(size);
     }
 
     template< typename I >
@@ -636,7 +636,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
     {
         if (!leaves.count(fn)) {
             // TODO(lukas): What about possible metadata?
-            leaves[fn] = impl->Create< I >(size);
+            leaves[fn] = impl->create< I >(size);
         }
         return leaves[fn];
     }
@@ -658,7 +658,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
     template< typename T, typename ...Args >
     T* Emplace(llvm::Value *key, Args &&... args)
     {
-        auto op = impl->Create< T >(std::forward< Args >(args) ... );
+        auto op = impl->create< T >(std::forward< Args >(args) ... );
         val_to_op.emplace(key, op);
         populate_meta(key, op);
         annote_with_llvm_inst(op, key);
@@ -734,16 +734,16 @@ Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func, Ctx &ctx)
         }
     }
 
-    CHECK(0u < num_input_regs);
-    CHECK(num_input_regs == num_output_regs);
+    check(0u < num_input_regs);
+    check(num_input_regs == num_output_regs);
 
-    auto all_verifications = impl->Create<OnlyOneCondition>();
-    impl->AddUse(all_verifications);
+    auto all_verifications = impl->create<OnlyOneCondition>();
+    impl->add_use(all_verifications);
 
     auto visit_context = [&](llvm::CallInst *verify_inst) {
         importer.Visit(circuit_func, verify_inst);
-        CHECK(importer.get(verify_inst)->op_code == VerifyInstruction::kind);
-        all_verifications->AddUse(importer.get(verify_inst));
+        check(importer.get(verify_inst)->op_code == VerifyInstruction::kind);
+        all_verifications->add_use(importer.get(verify_inst));
     };
     irops::VerifyInst::for_all_in(circuit_func, visit_context);
     log_info() << "IRImpoter done.";

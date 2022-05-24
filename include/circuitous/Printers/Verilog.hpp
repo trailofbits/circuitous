@@ -129,7 +129,7 @@ namespace circ::print::verilog
             if (auto name = ctx.get_name(op))
                 return *name;
             // `op` does not have a name -> create it and name it
-            return ctx.give_name(op, this->Dispatch(op));
+            return ctx.give_name(op, this->dispatch(op));
         }
 
         template< typename I > requires std::is_integral_v< I >
@@ -314,7 +314,7 @@ namespace circ::print::verilog
             }
         }
 
-        std::string Visit(Operation *op)
+        std::string visit(Operation *op)
         {
             log_kill() << "Cannot print in verilog: " << pretty_print< true >(op)
                        << "\n" << ctx.dbg().str();
@@ -331,7 +331,7 @@ namespace circ::print::verilog
         // Final value is then computed as
         // !O(m) && R(m)
         //   i.e. overflow did not happen, and at least one `1` was found.
-        std::string Visit(OnlyOneCondition *op)
+        std::string visit(OnlyOneCondition *op)
         {
             auto base = [&](std::string s) { return s + "nx" + std::to_string(op->id()); };
             auto rn = [&](auto i) { return base("r") + "x" + std::to_string(i); };
@@ -356,12 +356,12 @@ namespace circ::print::verilog
             return make_wire(op, ss.str());
         }
 
-        std::string Visit(VerifyInstruction *op) { return make(zip(), op); }
+        std::string visit(VerifyInstruction *op) { return make(zip(), op); }
 
         /* Constraints */
 
-        std::string Visit(AdviceConstraint *op)    { return make(zip(), op); }
-        std::string Visit(RegConstraint *op)       { return make(zip(), op); }
+        std::string visit(AdviceConstraint *op)    { return make(zip(), op); }
+        std::string visit(RegConstraint *op)       { return make(zip(), op); }
 
         std::string make_extract(const std::string &from, uint64_t high_inc, uint64_t low_inc)
         {
@@ -408,22 +408,22 @@ namespace circ::print::verilog
             add(  "1'b" + mode           , hint.mode());
             return make_wire(op, ss.str());
         }
-        std::string Visit(ReadConstraint *op) { return make_memory_constraint(op, false); }
-        std::string Visit(WriteConstraint *op) { return make_memory_constraint(op, true); }
+        std::string visit(ReadConstraint *op) { return make_memory_constraint(op, false); }
+        std::string visit(WriteConstraint *op) { return make_memory_constraint(op, true); }
 
         /* Decode condition */
-        std::string Visit(DecodeCondition *op) { return make(zip(), op); }
+        std::string visit(DecodeCondition *op) { return make(zip(), op); }
 
         /* Mux */
-        std::string Visit(Select *op) { return mux(op); }
+        std::string visit(Select *op) { return mux(op); }
 
         /* BitManip */
-        std::string Visit(Concat *op)
+        std::string visit(Concat *op)
         {
             return rmake(wrap_zip("{ ", " }"), op);
         }
 
-        std::string Visit(Extract *op)
+        std::string visit(Extract *op)
         {
             auto from = get(op->operands[0]);
             return make_wire(op, make_extract(from, op->high_bit_exc - 1, op->low_bit_inc));
@@ -431,31 +431,31 @@ namespace circ::print::verilog
 
         /* Helpers */
         // TOOD(lukas): Double check.
-        std::string Visit(InputImmediate *op) { return get(op->operands[0]); }
+        std::string visit(InputImmediate *op) { return get(op->operands[0]); }
 
         /* Nary helpers */
-        std::string Visit(And *op) { return make(zip(), op); }
-        std::string Visit(Or *op)  { return make(zip(), op); }
+        std::string visit(And *op) { return make(zip(), op); }
+        std::string visit(Or *op)  { return make(zip(), op); }
 
         /* Decoder result wrapper */
-        std::string Visit(DecoderResult *op) { return make(zip(), op); }
+        std::string visit(DecoderResult *op) { return make(zip(), op); }
 
         /* LLVM ops */
-        std::string Visit(Add *op) { return make(zip(), op); }
-        std::string Visit(Sub *op) { return make(zip(), op); }
-        std::string Visit(Mul *op) { return make(zip(), op); }
+        std::string visit(Add *op) { return make(zip(), op); }
+        std::string visit(Sub *op) { return make(zip(), op); }
+        std::string visit(Mul *op) { return make(zip(), op); }
 
-        std::string Visit(UDiv *op) { return make(zip(), op); }
-        std::string Visit(SDiv *op) { return make(szip(), op); }
+        std::string visit(UDiv *op) { return make(zip(), op); }
+        std::string visit(SDiv *op) { return make(szip(), op); }
 
-        std::string Visit(URem *op) { return make(zip(), op); }
-        std::string Visit(SRem *op) { return make(szip(), op); }
+        std::string visit(URem *op) { return make(zip(), op); }
+        std::string visit(SRem *op) { return make(szip(), op); }
 
-        std::string Visit(Shl *op)  { return make(zip(), op); }
-        std::string Visit(LShr *op) { return make(zip(), op); }
-        std::string Visit(AShr *op) { return make(zip(), op); }
+        std::string visit(Shl *op)  { return make(zip(), op); }
+        std::string visit(LShr *op) { return make(zip(), op); }
+        std::string visit(AShr *op) { return make(zip(), op); }
 
-        std::string Visit(Trunc *op)
+        std::string visit(Trunc *op)
         {
             auto trg_size = op->size - 1;
             std::stringstream ss;
@@ -463,13 +463,13 @@ namespace circ::print::verilog
             return make_wire(op, ss.str());
         }
 
-        std::string Visit(ZExt *op)
+        std::string visit(ZExt *op)
         {
             auto prefix = impl::bin_zero(op->size - op->operands[0]->size);
             return make_wire(op, concat({prefix, get(op->operands[0])}));
         }
 
-        std::string Visit(SExt *op)
+        std::string visit(SExt *op)
         {
             auto pos_prefix = impl::bin_zero(op->size - op->operands[0]->size);
             auto neg_prefix = impl::bin_one(op->size - op->operands[0]->size);
@@ -485,32 +485,32 @@ namespace circ::print::verilog
             return make_wire(op, concat({padding, get(op->operands[0])}));
         }
 
-        std::string Visit(Icmp_ult *op) { return make(zip(), op); }
-        std::string Visit(Icmp_slt *op) { return make(szip(), op); }
-        std::string Visit(Icmp_ugt *op) { return make(zip(), op); }
-        std::string Visit(Icmp_eq  *op) { return make(zip(), op); }
-        std::string Visit(Icmp_ne  *op) { return make(zip(), op); }
-        std::string Visit(Icmp_uge *op) { return make(zip(), op); }
-        std::string Visit(Icmp_ule *op) { return make(zip(), op); }
-        std::string Visit(Icmp_sgt *op) { return make(szip(), op); }
-        std::string Visit(Icmp_sge *op) { return make(szip(), op); }
-        std::string Visit(Icmp_sle *op) { return make(szip(), op); }
+        std::string visit(Icmp_ult *op) { return make(zip(), op); }
+        std::string visit(Icmp_slt *op) { return make(szip(), op); }
+        std::string visit(Icmp_ugt *op) { return make(zip(), op); }
+        std::string visit(Icmp_eq  *op) { return make(zip(), op); }
+        std::string visit(Icmp_ne  *op) { return make(zip(), op); }
+        std::string visit(Icmp_uge *op) { return make(zip(), op); }
+        std::string visit(Icmp_ule *op) { return make(zip(), op); }
+        std::string visit(Icmp_sgt *op) { return make(szip(), op); }
+        std::string visit(Icmp_sge *op) { return make(szip(), op); }
+        std::string visit(Icmp_sle *op) { return make(szip(), op); }
 
-        std::string Visit(Xor *op) { return make(zip(), op); }
+        std::string visit(Xor *op) { return make(zip(), op); }
 
         /* Leaves */
-        std::string Visit(Constant *op)
+        std::string visit(Constant *op)
         {
             return make_wire(op, std::to_string(op->size) + "'b" + op->bits);
         }
 
-        std::string Visit(Undefined *op)
+        std::string visit(Undefined *op)
         {
             return make_wire(op, impl::bin_zero(op->size));
         }
 
         /* High level */
-        std::string Visit(PopulationCount *op)
+        std::string visit(PopulationCount *op)
         {
             uint32_t operand_size = op->operands[0]->size;
             uint32_t rsize = static_cast< uint32_t >(std::ceil(std::log2(operand_size)));
@@ -533,14 +533,14 @@ namespace circ::print::verilog
             return name;
         }
 
-        std::string Visit(CountLeadingZeroes *op)
+        std::string visit(CountLeadingZeroes *op)
         {
             auto get_bit_ = [&](auto op, auto i) {
                 return this->get_bit(op, op->size - i - 1);
             };
             return count_zeroes(op, get_bit_);
         }
-        std::string Visit(CountTrailingZeroes *op)
+        std::string visit(CountTrailingZeroes *op)
         {
             return count_zeroes(op, [&](auto op, auto i){ return this->get_bit(op, i); });
         }
@@ -574,7 +574,7 @@ namespace circ::print::verilog
             return make_wire(op, concat({padding, last_tn}));
         }
 
-        std::string Visit(Circuit *op) { return get(op->operands[0]); }
+        std::string visit(Circuit *op) { return get(op->operands[0]); }
 
         std::string write(Operation *op) { return get(op); }
     };
@@ -586,7 +586,7 @@ namespace circ::print::verilog
             std::string operator()(Operation *op) {
                 // `.` is not a valid character in token name in verilog
                 std::string out = "";
-                for (auto c : op->Name())
+                for (auto c : op->name())
                     out += (c == '.') ? '_' : c;
                 return out;
             }
