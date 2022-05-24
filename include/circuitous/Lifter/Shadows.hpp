@@ -5,6 +5,7 @@
 
 #include <cstdint>
 #include <cmath>
+#include <concepts>
 #include <deque>
 #include <iostream>
 #include <map>
@@ -286,16 +287,10 @@ namespace circ::shadowinst
     namespace query
     {
         template< typename T >
-        concept container_like = requires (T c)
+        concept range_like = requires (T c)
         {
             c.begin();
             c.end();
-        };
-
-        template< typename Q, typename V >
-        concept invocable = requires(Q &q, const V &v)
-        {
-            q(v);
         };
 
         template< typename Q, typename V >
@@ -314,7 +309,7 @@ namespace circ::shadowinst
 
         /* dispatch */
 
-        template< typename Q, container_like C >
+        template< typename Q, range_like C >
         auto do_apply(Q &q, const C &c) -> decltype(do_apply(q, *c.begin()))
         {
             // TODO(lukas): Return type with optional would be complicated for now not neeeded.
@@ -330,13 +325,13 @@ namespace circ::shadowinst
             return r;
         }
 
-        template< typename Q, answers_queries_t V > requires(invocable< Q, V >)
+        template< typename Q, answers_queries_t V > requires (std::invocable< Q, V >)
         auto do_apply(Q &q, const V &v) -> decltype (q(v))
         {
             return q(v);
         }
 
-        template< typename Q, answers_queries_t V >
+        template< typename Q, answers_queries_t V > requires (indirectly_invocable< Q, V >)
         auto do_apply(Q &q, const std::optional< V > &v) -> decltype(q(*v))
         {
             if (!v)
