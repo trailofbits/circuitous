@@ -74,8 +74,8 @@ namespace circ::shadowinst
         storage_t bits;
         std::map< std::size_t, std::size_t > areas;
 
-        Regions_(std::size_t init) : bits(init, B{ false }) {}
-        Regions_(const ordered_bits_t &bits_) : bits(bits_.data)
+        explicit Regions_(std::size_t init) : bits(init, B{ false }) {}
+        explicit Regions_(const ordered_bits_t &bits_) : bits(bits_.data)
         {
             for (std::size_t i = 0; i < bits.size(); ++i)
             {
@@ -445,9 +445,9 @@ namespace circ::shadowinst
         using Regions = Regions_< bool >;
         Regions regions;
 
-        has_regions(std::size_t bitsize) : regions(bitsize) {}
-        has_regions(const ordered_bits_t &bits_) : regions(bits_) {}
-        has_regions(const Regions &regions_) : regions(regions_) {}
+        explicit has_regions(std::size_t bitsize) : regions(bitsize) {}
+        explicit has_regions(const ordered_bits_t &bits_) : regions(bits_) {}
+        explicit has_regions(const Regions &regions_) : regions(regions_) {}
 
         template< typename Q >
         auto query(Q &&q) const
@@ -488,7 +488,7 @@ namespace circ::shadowinst
         std::size_t bitsize = 0;
       public:
 
-        TranslationMap(std::size_t bitsize_) : bitsize(bitsize_) {}
+        explicit TranslationMap(std::size_t bitsize_) : bitsize(bitsize_) {}
         TranslationMap(const TranslationMap &) = default;
         TranslationMap(TranslationMap &&) = default;
 
@@ -670,13 +670,19 @@ namespace circ::shadowinst
 
         std::optional< std::size_t > selector;
 
-        Reg(const ordered_bits_t &bits_)
+        explicit Reg(const ordered_bits_t &bits_)
             : has_regions(bits_), translation_map(regions.marked_size())
         {}
 
-        Reg(const Regions &o)
+        explicit Reg(const Regions &o)
             : has_regions(o), translation_map(o.marked_size())
         {}
+
+        Reg(const Reg &) = default;
+        Reg(Reg &&) = default;
+
+        Reg &operator=(const Reg &) = default;
+        Reg &operator=(Reg &&) = default;
 
         auto &tm() { return translation_map; }
         const auto &tm() const { return translation_map; }
@@ -765,7 +771,7 @@ namespace circ::shadowinst
         auto do_make(std::size_t idx, Args &&... args)
         -> std::enable_if_t< std::is_same_v< T, Reg >, Reg &>
         {
-            _regs[idx] = std::make_optional(std::forward< Args >(args) ...);
+            _regs[idx] = Reg(std::forward< Args >(args) ...);
             return *_regs[idx];
         }
 
@@ -773,7 +779,7 @@ namespace circ::shadowinst
         auto do_make(std::size_t idx, Args &&... args)
         -> std::enable_if_t< std::is_same_v< T, Immediate >, Immediate &>
         {
-            _imms[idx] = std::make_optional(std::forward< Args >(args) ...);
+            _imms[idx] = Immediate(std::forward< Args >(args) ...);
             return *_imms[idx];
         }
 
@@ -844,7 +850,7 @@ namespace circ::shadowinst
 
         // Simply forwarded to the variant ctor.
         template< typename ... Args >
-        Operand(Args && ...args) : _data(std::forward< Args >(args) ...) {}
+        explicit Operand(Args && ...args) : _data(std::forward< Args >(args) ...) {}
 
       public:
 
@@ -942,7 +948,7 @@ namespace circ::shadowinst
         std::vector< Reg * > selectors;
         std::size_t enc_bitsize;
 
-        Instruction(std::size_t enc_bitsize_) : enc_bitsize(enc_bitsize_) {}
+        explicit Instruction(std::size_t enc_bitsize_) : enc_bitsize(enc_bitsize_) {}
         Instruction(const Instruction &other) : operands(other.operands)
         {
             for (const auto &o_cluster : other.deps)
