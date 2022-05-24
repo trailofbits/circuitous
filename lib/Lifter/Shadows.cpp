@@ -187,7 +187,8 @@ namespace circ::shadowinst
         std::stringstream ss;
         ss << "Shadowinst:" << std::endl;
 
-        for (const auto &cluster : deps) {
+        for (const auto &cluster : deps)
+        {
             ss << "Deps cluster: [ ";
             for (const auto &[idx, _] : cluster)
                 ss << idx << " ";
