@@ -76,7 +76,7 @@ namespace {
                 Write(op->id());
                 Write(op->op_code);
                 written.insert(op->id());
-                this->Dispatch(op);
+                this->dispatch(op);
             } else {
                 Write(Selector::Reference);
                 Write< raw_id_t >(op->id());
@@ -138,23 +138,23 @@ namespace {
         }
 
         // TODO(lukas): This should be called, but is not.
-        void Visit(Circuit *op) { write(op->ptr_size, op->operands);  }
+        void visit(Circuit *op) { write(op->ptr_size, op->operands);  }
 
-        void Visit(InputRegister *op) { write(op->reg_name, op->size); }
-        void Visit(OutputRegister *op) { write(op->reg_name, op->size); }
+        void visit(InputRegister *op) { write(op->reg_name, op->size); }
+        void visit(OutputRegister *op) { write(op->reg_name, op->size); }
 
-        void Visit(Operation *op) { write(op->size, op->operands); }
-        void Visit(Constant *op) { write(op->size, op->bits); }
-        void Visit(InputImmediate *op) { write(op->size, op->operands); }
+        void visit(Operation *op) { write(op->size, op->operands); }
+        void visit(Constant *op) { write(op->size, op->bits); }
+        void visit(InputImmediate *op) { write(op->size, op->operands); }
 
-        void Visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc, op->operands[0]); }
-        void Visit(Select *op) { write(op->size, op->bits, op->operands); }
-        void Visit(Memory *op) { write(op->size, op->mem_idx); }
-        void Visit(Advice *op) { write(op->size, op->advice_idx); }
-        void Visit(InputErrorFlag *op)  { write(op->size); }
-        void Visit(OutputErrorFlag *op) { write(op->size); }
-        void Visit(InputTimestamp *op)  { write(op->size); }
-        void Visit(OutputTimestamp *op) { write(op->size); }
+        void visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc, op->operands[0]); }
+        void visit(Select *op) { write(op->size, op->bits, op->operands); }
+        void visit(Memory *op) { write(op->size, op->mem_idx); }
+        void visit(Advice *op) { write(op->size, op->advice_idx); }
+        void visit(InputErrorFlag *op)  { write(op->size); }
+        void visit(OutputErrorFlag *op) { write(op->size); }
+        void visit(InputTimestamp *op)  { write(op->size); }
+        void visit(OutputTimestamp *op) { write(op->size); }
     };
 
 
@@ -163,7 +163,7 @@ namespace {
 
         template< typename D, typename T >
         struct inject {
-            Operation *Visit(T *, uint64_t id)
+            Operation *visit(T *, uint64_t id)
             {
                 auto &self = static_cast< D & >( *this );
                 return self.template with_ops< T >(id, self.template read< unsigned >());
@@ -174,13 +174,13 @@ namespace {
         struct unfolder {};
 
         template< typename D, typename T >
-        struct unfolder< D, T > : inject< D, T > { using inject< D, T >::Visit; };
+        struct unfolder< D, T > : inject< D, T > { using inject< D, T >::visit; };
 
         template< typename D, typename T, typename ...Ts >
         struct unfolder< D, T, Ts... > : inject< D, T >, unfolder< D, Ts... >
         {
-          using inject< D, T >::Visit;
-          using unfolder< D, Ts... >::Visit;
+          using inject< D, T >::visit;
+          using unfolder< D, Ts... >::visit;
         };
 
         template< typename D, typename L > struct inject_visitors {};
@@ -198,7 +198,7 @@ namespace {
     {
         using Selector = FileConfig::Selector;
 
-        using DeserializeComputational< DeserializeVisitor >::Visit;
+        using DeserializeComputational< DeserializeVisitor >::visit;
 
         std::istream &is;
         std::unordered_map<uint64_t, Operation *> id_to_op;
@@ -276,7 +276,7 @@ namespace {
         {
             auto [size] = read< uint32_t >();
             for (auto i = 0u; i < size; ++i)
-                elems->AddUse(Read());
+                elems->add_use(Read());
         }
 
         Operation *Read()
@@ -310,7 +310,7 @@ namespace {
         }
 
         template< typename T >
-        Operation *Visit(T *op, uint64_t id)
+        Operation *visit(T *op, uint64_t id)
         {
             unreachable() << "Cannot deserialize "
                           << fragment_as_str(T::kind)
@@ -319,14 +319,14 @@ namespace {
 
         Operation *Decode(raw_id_t id, Operation::kind_t op_code)
         {
-            return this->Dispatch(op_code, id);
+            return this->dispatch(op_code, id);
         }
 
         template< typename T, typename ...Args >
         auto make_op(uint64_t id, std::tuple< Args... > &&args)
         {
             auto make = [&](Args &&... args) {
-                return circuit->Adopt< T >(id, std::forward< Args >(args)... );
+                return circuit->adopt< T >(id, std::forward< Args >(args)... );
             };
             return std::apply(make, std::forward< std::tuple< Args ... > >(args));
         }
@@ -351,7 +351,7 @@ namespace {
           return make_op< T >(id, read< std::string, unsigned >());
         }
 
-        Operation *Visit(Circuit *, uint64_t id)
+        Operation *visit(Circuit *, uint64_t id)
         {
             check(!circuit) << "Found multiple Circuit * while deserializing!";
 
@@ -361,52 +361,52 @@ namespace {
             return circuit.get();
         }
 
-        Operation *Visit(InputRegister *, uint64_t id)
+        Operation *visit(InputRegister *, uint64_t id)
         {
             return reg_like_< InputRegister >(id);
         }
-        Operation *Visit(OutputRegister *, uint64_t id)
+        Operation *visit(OutputRegister *, uint64_t id)
         {
             return reg_like_< OutputRegister >(id);
         }
 
-        Operation *Visit(InputImmediate *, uint64_t id)
+        Operation *visit(InputImmediate *, uint64_t id)
         {
             auto op = make_op< InputImmediate >(id, read< unsigned >());
             ReadOps(op);
             return op;
         }
 
-        Operation *Visit(Memory *, uint64_t id)
+        Operation *visit(Memory *, uint64_t id)
         {
             auto [size, mem_id] = read< unsigned, unsigned >();
             check(size == Memory::expected_size(circuit->ptr_size));
-            return circuit->Adopt< Memory >(id, size, mem_id);
+            return circuit->adopt< Memory >(id, size, mem_id);
         }
 
-        Operation *Visit(Advice *, uint64_t id)
+        Operation *visit(Advice *, uint64_t id)
         {
             auto [size, advice_idx] = read< unsigned, unsigned >();
-            return circuit->Adopt<Advice>(id, size, advice_idx);
+            return circuit->adopt<Advice>(id, size, advice_idx);
         }
 
-        Operation *Visit(Constant *, uint64_t id)
+        Operation *visit(Constant *, uint64_t id)
         {
             auto [size, bits] = read< unsigned, std::string >();
-            return circuit->Adopt< Constant >(id, std::move(bits), size);
+            return circuit->adopt< Constant >(id, std::move(bits), size);
         }
 
-        Operation *Visit(Extract *, uint64_t id) {
+        Operation *visit(Extract *, uint64_t id) {
             auto [high, low] = read< unsigned, unsigned >();
-            auto op = circuit->Adopt< Extract >(id, low, high);
-            op->AddUse(Read());
+            auto op = circuit->adopt< Extract >(id, low, high);
+            op->add_use(Read());
             return op;
         }
 
-        Operation *Visit(Select *, uint64_t id)
+        Operation *visit(Select *, uint64_t id)
         {
             auto [size, bits] = read<unsigned, unsigned>();
-            auto op = circuit->Adopt< Select >(id, bits, size);
+            auto op = circuit->adopt< Select >(id, bits, size);
             ReadOps(op);
             return op;
         }
@@ -415,21 +415,21 @@ namespace {
         auto make_leaf(uint64_t id)
         {
             auto [size] = read< unsigned >();
-            return circuit->Adopt< T >(id, size);
+            return circuit->adopt< T >(id, size);
         }
 
-        Operation *Visit(InputErrorFlag *, uint64_t id)
+        Operation *visit(InputErrorFlag *, uint64_t id)
         {
             return make_leaf< InputErrorFlag >(id);
         }
-        Operation *Visit(OutputErrorFlag *, uint64_t id) {
+        Operation *visit(OutputErrorFlag *, uint64_t id) {
             return make_leaf< OutputErrorFlag >(id);
         }
-        Operation *Visit(InputTimestamp *, uint64_t id)
+        Operation *visit(InputTimestamp *, uint64_t id)
         {
             return make_leaf< InputTimestamp >(id);
         }
-        Operation *Visit(OutputTimestamp *, uint64_t id)
+        Operation *visit(OutputTimestamp *, uint64_t id)
         {
             return make_leaf< OutputTimestamp >(id);
         }
@@ -442,16 +442,16 @@ namespace {
         {
             auto [size] = read< unsigned >();
             check(size == 1);
-            auto self = circuit->Adopt< T >(id);
+            auto self = circuit->adopt< T >(id);
             ReadOps(self);
             return self;
         }
 
         #define DECODE_GENERIC(cls) \
-        Operation *Visit(cls *, uint64_t id) { return make_generic< cls >(id); }
+        Operation *visit(cls *, uint64_t id) { return make_generic< cls >(id); }
 
         #define DECODE_CONDITION(cls) \
-        Operation *Visit(cls *, uint64_t id) { return make_condition< cls >(id); }
+        Operation *visit(cls *, uint64_t id) { return make_condition< cls >(id); }
 
         DECODE_GENERIC(Undefined)
         DECODE_GENERIC(Not)
@@ -485,7 +485,7 @@ void Circuit::serialize(std::ostream &os)
     vis.serialize(this);
 
     auto write_metadata = [&](auto op) { vis.write_metadata(op); };
-    ForEachOperation(write_metadata);
+    for_each_operation(write_metadata);
 
     os.flush();
 }

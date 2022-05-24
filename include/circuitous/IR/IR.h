@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <circuitous/Util/UseDef.h>
+#include <circuitous/Util/UseDef.hpp>
 #include <circuitous/Util/TypeList.hpp>
 #include <circuitous/Util/TypeTraits.hpp>
 #include <circuitous/Support/Check.hpp>
@@ -110,17 +110,17 @@ namespace circ
 
         virtual ~Operation() = default;
 
-        virtual std::string Name() const;
+        virtual std::string name() const;
         static std::string op_code_str() { not_implemented(); }
 
         auto &operator[](std::size_t idx) { return operands[idx]; }
         const auto &operator[](std::size_t idx) const { return operands[idx]; }
 
         template< typename Vis >
-        void Traverse(Vis &vis)
+        void traverse(Vis &vis)
         {
             for (auto op : operands)
-                vis.Dispatch(op);
+                vis.dispatch(op);
         }
 
       protected:
@@ -226,7 +226,7 @@ namespace circ
         explicit Input(const Input< Next, k > & ) = default;
 
         static std::string op_code_str() { return "in." + parent_t::op_code_str(); }
-        std::string Name() const override { return "In." + parent_t::Name(); }
+        std::string name() const override { return "In." + parent_t::name(); }
     };
 
     template< class Next, Operation::kind_t k >
@@ -244,7 +244,7 @@ namespace circ
         explicit Output(const Output< Next, k > &) = default;
 
         static std::string op_code_str() { return "out." + parent_t::op_code_str(); }
-        std::string Name() const override { return "Out." + parent_t::Name(); }
+        std::string name() const override { return "Out." + parent_t::name(); }
     };
 
     /* I/O & Leaf nodes */
@@ -261,7 +261,7 @@ namespace circ
       public:
 
         static std::string op_code_str() { return "register"; }
-        std::string Name() const override { return "register." + reg_name; }
+        std::string name() const override { return "register." + reg_name; }
 
         std::string reg_name;
     };
@@ -277,7 +277,7 @@ namespace circ
       public:
 
         static std::string op_code_str() { return "error_flag"; }
-        std::string Name() const override { return "error_flag"; }
+        std::string name() const override { return "error_flag"; }
     };
 
     using InputErrorFlag = Input< ErrorFlag, Operation::kind_t::kInputErrorFlag >;
@@ -291,7 +291,7 @@ namespace circ
       public:
 
         static std::string op_code_str() { return "timestamp"; }
-        std::string Name() const override { return "timestamp"; }
+        std::string name() const override { return "timestamp"; }
     };
 
     using InputTimestamp = Input< Timestamp, Operation::kind_t::kInputTimestamp >;
@@ -305,7 +305,7 @@ namespace circ
         explicit Undefined(unsigned size_) : Operation(size_, kind) {}
 
         static std::string op_code_str() { return "undefined"; }
-        std::string Name() const override { return "undefined"; }
+        std::string name() const override { return "undefined"; }
     };
 
     struct Memory : Operation
@@ -318,7 +318,7 @@ namespace circ
         static uint32_t  expected_size(uint32_t ptr_size);
 
         static std::string op_code_str() { return "memory"; }
-        std::string Name() const override { return "memory." + std::to_string(mem_idx); }
+        std::string name() const override { return "memory." + std::to_string(mem_idx); }
 
         uint32_t mem_idx = 0;
     };
@@ -333,7 +333,7 @@ namespace circ
         {}
 
         static std::string op_code_str() { return "constant"; }
-        std::string Name() const override;
+        std::string name() const override;
 
         // Value of this constant. The least significant bit is stored in `bits[0]`,
         // and the most significant bit is stored in `bits[size - 1u]`.
@@ -349,7 +349,7 @@ namespace circ
         {}
 
         static std::string op_code_str() { return "Advice"; }
-        std::string Name() const override { return "Advice." + std::to_string(advice_idx) ; }
+        std::string name() const override { return "Advice." + std::to_string(advice_idx) ; }
 
         uint32_t advice_idx = 0;
     };
@@ -362,7 +362,7 @@ namespace circ
         explicit InputInstructionBits(unsigned size_) : Operation(size_, kind) {}
 
         static std::string op_code_str() { return "instruction_bits"; }
-        std::string Name() const override { return "instruction_bits"; }
+        std::string name() const override { return "instruction_bits"; }
     };
 
     using input_leaves_ts = tl::make_list<
@@ -397,7 +397,7 @@ namespace circ
         {
             if (operands.size() != 2)
                 return "invalid.0";
-            return fixed()->Name() + "." + std::to_string(fixed()->size);
+            return fixed()->name() + "." + std::to_string(fixed()->size);
         }
     };
 
@@ -427,7 +427,7 @@ namespace circ
         explicit RegConstraint() : EnforceCtx(this->bool_size, kind) {}
 
         static std::string op_code_str() { return "register_constraint"; }
-        std::string Name() const override
+        std::string name() const override
         {
             return "register_constraint." + EnforceCtx::suffix_();
         }
@@ -442,7 +442,7 @@ namespace circ
         explicit AdviceConstraint() : EnforceCtx(this->bool_size, kind) {}
 
         static std::string op_code_str() { return "advice_constraint"; }
-        std::string Name() const override
+        std::string name() const override
         {
             return "advice_constraint." + EnforceCtx::suffix_();
         }
@@ -455,7 +455,7 @@ namespace circ
         explicit WriteConstraint() : MemoryConstraint(this->bool_size, kind) {}
 
         static std::string op_code_str() { return "write_constraint"; }
-        std::string Name() const override { return "write_constraint"; }
+        std::string name() const override { return "write_constraint"; }
     };
 
     struct ReadConstraint : MemoryConstraint
@@ -465,7 +465,7 @@ namespace circ
         explicit ReadConstraint() : MemoryConstraint(this->bool_size, kind) {}
 
         static std::string op_code_str() { return "read_constraint"; }
-        std::string Name() const override { return "read_constraint"; }
+        std::string name() const override { return "read_constraint"; }
 
         Operation *val_arg() const
         {
@@ -480,7 +480,7 @@ namespace circ
         explicit UnusedConstraint() : Operation(this->bool_size, kind) {}
 
         static std::string op_code_str() { return "unused_constraint"; }
-        std::string Name() const override { return "unused_constraint"; }
+        std::string name() const override { return "unused_constraint"; }
     };
 
     using constraint_opts_ts = tl::TL< RegConstraint, AdviceConstraint,
@@ -509,7 +509,7 @@ namespace circ
         static constexpr Operation::kind_t kind = Operation::kind_t::k##cls; \
         explicit cls(unsigned size_) : Operation(size_, kind) {} \
         static std::string op_code_str() { return #cls; } \
-        std::string Name() const override { return #cls; } \
+        std::string name() const override { return #cls; } \
     }
 
     circuitous_declare_llvm_op(Add, 0);
@@ -564,7 +564,7 @@ namespace circ
         explicit InputImmediate(unsigned size_) : Operation(size_, kind) {}
 
         static std::string op_code_str() { return "input_immediate"; }
-        std::string Name() const override { return "input_immediate"; }
+        std::string name() const override { return "input_immediate"; }
     };
 
     using hidden_values_ts = tl::TL< InputImmediate >;
@@ -577,7 +577,7 @@ namespace circ
 
         static std::string op_code_str() { return "extract"; }
 
-        std::string Name() const override
+        std::string name() const override
         {
           std::stringstream ss;
           ss << "extract." << high_bit_exc << "." << low_bit_inc;
@@ -605,7 +605,7 @@ namespace circ
         explicit Concat(uint32_t size_) : Operation(size_, kind) {}
 
         static std::string op_code_str() { return "concat"; }
-        std::string Name() const override { return "concat"; }
+        std::string name() const override { return "concat"; }
     };
 
     using bit_manips_ts = tl::TL< Extract, Concat >;
@@ -619,7 +619,7 @@ namespace circ
         explicit PopulationCount(unsigned size_) : Operation(size_, kind) {}
 
         static std::string op_code_str() { return "pop_count"; }
-        std::string Name() const override { return "pop_count"; }
+        std::string name() const override { return "pop_count"; }
     };
 
     struct CountLeadingZeroes final : Operation
@@ -629,7 +629,7 @@ namespace circ
         explicit CountLeadingZeroes(unsigned size_) : Operation(size_, kind) {}
 
         static std::string op_code_str() { return "count_lead_zeroes"; }
-        std::string Name() const override { return "count_lead_zeroes"; }
+        std::string name() const override { return "count_lead_zeroes"; }
     };
 
     struct CountTrailingZeroes final : Operation
@@ -639,7 +639,7 @@ namespace circ
         explicit CountTrailingZeroes(unsigned size_) : Operation(size_, kind) {}
 
         static std::string op_code_str() { return "count_trailing_zeroes"; }
-        std::string Name() const override { return "count_trailing_zeroes"; }
+        std::string name() const override { return "count_trailing_zeroes"; }
     };
 
     struct Not final : Operation
@@ -649,7 +649,7 @@ namespace circ
         explicit Not(unsigned size_) : Operation(size_, kind) {}
 
         static std::string op_code_str() { return "not"; }
-        std::string Name() const override { return "not"; }
+        std::string name() const override { return "not"; }
     };
 
     struct Parity final : Operation
@@ -659,7 +659,7 @@ namespace circ
         explicit Parity() : Operation(1, kind) {}
 
         static std::string op_code_str() { return "parity"; }
-        std::string Name() const override { return "parity"; }
+        std::string name() const override { return "parity"; }
     };
 
     using bit_ops_ts = tl::TL< PopulationCount, CountLeadingZeroes,
@@ -676,7 +676,7 @@ namespace circ
         {}
 
         static std::string op_code_str() { return "select"; }
-        std::string Name() const override
+        std::string name() const override
         {
             std::stringstream ss;
             ss << "select." << bits;
@@ -712,7 +712,7 @@ namespace circ
         {}
 
         static std::string op_code_str() { return "external_computations"; }
-        std::string Name() const override
+        std::string name() const override
         {
             std::stringstream ss;
             ss << this->ExternalComputation::op_code_str() << "." << to_string(submodule_type);
@@ -730,7 +730,7 @@ namespace circ
       static constexpr Operation::kind_t kind = Operation::kind_t::k##cls; \
       explicit cls() : Operation(this->bool_size, kind) {} \
       static std::string op_code_str() { return #cls; } \
-      std::string Name() const override { return #cls; } \
+      std::string name() const override { return #cls; } \
     }
 
     circuitous_make_bool_op(DecodeCondition, 0);

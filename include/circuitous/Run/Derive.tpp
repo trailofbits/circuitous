@@ -33,7 +33,7 @@ void Ctx_<S>::verify_cond(Operation *op) {
             return;
         }
 
-        auto name = op->operands[1]->Name();
+        auto name = op->operands[1]->name();
         auto as_ref = llvm::StringRef(name);
         auto has_prefix = as_ref.consume_front("Out.register.");
         check(has_prefix);
@@ -47,48 +47,48 @@ void Ctx_<S>::verify_cond(Operation *op) {
 /* Input/Output nodes */
 
 template<typename S>
-void IOSem<S>::Visit(InputRegister *op) {
+void IOSem<S>::visit(InputRegister *op) {
     check(this->node_values.count(op)) << "Input register "
                                        << op->reg_name << " bits not set.";
 }
 
 template<typename S>
-void IOSem<S>::Visit(InputImmediate *op) {
-    check(op->operands.Size() == 1)
+void IOSem<S>::visit(InputImmediate *op) {
+    check(op->operands.size() == 1)
         << "Incorrect number of operands of InputImmediate:"
-        << op->operands.Size() << "!= 1";
+        << op->operands.size() << "!= 1";
     self().SetNodeVal(op, self().GetNodeVal(op->operands[0]));
 }
 
 template<typename S>
-void IOSem<S>::Visit(OutputRegister *op) {
+void IOSem<S>::visit(OutputRegister *op) {
     unreachable() << "Output values should not be visited in derivation mode.";
 }
 
 template<typename S>
-void IOSem<S>::Visit(InputErrorFlag *op) {
+void IOSem<S>::visit(InputErrorFlag *op) {
     check(this->node_values.count(op)) << "InputErrorFlag bits not set.";
 }
 
 template<typename S>
-void IOSem<S>::Visit(OutputErrorFlag *op) {
+void IOSem<S>::visit(OutputErrorFlag *op) {
     unreachable() << "Output values should not be visited in derivation mode.";
 }
 
 template<typename S>
-void IOSem<S>::Visit(InputInstructionBits *op) {
+void IOSem<S>::visit(InputInstructionBits *op) {
     check(this->node_values.count(op)) << "Input instruction bits not set.";
 }
 
 template<typename S>
-void IOSem<S>::Visit(Advice *op) {
+void IOSem<S>::visit(Advice *op) {
     unreachable() << "Output values should not be visited in derivation mode.";
 }
 
 /* Conditions */
 
 template<typename S>
-void CSem<S>::Visit(DecodeCondition *op) {
+void CSem<S>::visit(DecodeCondition *op) {
     auto decode = [&](DecodeCondition *op) {
         return this->BoolVal( self().get( op, 0 ) == self().get( op, 1 ) );
     };
@@ -96,10 +96,10 @@ void CSem<S>::Visit(DecodeCondition *op) {
 }
 
 template<typename S>
-void CSem<S>::Visit(ReadConstraint *op_)
+void CSem<S>::visit(ReadConstraint *op_)
 {
     auto exec = [&](ReadConstraint *op) -> value_type {
-        for (auto i = 1u; i < op->operands.Size(); ++i) {
+        for (auto i = 1u; i < op->operands.size(); ++i) {
             if (!this->GetNodeVal(op->operands[i])) {
                 return {};
             }
@@ -158,9 +158,9 @@ void CSem<S>::Visit(ReadConstraint *op_)
 }
 
 template<typename S>
-void CSem<S>::Visit(WriteConstraint *op_) {
+void CSem<S>::visit(WriteConstraint *op_) {
     auto exec = [&](WriteConstraint *op) -> value_type {
-        for (auto i = 1u; i < op->operands.Size(); ++i) {
+        for (auto i = 1u; i < op->operands.size(); ++i) {
             if (!this->GetNodeVal(op->operands[i])) {
                 return {};
             }
@@ -214,7 +214,7 @@ void CSem<S>::Visit(WriteConstraint *op_) {
 }
 
 template<typename S>
-void CSem<S>::Visit(UnusedConstraint *op) {
+void CSem<S>::visit(UnusedConstraint *op) {
     llvm::APInt unused { irops::memory::size(this->circuit->ptr_size), 0, false };
     if (this->supplied.count(op->operands[0])) {
         self().SetNodeVal(op, this->BoolVal(this->get(op, 0) == llvm::APInt(unused)));
@@ -227,13 +227,13 @@ void CSem<S>::Visit(UnusedConstraint *op) {
 
 
 template<typename S>
-void CSem<S>::Visit(RegConstraint *op) { return this-> handle_cond(op); }
+void CSem<S>::visit(RegConstraint *op) { return this-> handle_cond(op); }
 
 template<typename S>
-void CSem<S>::Visit(AdviceConstraint *op) { return this->handle_cond(op); }
+void CSem<S>::visit(AdviceConstraint *op) { return this->handle_cond(op); }
 
 template<typename S>
-void CSem<S>::Visit(VerifyInstruction *op)
+void CSem<S>::visit(VerifyInstruction *op)
 {
     auto verify = [&](VerifyInstruction *op) {
         auto result = this->TrueVal();
@@ -246,11 +246,11 @@ void CSem<S>::Visit(VerifyInstruction *op)
 }
 
 template<typename S>
-void CSem<S>::Visit(OnlyOneCondition *op)
+void CSem<S>::visit(OnlyOneCondition *op)
 {
     auto xor_ = [&](OnlyOneCondition *op) {
         auto result = 0u;
-        for (std::size_t i = 0; i < op->operands.Size(); ++i) {
+        for (std::size_t i = 0; i < op->operands.size(); ++i) {
             result += uint32_t(self().GetNodeVal(op->operands[i]) == this->TrueVal());
         }
         return this->BoolVal(result == 1U);

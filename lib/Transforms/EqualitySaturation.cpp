@@ -43,86 +43,86 @@ namespace circ::eqsat {
     ExtractOp extract(Extract *op)  { return {op->op_code_str(), op->low_bit_inc, op->high_bit_exc}; }
     SelectOp  select(Select *op)    { return {op->op_code_str(), op->size, op->bits}; }
 
-    OpTemplate Visit(InputRegister *op)  { return regop(op); }
-    OpTemplate Visit(OutputRegister *op) { return regop(op); }
+    OpTemplate visit(InputRegister *op)  { return regop(op); }
+    OpTemplate visit(OutputRegister *op) { return regop(op); }
 
-    OpTemplate Visit(InputTimestamp *op)  { return sized(op); }
-    OpTemplate Visit(OutputTimestamp *op) { return sized(op); }
-    OpTemplate Visit(InputErrorFlag *op)  { return sized(op); }
-    OpTemplate Visit(OutputErrorFlag *op) { return sized(op); }
+    OpTemplate visit(InputTimestamp *op)  { return sized(op); }
+    OpTemplate visit(OutputTimestamp *op) { return sized(op); }
+    OpTemplate visit(InputErrorFlag *op)  { return sized(op); }
+    OpTemplate visit(OutputErrorFlag *op) { return sized(op); }
 
-    OpTemplate Visit(Undefined *op) { return sized(op); }
+    OpTemplate visit(Undefined *op) { return sized(op); }
 
-    OpTemplate Visit(Memory *op)   { return memop(op); }
+    OpTemplate visit(Memory *op)   { return memop(op); }
 
-    OpTemplate Visit(Constant *op) { return constop(op); }
+    OpTemplate visit(Constant *op) { return constop(op); }
 
-    OpTemplate Visit(Advice *op) { return advice(op); }
+    OpTemplate visit(Advice *op) { return advice(op); }
 
-    OpTemplate Visit(InputInstructionBits *op) { return sized(op); }
+    OpTemplate visit(InputInstructionBits *op) { return sized(op); }
 
-    OpTemplate Visit(RegConstraint *op)       { return opcode(op); }
-    OpTemplate Visit(AdviceConstraint *op)    { return opcode(op); }
-    OpTemplate Visit(WriteConstraint *op)     { return opcode(op); }
-    OpTemplate Visit(ReadConstraint *op)      { return opcode(op); }
-    OpTemplate Visit(UnusedConstraint *op)    { return opcode(op); }
+    OpTemplate visit(RegConstraint *op)       { return opcode(op); }
+    OpTemplate visit(AdviceConstraint *op)    { return opcode(op); }
+    OpTemplate visit(WriteConstraint *op)     { return opcode(op); }
+    OpTemplate visit(ReadConstraint *op)      { return opcode(op); }
+    OpTemplate visit(UnusedConstraint *op)    { return opcode(op); }
 
-    OpTemplate Visit(Add *op) { return sized(op); }
-    OpTemplate Visit(Sub *op) { return sized(op); }
-    OpTemplate Visit(Mul *op) { return sized(op); }
+    OpTemplate visit(Add *op) { return sized(op); }
+    OpTemplate visit(Sub *op) { return sized(op); }
+    OpTemplate visit(Mul *op) { return sized(op); }
 
-    OpTemplate Visit(UDiv *op) { return sized(op); }
-    OpTemplate Visit(SDiv *op) { return sized(op); }
+    OpTemplate visit(UDiv *op) { return sized(op); }
+    OpTemplate visit(SDiv *op) { return sized(op); }
 
-    OpTemplate Visit(SRem *op) { return sized(op); }
-    OpTemplate Visit(URem *op) { return sized(op); }
+    OpTemplate visit(SRem *op) { return sized(op); }
+    OpTemplate visit(URem *op) { return sized(op); }
 
-    OpTemplate Visit(Xor *op) { return sized(op); }
+    OpTemplate visit(Xor *op) { return sized(op); }
 
-    OpTemplate Visit(Shl *op)  { return sized(op); }
-    OpTemplate Visit(LShr *op) { return sized(op); }
-    OpTemplate Visit(AShr *op) { return sized(op); }
+    OpTemplate visit(Shl *op)  { return sized(op); }
+    OpTemplate visit(LShr *op) { return sized(op); }
+    OpTemplate visit(AShr *op) { return sized(op); }
 
-    OpTemplate Visit(Trunc *op) { return sized(op); }
-    OpTemplate Visit(ZExt *op)  { return sized(op); }
-    OpTemplate Visit(SExt *op)  { return sized(op); }
+    OpTemplate visit(Trunc *op) { return sized(op); }
+    OpTemplate visit(ZExt *op)  { return sized(op); }
+    OpTemplate visit(SExt *op)  { return sized(op); }
 
-    OpTemplate Visit(Icmp_ult *op)  { return sized(op); }
-    OpTemplate Visit(Icmp_slt *op)  { return sized(op); }
-    OpTemplate Visit(Icmp_ugt *op)  { return sized(op); }
-    OpTemplate Visit(Icmp_eq *op)   { return sized(op); }
-    OpTemplate Visit(Icmp_ne *op)   { return sized(op); }
-    OpTemplate Visit(Icmp_uge *op)  { return sized(op); }
-    OpTemplate Visit(Icmp_ule *op)  { return sized(op); }
-    OpTemplate Visit(Icmp_sgt *op)  { return sized(op); }
-    OpTemplate Visit(Icmp_sge *op)  { return sized(op); }
-    OpTemplate Visit(Icmp_sle *op)  { return sized(op); }
+    OpTemplate visit(Icmp_ult *op)  { return sized(op); }
+    OpTemplate visit(Icmp_slt *op)  { return sized(op); }
+    OpTemplate visit(Icmp_ugt *op)  { return sized(op); }
+    OpTemplate visit(Icmp_eq *op)   { return sized(op); }
+    OpTemplate visit(Icmp_ne *op)   { return sized(op); }
+    OpTemplate visit(Icmp_uge *op)  { return sized(op); }
+    OpTemplate visit(Icmp_ule *op)  { return sized(op); }
+    OpTemplate visit(Icmp_sgt *op)  { return sized(op); }
+    OpTemplate visit(Icmp_sge *op)  { return sized(op); }
+    OpTemplate visit(Icmp_sle *op)  { return sized(op); }
 
-    OpTemplate Visit(InputImmediate *op) { return sized(op); }
+    OpTemplate visit(InputImmediate *op) { return sized(op); }
 
-    OpTemplate Visit(Extract *op) { return extract(op); }
+    OpTemplate visit(Extract *op) { return extract(op); }
 
-    OpTemplate Visit(Concat *op) { return sized(op); }
+    OpTemplate visit(Concat *op) { return sized(op); }
 
-    OpTemplate Visit(PopulationCount *op)     { return sized(op); }
-    OpTemplate Visit(CountLeadingZeroes *op)  { return sized(op); }
-    OpTemplate Visit(CountTrailingZeroes *op) { return sized(op); }
+    OpTemplate visit(PopulationCount *op)     { return sized(op); }
+    OpTemplate visit(CountLeadingZeroes *op)  { return sized(op); }
+    OpTemplate visit(CountTrailingZeroes *op) { return sized(op); }
 
-    OpTemplate Visit(Not *op) { return sized(op); }
+    OpTemplate visit(Not *op) { return sized(op); }
 
-    OpTemplate Visit(Parity *op) { return opcode(op); }
+    OpTemplate visit(Parity *op) { return opcode(op); }
 
-    OpTemplate Visit(Select *op) { return select(op); }
+    OpTemplate visit(Select *op) { return select(op); }
 
-    OpTemplate Visit(DecodeCondition *op)   { return opcode(op); }
-    OpTemplate Visit(DecoderResult *op)     { return opcode(op); }
-    OpTemplate Visit(VerifyInstruction *op) { return opcode(op); }
-    OpTemplate Visit(OnlyOneCondition *op)  { return opcode(op); }
+    OpTemplate visit(DecodeCondition *op)   { return opcode(op); }
+    OpTemplate visit(DecoderResult *op)     { return opcode(op); }
+    OpTemplate visit(VerifyInstruction *op) { return opcode(op); }
+    OpTemplate visit(OnlyOneCondition *op)  { return opcode(op); }
 
-    OpTemplate Visit(Or *op)  { return opcode(op); }
-    OpTemplate Visit(And *op) { return opcode(op); }
+    OpTemplate visit(Or *op)  { return opcode(op); }
+    OpTemplate visit(And *op) { return opcode(op); }
 
-    OpTemplate Visit(Circuit *) { unreachable() << "Unexpected case encountered in Visit."; }
+    OpTemplate visit(Circuit *) { unreachable() << "Unexpected case encountered in visit."; }
   };
 
   struct EGraphBuilder
@@ -156,7 +156,7 @@ namespace circ::eqsat {
 
     OpTemplate make_template(Operation *op)
     {
-      return template_builder.Dispatch(op);
+      return template_builder.dispatch(op);
     }
 
     Nodes nodes;
@@ -533,20 +533,20 @@ namespace circ::eqsat {
     Operation* make_operation(const OpCode &op, Circuit *circuit)
     {
       return llvm::StringSwitch< Operation* >(op.op_code_name)
-        .Case("register_constraint",  circuit->Create< RegConstraint >())
-        .Case("advice_constraint",    circuit->Create< AdviceConstraint >())
-        .Case("write_constraint",     circuit->Create< WriteConstraint >())
-        .Case("read_constraint",      circuit->Create< ReadConstraint >())
-        .Case("unused_constraint",    circuit->Create< UnusedConstraint >())
+        .Case("register_constraint",  circuit->create< RegConstraint >())
+        .Case("advice_constraint",    circuit->create< AdviceConstraint >())
+        .Case("write_constraint",     circuit->create< WriteConstraint >())
+        .Case("read_constraint",      circuit->create< ReadConstraint >())
+        .Case("unused_constraint",    circuit->create< UnusedConstraint >())
 
-        .Case("parity",                circuit->Create< Parity >())
+        .Case("parity",                circuit->create< Parity >())
 
-        .Case("DecodeCondition",      circuit->Create< DecodeCondition >())
-        .Case("DecoderResult",        circuit->Create< DecoderResult >())
-        .Case("VerifyInstruction",    circuit->Create< VerifyInstruction >())
-        .Case("OnlyOneCondition",     circuit->Create< OnlyOneCondition >())
+        .Case("DecodeCondition",      circuit->create< DecodeCondition >())
+        .Case("DecoderResult",        circuit->create< DecoderResult >())
+        .Case("VerifyInstruction",    circuit->create< VerifyInstruction >())
+        .Case("OnlyOneCondition",     circuit->create< OnlyOneCondition >())
 
-        .Case("DecoderResult", circuit->Create< DecoderResult >())
+        .Case("DecoderResult", circuit->create< DecoderResult >())
 
         .Default( nullptr );
 
@@ -557,85 +557,85 @@ namespace circ::eqsat {
       check(op.size.has_value());
       auto size = op.size.value();
       return llvm::StringSwitch< Operation* >(op.op_code_name)
-        .Case("in.timestamp",     circuit->Create< InputTimestamp >( size ))
-        .Case("out.timestamp",    circuit->Create< OutputTimestamp >( size ))
-        .Case("in.error_flag",    circuit->Create< InputErrorFlag >( size ))
-        .Case("out.error_flag",   circuit->Create< OutputErrorFlag >( size ))
-        .Case("undefined",        circuit->Create< Undefined >( size ))
-        .Case("instruction_bits", circuit->Create< InputInstructionBits >( size ))
+        .Case("in.timestamp",     circuit->create< InputTimestamp >( size ))
+        .Case("out.timestamp",    circuit->create< OutputTimestamp >( size ))
+        .Case("in.error_flag",    circuit->create< InputErrorFlag >( size ))
+        .Case("out.error_flag",   circuit->create< OutputErrorFlag >( size ))
+        .Case("undefined",        circuit->create< Undefined >( size ))
+        .Case("instruction_bits", circuit->create< InputInstructionBits >( size ))
 
-        .Case("Add",   circuit->Create< Add >( size ))
-        .Case("Sub",   circuit->Create< Sub >( size ))
-        .Case("Mul",   circuit->Create< Mul >( size ))
-        .Case("UDiv",  circuit->Create< UDiv >( size ))
-        .Case("SDiv",  circuit->Create< SDiv >( size ))
-        .Case("URem",  circuit->Create< URem >( size ))
-        .Case("Xor",  circuit->Create< Xor >( size ))
-        .Case("SRem",  circuit->Create< SRem >( size ))
-        .Case("Shl",   circuit->Create< Shl >( size ))
-        .Case("LShr",  circuit->Create< LShr >( size ))
-        .Case("AShr",  circuit->Create< AShr >( size ))
-        .Case("Trunc", circuit->Create< Trunc >( size ))
-        .Case("ZExt",  circuit->Create< ZExt >( size ))
-        .Case("SExt",  circuit->Create< SExt >( size ))
+        .Case("Add",   circuit->create< Add >( size ))
+        .Case("Sub",   circuit->create< Sub >( size ))
+        .Case("Mul",   circuit->create< Mul >( size ))
+        .Case("UDiv",  circuit->create< UDiv >( size ))
+        .Case("SDiv",  circuit->create< SDiv >( size ))
+        .Case("URem",  circuit->create< URem >( size ))
+        .Case("Xor",  circuit->create< Xor >( size ))
+        .Case("SRem",  circuit->create< SRem >( size ))
+        .Case("Shl",   circuit->create< Shl >( size ))
+        .Case("LShr",  circuit->create< LShr >( size ))
+        .Case("AShr",  circuit->create< AShr >( size ))
+        .Case("Trunc", circuit->create< Trunc >( size ))
+        .Case("ZExt",  circuit->create< ZExt >( size ))
+        .Case("SExt",  circuit->create< SExt >( size ))
 
-        .Case("Or",  circuit->Create< Or >( size ))
-        .Case("And", circuit->Create< And >( size ))
+        .Case("Or",  circuit->create< Or >( size ))
+        .Case("And", circuit->create< And >( size ))
 
-        .Case("Icmp_ult", circuit->Create< Icmp_ult >( size ))
-        .Case("Icmp_slt", circuit->Create< Icmp_slt >( size ))
-        .Case("Icmp_ugt", circuit->Create< Icmp_ugt >( size ))
-        .Case("Icmp_eq",  circuit->Create< Icmp_eq >( size ))
-        .Case("Icmp_ne",  circuit->Create< Icmp_ne >( size ))
-        .Case("Icmp_uge", circuit->Create< Icmp_uge >( size ))
-        .Case("Icmp_ule", circuit->Create< Icmp_ule >( size ))
-        .Case("Icmp_sgt", circuit->Create< Icmp_sgt >( size ))
-        .Case("Icmp_sge", circuit->Create< Icmp_sge >( size ))
-        .Case("Icmp_sle", circuit->Create< Icmp_sle >( size ))
+        .Case("Icmp_ult", circuit->create< Icmp_ult >( size ))
+        .Case("Icmp_slt", circuit->create< Icmp_slt >( size ))
+        .Case("Icmp_ugt", circuit->create< Icmp_ugt >( size ))
+        .Case("Icmp_eq",  circuit->create< Icmp_eq >( size ))
+        .Case("Icmp_ne",  circuit->create< Icmp_ne >( size ))
+        .Case("Icmp_uge", circuit->create< Icmp_uge >( size ))
+        .Case("Icmp_ule", circuit->create< Icmp_ule >( size ))
+        .Case("Icmp_sgt", circuit->create< Icmp_sgt >( size ))
+        .Case("Icmp_sge", circuit->create< Icmp_sge >( size ))
+        .Case("Icmp_sle", circuit->create< Icmp_sle >( size ))
 
-        .Case("input_immediate", circuit->Create< InputImmediate >( size ))
+        .Case("input_immediate", circuit->create< InputImmediate >( size ))
 
-        .Case("concat", circuit->Create< Concat >( size ))
+        .Case("concat", circuit->create< Concat >( size ))
 
-        .Case("pop_count",             circuit->Create< PopulationCount >( size ))
-        .Case("count_lead_zeroes",     circuit->Create< CountLeadingZeroes >( size ))
-        .Case("count_trailing_zeroes", circuit->Create< CountTrailingZeroes >( size ))
-        .Case("not",                   circuit->Create< Not >( size ))
+        .Case("pop_count",             circuit->create< PopulationCount >( size ))
+        .Case("count_lead_zeroes",     circuit->create< CountLeadingZeroes >( size ))
+        .Case("count_trailing_zeroes", circuit->create< CountTrailingZeroes >( size ))
+        .Case("not",                   circuit->create< Not >( size ))
 
         .Default( nullptr );
     }
 
     Operation* make_operation(const AdviceOp &op, Circuit *circuit)
     {
-      return circuit->Create< Advice >( op.size.value(), op.idx.value() );
+      return circuit->create< Advice >( op.size.value(), op.idx.value() );
     }
 
     Operation* make_operation(const RegOp &op, Circuit *circuit)
     {
       return llvm::StringSwitch< Operation* >(op.op_code_name)
-        .Case("in.register",  circuit->Create< InputRegister >( op.reg_name, op.size ))
-        .Case("out.register", circuit->Create< OutputRegister >( op.reg_name, op.size ))
+        .Case("in.register",  circuit->create< InputRegister >( op.reg_name, op.size ))
+        .Case("out.register", circuit->create< OutputRegister >( op.reg_name, op.size ))
         .Default( nullptr );
     }
 
     Operation* make_operation(const ConstOp &op, Circuit *circuit)
     {
-      return circuit->Create< Constant >( op.bits, op.size );
+      return circuit->create< Constant >( op.bits, op.size );
     }
 
     Operation* make_operation(const MemOp &op, Circuit *circuit)
     {
-      return circuit->Create< Memory >( irops::memory::size(circuit->ptr_size), op.mem_idx );
+      return circuit->create< Memory >( irops::memory::size(circuit->ptr_size), op.mem_idx );
     }
 
     Operation* make_operation(const ExtractOp &op, Circuit *circuit)
     {
-      return circuit->Create< Extract >( op.low_bit_inc, op.high_bit_exc );
+      return circuit->create< Extract >( op.low_bit_inc, op.high_bit_exc );
     }
 
     Operation* make_operation(const SelectOp &op, Circuit *circuit)
     {
-      return circuit->Create< Select >( op.bits, op.size );
+      return circuit->create< Select >( op.bits, op.size );
     }
 
     Operation* make_operation(const OpTemplate &op, Circuit *circuit)
@@ -694,7 +694,7 @@ namespace circ::eqsat {
       check(name(node) == "circuit");
 
       for (const auto &child : graph.children(node))
-        circuit->AddUse( extract(child, circuit.get()) );
+        circuit->add_use( extract(child, circuit.get()) );
       return circuit;
     }
 
@@ -725,7 +725,7 @@ namespace circ::eqsat {
       cached.emplace(enode, op);
 
       for (const auto &child : graph.children(enode))
-        op->AddUse( extract(child, circuit) );
+        op->add_use( extract(child, circuit) );
 
       return op;
     }
@@ -758,10 +758,10 @@ namespace circ::eqsat {
     }
 
     for (auto [aconstraint, ctx] : remove) {
-      aconstraint->RemoveUse(ctx);
+      aconstraint->remove_use(ctx);
     }
 
-    circuit->RemoveUnused();
+    circuit->remove_unused();
     return std::move(circuit);
   }
 

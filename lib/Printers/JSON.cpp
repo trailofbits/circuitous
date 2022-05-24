@@ -24,7 +24,7 @@ void print_json(std::ostream &os, Circuit *circuit) {
     check(op);
     os << sep;
     os << "\"" << id(op) << "\":{";
-    os << "\"op_name\":\"" << op->Name() << "\",";
+    os << "\"op_name\":\"" << op->name() << "\",";
     os << "\"op_size\":" << std::dec << op->size << ",";
     os << "\"op_code\":" << std::dec << static_cast<unsigned>(op->op_code)
        << ",";
@@ -48,7 +48,7 @@ void print_json(std::ostream &os, Circuit *circuit) {
     sep = ",\n";
   };
 
-  circuit->ForEachOperation(do_op);
+  circuit->for_each_operation(do_op);
   do_op(circuit);
 
   os << "\n}]"

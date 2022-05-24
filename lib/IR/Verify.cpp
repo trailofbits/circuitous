@@ -75,20 +75,20 @@ namespace circ
 
         PartialEnc take() { return std::move(enc); }
 
-        self_t &Visit(const Operation *op)
+        self_t &visit(const Operation *op)
         {
             unreachable() << "EncCollector encountered unknown op:\n"
                           << pretty_print< true >(op);
         }
 
-        self_t &Visit(const DecoderResult *op)
+        self_t &visit(const DecoderResult *op)
         {
             for (auto c : op->operands)
-                this->Dispatch(c);
+                this->dispatch(c);
             return *this;
         }
 
-        self_t &Visit(const DecodeCondition *op)
+        self_t &visit(const DecodeCondition *op)
         {
             auto convert = [](const auto &str) {
                 std::vector< int > out;
@@ -232,9 +232,9 @@ namespace circ
     VerifierResult verify_ctxs_uniqueness(Circuit *circuit)
     {
         std::unordered_map< Operation *, PartialEnc > all;
-        for (auto ctx : circuit->Attr< VerifyInstruction >())
+        for (auto ctx : circuit->attr< VerifyInstruction >())
         {
-            all.emplace(ctx, EncCollector(15 * 8).Dispatch(get_decoder_result(ctx)).take());
+            all.emplace(ctx, EncCollector(15 * 8).dispatch(get_decoder_result(ctx)).take());
         }
         return UniqnuessVerifier(std::move(all)).run();
     }
@@ -281,7 +281,7 @@ namespace circ
         {
             res.add_error() << op_code_str(op->op_code)
                             << " has "
-                            << op->operands.Size() << " operands which is invalid.\n"
+                            << op->operands.size() << " operands which is invalid.\n"
                             << log_src_dump(op, "\t")
                             << "Error entry end.\n";
         }
@@ -289,7 +289,7 @@ namespace circ
         template< typename Fn >
         void verify_op_count(uint64_t count, Operation *op, Fn fn)
         {
-            if (!fn(count, op->operands.Size()))
+            if (!fn(count, op->operands.size()))
                 log_operand_mismatch(op);
         }
 
@@ -406,7 +406,7 @@ namespace circ
             std::unordered_map< Operation *, verifies_t > hint_to_ctxs;
             std::unordered_map< Operation *, VerifyInstruction * > ctx;
 
-            for (auto verif : circuit->Attr<VerifyInstruction>()) {
+            for (auto verif : circuit->attr<VerifyInstruction>()) {
                 for (auto op : verif->operands) {
                     if (op->op_code == AdviceConstraint::kind)
                     {
@@ -484,7 +484,7 @@ namespace circ
 
         void verify_decoder_result_presence(Circuit *circuit)
         {
-            for (auto ctx : circuit->Attr< VerifyInstruction >())
+            for (auto ctx : circuit->attr< VerifyInstruction >())
             {
                 std::vector< Operation * > decoder_results;
                 for (auto op : ctx->operands)
@@ -523,7 +523,7 @@ namespace circ
                                                 DecoderResult, Extract,
                                                 InputInstructionBits, And, Advice, Icmp_eq,
                                                 Or, Xor >();
-            for (auto root : circuit->Attr< DecoderResult >())
+            for (auto root : circuit->attr< DecoderResult >())
                 verify_constrained_subtree(root, root, allowed_nodes);
         }
     };

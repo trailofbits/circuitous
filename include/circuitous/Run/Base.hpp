@@ -167,9 +167,9 @@ namespace circ::run {
     }
 
     // Default
-    void Visit(Operation *op);
+    void visit(Operation *op);
     // Circuit
-    void Visit(Circuit *op);
+    void visit(Circuit *op);
   };
 
   // Tags that tells us about which visits are implemented by a layer
@@ -198,81 +198,81 @@ namespace circ::run {
     using raw_value_type = typename Next::raw_value_type;
 
     using Next::self;
-    using Next::Visit;
+    using Next::visit;
     using Next::safe;
 
 
     using Next::Next;
 
     // Constant semantics
-    void Visit(Constant *op);
-    void Visit(Undefined *op);
+    void visit(Constant *op);
+    void visit(Undefined *op);
 
     // Operations
-    void Visit(Concat *op);
-    void Visit(Extract *op);
-    void Visit(Not *op);
-    void Visit(Select *op);
-    void Visit(Parity *op);
-    void Visit(PopulationCount *op);
-    void Visit(CountLeadingZeroes *op) {
+    void visit(Concat *op);
+    void visit(Extract *op);
+    void visit(Not *op);
+    void visit(Select *op);
+    void visit(Parity *op);
+    void visit(PopulationCount *op);
+    void visit(CountLeadingZeroes *op) {
       safe(op, [&](auto o){ return self().get(o, 0)->countLeadingZeros(); } );
     }
-    void Visit(CountTrailingZeroes *op) {
+    void visit(CountTrailingZeroes *op) {
       safe(op, [&](auto o){ return self().get(o, 0)->countTrailingZeros(); } );
     }
-    void Visit(Or *op);
-    void Visit(And *op);
-    void Visit(DecoderResult *op);
+    void visit(Or *op);
+    void visit(And *op);
+    void visit(DecoderResult *op);
 
     // Must be called in `safe` context.
     auto lhs(Operation *op) { return *self().get(op, 0); }
     auto rhs(Operation *op) { return *self().get(op, 1); }
     bool is_zero(const llvm::APInt &i) { return i.isNullValue(); }
 
-    void Visit(Add *op) { safe(op, [&](auto o){ return lhs(o) + rhs(o); } ); }
-    void Visit(Sub *op) { safe(op, [&](auto o){ return lhs(o) - rhs(o); } ); }
-    void Visit(Mul *op) { safe(op, [&](auto o){ return lhs(o) * rhs(o); } ); }
+    void visit(Add *op) { safe(op, [&](auto o){ return lhs(o) + rhs(o); } ); }
+    void visit(Sub *op) { safe(op, [&](auto o){ return lhs(o) - rhs(o); } ); }
+    void visit(Mul *op) { safe(op, [&](auto o){ return lhs(o) * rhs(o); } ); }
 
-    void Visit(UDiv *op) {
+    void visit(UDiv *op) {
       auto div = [&](auto o) {
         return (is_zero(rhs(o))) ? rhs(o) : std::make_optional( lhs(o).udiv(rhs(o)) );
       };
       safe(op, div);
     }
-    void Visit(SDiv *op) {
+    void visit(SDiv *op) {
       auto div = [&](auto o) {
         return (is_zero(rhs(o))) ? rhs(o) : std::make_optional( lhs(o).sdiv(rhs(o)) );
       };
       safe(op, div);
     }
 
-    void Visit(Xor *op) { safe(op, [&](auto o){ return lhs(o) ^ rhs(o); } ); }
+    void visit(Xor *op) { safe(op, [&](auto o){ return lhs(o) ^ rhs(o); } ); }
 
-    void Visit(Shl *op) { safe(op, [&](auto o){ return lhs(o) << rhs(o); } ); }
-    void Visit(LShr *op) { safe(op, [&](auto o){ return lhs(o).lshr(rhs(o)); } ); }
-    void Visit(AShr *op) { safe(op, [&](auto o){ return lhs(o).ashr(rhs(o)); } ); }
+    void visit(Shl *op) { safe(op, [&](auto o){ return lhs(o) << rhs(o); } ); }
+    void visit(LShr *op) { safe(op, [&](auto o){ return lhs(o).lshr(rhs(o)); } ); }
+    void visit(AShr *op) { safe(op, [&](auto o){ return lhs(o).ashr(rhs(o)); } ); }
 
-    void Visit(Trunc *op) {
+    void visit(Trunc *op) {
       safe(op, [&](auto o){ return lhs(o).trunc(o->size); } );
     }
-    void Visit(ZExt *op) { safe(op, [&](auto o){ return lhs(o).zext(o->size);   } ); }
-    void Visit(SExt *op) { safe(op, [&](auto o){ return lhs(o).sext(o->size);  } ); }
+    void visit(ZExt *op) { safe(op, [&](auto o){ return lhs(o).zext(o->size);   } ); }
+    void visit(SExt *op) { safe(op, [&](auto o){ return lhs(o).sext(o->size);  } ); }
 
     auto bv(bool b) { return this->BoolVal(b); }
 
-    void Visit(Icmp_ult *op) { safe(op, [&](auto o){ return bv(lhs(o).ult(rhs(o))); } ); }
-    void Visit(Icmp_slt *op) { safe(op, [&](auto o){ return bv(lhs(o).slt(rhs(o))); } ); }
-    void Visit(Icmp_ugt *op) { safe(op, [&](auto o){ return bv(lhs(o).ugt(rhs(o))); } ); }
+    void visit(Icmp_ult *op) { safe(op, [&](auto o){ return bv(lhs(o).ult(rhs(o))); } ); }
+    void visit(Icmp_slt *op) { safe(op, [&](auto o){ return bv(lhs(o).slt(rhs(o))); } ); }
+    void visit(Icmp_ugt *op) { safe(op, [&](auto o){ return bv(lhs(o).ugt(rhs(o))); } ); }
 
-    void Visit(Icmp_uge *op) { safe(op, [&](auto o){ return bv(lhs(o).uge(rhs(o))); } ); }
-    void Visit(Icmp_ule *op) { safe(op, [&](auto o){ return bv(lhs(o).ule(rhs(o))); } ); }
-    void Visit(Icmp_sgt *op) { safe(op, [&](auto o){ return bv(lhs(o).sgt(rhs(o))); } ); }
-    void Visit(Icmp_sge *op) { safe(op, [&](auto o){ return bv(lhs(o).sge(rhs(o))); } ); }
-    void Visit(Icmp_sle *op) { safe(op, [&](auto o){ return bv(lhs(o).sle(rhs(o))); } ); }
+    void visit(Icmp_uge *op) { safe(op, [&](auto o){ return bv(lhs(o).uge(rhs(o))); } ); }
+    void visit(Icmp_ule *op) { safe(op, [&](auto o){ return bv(lhs(o).ule(rhs(o))); } ); }
+    void visit(Icmp_sgt *op) { safe(op, [&](auto o){ return bv(lhs(o).sgt(rhs(o))); } ); }
+    void visit(Icmp_sge *op) { safe(op, [&](auto o){ return bv(lhs(o).sge(rhs(o))); } ); }
+    void visit(Icmp_sle *op) { safe(op, [&](auto o){ return bv(lhs(o).sle(rhs(o))); } ); }
 
-    void Visit(Icmp_eq *op) { safe(op, [&](auto o){ return bv(lhs(o) == rhs(o)); } ); }
-    void Visit(Icmp_ne *op) { safe(op, [&](auto o){ return bv(lhs(o) != rhs(o)); } ); }
+    void visit(Icmp_eq *op) { safe(op, [&](auto o){ return bv(lhs(o) == rhs(o)); } ); }
+    void visit(Icmp_ne *op) { safe(op, [&](auto o){ return bv(lhs(o) != rhs(o)); } ); }
   };
 
   #include "Base.tpp"
@@ -281,7 +281,7 @@ namespace circ::run {
   struct Ctx_ : Next {
     using Next::self;
     using Next::safe;
-    using Next::Visit;
+    using Next::visit;
 
     using Next::Next;
 
@@ -290,7 +290,7 @@ namespace circ::run {
 
     template<typename T, typename ...Ts>
     void init() {
-      for (auto op : this->circuit->template Attr<T>()) {
+      for (auto op : this->circuit->template attr<T>()) {
         if (this->has_value(op)) {
           supplied.insert(op);
         } else {
@@ -318,7 +318,7 @@ namespace circ::run {
 
     std::vector<HasMemory::Parsed> get_derived_mem() {
       std::vector<HasMemory::Parsed> out;
-      for (auto op : this->circuit->template Attr<Memory>()) {
+      for (auto op : this->circuit->template attr<Memory>()) {
         // TODO(lukas): Check if memory was derived or supplied
         // TODO(lukas): This should never happen once we enforce zeroed unused hints
         if (this->has_value(op)) {
@@ -347,21 +347,21 @@ namespace circ::run {
 
     using Next::self;
     using Next::safe;
-    using Next::Visit;
+    using Next::visit;
 
     using Next::Next;
 
 
     // Input semantics
-    void Visit(InputRegister *op);
-    void Visit(InputImmediate *op);
-    void Visit(InputErrorFlag *op);
-    void Visit(InputInstructionBits *op);
+    void visit(InputRegister *op);
+    void visit(InputImmediate *op);
+    void visit(InputErrorFlag *op);
+    void visit(InputInstructionBits *op);
 
     // Output semantics
-    void Visit(OutputRegister *op);
-    void Visit(OutputErrorFlag *op);
-    void Visit(Advice *op);
+    void visit(OutputRegister *op);
+    void visit(OutputErrorFlag *op);
+    void visit(Advice *op);
   };
 
   template<typename Next>
@@ -371,22 +371,22 @@ namespace circ::run {
 
     using Next::self;
     using Next::safe;
-    using Next::Visit;
+    using Next::visit;
 
     using Next::Next;
 
 
     // Condition semantics
-    void Visit(DecodeCondition *op);
-    void Visit(RegConstraint *op);
-    void Visit(AdviceConstraint *op);
+    void visit(DecodeCondition *op);
+    void visit(RegConstraint *op);
+    void visit(AdviceConstraint *op);
 
-    void Visit(VerifyInstruction *op);
-    void Visit(OnlyOneCondition *op);
+    void visit(VerifyInstruction *op);
+    void visit(OnlyOneCondition *op);
 
-    void Visit(ReadConstraint *op);
-    void Visit(WriteConstraint *op);
-    void Visit(UnusedConstraint *op);
+    void visit(ReadConstraint *op);
+    void visit(WriteConstraint *op);
+    void visit(UnusedConstraint *op);
   };
 
   #include <circuitous/Run/Derive.tpp>

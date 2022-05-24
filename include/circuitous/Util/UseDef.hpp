@@ -51,7 +51,7 @@ namespace circ
         using value_type = Value *;
 
         template< typename ...Args >
-        auto Create(Args &&...args)
+        auto create(Args &&...args)
         -> std::enable_if_t< std::is_constructible_v< Value, Args ... >, Value * >
         {
             auto new_def = new Value(std::forward<Args>(args)...);
@@ -59,7 +59,7 @@ namespace circ
             return new_def;
         }
 
-        Value *Adopt(Value &&val)
+        Value *adpot(Value &&val)
         {
             auto [it, _] = defs.insert(std::make_unique< Value >(std::move(val)));
             return it->get();
@@ -73,7 +73,7 @@ namespace circ
         // CB should have type `void()(std::uniqe_ptr<T> &&)` -- it will be given
         // ownership of the object.
         template< typename CB >
-        std::size_t RemoveUnused(CB cb)
+        std::size_t remove_unused(CB cb)
         {
             std::size_t num = 0;
             for (auto it = defs.begin(); it != defs.end();)
@@ -112,7 +112,7 @@ namespace circ
     {
         UseList< T > users;
 
-        void RemoveUser(T *user)
+        void remove_user(T *user)
         {
             auto num = std::erase(users, user);
             check(num == 1) << "Trying to remove user that is not part of the list.";
@@ -125,7 +125,7 @@ namespace circ
     {
         UseList< T > operands;
 
-        void RemoveOperand(T *op)
+        void remove_operand(T *op)
         {
             auto num = std::erase(operands, op);
             check(num == 1) << "Trying to remove operand that is not part of the list.";
@@ -140,29 +140,29 @@ namespace circ
     {
         T *Raw() { return static_cast< T * >(this); }
 
-        void AddUse(T *other)
+        void add_use(T *other)
         {
             this->operands.push_back(other);
             other->users.push_back(Raw());
         }
 
-        void RemoveUse(T *parent)
+        void remove_use(T *parent)
         {
-            parent->RemoveOperand(Raw());
-            this->RemoveUser(parent);
+            parent->remove_operand(Raw());
+            this->remove_user(parent);
         }
 
-        void ReplaceUse(T *other, std::size_t at)
+        void replace_use(T *other, std::size_t at)
         {
             check(this->operands.size() > at);
-            this->operands[at]->RemoveUser(Raw());
+            this->operands[at]->remove_user(Raw());
 
             this->operands[at] = other;
             other->users.push_back(Raw());
         }
 
 
-        void ReplaceAllUsesWith(T *other)
+        void replace_all_uses_with(T *other)
         {
             check(other != this) << "Trying to replace all uses of X with X, probably error.";
 
@@ -188,7 +188,7 @@ namespace circ
         }
 
         template< typename U, typename CB >
-        void ForEachUse(CB cb)
+        void for_each_use(CB cb)
         {
             std::vector< U * > frozen;
             for (auto user : this->users)

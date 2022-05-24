@@ -17,17 +17,17 @@ namespace circ::run {
     using parent_t::parent_t;
 
     void Dispatch(Operation *op) {
-      op->Traverse(*this);
+      op->traverse(*this);
       if (node_values.count(op)) {
         // Remember previous node value
         auto prev_val{GetNodeVal(op)};
         // Compute new node value
-        parent_t::Dispatch(op);
+        parent_t::dispatch(op);
         // Was there a change?
         changed |= prev_val != GetNodeVal(op);
       } else {
         // We have no value. Just do it!
-        parent_t::Dispatch(op);
+        parent_t::dispatch(op);
         changed = true;
       }
     }
@@ -36,7 +36,7 @@ namespace circ::run {
       // Save initial node values
       auto node_values_init{node_values};
       // Run verification nodes until one succeeds
-      for (auto op : circuit->Attr<VerifyInstruction>()) {
+      for (auto op : circuit->attr<VerifyInstruction>()) {
         // Re-initialize node values
         node_values = node_values_init;
         // Reset
@@ -72,7 +72,7 @@ namespace circ::run {
     QueueInterpreter(Circuit *circuit_) : circuit(circuit_) {
       collector.Run(circuit);
 
-      for (auto vi : circuit->Attr<VerifyInstruction>()) {
+      for (auto vi : circuit->attr<VerifyInstruction>()) {
         Spawn spawn{ circuit, vi, &collector };
         runners.emplace_back( vi, std::move(spawn) );
       }
@@ -99,8 +99,8 @@ namespace circ::run {
 
     template<typename T, typename ...Ts>
     void init() {
-      for (auto c : circuit->Attr<T>()) {
-        runners_do([ & ]( auto &runner ){ runner.Visit(c); } );
+      for (auto c : circuit->attr<T>()) {
+        runners_do([ & ]( auto &runner ){ runner.visit(c); } );
       }
 
       if constexpr (sizeof...(Ts) != 0) {

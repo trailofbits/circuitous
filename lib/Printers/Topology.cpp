@@ -64,7 +64,7 @@ void print_topology(std::ostream &os, Operation *op, unsigned max_depth,
     case VerifyInstruction::kind: {
       os << "(&";
       std::vector<std::string> topos;
-      topos.reserve(op->operands.Size());
+      topos.reserve(op->operands.size());
       for (auto sub_op : op->operands) {
         std::stringstream ss;
         print_topology(ss, sub_op, max_depth, accept);

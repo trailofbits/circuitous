@@ -21,7 +21,7 @@ bool MergeAdvices(Circuit *circuit) {
 
   // Create a mapping of instructions to the hints that they use.
   std::unordered_map<VerifyInstruction *, std::vector<Advice *>> used_hints;
-  for (auto inst_check : circuit->Attr<VerifyInstruction>()) {
+  for (auto inst_check : circuit->attr<VerifyInstruction>()) {
     auto &inst_hints = used_hints[inst_check];
 
     std::function<void(Operation *)> visit;
@@ -70,7 +70,7 @@ bool MergeAdvices(Circuit *circuit) {
   std::vector<bool> used_bits;
 
   // Can be `0` since all other Advices will be removed.
-  const auto wide_hint = circuit->Create<Advice>(max_size, 0u);
+  const auto wide_hint = circuit->create<Advice>(max_size, 0u);
   for (auto &[inst_check, hints] : used_hints) {
 
     used_bits.clear();
@@ -80,7 +80,7 @@ bool MergeAdvices(Circuit *circuit) {
     // we've used.
     for (auto hint : hints) {
       if (auto extract = prev_extract[hint]; extract) {
-        hint->ReplaceAllUsesWith(extract);
+        hint->replace_all_uses_with(extract);
         for (auto i = extract->low_bit_inc; i < extract->high_bit_exc; ++i) {
           used_bits[i] = true;
         }
@@ -107,9 +107,9 @@ bool MergeAdvices(Circuit *circuit) {
 
         // We've found an allocation.
         if (!failed) {
-          extract = circuit->Create<Extract>(i, i + hint->size);
-          extract->AddUse(wide_hint);
-          hint->ReplaceAllUsesWith(extract);
+          extract = circuit->create<Extract>(i, i + hint->size);
+          extract->add_use(wide_hint);
+          hint->replace_all_uses_with(extract);
 
           for (auto j = 0u; j < hint->size; ++j, ++i) {
             used_bits[i] = true;

@@ -43,122 +43,122 @@ namespace circ::smt
       auto view = llvm::StringRef(name);
       auto [pref, rest] = view.split('.');
       auto [lo, hi] = rest.split('.');
-      return circuit->Create< Extract >(unsigned(std::stoi(lo.str())), unsigned(std::stoi(hi.str())));
+      return circuit->create< Extract >(unsigned(std::stoi(lo.str())), unsigned(std::stoi(hi.str())));
     }
     else if (name == "InputBits")
-      return circuit->Create< InputInstructionBits >(bv);
+      return circuit->create< InputInstructionBits >(bv);
 
     else if (name.starts_with("In.register")) {
       auto reg = name.substr(strlen("In.register."));
-      return circuit->Create< InputRegister >(reg, bv);
+      return circuit->create< InputRegister >(reg, bv);
     }
 
     else if (name.starts_with("Out.register")) {
       auto reg = name.substr(strlen("Out.register."));
-      return circuit->Create< OutputRegister >(reg, bv);
+      return circuit->create< OutputRegister >(reg, bv);
     }
 
     else if (name == "Advice") {
-      return circuit->Create< Advice >(bv, ++idxs.advice_idx);
+      return circuit->create< Advice >(bv, ++idxs.advice_idx);
     }
 
     else if (name == "Population")
-      return circuit->Create< PopulationCount >(bv);
+      return circuit->create< PopulationCount >(bv);
     else if (name == "LeadingZeros")
-      return circuit->Create< CountLeadingZeroes >(bv);
+      return circuit->create< CountLeadingZeroes >(bv);
     else if (name == "TrailingZeros")
-      return circuit->Create< CountTrailingZeroes >(bv);
+      return circuit->create< CountTrailingZeroes >(bv);
 
     else if (name == "RegisterConstraint")
-      return circuit->Create< RegConstraint >();
+      return circuit->create< RegConstraint >();
     else if (name == "AdviceConstraint")
-      return circuit->Create< AdviceConstraint >();
+      return circuit->create< AdviceConstraint >();
 
     else if (name == "OnlyOne")
-      return circuit->Create< OnlyOneCondition >();
+      return circuit->create< OnlyOneCondition >();
     else if (name == "Decode")
-      return circuit->Create< DecodeCondition >();
+      return circuit->create< DecodeCondition >();
     else if (name == "Verify")
-      return circuit->Create< VerifyInstruction >();
+      return circuit->create< VerifyInstruction >();
 
     else if (name == "add")
-      return circuit->Create< Add >(bv);
+      return circuit->create< Add >(bv);
     else if (name == "sub")
-      return circuit->Create< Sub >(bv);
+      return circuit->create< Sub >(bv);
     else if (name == "mul")
-      return circuit->Create< Mul >(bv);
+      return circuit->create< Mul >(bv);
 
     else if (name == "udiv")
-      return circuit->Create< UDiv >(bv);
+      return circuit->create< UDiv >(bv);
     else if (name == "sdiv")
-      return circuit->Create< SDiv >(bv);
+      return circuit->create< SDiv >(bv);
 
     else if (name == "shl")
-      return circuit->Create< Shl >(bv);
+      return circuit->create< Shl >(bv);
     else if (name == "lshr")
-      return circuit->Create< LShr >(bv);
+      return circuit->create< LShr >(bv);
     else if (name == "ashr")
-      return circuit->Create< AShr >(bv);
+      return circuit->create< AShr >(bv);
 
     // else if (name == "trunc")
-    //   return circuit->Create< Trunc >();
+    //   return circuit->create< Trunc >();
     else if (name == "zext")
-      return circuit->Create< ZExt >(bv);
+      return circuit->create< ZExt >(bv);
     else if (name == "sext")
-      return circuit->Create< SExt >(bv);
+      return circuit->create< SExt >(bv);
 
     else if (name == "ult")
-      return circuit->Create< Icmp_ult >(bv);
+      return circuit->create< Icmp_ult >(bv);
     else if (name == "slt")
-      return circuit->Create< Icmp_slt >(bv);
+      return circuit->create< Icmp_slt >(bv);
     else if (name == "ugt")
-      return circuit->Create< Icmp_ugt >(bv);
+      return circuit->create< Icmp_ugt >(bv);
     else if (name == "eq")
-      return circuit->Create< Icmp_eq >(bv);
+      return circuit->create< Icmp_eq >(bv);
     else if (name == "ne")
-      return circuit->Create< Icmp_ne >(bv);
+      return circuit->create< Icmp_ne >(bv);
     else if (name == "uge")
-      return circuit->Create< Icmp_uge >(bv);
+      return circuit->create< Icmp_uge >(bv);
     else if (name == "ule")
-      return circuit->Create< Icmp_ule >(bv);
+      return circuit->create< Icmp_ule >(bv);
     else if (name == "sgt")
-      return circuit->Create< Icmp_sgt >(bv);
+      return circuit->create< Icmp_sgt >(bv);
     else if (name == "sge")
-      return circuit->Create< Icmp_sge >(bv);
+      return circuit->create< Icmp_sge >(bv);
     else if (name == "sle")
-      return circuit->Create< Icmp_sle >(bv);
+      return circuit->create< Icmp_sle >(bv);
 
     else if (name == "In.timestamp")
-      return circuit->Create< InputTimestamp >(bv);
+      return circuit->create< InputTimestamp >(bv);
     else if (name == "Out.timestamp")
-      return circuit->Create< OutputTimestamp >(bv);
+      return circuit->create< OutputTimestamp >(bv);
 
     else if (name == "In.error_flag")
-      return circuit->Create< InputErrorFlag >(bv);
+      return circuit->create< InputErrorFlag >(bv);
     else if (name == "Out.error_flag")
-      return circuit->Create< OutputErrorFlag >(bv);
+      return circuit->create< OutputErrorFlag >(bv);
 
     else if (name == "Concat")
-      return circuit->Create< Concat >(bv);
+      return circuit->create< Concat >(bv);
     else if (name.starts_with("Select")) {
       auto bits = name.substr(strlen("Select."));
-      return circuit->Create< Select >(unsigned(std::stoi(bits)), bv);
+      return circuit->create< Select >(unsigned(std::stoi(bits)), bv);
     }
     else if (name == "Parity")
-      return circuit->Create< Parity >();
+      return circuit->create< Parity >();
 
     else if (name == "ReadConstraint")
-      return circuit->Create< ReadConstraint >();
+      return circuit->create< ReadConstraint >();
     else if (name == "WriteConstraint")
-      return circuit->Create< WriteConstraint >();
+      return circuit->create< WriteConstraint >();
     else if (name == "UnusedConstraint")
-      return circuit->Create< UnusedConstraint >();
+      return circuit->create< UnusedConstraint >();
 
     else if (name == "Memory")
-      return circuit->Create< Memory >(irops::memory::size(circuit->ptr_size), ++idxs.mem_idx);
+      return circuit->create< Memory >(irops::memory::size(circuit->ptr_size), ++idxs.mem_idx);
 
     else if (name == "InputImmediate")
-      return circuit->Create< InputImmediate >(bv);
+      return circuit->create< InputImmediate >(bv);
 
     log_kill() << "unknown operation" << e << name;
   }
@@ -180,7 +180,7 @@ namespace circ::smt
     }
 
     std::reverse(bits.begin(), bits.end());
-    return circuit->Create< Constant >( bits.str().str(), bv );
+    return circuit->create< Constant >( bits.str().str(), bv );
   }
 
   auto expr_hash  = [] (const z3::expr &e) { return e.hash(); };
@@ -201,11 +201,11 @@ namespace circ::smt
       for (unsigned i = 0; i < num; i++) {
         auto arg = e.arg(i);
         if (auto it = seen.find(arg); it != seen.end()) {
-          op->AddUse(it->second);
+          op->add_use(it->second);
         } else {
           auto darg = deserialize(e.arg(i), circuit, seen, idxs);
           seen.emplace(arg, darg);
-          op->AddUse(darg);
+          op->add_use(darg);
         }
       }
 

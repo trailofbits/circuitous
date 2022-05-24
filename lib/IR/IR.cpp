@@ -21,11 +21,11 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ {
 
-std::string Operation::Name() const {
-  unreachable() << util::to_underlying(op_code) << " does not provide Name() method override.";
+std::string Operation::name() const {
+  unreachable() << util::to_underlying(op_code) << " does not provide name() method override.";
 }
 
-std::string Constant::Name() const {
+std::string Constant::name() const {
   std::stringstream ss;
   ss << "CONST_" << size << "_";
   for (auto i = 0U; i < size; ++i) {

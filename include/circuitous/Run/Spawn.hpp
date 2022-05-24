@@ -39,7 +39,7 @@ namespace circ::run
         template< typename MO >
         void init()
         {
-            for (auto op : circuit->Attr< MO >()) {
+            for (auto op : circuit->attr< MO >()) {
                 if (collector->op_to_ctxs[op].count(current)) {
                     auto idx = op->mem_idx();
                     extend(idx);
@@ -271,11 +271,11 @@ namespace circ::run
             state.SetNodeVal(op);
         }
 
-        void Dispatch(Operation *op)
+        void dispatch(Operation *op)
         {
             log_dbg() << "Dispatching: " << pretty_print(op);
             if (collector->op_to_ctxs[op].count(current))
-                parent_t::Dispatch(op);
+                parent_t::dispatch(op);
         }
 
         void set_memory(uint64_t addr, const std::string &data)
@@ -305,7 +305,7 @@ namespace circ::run
                 }
             };
 
-            for (auto node : circuit->template Attr<T>())
+            for (auto node : circuit->template attr<T>())
             {
                 if (this->node_values.count(node))
                     continue;
@@ -391,7 +391,7 @@ namespace circ::run
                         this->dispatch(o, skip_unset);
                 };
 
-                ss << " [" << op->id() << "] " << op->Name() << " ";
+                ss << " [" << op->id() << "] " << op->name() << " ";
                 if (!parent->node_values.count(op))
                 {
                       ss << "(no value set)";
@@ -487,7 +487,7 @@ namespace circ::run
             init();
             while (!state.todo.empty()) {
                 auto x = state.Pop();
-                Dispatch(x);
+                dispatch(x);
                 if (auto r = short_circuit(x)) {
                     log_dbg() << "Short circuiting to result, as decode was not satisfied.";
                     result = *r;

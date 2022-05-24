@@ -14,7 +14,7 @@ namespace circ
   {
     try {
       auto visitor = IRToSMTVisitor(circuit->ptr_size);
-      auto expr = visitor.Visit(circuit);
+      auto expr = visitor.visit(circuit);
       z3::solver solver(visitor.ctx);
       solver.add(expr);
 
@@ -28,7 +28,7 @@ namespace circ
   {
     try {
       auto visitor = IRToBitBlastableSMTVisitor(circuit->ptr_size);
-      auto expr = visitor.Visit(circuit);
+      auto expr = visitor.visit(circuit);
       auto bitblasted = bitblast(expr, visitor.ctx);
       os << bitblasted.to_smt2() << '\n';
     } catch (const z3::exception &e) {

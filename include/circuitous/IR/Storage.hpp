@@ -16,27 +16,27 @@ namespace circ
     {
         DefList< OP > data;
 
-        std::size_t RemoveUnused()
+        std::size_t remove_unused()
         {
             auto notify_operands = [](auto &&x)
             {
                 for (auto op : x->operands)
-                    op->RemoveUser(x.get());
+                    op->remove_user(x.get());
             };
-            return data.RemoveUnused(notify_operands);
+            return data.remove_unused(notify_operands);
         }
 
         template< typename CB >
-        void ForEachOperation(CB &&cb)
+        void for_each_operation(CB &&cb)
         {
             for (auto op : this->data)
                 cb(op);
         }
 
         template< typename CB >
-        void Apply(CB &&cb) { cb(data); }
+        void apply(CB &&cb) { cb(data); }
 
-        auto &Attr() { return data; }
+        auto &attr() { return data; }
 
         template< typename CB >
         auto match(Operation *op, CB cb)
@@ -63,26 +63,23 @@ namespace circ
         using parent = MaterializedDefList< T >;
 
         template< typename T >
-        auto &Attr() { return this->parent< T >::Attr(); }
+        auto &attr() { return this->parent< T >::attr(); }
 
         template< typename CB >
-        void ForEachOperation(CB cb) { (this->Ops::ForEachOperation(cb), ...); }
+        void for_each_operation(CB cb) { (this->Ops::for_each_operation(cb), ...); }
 
-        void ClearWithoutErasure()
+        void clear_without_erasure()
         {
             auto clear = [](auto &field)
             {
                 for (auto op : field) {
-                    op->operands.ClearWithoutErasure();
+                    op->operands.clear_without_erasure();
                 }
             };
-            (this->Ops::Apply(clear), ...);
+            (this->Ops::apply(clear), ...);
         }
 
-        template< typename CB >
-        void ForEachField(CB cb) { (this->Ops::Apply(cb), ...); }
-
-        std::size_t RemoveUnused() { return (this->Ops::RemoveUnused() + ...); }
+        std::size_t remove_unused() { return (this->Ops::remove_unused() + ...); }
 
         template< typename CB > auto match(Operation *op, CB cb)
         {
@@ -107,39 +104,39 @@ namespace circ
     //              error messages even further.
     struct CircuitStorage : Attributes< m_def_lists >
     {
-        void RemoveUnused()
+        void remove_unused()
         {
-            while (this->AllAttributes::RemoveUnused()) {}
+            while (this->AllAttributes::remove_unused()) {}
         }
 
         template< typename T >
-        std::size_t RemoveUnused()
+        std::size_t remove_unused()
         {
-            return this->AllAttributes::parent< T >::RemoveUnused();
+            return this->AllAttributes::parent< T >::remove_unused();
         }
 
-        using AllAttributes::ForEachOperation;
+        using AllAttributes::for_each_operation;
 
         uint64_t ids = 0;
         static constexpr inline uint64_t max_id = (1ull >> 60);
 
         template< typename T >
-        auto &Attr()
+        auto &attr()
         {
             static_assert(std::is_base_of_v< Operation, T >);
-            return this->AllAttributes::Attr< T >();
+            return this->AllAttributes::attr< T >();
         }
 
         template< typename T, typename ...Args >
-        auto Create(Args &&...args)
+        auto create(Args &&...args)
         {
-            auto op = Attr< T >().Create(std::forward< Args >(args)...);
+            auto op = attr< T >().create(std::forward< Args >(args)...);
             op->_id = ++ids;
             return op;
         }
 
         template< typename ...Args >
-        Operation *Create(uint32_t kind, Args &&...args)
+        Operation *create(uint32_t kind, Args &&...args)
         {
             Operation *out = nullptr;
 
@@ -150,7 +147,7 @@ namespace circ
                 // and since ctors are not uniform, the invocation may not be well-formed
                 // which leads to compile error.
                 if constexpr ( std::is_constructible_v< raw_t, Args ... > ) {
-                    out = this->Create< raw_t >( std::forward< Args >( args ) ... );
+                    out = this->create< raw_t >( std::forward< Args >( args ) ... );
                 }
             };
 
@@ -159,23 +156,23 @@ namespace circ
         }
 
         template< typename T, typename ...Args >
-        T* Adopt(uint64_t id, Args &&...args)
+        T* adopt(uint64_t id, Args &&...args)
         {
-            auto op = Attr< T >().Create(std::forward< Args >(args)...);
+            auto op = attr< T >().create(std::forward< Args >(args)...);
             op->_id = id;
             ids = std::max(ids, id);
             return op;
         }
 
         template< typename ...Args >
-        Operation *Adopt(uint64_t id, uint32_t kind, Args &&...args)
+        Operation *adopt(uint64_t id, uint32_t kind, Args &&...args)
         {
             Operation *out;
             auto adopt = [&](auto op)
             {
                 using raw_t = std::remove_pointer_t< std::decay_t< decltype( op ) > >;
                 if constexpr ( std::is_constructible_v< raw_t, Args ... > ) {
-                    out = this->Adopt< raw_t >( id, std::forward< Args >( args )... );
+                    out = this->adopt< raw_t >( id, std::forward< Args >( args )... );
                 }
             };
             return out;
@@ -185,15 +182,15 @@ namespace circ
         template< typename What >
         auto fetch_singular()
         {
-            auto &all = this->Attr< What >();
-            check(all.Size() == 1) << "Fetch singular did not return 1 element.";
+            auto &all = this->attr< What >();
+            check(all.size() == 1) << "Fetch singular did not return 1 element.";
             return all[0];
         }
 
         template< typename What, bool allow_failure = true >
         auto fetch_reg(const std::string &name) -> What *
         {
-            for (auto reg : this->Attr<What>())
+            for (auto reg : this->attr<What>())
                 if (reg->reg_name == name)
                     return reg;
 

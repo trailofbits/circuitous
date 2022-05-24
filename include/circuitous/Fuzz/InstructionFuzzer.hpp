@@ -162,7 +162,7 @@ namespace circ
             return std::make_tuple(op_bits, dirts);
         }
 
-        auto FuzzOps(bool generate_all=true)
+        auto fuzz_ops(bool generate_all=true)
         {
             shadowinst::Instruction shadow_inst(rinst_bitsize());
             auto [op_bits, dirts] = generate_bits();
@@ -207,11 +207,11 @@ namespace circ
             // (due to being read+write operands), so they need special attention.
             HuskResolver(*this).resolve_husks(shadow_inst);
             if (generate_all)
-                PopulateTranslationTables(shadow_inst);
+                populate_translation_tables(shadow_inst);
             return shadow_inst;
         }
 
-        void PopulateTranslationTables(shadowinst::Instruction &s_inst)
+        void populate_translation_tables(shadowinst::Instruction &s_inst)
         {
             check(s_inst.deps.size() == s_inst.dirt.size());
 
@@ -542,7 +542,7 @@ namespace circ
                 yield( std::make_optional(std::move(tmp)), idxs, ss.str());
             };
 
-            _Permutate(nbytes, idxs, 0, preprocess);
+            permutate(nbytes, idxs, 0, preprocess);
         }
 
         std::vector< shadowinst::has_regions > get_candidates(
@@ -782,7 +782,7 @@ namespace circ
         }
 
         template<typename Yield>
-        void _Permutate(std::string &bytes, const std::vector<uint64_t> &idxs,
+        void permutate(std::string &bytes, const std::vector<uint64_t> &idxs,
                         std::size_t current, Yield &yield)
         {
             // I am done flipping, we look at the value now
@@ -792,12 +792,12 @@ namespace circ
             }
 
             // We chose not to flip first
-            _Permutate(bytes, idxs, current + 1, yield);
+            permutate(bytes, idxs, current + 1, yield);
             auto byte = static_cast<uint8_t>(bytes[idxs[current] / 8 ]);
             uint8_t mask = 1;
             bytes[idxs[current] / 8]
                 = static_cast< char >(byte ^ (mask << (idxs[current] % 8)));
-            _Permutate(bytes, idxs, current + 1, yield);
+            permutate(bytes, idxs, current + 1, yield);
             // We are taking bytes as reference we need to flip back as we backtrack!
             byte = static_cast<uint8_t>(bytes[idxs[current] / 8 ]);
             bytes[idxs[current] / 8]
@@ -809,7 +809,7 @@ namespace circ
     static inline shadowinst::Instruction fuzz_operands(const remill::Arch &arch,
                                                         const remill::Instruction &rinst)
     {
-        return InstructionFuzzer{&arch, rinst}.FuzzOps();
+        return InstructionFuzzer{&arch, rinst}.fuzz_ops();
     }
 
 } // namespace circ

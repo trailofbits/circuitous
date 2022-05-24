@@ -25,7 +25,7 @@ namespace circ
 
         static std::string op_code_str() { return "circuit"; }
 
-        std::string Name() const override { return "circuit"; }
+        std::string name() const override { return "circuit"; }
         // TODO(lukas): Will be deprecated in the future.
         Circuit(uint32_t ptr_size_=64) : Operation(this->bool_size, kind),
                                          ptr_size(ptr_size_)
