@@ -646,12 +646,12 @@ namespace circ
             for (auto from : dirt)
                 flattened.add({from, 1});
 
-            auto raw_candidates = get_candidates(flattened);
+            auto raw_candidates = get_candidates(shadowinst::has_regions(flattened));
             if (flattened.marked_size() == 1)
             {
                 auto [from, size] = *flattened.areas.begin();
                 if (ifuzz::is_reg_octet(from, size))
-                    raw_candidates.push_back(flattened);
+                    raw_candidates.push_back(shadowinst::has_regions(flattened));
             }
             if (raw_candidates.empty())
                 return;
