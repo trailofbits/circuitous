@@ -3,4 +3,6 @@
 add_circuitous_executable( seed
   SOURCES
     Seed.cpp
+  LINK_LIBS
+    circuitous::lifter
 )
