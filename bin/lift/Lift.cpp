@@ -20,6 +20,8 @@
 
 #include <circuitous/Lifter/CircuitSmithy.hpp>
 
+#include <circuitous/Disassembler/DisassemblerPrinter.h>
+
 CIRCUITOUS_RELAX_WARNINGS
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -38,6 +40,7 @@ DEFINE_string(os, REMILL_OS, "");
 DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(smt_in, "", "Path to the input smt2 file.");
 
+DEFINE_string(dec_out, "", "Decoder shizzle.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(dot_highlight, "", "Names of node-type to highlight in DOT file");
@@ -109,7 +112,9 @@ using output_options = circ::tl::TL<
     circ::cli::VerilogOut,
     circ::cli::IROut,
     circ::cli::DotOut,
-    circ::cli::DotHighlight>;
+    circ::cli::DotHighlight,
+    circ::cli::DecoderOut
+>;
 using remill_config_options = circ::tl::TL<
     circ::cli::Arch,
     circ::cli::OS
@@ -156,6 +161,11 @@ circ::CircuitPtr get_input_circuit(auto &cli)
 
 void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 {
+    if (auto decoder_out = cli.template get< cli::DecoderOut >()){
+      auto gen = circ::disassm::DisassemblerPrinter(circuit);
+      gen.print_file();
+    }
+
     if (auto ir_out = cli.template get< cli::IROut >())
         circuit->serialize(*ir_out);
 
@@ -179,6 +189,8 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 
     if (auto bitblast_smt = cli.template get< cli::BitBlastSmtOut >())
         circ::print_circuit(*bitblast_smt, circ::print_bitblasted_smt, circuit.get());
+
+//      circ::print_circuit(*bitblast_smt, circ::print_bitblasted_smt, circuit.get());
 }
 
 template< typename OptsList >
