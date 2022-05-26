@@ -160,20 +160,4 @@ namespace circ
 
         std::unordered_set< Operation * > seen_ops;
     };
-
-
-    template<typename NodeType>
-    class NodeExtractor : UniqueVisitor<NodeExtractor<NodeType>> {
-     public:
-      std::vector<NodeType*> nodes;
-      void Visit(Operation* op){
-        op->Traverse(*this);
-      }
-
-      void Visit(NodeType *op) {
-        nodes.push_back(op);
-        op->Traverse(*this);
-      }
-    };
-
 } // namespace circ

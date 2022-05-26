@@ -46,7 +46,6 @@ namespace circ::disassm{
     void print_decoder_func(ExtractedVI evi);
     void print_circuit_decoder();
 
-    std::string reserve_name(std::string preferred_name, bool prefix = true);
     std::vector<std::string> used_generated_names;
     void printInputCheck(InputCheck check, std::string name_output_var,
                          std::string name_fuc_input);
