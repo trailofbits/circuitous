@@ -9,12 +9,12 @@
 #include <circuitous/Support/CLIArgs.hpp>
 
 #include <circuitous/Run/Inspect.hpp>
-#include <circuitous/Run/Interpreter.h>
+#include <circuitous/Run/Interpreter.hpp>
 #include <circuitous/Run/Trace.hpp>
 
 #include <circuitous/IR/Verify.hpp>
 #include <circuitous/IR/IR.hpp>
-#include <circuitous/Printers.h>
+#include <circuitous/Printers.hpp>
 
 #include <fstream>
 #include <iostream>
