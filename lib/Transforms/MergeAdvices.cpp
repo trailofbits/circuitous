@@ -3,7 +3,7 @@
  */
 
 #include <circuitous/IR/IR.hpp>
-#include <circuitous/Transforms.h>
+#include <circuitous/Transforms.hpp>
 
 #include <circuitous/Support/Check.hpp>
 

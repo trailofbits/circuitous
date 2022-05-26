@@ -5,8 +5,8 @@
 #include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Verify.hpp>
 #include <circuitous/IR/SMT.hpp>
-#include <circuitous/Printers.h>
-#include <circuitous/Transforms.h>
+#include <circuitous/Printers.hpp>
+#include <circuitous/Transforms.hpp>
 #include <circuitous/IR/Cost.hpp>
 
 #include <circuitous/Printers/Verilog.hpp>

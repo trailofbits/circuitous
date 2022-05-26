@@ -11,7 +11,7 @@ add_headers( Util CIRCUITOUS_UTIL_HEADERS
   Parser.hpp
   StrongType.hpp
   TypeList.hpp
-  UseDef.h
+  UseDef.hpp
 )
 
 add_circuitous_header_library( util

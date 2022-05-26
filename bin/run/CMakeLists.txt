@@ -5,7 +5,7 @@ add_headers( Run CIRCUITOUS_RUN_HEADERS
   Base.tpp
   Derive.tpp
   Inspect.hpp
-  Interpreter.h
+  Interpreter.hpp
   Spawn.hpp
   Trace.hpp
 )

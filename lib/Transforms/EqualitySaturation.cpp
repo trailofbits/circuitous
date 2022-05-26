@@ -3,8 +3,8 @@
  */
 
 #include <circuitous/IR/IR.hpp>
-#include <circuitous/Printers.h>
-#include <circuitous/Transforms.h>
+#include <circuitous/Printers.hpp>
+#include <circuitous/Transforms.hpp>
 #include <llvm/ADT/StringRef.h>
 #include <llvm/ADT/StringSwitch.h>
 

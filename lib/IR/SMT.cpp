@@ -2,7 +2,7 @@
  * Copyright (c) 2021 Trail of Bits, Inc.
  */
 
-#include <circuitous/Printers.h>
+#include <circuitous/Printers.hpp>
 
 #include <algorithm>
 #include <memory>
