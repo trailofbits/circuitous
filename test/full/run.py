@@ -8,6 +8,7 @@ import tempfile
 import threading
 import queue
 import sys
+import re
 
 from tools.tc import State, Test
 import tools.tc as TC
@@ -489,9 +490,12 @@ def filter_by_tag(sets, tags):
 
 def filter_by_name(names, prefiltered):
     result = set()
-    for x in prefiltered:
-        if x.name in names:
-            result.add(x)
+
+    patterns = [ re.compile(x) for x in names ]
+
+    for test in prefiltered:
+        if any([re.match(pattern, test.name) is not None for pattern in patterns]):
+            result.add(test)
     return result
 
 def main():
