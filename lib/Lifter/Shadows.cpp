@@ -5,7 +5,8 @@
 #include <circuitous/Lifter/Shadows.hpp>
 
 #include <circuitous/Support/Check.hpp>
-#include <circuitous/Util/Logging.hpp>
+#include <circuitous/Support/Log.hpp>
+
 
 namespace circ::shadowinst
 {
