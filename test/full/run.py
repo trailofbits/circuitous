@@ -512,17 +512,17 @@ def main():
                             nargs='+'
                             )
     arg_parser.add_argument("--sets",
-                             help="TODO: Choose which test sets to consider.",
+                             help="TODO: Choose which test sets to consider. (not implemented)",
                              action='extend',
                              nargs='+')
     arg_parser.add_argument("--names",
-                            help="Run tests with given names.",
+                            help="Run tests with given names (regex search).",
                             action='extend',
                             nargs='+')
     arg_parser.add_argument("--dbg",
-                             help="TODO: Run in dbg mode, which means be verbose.",
-                             action='store_true',
-                             default=False)
+                            help="Devtool:Run in dbg mode, which means be verbose.",
+                            action='store_true',
+                            default=False)
     arg_parser.add_argument("--jobs",
                             help="Number of python threads. Should improve execution time.",
                             default=1)
@@ -531,9 +531,9 @@ def main():
                             action='store_true',
                             default=False)
     arg_parser.add_argument("--die",
-                             help="DBG: Pass --die to interpreter invocation.",
-                             action='store_true',
-                             default=False)
+                            help="Devtool: Pass --die to interpreter invocation.",
+                            action='store_true',
+                            default=False)
 
     args, command_args = arg_parser.parse_known_args()
 
