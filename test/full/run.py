@@ -487,6 +487,13 @@ def filter_by_tag(sets, tags):
     log_info("Skipped " + str(skipped_todos) + " todo tests")
     return result
 
+def filter_by_name(names, prefiltered):
+    result = set()
+    for x in prefiltered:
+        if x.name in names:
+            result.add(x)
+    return result
+
 def main():
     arg_parser = argparse.ArgumentParser(
         formatter_class = argparse.RawDescriptionHelpFormatter)
@@ -504,6 +511,10 @@ def main():
                              help="TODO: Choose which test sets to consider.",
                              action='extend',
                              nargs='+')
+    arg_parser.add_argument("--names",
+                            help="Run tests with given names.",
+                            action='extend',
+                            nargs='+')
     arg_parser.add_argument("--dbg",
                              help="TODO: Run in dbg mode, which means be verbose.",
                              action='store_true',
@@ -542,6 +553,8 @@ def main():
 
 
     tests = filter_by_tag(fetch_test(args.sets), args.tags)
+    if args.names:
+        tests = filter_by_name(args.names, tests)
     if not tests:
         log_error("No tests selected")
         return
