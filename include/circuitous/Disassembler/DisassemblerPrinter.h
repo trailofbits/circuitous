@@ -37,16 +37,15 @@ namespace circ::disassm{
 
     const std::string circuitous_decoder_name_prefix = "circ__";
     const std::string function_parameter_name = "input";
+    const std::string circuit_decode_function_name = "circuit_decode";
 
     const circ::CircuitPtr & circuit;
     std::ostream& os;
     std::vector<ExtractedVI> extractedVIs;
 
-    void print_func_signatures();
     void print_decoder_func(ExtractedVI evi);
     void print_circuit_decoder();
 
-    std::string reserve_name(std::string preferred_name, bool prefix = true);
     std::vector<std::string> used_generated_names;
     void printInputCheck(InputCheck check, std::string name_output_var,
                          std::string name_fuc_input);
@@ -54,6 +53,9 @@ namespace circ::disassm{
 
     std::string swap_endian(std::string input);
 
+    void flip_lsb_to_dont_care(uint len_lsb_to_flip,
+                               const std::string variable);
+    void flip_msb_to_dont_care(uint len_msb_to_flip, std::string variable_name);
   };
 }
 
