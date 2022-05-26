@@ -11,9 +11,7 @@ add_circuitous_library( printers
     DOT.cpp
     JSON.cpp
     Printers.cpp
-    Python.cpp
     SMT.cpp
-    Topology.cpp
   LINK_LIBS
     z3::libz3
   HEADERS
