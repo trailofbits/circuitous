@@ -1,5 +1,7 @@
 # Copyright (c) 2022 Trail of Bits, Inc.
 
+add_subdirectory( Components )
+
 add_headers( Lifter CIRCUITOUS_LIFTER_HEADERS
   BaseLifter.hpp
   CircuitBuilder.hpp
@@ -34,6 +36,7 @@ add_circuitous_library( lifter
   LINK_LIBS
     circuitous::dbg
     circuitous::fuzz
+    circuitous::components
   HEADERS
     ${CIRCUITOUS_LIFTER_HEADERS}
 )
