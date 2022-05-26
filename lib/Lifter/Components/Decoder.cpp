@@ -4,6 +4,7 @@
 
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
+#include <circuitous/Util/Warnings.hpp>
 
 #include <remill/BC/Compat/CallSite.h>
 
