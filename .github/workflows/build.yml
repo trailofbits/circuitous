@@ -21,12 +21,8 @@ on:
       - '*'
 
 env:
-  # Indicates the location of the vcpkg as a Git submodule of the project repository.
-  VCPKG_ROOT: ${{ github.workspace }}/vcpkg
   # Tells vcpkg where binary packages are stored.
   VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg/bincache
-  # Use specific vcpkg version
-  VCPKG_COMMIT_ID: '9836ae4f2671db41e07843f31b4e341f0d3ebfb1'
   # Setup compiler
   CC: clang-12
   CXX: clang++-12
@@ -149,14 +145,13 @@ jobs:
         # TODO(Heno): fix in port patch
         mkdir -p ./vcpkg_installed/x64-linux-rel
         mkdir -p ${{ steps.paths.outputs.src }}/cxx-common-ports/vcpkg/installed/x64-linux-rel
-        cmake --preset ninja-cxx-common-system-llvm-x64-linux-rel -B ${{ steps.paths.outputs.build }}/circuitous -DCMAKE_VERBOSE_MAKEFILE=true || true
+        cmake --preset ninja-cxx-common-system-llvm-x64-linux-rel -B ${{ steps.paths.outputs.build }}/circuitous
 
     - name: Build circuitous
       working-directory: ${{ steps.paths.outputs.build }}/circuitous
       env:
         CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
       run: |
-        # TODO(Heno): use preset
         cmake --build ${{ steps.paths.outputs.build }}/circuitous -j $(nproc)
 
     - name: Install circuitous
