@@ -108,7 +108,7 @@ void CSem<S>::visit(ReadConstraint *op_)
         // Is hint supplied?
         if (this->supplied.count(op->hint_arg())) {
             check(this->has_value(op->hint_arg()));
-            auto parsed = this->deconstruct(*this->get(op->hint_arg()));
+            auto parsed = this->memory.deconstruct(*this->get(op->hint_arg()));
 
             irops::memory::Parsed< llvm::APInt > args {
                 this->circuit->ptr_size,
@@ -128,7 +128,7 @@ void CSem<S>::visit(ReadConstraint *op_)
         auto addr = this->get(op->addr_arg())->getLimitedValue();
         auto size = this->get(op->size_arg())->getLimitedValue();
 
-        if (!this->defined(addr, size)) {
+        if (!this->memory.defined(addr, size)) {
             std::stringstream ss;
             ss << "Memory at " << std::hex << addr << " is not defined with size: " << size;
             log_error() << ss.str();
@@ -144,7 +144,7 @@ void CSem<S>::visit(ReadConstraint *op_)
         val.insertBits(*this->get(op->size_arg()), 12);
 
         val.insertBits(*this->get(op->addr_arg()), 16);
-        val.insertBits(*this->load(addr, size), 16 + this->circuit->ptr_size);
+        val.insertBits(*this->memory.load(addr, size), 16 + this->circuit->ptr_size);
         val.insertBits(*this->get(op->ts_arg()), 16 + this->circuit->ptr_size * 2);
 
         self().SetNodeVal(op->hint_arg(), val);
@@ -169,7 +169,7 @@ void CSem<S>::visit(WriteConstraint *op_) {
         // Is hint supplied?
         if (this->supplied.count(op->hint_arg())) {
             check(this->has_value(op->hint_arg()));
-            auto parsed = this->deconstruct(*this->get(op->hint_arg()));
+            auto parsed = this->memory.deconstruct(*this->get(op->hint_arg()));
 
             irops::memory::Parsed< llvm::APInt > args {
                 this->circuit->ptr_size,
@@ -203,7 +203,7 @@ void CSem<S>::visit(WriteConstraint *op_) {
     if (exec) {
         auto addr = this->get(op_->addr_arg())->getLimitedValue();
         auto value = *this->get(op_->val_arg());
-        this->store(addr, value);
+        this->memory.store(addr, value);
     }
 
     if (!exec && !this->supplied.count(op_->hint_arg())) {

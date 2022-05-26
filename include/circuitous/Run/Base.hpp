@@ -16,6 +16,8 @@
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/Util/Warnings.hpp>
 
+#include <circuitous/Run/State.hpp>
+
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/ADT/StringRef.h>
 #include <llvm/IR/InstrTypes.h>
@@ -25,59 +27,8 @@ CIRCUITOUS_UNRELAX_WARNINGS
 namespace circ::run
 {
 
-    // TODO(lukas): Most likely it will be required for this to be an attribute
-    //              as we will need to move/copy it between `Spawn` classes.
-    struct HasMemory
-    {
-        using raw_value_type = llvm::APInt;
-        using value_type = std::optional<raw_value_type>;
-
-        uint32_t hint_size;
-        std::unordered_map<uint64_t, raw_value_type> memory;
-
-        HasMemory(Circuit *circuit) : hint_size(circuit->ptr_size) {}
-
-        template< typename U >
-        bool defined(uint64_t addr, U size)
-        {
-            for (auto i = 0u; i < size; ++i)
-                if (!memory.count(addr + i))
-                    return false;
-            return true;
-        }
-
-        template< typename U >
-        value_type load(uint64_t addr, U size_)
-        {
-            U size = size_;
-            if (!defined(addr, size))
-                return {};
-
-            llvm::APInt build{ static_cast< uint32_t >(size * 8), 0, false };
-            for (auto i = 0u; i < size; ++i)
-                build.insertBits( memory[addr + i], i * 8 );
-
-            return build;
-        }
-
-        void store(uint64_t addr, raw_value_type val)
-        {
-            check( val.getBitWidth() % 8 == 0 )
-                << "Cannot store val that has unalinged bw such as " << val.getBitWidth();
-
-            for (auto i = 0u; i < val.getBitWidth(); i += 8)
-                memory[addr + i] = val.extractBits(8, i);
-        }
-
-        using Parsed = irops::memory::Parsed< llvm::APInt >;
-
-        Parsed deconstruct(const llvm::APInt &value);
-        llvm::APInt construct(const Parsed &parsed);
-
-    };
-
     template< typename Self >
-    struct Base_ : public Visitor<Self>, HasMemory
+    struct Base_ : public Visitor<Self>
     {
         using raw_value_type = llvm::APInt;
         // If no value is held <=> value is undefined
@@ -87,14 +38,15 @@ namespace circ::run
         Circuit *circuit{nullptr};
         bool changed{false};
 
-        std::unordered_map<Operation *, value_type> node_values;
+        Memory memory;
+        std::unordered_map< Operation *, value_type > node_values;
 
         value_type Undef() const { return {}; }
         llvm::APInt TrueVal() const { return llvm::APInt(1, 1); }
         llvm::APInt FalseVal() const { return llvm::APInt(1, 0); }
         llvm::APInt BoolVal(bool v) const { return (v) ? TrueVal() : FalseVal(); }
 
-        Base_(Circuit *circuit_) : HasMemory(circuit_), circuit(circuit_) {}
+        Base_(Circuit *circuit_) :  circuit(circuit_), memory(circuit_) {}
 
         void init() {}
 
@@ -337,14 +289,14 @@ namespace circ::run
             return verify_cond(op);
         }
 
-        std::vector< HasMemory::Parsed > get_derived_mem()
+        std::vector< Memory::Parsed > get_derived_mem()
         {
-            std::vector<HasMemory::Parsed> out;
-            for (auto op : this->circuit->template attr<Memory>()) {
+            std::vector< Memory::Parsed > out;
+            for (auto op : this->circuit->template attr< circ::Memory >()) {
                 // TODO(lukas): Check if memory was derived or supplied
                 // TODO(lukas): This should never happen once we enforce zeroed unused hints
                 if (this->has_value(op))
-                    out.push_back(this->deconstruct(*this->get(op)));
+                    out.push_back(this->memory.deconstruct(*this->get(op)));
             }
             return out;
         }
@@ -427,7 +379,7 @@ namespace circ::run
                 parent_t::init();
                 std::unordered_set<Operation *> preserved;
                 for (auto op : this->derived) {
-                    if (op->op_code == Advice::kind || op->op_code == Memory::kind) {
+                    if (op->op_code == Advice::kind || op->op_code == circ::Memory::kind) {
                         preserved.insert(op);
                         continue;
                     }

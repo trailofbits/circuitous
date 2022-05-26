@@ -44,4 +44,26 @@ namespace circ::run
         for (auto i = 0u; i < val.getBitWidth(); i += 8)
             memory[addr + i] = val.extractBits(8, i);
     }
+
+    auto Memory::deconstruct(const llvm::APInt &value) -> Parsed
+    {
+        auto extractor = [](auto thing, auto from, auto size) -> llvm::APInt {
+            return thing.extractBits(size, from);
+        };
+        check(value.getBitWidth() == irops::memory::size(hint_size));
+        return irops::memory::parse< llvm::APInt >(value, extractor, hint_size);
+    }
+
+    llvm::APInt Memory::construct(const Parsed &parsed)
+    {
+        llvm::APInt out { irops::memory::size(hint_size), 0, false };
+        auto inserter_ = [&](auto thing, auto from, auto size) {
+            check(size == thing.getBitWidth());
+            out.insertBits(thing, from);
+        };
+        irops::memory::construct(parsed, inserter_);
+        return out;
+    }
+
+
 } // namespace circ::run
