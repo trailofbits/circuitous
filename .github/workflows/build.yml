@@ -164,4 +164,4 @@ jobs:
     - name: Run circuitous unittests
       working-directory: ${{ steps.paths.outputs.build }}/circuitous
       run: |
-        ctest
+        ctest --output-on-failure
