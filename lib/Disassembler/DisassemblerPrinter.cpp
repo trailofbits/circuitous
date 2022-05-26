@@ -1,30 +1,19 @@
 #include <circuitous/Disassembler/DisassemblerPrinter.h>
+#include <circuitous/Printers.h>
+
+#include <circuitous/IR/Shapes.hpp>
 #include <circuitous/IR/Visitors.hpp>
 #include <cstdlib>
-
 namespace circ::disassm {
 
 std::string DisassemblerPrinter::array_index(uint index) {
   return "[" + std::to_string(index) + "]";
 }
 
-class DCNodeExtractor : public circ::UniqueVisitor<DCNodeExtractor> {
- public:
-  std::vector<DecodeCondition*> DecodeConditions;
-  void Visit(Operation* op){
-    op->Traverse(*this);
-  }
-
-  void Visit(DecodeCondition *op) {
-    DecodeConditions.push_back(op);
-    op->Traverse(*this);
-  }
-};
-
 std::string DisassemblerPrinter::reserve_name(std::string preferred_name, bool prefix){
   std::string candidate = preferred_name;
   if(prefix){
-    candidate = CIRCUITOUS_DECODER_NAME_PREFIX + preferred_name;
+    candidate = circuitous_decoder_name_prefix + preferred_name;
   }
 
   if(std::ranges::none_of(this->used_generated_names, [&](std::string s){ return s == preferred_name; })){
@@ -135,31 +124,34 @@ void DisassemblerPrinter::printInputCheck(InputCheck check,
 }
 
 
-void DisassemblerPrinter::printVerifyInstructions() {
- std::vector<VerifyInstruction*> VIs;
-  auto extract_VI_ops = [&](circ::Operation* op) {
-    check(op);
-    if (auto vi = dynamic_cast<circ::VerifyInstruction*>(op)){
-      VIs.push_back(vi);
-    }
-  };
+void DisassemblerPrinter::print_decoder_func(ExtractedVI evi) {
+    auto vi = evi.VI;
+    std::cout << "Generating function for VI: " << vi->id() << " name: " << evi.generated_name << std::endl;
 
-  circuit->ForEachOperation(extract_VI_ops);
-  for (auto& vi : VIs) {
-    std::cout << "Generating function for VI: " << vi->id() << std::endl;
-    auto inputName = this->reserve_name("input", false);
-    os << "bool context_decode_" << vi->id() << "(std::vector<uint8_t> " << inputName << ") {" << std::endl;
+    std::cout << "Side effects" << std::endl;
+    SubtreeCollector<RegConstraint> reg_collector;
+    reg_collector.Run(evi.VI->operands);
+    for(auto& reg : reg_collector.collected){
+    print_topology(std::cout, reg, 5, [&](Operation* op){return true;});
+//      std::cout << "reg: "<< pretty_print(*reg_collector.collected.begin()) << std::endl;
+    }
+
+    auto inputName = function_parameter_name;
+    os << "bool " << evi.generated_name << "(std::vector<uint8_t> " << inputName << ") {" << std::endl;
 
     std::vector<InputCheck> checks;
-    DCNodeExtractor decNodes;
-    std::vector<std::string> boolCheckNames;
-    vi->Traverse(decNodes);
+    SubtreeCollector<DecodeCondition> dc_collector;
+    dc_collector.Run(vi->operands);
+    auto decNodes = dc_collector.collected;
 
-    auto x= std::find_if(decNodes.DecodeConditions.begin(), decNodes.DecodeConditions.end(), [&](DecodeCondition* dc) {
+
+    std::vector<std::string> boolCheckNames;
+
+    auto x= std::find_if(decNodes.begin(), decNodes.end(), [&](DecodeCondition* dc) {
       auto rhs = dynamic_cast<circ::Extract *>(dc->operands[1]);
       return rhs->high_bit_exc == 120;
     });
-    if(x == decNodes.DecodeConditions.end()){
+    if(x == decNodes.end()){
       //throw
       std::cout << "big error" << "didn't find last element" << std::endl;
     }
@@ -168,7 +160,7 @@ void DisassemblerPrinter::printVerifyInstructions() {
       os << "\tif(" <<inputName << ".size() != " << ceil(rhs->low_bit_inc/8.0) << ") { " << std::endl << "\t\treturn false; " << std::endl << "\t}" << std::endl;
     }
 
-    for(auto& decOp : decNodes.DecodeConditions){
+    for(auto& decOp : decNodes){
       auto lhs = dynamic_cast<circ::Constant *>(decOp->operands[0]);
       auto rhs = dynamic_cast<circ::Extract *>(decOp->operands[1]);
 
@@ -199,16 +191,41 @@ void DisassemblerPrinter::printVerifyInstructions() {
     }
     os << ";" << std::endl;
     os << "}" << std::endl;
+    return;
+}
+
+
+
+void DisassemblerPrinter::print_file(){
+  SubtreeCollector<VerifyInstruction> sc;
+  auto VIs = sc.Run(circuit.get()->operands[0]).collected;
+  for(auto& vi: VIs){
+    extractedVIs.push_back(ExtractedVI(vi, "generated_decoder_prefix_" + std::to_string(vi->id())));
   }
 
-  return;
-}
-void DisassemblerPrinter::printCanCircuitDecode(){
+  os << "#pragma once" << std::endl;
 
+
+  for(auto& evi : extractedVIs){
+    print_decoder_func(evi);
+  }
+
+  print_circuit_decoder();
 }
-void DisassemblerPrinter::print_file(){
-  printVerifyInstructions();
-};
+void DisassemblerPrinter::print_circuit_decoder(){
+  //create function here
+    //TODO Give circuit a proper name and safe it somewhere
+    os << "bool circuit_decoder(" << function_parameter_name << ") {" << std::endl;
+    os << "\treturn ";
+    for(ulong i = 0; i < extractedVIs.size(); i++){
+      os << extractedVIs[i].generated_name << "(" << function_parameter_name << ")";
+      if(i != extractedVIs.size() - 1){
+        os << " && ";
+      }
+    }
+    os << ";" << std::endl;
+    os << "}" << std::endl;
+}
 
 
 }  // namespace circ::disassm

@@ -18,24 +18,33 @@ namespace circ::disassm{
     uint high; // same as low, but exclusive
   };
 
+  struct ExtractedVI{
+    ExtractedVI(VerifyInstruction* VI, std::string name): VI(VI), generated_name(name){}
+    VerifyInstruction* VI;
+    std::string generated_name;
+  };
+
   class DisassemblerPrinter{
+    /*
+     * Eventually needs two different files, one for header and one for body?
+     */
    public: DisassemblerPrinter(const circ::CircuitPtr & circ) : circuit(circ), os(std::cout){}
     void print_file(); // TODO remove os from constructor?, no this whole class should be just functions
 
 
     //TODO Create functions which exports names of generated functions
+  private:
 
-   private:
-    const std::string CIRCUITOUS_DECODER_NAME_PREFIX = "circ__";
+    const std::string circuitous_decoder_name_prefix = "circ__";
+    const std::string function_parameter_name = "input";
 
     const circ::CircuitPtr & circuit;
     std::ostream& os;
-    std::vector<VerifyInstruction*> extractedVIs;
+    std::vector<ExtractedVI> extractedVIs;
 
-    void printVerifyInstructions();
-    void printCanCircuitDecode();
-    void print_give_context_id_which_can_decode();
-    void print_can_context_decode(int context_id);
+    void print_func_signatures();
+    void print_decoder_func(ExtractedVI evi);
+    void print_circuit_decoder();
 
     std::string reserve_name(std::string preferred_name, bool prefix = true);
     std::vector<std::string> used_generated_names;
