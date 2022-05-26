@@ -57,7 +57,7 @@ def log_error(what):
 def log_info(what):
     print("[ > ]", what)
 
-def check_retcode(pipes, component : str):
+def check_retcode(pipes, component):
     try:
         out, err = pipes.communicate(timeout = 45)
     except subprocess.TimeoutExpired:
