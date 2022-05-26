@@ -286,7 +286,7 @@ namespace circ::run
             {
                 auto str = data.substr(i, 2);
                 auto val = llvm::APInt(8, str, 16);
-                this->store(addr + offset, val);
+                this->memory.store(addr + offset, val);
                 ++offset;
             }
         }
@@ -330,7 +330,8 @@ namespace circ::run
         void init()
         {
             parent_t::init();
-            init_notify<Advice, OutputRegister, OutputErrorFlag, OutputTimestamp, Memory>();
+            init_notify< Advice, OutputRegister, OutputErrorFlag, OutputTimestamp,
+                         circ::Memory >();
         }
 
 

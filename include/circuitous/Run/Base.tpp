@@ -2,26 +2,6 @@
  * Copyright (c) 2020-2021 Trail of Bits, Inc.
  */
 
-auto HasMemory::deconstruct(const llvm::APInt &value) -> Parsed
-{
-    auto extractor = [](auto thing, auto from, auto size) -> llvm::APInt {
-        return thing.extractBits(size, from);
-    };
-    check(value.getBitWidth() == irops::memory::size(hint_size));
-    return irops::memory::parse< llvm::APInt >(value, extractor, hint_size);
-}
-
-llvm::APInt HasMemory::construct(const Parsed &parsed)
-{
-    llvm::APInt out { irops::memory::size(hint_size), 0, false };
-    auto inserter_ = [&](auto thing, auto from, auto size) {
-        check(size == thing.getBitWidth());
-        out.insertBits(thing, from);
-    };
-    irops::memory::construct(parsed, inserter_);
-    return out;
-}
-
 template<typename S>
 void Base_<S>::SetNodeVal(Operation *op, const value_type &val)
 {
@@ -195,7 +175,7 @@ void Base_<S>::set_input_state(const trace::Entry &in)
     }
 
     self()._dbg << "Loading memory hints:\n";
-    for (auto hint : circuit->attr<Memory>()) {
+    for (auto hint : circuit->attr<circ::Memory>()) {
         if (auto val = in.get_mem_hint(std::to_string(hint->mem_idx))) {
             self()._dbg << "Setting memory: " << hint->mem_idx << std::endl;
             self().SetNodeVal(hint, *val);
