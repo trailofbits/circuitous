@@ -28,6 +28,9 @@ add_circuitous_library( lifter
     Decoder.cpp
     Instruction.cpp
     Remill.cpp
+    ShadowMat.cpp
+    Shadows.cpp
+    Components/Decoder.cpp
   LINK_LIBS
     circuitous::dbg
     circuitous::fuzz
