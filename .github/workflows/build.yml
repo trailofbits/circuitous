@@ -179,7 +179,7 @@ jobs:
         retention-days: 30
 
   pre-release:
-      if: github.event.pull_request.merged == true && github.ref == 'master'
+      if: github.event.pull_request.merged == true && github.ref == 'refs/heads/master'
       name: "Pre Release"
       runs-on: ubuntu-20.04
       needs: build_linux
