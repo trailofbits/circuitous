@@ -6,12 +6,13 @@ add_headers( Util CIRCUITOUS_UTIL_HEADERS
   FixedString.hpp
   InstructionBytes.hpp
   LLVMUtil.hpp
-  Warnings.hpp
   Overloads.hpp
   Parser.hpp
   StrongType.hpp
   TypeList.hpp
+  TypeTraits.hpp
   UseDef.hpp
+  Warnings.hpp
 )
 
 add_circuitous_header_library( util
