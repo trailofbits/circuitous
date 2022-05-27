@@ -175,7 +175,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: circuitous-${{ matrix.image.name }}-${{ matrix.image.tag }}
-        path: ${{ steps.paths.outputs.build }}/package/
+        path: ${{ steps.paths.outputs.build }}/circuitous/package/
         retention-days: 30
 
   pre-release:
