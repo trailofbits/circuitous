@@ -1,36 +1,40 @@
 [![Build](https://github.com/trailofbits/circuitous/actions/workflows/build.yml/badge.svg)](https://github.com/trailofbits/circuitous/actions/workflows/build.yml)
 
-# Installation
+## Build
+Build of circuitous follows the traditional, modern `cmake` build process.
+The simplest way to build and install the project is to use premade presets that take care of downloading all dependencies.
+Dependencies of circuitous are managed by `vcpkg` manifest file.
+Before building one need to specify environment variables `CXX_COMMON_ROOT` and `VCPKG_ROOT` that point to folders of pre-downloaded [vcpkg](https://github.com/microsoft/vcpkg) and [cxx-common](https://github.com/lifting-bits/cxx-common/tree/port-files) or
+run `scripts/build/setup.sh` to download and setup these dependencies automatically.
 
-Install `remill` and `cxx-common`. Then use the same process here, e.g. something like:
-```
-mkdir build && cd build
-cmake -DVCPKG_ROOT=/path/to/vckpg \
-      -DVCPKG_TARGET_TRIPLET=your-triplet \
-      -Dremill_DIR=/path/to/remill/install/lib/cmake/remill \
-      ..
-make
-```
-
-Using `cmake preset` requires to have variables `VCPKG_ROOT` `remill_DIR` in the environment:
+Depending on your system, use `linux` or `osx` preset.  To make `debug` build use `deb` presets:
 
 ```
-cmake --preset ninja-multi-osx-cxx-common
-cmake --build --preset ninja-multi-cxx-common-release
+# configure project
+cmake --preset ninja-cxx-common-x64-osx-rel
+
+# build project
+cmake --build builds/ninja-cxx-common-x64-osx-rel
+
+# install project
+cmake --build builds/ninja-cxx-common-x64-osx-rel --target install
 ```
 
-### Docker image
+## Development build
 
-To build via Docker run, specify the architecture, base Ubuntu image and LLVM version. For example, to build `circuitous` linking against LLVM 12 on Ubuntu 20.04 on AMD64 do:
+If you want to use your own prebuilt dependencies, project presets allow you to configure the build.
+For example, if you have prebuild `llvm`, can be from `cxx-common` package, you can specify `CMAKE_PREFIX_PATH` to point to `LLVMConfig.cmake` folder.  For example:
 
-```shell
-ARCH=amd64; UBUNTU_VERSION=20.04; LLVM=12; \
-   docker build . \
-   -t circuitous-llvm${LLVM}-ubuntu${UBUNTU_VERSION}-${ARCH} \
-   -f Dockerfile \
-   --build-arg UBUNTU_VERSION=${UBUNTU_VERSION} \
-   --build-arg ARCH=${ARCH} \
-   --build-arg LLVM_VERSION=${LLVM}
+```
+CMAKE_PREFIX_PATH=${CXX_COMMON_ROOT}/installed/x64-linux-rel/share/:${CMAKE_PREFIX_PATH}
+```
+
+Then use presets with prefix `ninja-cxx-common-system-llvm` and your desired triplet. Similarly, to build with system remill use presets prefixed `ninja-system-remill`.
+
+# Testing
+
+```
+ctest --preset ninja-osx-cxx-common-test
 ```
 
 # Usage
