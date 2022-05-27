@@ -23,7 +23,7 @@ cmake --build builds/ninja-cxx-common-x64-osx-rel --target install
 ## Development build
 
 If you want to use your own prebuilt dependencies, project presets allow you to configure the build.
-For example, if you have prebuild `llvm`, can be from `cxx-common` package, you can specify `CMAKE_PREFIX_PATH` to point to `LLVMConfig.cmake` folder.  For example:
+For example, if you have prebuilt `llvm`, can be from `cxx-common` package, you can specify `CMAKE_PREFIX_PATH` to point to `LLVMConfig.cmake` folder.  For example:
 
 ```
 CMAKE_PREFIX_PATH=${CXX_COMMON_ROOT}/installed/x64-linux-rel/share/:${CMAKE_PREFIX_PATH}
@@ -34,7 +34,7 @@ Then use presets with prefix `ninja-cxx-common-system-llvm` and your desired tri
 ## Testing
 
 ```
-ctest --preset ninja-osx-cxx-common-test
+ctest  --test-dir ./builds/ninja-cxx-common-x64-osx-rel
 ```
 
 ## Dependencies
