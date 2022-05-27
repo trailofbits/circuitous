@@ -10,6 +10,9 @@
     "cxx-common-llvm-14"
   ],
   "features": {
+    "system-remill": {
+      "description": "Build with system remill"
+    },
     "system-llvm": {
       "description": "Build with system llvm",
       "dependencies": [
