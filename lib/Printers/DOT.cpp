@@ -89,8 +89,9 @@ namespace circ::dot
 {
     struct Printer : UniqueVisitor<Printer> {
         using value_map_t = std::unordered_map<Operation *, std::string>;
-        explicit Printer(std::ostream &os_, const value_map_t &vals)
-            : os(os_), node_values(vals) {}
+        using highlight_names_t = std::vector<std::string>;
+        explicit Printer(std::ostream &os_, const value_map_t &vals, const highlight_names_t &highlight_nodes)
+            : os(os_), node_values(vals), highlight_nodes(highlight_nodes) {}
 
 
         std::string Operand(Operation *of, std::size_t i) {
@@ -113,14 +114,11 @@ namespace circ::dot
         }
 
         void Node(Operation *op) {
-
-            if (auto lop = dynamic_cast<Add *>(op)) {
-                os << NodeID(op) << " [fillcolor=red;style=filled;label = " << '"'
-                    << "{ " << AsID(NodeID(op)) << " " << op->name();
-            } else {
-                os << NodeID(op) << " [label = " << '"'
-                    << "{ " << AsID(NodeID(op)) << " " << op->name();
+            os << NodeID(op) << "[";
+            if(should_highlight(op)) {
+                os << "fillcolor=red;style=filled;";
             }
+            os << "label = \" { " << AsID(NodeID(op)) << " " << op->name();
             if (node_values.count(op)) {
                 os << " " << node_values.find(op)->second << " ";
             }
@@ -165,6 +163,17 @@ namespace circ::dot
 
         std::ostream &os;
         const value_map_t &node_values;
+
+       private:
+          highlight_names_t highlight_nodes;
+
+          bool should_highlight(Operation* op){
+            auto case_insensitive_cmp = [](const std::string& str1, const std::string& str2){ return str1.size() == str2.size() && std::equal(str1.begin(), str1.end(), str2.begin(), [](auto a, auto b){return std::tolower(a)==std::tolower(b);}); };
+            auto remove_suffixes = [](const std::string& s) { return s.substr(0, s.find("."));};
+            auto target = remove_suffixes(op->name());
+            auto highlight = std::find_if(highlight_nodes.begin(), highlight_nodes.end(), [&](std::string hl) {return case_insensitive_cmp(hl, target);} ) != highlight_nodes.end();
+            return highlight;
+          }
     };
 
 } // namespace circ::dot
@@ -172,9 +181,9 @@ namespace circ::dot
 namespace circ
 {
     void print_dot(std::ostream &os, Circuit *circuit,
-                  const std::unordered_map<Operation *, std::string> &node_values)
+                  const std::unordered_map<Operation *, std::string> &node_values, const std::vector<std::string> &highlights = std::vector<std::string>())
     {
-      circ::dot::Printer dot_os(os, node_values);
+      circ::dot::Printer dot_os(os, node_values, highlights);
       dot_os.visit(circuit);
     }
 } // namespace circ
