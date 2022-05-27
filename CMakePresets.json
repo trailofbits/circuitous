@@ -37,6 +37,15 @@
         }
     },
     {
+        "name": "system-remill",
+        "hidden": true,
+        "description": "Configure with system remill",
+        "cacheVariables": {
+            "VCPKG_MANIFEST_FEATURES": "system-remill",
+            "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "ON"
+        }
+    },
+    {
         "name": "cxx-common-llvm-14",
         "hidden": true,
         "description": "Configure with cxx-common llvm-14 port",
@@ -99,6 +108,7 @@
             "VCPKG_OVERLAY_PORTS": "$env{CXX_COMMON_ROOT}/ports"
         }
     },
+
     {
         "name": "ninja-cxx-common-x64-osx-rel",
         "binaryDir": "${sourceDir}/builds/${presetName}",
@@ -109,7 +119,7 @@
     {
         "name": "ninja-cxx-common--x64-osx-deb",
         "binaryDir": "${sourceDir}/builds/${presetName}",
-        "displayName": "Ninja release with cxx-common",
+        "displayName": "Ninja debug with cxx-common",
         "description": "Configure with cxx-common toolchain for x64-osx-deb",
         "inherits": [ "debug", "x64-osx-deb", "cxx-common-llvm-14" ]
     },
@@ -127,6 +137,7 @@
         "description": "Configure with cxx-common toolchain for x64-linux-deb",
         "inherits": [ "debug", "x64-linux-deb", "cxx-common-llvm-14" ]
     },
+
     {
         "name": "ninja-cxx-common-system-llvm-x64-linux-rel",
         "binaryDir": "${sourceDir}/builds/${presetName}",
@@ -135,16 +146,9 @@
         "inherits": [ "release", "x64-linux-rel", "system-llvm" ]
     },
     {
-        "name": "ninja-cxx-common-system-llvm-x64-osx-deb",
-        "binaryDir": "${sourceDir}/builds/${presetName}",
-        "displayName": "Ninja osx debug with cxx-common",
-        "description": "Configure with cxx-common toolchain for x64-osx-deb with system llvm",
-        "inherits": [ "debug", "x64-osx-deb", "system-llvm" ]
-    },
-    {
         "name": "ninja-cxx-common-system-llvm-x64-linux-deb",
         "binaryDir": "${sourceDir}/builds/${presetName}",
-        "displayName": "Ninja linux release with cxx-common",
+        "displayName": "Ninja linux debug with cxx-common",
         "description": "Configure with cxx-common toolchain for x64-linux-deb with system llvm",
         "inherits": [ "debug", "x64-linux-deb", "system-llvm" ]
     },
@@ -155,6 +159,43 @@
         "description": "Configure with cxx-common toolchain for x64-osx-rel with system llvm",
         "inherits": [ "release", "x64-osx-rel", "system-llvm" ]
     },
+    {
+        "name": "ninja-cxx-common-system-llvm-x64-osx-deb",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja osx debug with cxx-common",
+        "description": "Configure with cxx-common toolchain for x64-osx-deb with system llvm",
+        "inherits": [ "debug", "x64-osx-deb", "system-llvm" ]
+    },
+
+    {
+        "name": "ninja-system-remill-x64-linux-rel",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja linux release with system-remill",
+        "description": "Configure for x64-linux-rel with system remill",
+        "inherits": [ "release", "x64-linux-rel", "system-remill" ]
+    },
+    {
+        "name": "ninja-system-remill-x64-linux-deb",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja linux debug with system remill",
+        "description": "Configure for x64-linux-deb with system remill",
+        "inherits": [ "debug", "x64-linux-deb", "system-remill" ]
+    },
+    {
+        "name": "ninja-system-remill-x64-osx-rel",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja osx release with system remill",
+        "description": "Configure for x64-osx-rel with system remill",
+        "inherits": [ "release", "x64-osx-rel", "system-remill" ]
+    },
+    {
+        "name": "ninja-system-remill-x64-osx-deb",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja osx debug with system remill",
+        "description": "Configure for x64-osx-deb with system remill",
+        "inherits": [ "debug", "x64-osx-deb", "system-remill" ]
+    },
+
     {
         "name": "ninja-multi-osx-cxx-common",
         "inherits": [ "ninja-multi-cxx-common" ],
