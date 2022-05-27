@@ -31,11 +31,29 @@ CMAKE_PREFIX_PATH=${CXX_COMMON_ROOT}/installed/x64-linux-rel/share/:${CMAKE_PREF
 
 Then use presets with prefix `ninja-cxx-common-system-llvm` and your desired triplet. Similarly, to build with system remill use presets prefixed `ninja-system-remill`.
 
-# Testing
+## Testing
 
 ```
 ctest --preset ninja-osx-cxx-common-test
 ```
+
+## Dependencies
+
+| Name | Version |
+| ---- | ------- |
+| [Git](https://git-scm.com/) | Latest |
+| [CMake](https://cmake.org/) | 3.23+ |
+| [Clang](http://clang.llvm.org/) | 12+ |
+| [ccache](https://ccache.dev/) | Latest |
+| [cxx-common](https://github.com/lifting-bits/cxx-common) | 0.2.6 |
+| [llvm](https://github.com/lifting-bits/cxx-common) | 14+ |
+| [remill](https://github.com/lifting-bits/remill) | Latest |
+| [gap](https://github.com/lifting-bits/gap) | Latest |
+| [doctest](https://github.com/doctest/doctest) | 2.4.8+ |
+| [spdlog](https://github.com/gabime/spdlog) | 1.10.0 |
+
+For python dependencies see `requirements.txt` and for c++ `vcpkg.json`.
+
 
 # Usage
 
