@@ -65,13 +65,13 @@
         }
     },
     {
-        "name": "x64-osx-deb",
+        "name": "x64-osx",
         "hidden": true,
-        "description": "Configure with x64-osx-deb triplet",
+        "description": "Configure with x64-osx triplet",
         "inherits": "cxx-common",
         "cacheVariables": {
-            "VCPKG_TARGET_TRIPLET": "x64-osx-deb",
-            "VCPKG_HOST_TRIPLET": "x64-osx-deb"
+            "VCPKG_TARGET_TRIPLET": "x64-osx",
+            "VCPKG_HOST_TRIPLET": "x64-osx"
         }
     },
     {
@@ -85,27 +85,13 @@
         }
     },
     {
-        "name": "x64-linux-deb",
+        "name": "x64-linux",
         "hidden": true,
-        "description": "Configure with x64-linux-deb triplet",
+        "description": "Configure with x64-linux triplet",
         "inherits": "cxx-common",
         "cacheVariables": {
-            "VCPKG_TARGET_TRIPLET": "x64-linux-deb",
-            "VCPKG_HOST_TRIPLET": "x64-linux-deb"
-        }
-    },
-    {
-        "name": "ninja-multi-cxx-common",
-        "hidden": true,
-        "inherits": [ "cxx-common-llvm-14" ],
-        "binaryDir": "${sourceDir}/builds/${presetName}",
-        "generator": "Ninja Multi-Config",
-        "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
-        "installDir": "${sourceDir}/install",
-        "cacheVariables": {
-            "CMAKE_CONFIGURATION_TYPES": "Release;RelWithDebInfo;Debug",
-            "VCPKG_OVERLAY_TRIPLETS": "$env{CXX_COMMON_ROOT}/triplets",
-            "VCPKG_OVERLAY_PORTS": "$env{CXX_COMMON_ROOT}/ports"
+            "VCPKG_TARGET_TRIPLET": "x64-linux",
+            "VCPKG_HOST_TRIPLET": "x64-linux"
         }
     },
 
@@ -117,11 +103,11 @@
         "inherits": [ "release", "x64-osx-rel", "cxx-common-llvm-14" ]
     },
     {
-        "name": "ninja-cxx-common--x64-osx-deb",
+        "name": "ninja-cxx-common-x64-osx-deb",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja debug with cxx-common",
-        "description": "Configure with cxx-common toolchain for x64-osx-deb",
-        "inherits": [ "debug", "x64-osx-deb", "cxx-common-llvm-14" ]
+        "description": "Configure with cxx-common toolchain for x64-osx",
+        "inherits": [ "debug", "x64-osx", "cxx-common-llvm-14" ]
     },
     {
         "name": "ninja-cxx-common-x64-linux-rel",
@@ -134,8 +120,8 @@
         "name": "ninja-cxx-common-x64-linux-deb",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja debug with cxx-common",
-        "description": "Configure with cxx-common toolchain for x64-linux-deb",
-        "inherits": [ "debug", "x64-linux-deb", "cxx-common-llvm-14" ]
+        "description": "Configure with cxx-common toolchain for x64-linux",
+        "inherits": [ "debug", "x64-linux", "cxx-common-llvm-14" ]
     },
 
     {
@@ -149,8 +135,8 @@
         "name": "ninja-cxx-common-system-llvm-x64-linux-deb",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja linux debug with cxx-common",
-        "description": "Configure with cxx-common toolchain for x64-linux-deb with system llvm",
-        "inherits": [ "debug", "x64-linux-deb", "system-llvm" ]
+        "description": "Configure with cxx-common toolchain for x64-linux with system llvm",
+        "inherits": [ "debug", "x64-linux", "system-llvm" ]
     },
     {
         "name": "ninja-cxx-common-system-llvm-x64-osx-rel",
@@ -163,8 +149,8 @@
         "name": "ninja-cxx-common-system-llvm-x64-osx-deb",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja osx debug with cxx-common",
-        "description": "Configure with cxx-common toolchain for x64-osx-deb with system llvm",
-        "inherits": [ "debug", "x64-osx-deb", "system-llvm" ]
+        "description": "Configure with cxx-common toolchain for x64-osx with system llvm",
+        "inherits": [ "debug", "x64-osx", "system-llvm" ]
     },
 
     {
@@ -178,8 +164,8 @@
         "name": "ninja-system-remill-x64-linux-deb",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja linux debug with system remill",
-        "description": "Configure for x64-linux-deb with system remill",
-        "inherits": [ "debug", "x64-linux-deb", "system-remill" ]
+        "description": "Configure for x64-linux with system remill",
+        "inherits": [ "debug", "x64-linux", "system-remill" ]
     },
     {
         "name": "ninja-system-remill-x64-osx-rel",
@@ -192,63 +178,52 @@
         "name": "ninja-system-remill-x64-osx-deb",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja osx debug with system remill",
-        "description": "Configure for x64-osx-deb with system remill",
-        "inherits": [ "debug", "x64-osx-deb", "system-remill" ]
-    },
-
-    {
-        "name": "ninja-multi-osx-cxx-common",
-        "inherits": [ "ninja-multi-cxx-common" ],
-        "displayName": "Ninja Multi-Config osx with cxx-common",
-        "description": "Configure with cxx-common toolchain for x64-osx",
-        "cacheVariables": {
-            "VCPKG_TARGET_TRIPLET": "x64-osx",
-            "VCPKG_HOST_TRIPLET": "x64-osx"
-        }
-    },
-    {
-        "name": "ninja-multi-linux-cxx-common",
-        "inherits": [ "ninja-multi-cxx-common" ],
-        "displayName": "Ninja Multi-Config linux with cxx-common",
-        "description": "Configure with cxx-common toolchain for x64-linux",
-        "cacheVariables": {
-            "VCPKG_TARGET_TRIPLET": "x64-linux",
-            "VCPKG_HOST_TRIPLET": "x64-linux"
-        }
+        "description": "Configure for x64-osx with system remill",
+        "inherits": [ "debug", "x64-osx", "system-remill" ]
     }
   ],
   "buildPresets": [
     {
-        "name": "ninja-osx-cxx-common-rel",
-        "configurePreset": "ninja-multi-osx-cxx-common",
-        "displayName": "Build osx-release with cxx-common",
-        "configuration": "Release"
+        "name": "ninja-cxx-common-osx-rel",
+        "configurePreset": "ninja-cxx-common-x64-osx-rel",
+        "displayName": "Build osx-release with cxx-common"
     },
     {
-        "name": "ninja-osx-cxx-common-deb",
-        "configurePreset": "ninja-multi-osx-cxx-common",
-        "displayName": "Build osx-debug with cxx-common",
-        "configuration": "Debug"
+        "name": "ninja-cxx-common-osx-deb",
+        "configurePreset": "ninja-cxx-common-x64-osx-deb",
+        "displayName": "Build osx-debug with cxx-common"
     },
     {
-        "name": "ninja-linux-cxx-common-rel",
-        "configurePreset": "ninja-multi-linux-cxx-common",
-        "displayName": "Build linux-release with cxx-common",
-        "configuration": "Release"
+        "name": "ninja-cxx-common-linux-rel",
+        "configurePreset": "ninja-cxx-common-x64-linux-rel",
+        "displayName": "Build linux-release with cxx-common"
     },
     {
-        "name": "ninja-linux-cxx-common-deb",
-        "configurePreset": "ninja-multi-linux-cxx-common",
-        "displayName": "Build linux-debug with cxx-common",
-        "configuration": "Debug"
+        "name": "ninja-cxx-common-linux-deb",
+        "configurePreset": "ninja-cxx-common-x64-linux-deb",
+        "displayName": "Build linux-debug with cxx-common"
     }
   ],
   "testPresets": [
     {
-        "name": "ninja-osx-cxx-common-test",
+        "name": "ninja-cxx-common-osx-deb-test",
         "displayName": "Test osx with cxx-common config",
-        "configurePreset": "ninja-multi-osx-cxx-common",
-        "configuration": "Debug"
+        "configurePreset": "ninja-cxx-common-x64-osx-deb"
+    },
+    {
+        "name": "ninja-cxx-common-osx-rel-test",
+        "displayName": "Test osx with cxx-common config",
+        "configurePreset": "ninja-cxx-common-x64-osx-rel"
+    },
+    {
+        "name": "ninja-cxx-common-linux-deb-test",
+        "displayName": "Test linux with cxx-common config",
+        "configurePreset": "ninja-cxx-common-x64-linux-deb"
+    },
+    {
+        "name": "ninja-cxx-common-linux-rel-test",
+        "displayName": "Test linux with cxx-common config",
+        "configurePreset": "ninja-cxx-common-x64-linux-rel"
     }
   ]
 }
