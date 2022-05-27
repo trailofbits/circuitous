@@ -33,6 +33,7 @@ builds/*
 install/*
 test/full/tmp*
 vcpkg_installed/*
+_external/*
 
 *.o
 *.ll
