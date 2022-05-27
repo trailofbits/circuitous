@@ -14,10 +14,10 @@ Depending on your system, use `linux` or `osx` preset.  To make `debug` build us
 cmake --preset ninja-cxx-common-x64-osx-rel
 
 # build project
-cmake --build builds/ninja-cxx-common-x64-osx-rel
+cmake --build --preset ninja-cxx-common-osx-rel
 
 # install project
-cmake --build builds/ninja-cxx-common-x64-osx-rel --target install
+cmake --build --preset ninja-cxx-common-osx-rel --target install
 ```
 
 ## Development build
@@ -34,7 +34,7 @@ Then use presets with prefix `ninja-cxx-common-system-llvm` and your desired tri
 ## Testing
 
 ```
-ctest  --test-dir ./builds/ninja-cxx-common-x64-osx-rel
+ctest --preset ninja-cxx-common-osx-deb-test
 ```
 
 ## Dependencies
