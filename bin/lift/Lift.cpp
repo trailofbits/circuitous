@@ -40,6 +40,7 @@ DEFINE_string(smt_in, "", "Path to the input smt2 file.");
 
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
+DEFINE_string(dot_highlight, "", "Names of node-type to highlight in DOT file");
 DEFINE_string(smt_out, "", "Path to the output smt2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
 DEFINE_string(verilog_out, "", "Path to the output verilog file.");
@@ -107,8 +108,8 @@ using output_options = circ::tl::TL<
     circ::cli::BitBlastSmtOut,
     circ::cli::VerilogOut,
     circ::cli::IROut,
-    circ::cli::DotOut
->;
+    circ::cli::DotOut,
+    circ::cli::DotHighlight>;
 using remill_config_options = circ::tl::TL<
     circ::cli::Arch,
     circ::cli::OS
@@ -161,9 +162,14 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
     if (auto json_out = cli.template get< cli::JsonOut >())
         circ::print_circuit(*json_out, circ::print_json, circuit.get());
 
-    if (auto dot_out = cli.template get< cli::DotOut >())
+    if (auto dot_out = cli.template get< cli::DotOut >()) {
+        std::vector<std::string> highlights;
+        if (auto input_colors = cli.template get<cli::DotHighlight>()) {
+            highlights = std::move(*input_colors);
+        }
         circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
-                            std::unordered_map< circ::Operation *, std::string>{});
+                            std::unordered_map<circ::Operation *, std::string>{}, highlights);
+    }
 
     if (auto verilog_out = cli.template get< cli::VerilogOut >())
         circ::print_circuit(*verilog_out, circ::print_verilog, "circuit", circuit.get());

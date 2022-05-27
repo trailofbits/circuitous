@@ -67,6 +67,14 @@ namespace circ::cli
         static inline const auto opt = circ::CmdOpt("--dot-out", false);
     };
 
+    struct DotHighlight : circ::DefaultCmdOpt, Arity< -1 >, Implies<DotOut, DotHighlight>
+    {
+        static inline const auto opt = circ::CmdOpt("--dot-highlight", false);
+        static std::optional< std::vector< std::string > > cast(std::vector< std::string > tokens) {
+            return tokens;
+        }
+    };
+
     struct BitBlastStats : circ::DefaultCmdOpt, PathArg
     {
         static inline const auto opt = circ::CmdOpt("--bitblast-stats", false);
