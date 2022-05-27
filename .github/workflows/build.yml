@@ -165,3 +165,43 @@ jobs:
       working-directory: ${{ steps.paths.outputs.build }}/circuitous
       run: |
         ctest --output-on-failure
+
+    - name: Package circuitous
+      working-directory: ${{ steps.paths.outputs.build }}/circuitous
+      run: |
+        cpack -G TXZ --config ./CPackConfig.cmake
+
+    - name: Upload circuitous package artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: circuitous-${{ matrix.image.name }}-${{ matrix.image.tag }}
+          path: ${{ steps.paths.outputs.build }}/package/
+          retention-days: 30
+
+  pre-release:
+      if: github.event_name == 'pull' && github.ref == 'master'
+      name: "Pre Release"
+      runs-on: ubuntu-20.04
+      needs: build_linux
+
+      steps:
+        - name: Clone the vast repository
+          uses: actions/checkout@v3
+          with:
+            path: ./circuitous
+            fetch-depth: 1
+
+        - name: "Download build artifacts"
+          id: download
+          uses: actions/download-artifact@v3
+
+         - name: "Publish Pre-Release"
+           uses: "marvinpinto/action-automatic-releases@latest"
+           with:
+            repo_token: "${{ secrets.GITHUB_TOKEN }}"
+            automatic_release_tag: "latest"
+            prerelease: true
+            title: "Development Build"
+            files: |
+              ./circuitous/LICENSE
+              ${{steps.download.outputs.download-path}}/circuitous-*/*.tar.xz
