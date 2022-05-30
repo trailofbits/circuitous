@@ -11,7 +11,7 @@ namespace circ::disassm{
    * Mirrors decoding condition which consts of comparing a CONST to an extract node
    */
   struct InputCheck{
-    InputCheck(std::string bits, uint low, uint high) : bits(std::string(bits)), low(low), high(high){}
+    InputCheck(const std::string &bits, uint low, uint high) : bits(std::string(bits)), low(low), high(high){}
     // bits are in stored in reverse order, so _least_ significant bit is at bits[|bits|]
     std::string bits; // currently, a string to make easier conversion from CONSTANTS, and it's easy to use in the generator
     uint low; // the first bit from a potential _encoding_ that will be checked against bits[0]
@@ -19,7 +19,7 @@ namespace circ::disassm{
   };
 
   struct ExtractedVI{
-    ExtractedVI(VerifyInstruction* VI, std::string name): VI(VI), generated_name(name){}
+    ExtractedVI(VerifyInstruction* VI, std::string name): VI(VI), generated_name(std::move(name)){}
     VerifyInstruction* VI;
     std::string generated_name;
   };
@@ -49,15 +49,14 @@ namespace circ::disassm{
     std::ostream& os;
     std::vector<ExtractedVI> extractedVIs;
 
-    void print_decoder_func(ExtractedVI evi);
+    void print_decoder_func(const ExtractedVI &evi);
     void print_circuit_decoder();
 
-    std::vector<std::string> used_generated_names;
-    void printInputCheck(InputCheck check, std::string name_output_var,
-                         std::string name_fuc_input);
+    void printInputCheck(InputCheck check, const std::string &name_output_var,
+                         const std::string &name_fuc_input);
     std::string array_index(uint index);
 
-    std::string swap_endian(std::string input);
+    const std::string & swap_endian(std::string input);
 
     void flip_bits_to_dont_care(const PaddingBits& padding, const std::string& variable_name);
 

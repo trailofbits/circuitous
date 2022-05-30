@@ -108,13 +108,13 @@ std::string DisassemblerPrinter::reserve_name(std::string preferred_name,
   }
 }
 
-std::string DisassemblerPrinter::swap_endian(std::string input) {
+const std::string & DisassemblerPrinter::swap_endian(std::string input) {
   return std::string(input.rbegin(), input.rend());
 }
 
 void DisassemblerPrinter::printInputCheck(InputCheck check,
-                                          std::string name_output_var,
-                                          std::string name_fuc_input) {
+                                          const std::string &name_output_var,
+                                          const std::string &name_fuc_input) {
     // for check all relevant bytes for check
     // relevant bytes are from indices floor(x)/8 to floor(y)/8
     auto startByte = check.low / 8;  //integer div <==> floor(x)/8
@@ -214,7 +214,7 @@ void DisassemblerPrinter::flip_bits_to_dont_care(const PaddingBits& padding, con
 }
 
 
-void DisassemblerPrinter::print_decoder_func(ExtractedVI evi) {
+void DisassemblerPrinter::print_decoder_func(const ExtractedVI &evi) {
   auto vi = evi.VI;
   std::cout << "// Generating function for VI: " << vi->id()
             << " name: " << evi.generated_name << std::endl;
