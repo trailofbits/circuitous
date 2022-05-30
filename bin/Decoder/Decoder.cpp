@@ -20,7 +20,7 @@
 
 #include <circuitous/Lifter/CircuitSmithy.hpp>
 
-#include <circuitous/Disassembler/DisassemblerPrinter.h>
+#include <circuitous/Disassembler/DisassemblerPrinter.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <gflags/gflags.h>

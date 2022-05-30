@@ -1,5 +1,5 @@
-#include <circuitous/Disassembler/DisassemblerPrinter.h>
-#include <circuitous/Printers.h>
+#include <circuitous/Disassembler/DisassemblerPrinter.hpp>
+#include <circuitous/Printers.hpp>
 
 #include <circuitous/IR/Shapes.hpp>
 #include <circuitous/IR/Visitors.hpp>
@@ -13,13 +13,18 @@ const char dont_care_bit_neg = '0';  // negated value of don't care
 namespace CodeGen {
 std::string default_index = std::string(4, ' ');
 std::string castToUint8(std::string expr) {
-  return "(uint8_t) " + expr + "";
+  return "(uint8_t) " + expr;
 }
+
+std::string wrap_in_quotes(const std::string& s){
+    return "(" + s + ")";
+}
+
 std::string xorInputWithNegatedTarget(std::string variable,
                                       std::string targetVal, uint pad_msb,
                                       uint pad_lsb) {
-  return variable + " ^~(0b" + std::string(pad_msb, dont_care_bit_neg) +
-         targetVal + std::string(pad_lsb, dont_care_bit_neg) + ")";
+  return wrap_in_quotes(variable + " ^~(0b" + std::string(pad_msb, dont_care_bit_neg) +
+         targetVal + std::string(pad_lsb, dont_care_bit_neg) + ")");
 }
 
 std::string prepareInputByte(std::string variable, std::string targetVal,
@@ -35,7 +40,7 @@ std::string getTarget(uint pad_msb, uint pad_lsb) {
 }
 
 std::string compare(std::string lhs, std::string rhs) {
-  return "(" + lhs + " == " + rhs + ")";
+  return wrap_in_quotes(lhs + " == " + rhs);
 }
 
 std::string assignStatement(std::string lhs, std::string rhs) {
@@ -70,7 +75,7 @@ std::string orExpressions(std::vector<std::string> exprs) {
 
 // assumes rhs_bits is a string of consecutive bits with 0b in the string
 std::string bitwiseOR(std::string lhs, std::string rhs_bits) {
-  return lhs + " | (0b" + rhs_bits + ")";
+  return lhs + " | " + wrap_in_quotes("0b" + rhs_bits);
 }
 
 std::string returnStatement(std::string expr) {
@@ -86,129 +91,114 @@ std::string DisassemblerPrinter::array_index(uint index) {
   return "[" + std::to_string(index) + "]";
 }
 
-std::string DisassemblerPrinter::reserve_name(std::string preferred_name,
-                                              bool prefix) {
-  std::string candidate = preferred_name;
-  if (prefix) {
-    candidate = circuitous_decoder_name_prefix + preferred_name;
-  }
 
-  if (std::ranges::none_of(this->used_generated_names, [&](std::string s) {
-        return s == preferred_name;
-      })) {
-    this->used_generated_names.push_back(candidate);
-    return candidate;
-  } else {
-    /*
-     * We do not care about the quality of randomness, and ideally we would
-     * change this to some word bases system instead of numbers
-     */
-    auto new_candidate = candidate + std::to_string(rand() % 10);
-    return reserve_name(new_candidate, false);
-  }
-}
-
-std::string DisassemblerPrinter::swap_endian(std::string input) {
+std::string DisassemblerPrinter::swap_endian(const std::string &input) {
   return std::string(input.rbegin(), input.rend());
 }
 
 void DisassemblerPrinter::printInputCheck(InputCheck check,
-                                          std::string name_output_var,
-                                          std::string name_fuc_input) {
-  // for check all relevant bytes for check
-  // relevant bytes are from indices floor(x)/8 to floor(y)/8
-  auto startByte = check.low / 8;  //integer div <==> floor(x)/8
-  auto endByte = (check.high - 1) / 8;  //exclusive so need to subtract one
+                                          const std::string &name_output_var,
+                                          const std::string &name_fuc_input) {
+    // for check all relevant bytes for check
+    // relevant bytes are from indices floor(x)/8 to floor(y)/8
+    auto startByte = check.low / 8;  //integer div <==> floor(x)/8
+    auto endByte = (check.high - 1) / 8;  //exclusive so need to subtract one
 
-  /*
-   * we will need the check.bits in little endian otherwise we reverse the _entire_ constant
-   * but, we will need to swap the endianness on byte level, so keep this like now
-   */
-  auto littleEndianBits = std::string(check.bits.begin(), check.bits.end());
-  os << "\t // Generating for const: " << littleEndianBits
-     << " start: " << std::to_string(check.low)
-     << " end: " << std::to_string(check.high) << std::endl;
+    /*
+     * we will need the check.bits in little endian otherwise we reverse the _entire_ constant
+     * but, we will need to swap the endianness on byte level, so keep this like now
+     */
+    auto littleEndianBits = std::string(check.bits.begin(), check.bits.end());
+    os << "\t // Generating for const: " << littleEndianBits
+       << " start: " << std::to_string(check.low)
+       << " end: " << std::to_string(check.high) << std::endl;
 
-  // local variable inside a function that we control, so this won't give conflicts
-  auto input_name = name_output_var + "_copy";
-  os << CodeGen::declareStatement(
+    // local variable inside a function that we control, so this won't give conflicts
+    auto input_name = name_output_var + "_copy";
+    os << CodeGen::declareStatement(
             "auto", input_name, "std::vector<uint8_t>(" + name_fuc_input + ")")
-     << std::endl;
+       << std::endl;
 
-  uint padding_len_lsb = (check.low % 8);
-  uint padding_len_msb = (8 - (check.high % 8)) % 8;
+    uint8_t padding_len_lsb = (check.low % 8);
+    uint8_t padding_len_msb = (8 - (check.high % 8)) % 8;
 
-  // flip the bits that are allowed to be anything to a special constant that we do not check for at the end
-  flip_lsb_to_dont_care(padding_len_lsb, input_name + array_index(startByte));
-  flip_msb_to_dont_care(padding_len_msb, input_name + array_index(endByte));
+    print_padding(startByte, endByte, input_name, padding_len_lsb, padding_len_msb);
 
-  // if start==end ==> only 1 byte to check
-  if (startByte == endByte) {
-    auto consideredInputByte = input_name + array_index(startByte);
-    auto preparedInput = CodeGen::prepareInputByte(
-        consideredInputByte, swap_endian(littleEndianBits), padding_len_msb,
-        padding_len_lsb);
-    auto compExpression = CodeGen::compare(
-        preparedInput, CodeGen::getTarget(padding_len_msb, padding_len_lsb));
-    os << CodeGen::declareStatement("bool", name_output_var, compExpression);
-  } else {  // check spans multiple bytes
-    std::vector<std::string> exprs;
-    for (auto currByte = startByte; currByte <= endByte; currByte++) {
-      auto considerdByte = input_name + array_index(currByte);
-      auto bytesDeepIntoExtract = currByte - startByte - 1;
-      auto startOffset = 8 - padding_len_lsb + (bytesDeepIntoExtract * 8);
+    // if start==end ==> only 1 byte to check
+    if (startByte == endByte) {
+        auto consideredInputByte = input_name + array_index(startByte);
+        auto preparedInput = CodeGen::prepareInputByte(
+                consideredInputByte, swap_endian(littleEndianBits), padding_len_msb,
+                padding_len_lsb);
+        auto compExpression = CodeGen::compare(
+                preparedInput, CodeGen::getTarget(padding_len_msb, padding_len_lsb));
+        os << CodeGen::declareStatement("bool", name_output_var, compExpression);
+    } else {  // check spans multiple bytes
+        std::vector<std::string> exprs;
+        for (auto currByte = startByte; currByte <= endByte; currByte++) {
+            auto considerdByte = input_name + array_index(currByte);
+            auto bytesDeepIntoExtract = currByte - startByte - 1;
+            auto startOffset = 8 - padding_len_lsb + (bytesDeepIntoExtract * 8);
 
-      std::string target = "";
-      std::string preparedInput = "";
-      if (currByte == startByte) {
-        auto checkBytes =
-            swap_endian(littleEndianBits.substr(0, 8 - padding_len_lsb));
-        preparedInput = CodeGen::prepareInputByte(considerdByte, checkBytes, 0, padding_len_lsb);
-        target = CodeGen::getTarget(0, padding_len_lsb);
-      } else if (currByte != startByte && currByte != endByte) {
-        auto checkBytes =
-            swap_endian(littleEndianBits.substr(startOffset, startOffset + 8));
-        preparedInput =
-            CodeGen::prepareInputByte(considerdByte, checkBytes, 0, 0);
-        target = CodeGen::getTarget(0, 0);
-      } else {  //currByte == endByte
-        auto checkBytes = swap_endian(
-            littleEndianBits.substr(startOffset, 8 - padding_len_msb));
-        preparedInput = CodeGen::prepareInputByte(considerdByte, checkBytes, padding_len_msb, 0);
-        target = CodeGen::getTarget(padding_len_msb, 0);
-      }
+            std::string target = "";
+            std::string preparedInput = "";
+            if (currByte == startByte) {
+                auto checkBytes =
+                        swap_endian(littleEndianBits.substr(0, 8 - padding_len_lsb));
+                preparedInput = CodeGen::prepareInputByte(considerdByte, checkBytes, 0,
+                                                          padding_len_lsb);
+                target = CodeGen::getTarget(0, padding_len_lsb);
+            } else if (currByte != startByte && currByte != endByte) {
+                auto checkBytes =
+                        swap_endian(littleEndianBits.substr(startOffset, startOffset + 8));
+                preparedInput =
+                        CodeGen::prepareInputByte(considerdByte, checkBytes, 0, 0);
+                target = CodeGen::getTarget(0, 0);
+            } else {  //currByte == endByte
+                auto checkBytes = swap_endian(
+                        littleEndianBits.substr(startOffset, 8 - padding_len_msb));
+                preparedInput = CodeGen::prepareInputByte(considerdByte, checkBytes,
+                                                          padding_len_msb, 0);
+                target = CodeGen::getTarget(padding_len_msb, 0);
+            }
 
-      auto compExpression = CodeGen::compare(preparedInput, target);
-      exprs.push_back(compExpression);
+            auto compExpression = CodeGen::compare(preparedInput, target);
+            exprs.push_back(compExpression);
+        }
+
+        os << CodeGen::declareStatement("bool", name_output_var,
+                                        CodeGen::andExpressions(exprs));
     }
-
-    os << CodeGen::declareStatement("bool", name_output_var,
-                                    CodeGen::andExpressions(exprs));
-  }
 }
-void DisassemblerPrinter::flip_msb_to_dont_care(uint len_msb_to_flip,
-                                                std::string variable_name) {
-  if (len_msb_to_flip != 0) {
-    auto bitTarget = std::string(len_msb_to_flip, dont_care_bit) +
-                     std::string(8 - len_msb_to_flip, dont_care_bit_neg);
+
+void DisassemblerPrinter::print_padding(uint startByte, uint endByte,
+                                        const std::string& input_name,
+                                        uint8_t padding_len_lsb, uint8_t padding_len_msb) {
+    if(startByte == endByte){
+        flip_bits_to_dont_care(PaddingBits(padding_len_lsb, padding_len_msb), input_name + array_index(startByte));
+    }
+    else{
+        if(padding_len_lsb > 0){
+            flip_bits_to_dont_care(PaddingBits(padding_len_lsb, 0), input_name + array_index(startByte));
+        }
+        if(padding_len_msb > 0){
+            flip_bits_to_dont_care(PaddingBits(0, padding_len_msb), input_name + array_index(endByte));
+        }
+    }
+}
+
+void DisassemblerPrinter::flip_bits_to_dont_care(const PaddingBits& padding, const std::string& variable_name) {
+    auto bitTarget = std::string(padding.msb, dont_care_bit)
+            + std::string(8 - padding.lsb - padding.msb, dont_care_bit_neg)
+            + std::string(padding.lsb, dont_care_bit);
+
     os << CodeGen::assignStatement(variable_name,
                                    CodeGen::bitwiseOR(variable_name, bitTarget))
-       << std::endl;
-  }
-}
-void DisassemblerPrinter::flip_lsb_to_dont_care(uint len_lsb_to_flip,
-                                                const std::string variable) {
-  if (len_lsb_to_flip != 0) {
-    auto bitTarget = std::string(8 - len_lsb_to_flip, dont_care_bit_neg) +
-                     std::string(len_lsb_to_flip, dont_care_bit);
-    os << CodeGen::assignStatement(variable,
-                                   CodeGen::bitwiseOR(variable, bitTarget))
-       << std::endl;
-  }
+                                   << std::endl;
 }
 
 
-void DisassemblerPrinter::print_decoder_func(ExtractedVI evi) {
+void DisassemblerPrinter::print_decoder_func(const ExtractedVI &evi) {
   auto vi = evi.VI;
   std::cout << "// Generating function for VI: " << vi->id()
             << " name: " << evi.generated_name << std::endl;
@@ -249,7 +239,7 @@ void DisassemblerPrinter::print_decoder_func(ExtractedVI evi) {
           "Decoder Condition does not consist of const//extract");
     }
     if (rhs->high_bit_exc != 120) {
-      auto ret_val_name = reserve_name(std::to_string(decOp->id()));
+      auto ret_val_name = "dc_" + std::to_string(decOp->id());
       boolCheckNames.push_back(ret_val_name);
       this->printInputCheck(
           InputCheck(lhs->bits, rhs->low_bit_inc, rhs->high_bit_exc),
@@ -274,7 +264,10 @@ void DisassemblerPrinter::print_file() {
         vi, "generated_decoder_prefix_" + std::to_string(vi->id())));
   }
 
-  os << "#pragma once" << std::endl << std::endl;
+//    os << "#pragma once" << std::endl << std::endl;
+    os << "#inlcude <vector>" << std::endl << std::endl;
+    os << "#include <stdint.h>" << std::endl << std::endl;
+
   for (auto &evi : extractedVIs) {
     print_decoder_func(evi);
     os << std::endl;

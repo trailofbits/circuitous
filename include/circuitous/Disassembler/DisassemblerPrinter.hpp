@@ -11,7 +11,7 @@ namespace circ::disassm{
    * Mirrors decoding condition which consts of comparing a CONST to an extract node
    */
   struct InputCheck{
-    InputCheck(std::string bits, uint low, uint high) : bits(std::string(bits)), low(low), high(high){}
+    InputCheck(const std::string &bits, uint low, uint high) : bits(std::string(bits)), low(low), high(high){}
     // bits are in stored in reverse order, so _least_ significant bit is at bits[|bits|]
     std::string bits; // currently, a string to make easier conversion from CONSTANTS, and it's easy to use in the generator
     uint low; // the first bit from a potential _encoding_ that will be checked against bits[0]
@@ -19,9 +19,15 @@ namespace circ::disassm{
   };
 
   struct ExtractedVI{
-    ExtractedVI(VerifyInstruction* VI, std::string name): VI(VI), generated_name(name){}
+    ExtractedVI(VerifyInstruction* VI, std::string name): VI(VI), generated_name(std::move(name)){}
     VerifyInstruction* VI;
     std::string generated_name;
+  };
+
+  struct PaddingBits{
+      PaddingBits(uint8_t lsb, uint8_t msb) : lsb(lsb), msb(msb){};
+      uint8_t lsb;
+      uint8_t msb;
   };
 
   class DisassemblerPrinter{
@@ -43,19 +49,20 @@ namespace circ::disassm{
     std::ostream& os;
     std::vector<ExtractedVI> extractedVIs;
 
-    void print_decoder_func(ExtractedVI evi);
+    void print_decoder_func(const ExtractedVI &evi);
     void print_circuit_decoder();
 
-    std::vector<std::string> used_generated_names;
-    void printInputCheck(InputCheck check, std::string name_output_var,
-                         std::string name_fuc_input);
+    void printInputCheck(InputCheck check, const std::string &name_output_var,
+                         const std::string &name_fuc_input);
     std::string array_index(uint index);
 
-    std::string swap_endian(std::string input);
+    std::string swap_endian(const std::string &input);
 
-    void flip_lsb_to_dont_care(uint len_lsb_to_flip,
-                               const std::string variable);
-    void flip_msb_to_dont_care(uint len_msb_to_flip, std::string variable_name);
+    void flip_bits_to_dont_care(const PaddingBits& padding, const std::string& variable_name);
+
+      void print_padding(uint startByte, uint endByte,
+                         const std::basic_string<char, std::char_traits<char>, std::allocator<char>> &input_name,
+                         uint8_t padding_len_lsb, uint8_t padding_len_msb);
   };
 }
 
