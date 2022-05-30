@@ -24,6 +24,12 @@ namespace circ::disassm{
     std::string generated_name;
   };
 
+  struct PaddingBits{
+      PaddingBits(uint8_t lsb, uint8_t msb) : lsb(lsb), msb(msb){};
+      uint8_t lsb;
+      uint8_t msb;
+  };
+
   class DisassemblerPrinter{
     /*
      * Eventually needs two different files, one for header and one for body?
@@ -53,9 +59,11 @@ namespace circ::disassm{
 
     std::string swap_endian(std::string input);
 
-    void flip_lsb_to_dont_care(uint len_lsb_to_flip,
-                               const std::string variable);
-    void flip_msb_to_dont_care(uint len_msb_to_flip, std::string variable_name);
+    void flip_bits_to_dont_care(const PaddingBits& padding, const std::string& variable_name);
+
+      void print_padding(uint startByte, uint endByte,
+                         const std::basic_string<char, std::char_traits<char>, std::allocator<char>> &input_name,
+                         uint8_t padding_len_lsb, uint8_t padding_len_msb);
   };
 }
 
