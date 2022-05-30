@@ -20,7 +20,7 @@
 
 #include <circuitous/Lifter/CircuitSmithy.hpp>
 
-#include <circuitous/Disassembler/DisassemblerPrinter.h>
+#include <circuitous/Disassembler/DisassemblerPrinter.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <gflags/gflags.h>
@@ -43,6 +43,8 @@ DEFINE_string(smt_in, "", "Path to the input smt2 file.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(dot_highlight, "", "Names of node-type to highlight in DOT file");
+DEFINE_string(dec_out, "", "Decoder emitter.");
+
 DEFINE_string(smt_out, "", "Path to the output smt2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
 DEFINE_string(verilog_out, "", "Path to the output verilog file.");
@@ -160,6 +162,11 @@ circ::CircuitPtr get_input_circuit(auto &cli)
 
 void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 {
+    if (auto dec_out = cli.template get< cli::DecoderOut >()){
+        auto decGen = circ::disassm::DisassemblerPrinter(circuit);
+        decGen.print_file();
+    }
+
     if (auto ir_out = cli.template get< cli::IROut >())
         circuit->serialize(*ir_out);
 
