@@ -11,7 +11,21 @@
   ],
   "features": {
     "system-remill": {
-      "description": "Build with system remill"
+      "description": "Build with system remill",
+      "dependencies": [
+        {
+          "name": "xed",
+          "default-features": false
+        },
+        {
+          "name": "glog",
+          "default-features": false
+        },
+        {
+          "name": "z3",
+          "default-features": false
+        }
+      ]
     },
     "system-llvm": {
       "description": "Build with system llvm",
