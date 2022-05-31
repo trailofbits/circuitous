@@ -163,12 +163,12 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
         circ::print_circuit(*json_out, circ::print_json, circuit.get());
 
     if (auto dot_out = cli.template get< cli::DotOut >()) {
-        std::vector<std::string> highlights;
-        if (auto input_colors = cli.template get<cli::DotHighlight>()) {
+        std::vector< std::string > highlights;
+        if (auto input_colors = cli.template get< cli::DotHighlight >()) {
             highlights = std::move(*input_colors);
         }
         circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
-                            std::unordered_map<circ::Operation *, std::string>{}, highlights);
+                             std::unordered_map< circ::Operation *, std::string >{}, highlights);
     }
 
     if (auto verilog_out = cli.template get< cli::VerilogOut >())
