@@ -89,7 +89,7 @@ namespace circ::dot
 {
     struct Printer : UniqueVisitor<Printer> {
         using value_map_t = std::unordered_map<Operation *, std::string>;
-        using highlight_names_t = std::vector<std::string>;
+        using highlight_names_t = std::vector< std::string >;
         explicit Printer(std::ostream &os_, const value_map_t &vals, const highlight_names_t &highlight_nodes)
             : os(os_), node_values(vals), highlight_nodes(highlight_nodes) {}
 
@@ -187,7 +187,7 @@ namespace circ::dot
 namespace circ
 {
     void print_dot(std::ostream &os, Circuit *circuit,
-                  const std::unordered_map<Operation *, std::string> &node_values, const std::vector<std::string> &highlights = std::vector<std::string>())
+                  const std::unordered_map<Operation *, std::string> &node_values, const std::vector< std::string > &highlights = std::vector< std::string >())
     {
       circ::dot::Printer dot_os(os, node_values, highlights);
       dot_os.visit(circuit);
