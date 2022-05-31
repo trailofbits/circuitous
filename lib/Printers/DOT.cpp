@@ -168,11 +168,17 @@ namespace circ::dot
           highlight_names_t highlight_nodes;
 
           bool should_highlight(Operation* op){
-            auto case_insensitive_cmp = [](const std::string& str1, const std::string& str2){ return str1.size() == str2.size() && std::equal(str1.begin(), str1.end(), str2.begin(), [](auto a, auto b){return std::tolower(a)==std::tolower(b);}); };
-            auto remove_suffixes = [](const std::string& s) { return s.substr(0, s.find("."));};
-            auto target = remove_suffixes(op->name());
-            auto highlight = std::find_if(highlight_nodes.begin(), highlight_nodes.end(), [&](std::string hl) {return case_insensitive_cmp(hl, target);} ) != highlight_nodes.end();
-            return highlight;
+              auto is_prefix_case_insensitive = [](const std::string &str1, const std::string &str2) {
+                  return std::equal(str1.begin(), str1.end(), str2.begin(), [](auto a, auto b) {
+                      return std::tolower(a) == std::tolower(b);
+                  });
+              };
+;
+              auto highlight = std::find_if(highlight_nodes.begin(), highlight_nodes.end(),
+                                            [&](const std::string& hl) {
+                                                return is_prefix_case_insensitive(hl, op->name());
+                                            }) != highlight_nodes.end();
+              return highlight;
           }
     };
 
