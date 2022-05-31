@@ -338,12 +338,12 @@ namespace circ
             if (!parsed.template present< L >())
                 return {};
 
-            auto missing = this->parent_t::filter_missing< Rhs ... >();
+            auto missing = this->parent_t::filter_missing< Rhs ... >(parsed);
             if (missing.size() == 0)
                 return {};
 
             std::stringstream ss;
-            ss << L::primary << " implies " << parent_t::format_opts(missing);
+            ss << L::opt.primary << " implies " << parent_t::format_opts(missing);
             return std::make_optional( ss.str() );
         }
     };
