@@ -214,6 +214,11 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
         return {};
     }
 
+    if (v.check(implies< cli::DotHighlight, cli::DotOut >()).process_errors(yield_err))
+    {
+        return {};
+    }
+
     if (v.validate_leaves( OptsList{} ).process_errors(yield_err))
         return {};
 

@@ -67,7 +67,7 @@ namespace circ::cli
         static inline const auto opt = circ::CmdOpt("--dot-out", false);
     };
 
-    struct DotHighlight : circ::DefaultCmdOpt, Arity< -1 >, Implies<DotOut, DotHighlight>
+    struct DotHighlight : circ::DefaultCmdOpt, Arity< -1 >
     {
         static inline const auto opt = circ::CmdOpt("--dot-highlight", false);
         static std::optional< std::vector< std::string > > cast(std::vector< std::string > tokens) {
