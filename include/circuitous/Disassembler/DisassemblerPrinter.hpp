@@ -56,7 +56,7 @@ namespace circ::disassm{
                          const std::string &name_fuc_input);
     std::string array_index(uint index);
 
-    const std::string & swap_endian(std::string input);
+    std::string swap_endian(const std::string &input);
 
     void flip_bits_to_dont_care(const PaddingBits& padding, const std::string& variable_name);
 

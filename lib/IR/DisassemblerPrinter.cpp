@@ -1,5 +1,5 @@
-#include <circuitous/Disassembler/DisassemblerPrinter.h>
-#include <circuitous/Printers.h>
+#include <circuitous/Disassembler/DisassemblerPrinter.hpp>
+#include <circuitous/Printers.hpp>
 
 #include <circuitous/IR/Shapes.hpp>
 #include <circuitous/IR/Visitors.hpp>
@@ -86,29 +86,8 @@ std::string DisassemblerPrinter::array_index(uint index) {
   return "[" + std::to_string(index) + "]";
 }
 
-std::string DisassemblerPrinter::reserve_name(std::string preferred_name,
-                                              bool prefix) {
-  std::string candidate = preferred_name;
-  if (prefix) {
-    candidate = circuitous_decoder_name_prefix + preferred_name;
-  }
 
-  if (std::ranges::none_of(this->used_generated_names, [&](std::string s) {
-        return s == preferred_name;
-      })) {
-    this->used_generated_names.push_back(candidate);
-    return candidate;
-  } else {
-    /*
-     * We do not care about the quality of randomness, and ideally we would
-     * change this to some word bases system instead of numbers
-     */
-    auto new_candidate = candidate + std::to_string(rand() % 10);
-    return reserve_name(new_candidate, false);
-  }
-}
-
-const std::string & DisassemblerPrinter::swap_endian(std::string input) {
+std::string DisassemblerPrinter::swap_endian(const std::string &input) {
   return std::string(input.rbegin(), input.rend());
 }
 
@@ -191,7 +170,7 @@ void DisassemblerPrinter::print_padding(uint startByte, uint endByte,
                                         const std::string& input_name,
                                         uint8_t padding_len_lsb, uint8_t padding_len_msb) {
     if(startByte == endByte){
-        flip_bits_to_dont_care(PaddingBits(padding_len_lsb, padding_len_msb), input_name);
+        flip_bits_to_dont_care(PaddingBits(padding_len_lsb, padding_len_msb), input_name + array_index(startByte));
     }
     else{
         if(padding_len_lsb > 0){
@@ -255,11 +234,7 @@ void DisassemblerPrinter::print_decoder_func(const ExtractedVI &evi) {
           "Decoder Condition does not consist of const//extract");
     }
     if (rhs->high_bit_exc != 120) {
-<<<<<<< HEAD
-      auto ret_val_name = reserve_name(std::to_string(decOp->id()));
-=======
       auto ret_val_name = "dc_" + std::to_string(decOp->id());
->>>>>>> dec: Merge lsb/msb bit padding functions.
       boolCheckNames.push_back(ret_val_name);
       this->printInputCheck(
           InputCheck(lhs->bits, rhs->low_bit_inc, rhs->high_bit_exc),
@@ -284,7 +259,10 @@ void DisassemblerPrinter::print_file() {
         vi, "generated_decoder_prefix_" + std::to_string(vi->id())));
   }
 
-  os << "#pragma once" << std::endl << std::endl;
+//    os << "#pragma once" << std::endl << std::endl;
+    os << "#inlcude <vector>" << std::endl << std::endl;
+    os << "#include <stdint.h>" << std::endl << std::endl;
+
   for (auto &evi : extractedVIs) {
     print_decoder_func(evi);
     os << std::endl;

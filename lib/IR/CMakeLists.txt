@@ -15,6 +15,7 @@ add_headers( IR CIRCUITOUS_IR_HEADERS
   Trace.hpp
   Verify.hpp
   Visitors.hpp
+  ../Disassembler/DisassemblerPrinter.hpp
 )
 
 add_circuitous_library( ir
@@ -23,6 +24,7 @@ add_circuitous_library( ir
     Serialize.cpp
     SMT.cpp
     Verify.cpp
+    DisassemblerPrinter.cpp
   HEADERS
     ${CIRCUITOUS_IR_HEADERS}
 )
