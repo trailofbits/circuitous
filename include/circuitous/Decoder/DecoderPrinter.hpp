@@ -6,7 +6,7 @@
 #include <vector>
 #include <string>
 
-namespace circ::disassm{
+namespace circ::decoder{
   /*
    * Mirrors decoding condition which consts of comparing a CONST to an extract node
    */
@@ -30,12 +30,12 @@ namespace circ::disassm{
       uint8_t msb;
   };
 
-  class DisassemblerPrinter{
+  class DecoderPrinter{
     /*
      * Eventually needs two different files, one for header and one for body?
      */
-    public: DisassemblerPrinter(const circ::CircuitPtr & circ) : circuit(circ), os(std::cout){}
-    public: DisassemblerPrinter(const circ::CircuitPtr & circ, std::ostream& os) : circuit(circ), os(os){}
+    public: DecoderPrinter(const circ::CircuitPtr & circ) : circuit(circ), os(std::cout){}
+    public: DecoderPrinter(const circ::CircuitPtr & circ, std::ostream& os) : circuit(circ), os(os){}
     void print_file(); // TODO remove os from constructor?, no this whole class should be just functions
 
 

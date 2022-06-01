@@ -20,7 +20,7 @@
 
 #include <circuitous/Lifter/CircuitSmithy.hpp>
 
-#include <circuitous/Disassembler/DisassemblerPrinter.hpp>
+#include <circuitous/Decoder/DecoderPrinter.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <gflags/gflags.h>
@@ -164,7 +164,7 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 {
     if (auto dec_out = cli.template get< cli:: DecoderOut >()){
         std::ofstream o(*dec_out);
-        auto decGen = circ::disassm::DisassemblerPrinter(circuit, o);
+        auto decGen = circ::decoder::DecoderPrinter(circuit, o);
         decGen.print_file();
     }
 
