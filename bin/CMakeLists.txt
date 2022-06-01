@@ -3,3 +3,4 @@
 add_subdirectory( lift )
 add_subdirectory( run )
 add_subdirectory( seed )
+add_subdirectory( decoder )
