@@ -13,13 +13,18 @@ const char dont_care_bit_neg = '0';  // negated value of don't care
 namespace CodeGen {
 std::string default_index = std::string(4, ' ');
 std::string castToUint8(std::string expr) {
-  return "(uint8_t) " + expr + "";
+  return "(uint8_t) " + expr;
 }
+
+std::string wrap_in_quotes(const std::string& s){
+    return "(" + s + ")";
+}
+
 std::string xorInputWithNegatedTarget(std::string variable,
                                       std::string targetVal, uint pad_msb,
                                       uint pad_lsb) {
-  return variable + " ^~(0b" + std::string(pad_msb, dont_care_bit_neg) +
-         targetVal + std::string(pad_lsb, dont_care_bit_neg) + ")";
+  return wrap_in_quotes(variable + " ^~(0b" + std::string(pad_msb, dont_care_bit_neg) +
+         targetVal + std::string(pad_lsb, dont_care_bit_neg) + ")");
 }
 
 std::string prepareInputByte(std::string variable, std::string targetVal,
@@ -35,7 +40,7 @@ std::string getTarget(uint pad_msb, uint pad_lsb) {
 }
 
 std::string compare(std::string lhs, std::string rhs) {
-  return "(" + lhs + " == " + rhs + ")";
+  return wrap_in_quotes(lhs + " == " + rhs);
 }
 
 std::string assignStatement(std::string lhs, std::string rhs) {
@@ -70,7 +75,7 @@ std::string orExpressions(std::vector<std::string> exprs) {
 
 // assumes rhs_bits is a string of consecutive bits with 0b in the string
 std::string bitwiseOR(std::string lhs, std::string rhs_bits) {
-  return lhs + " | (0b" + rhs_bits + ")";
+  return lhs + " | " + wrap_in_quotes("0b" + rhs_bits);
 }
 
 std::string returnStatement(std::string expr) {
