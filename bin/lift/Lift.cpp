@@ -162,8 +162,9 @@ circ::CircuitPtr get_input_circuit(auto &cli)
 
 void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 {
-    if (auto dec_out = cli.template get< cli::DecoderOut >()){
-        auto decGen = circ::disassm::DisassemblerPrinter(circuit);
+    if (auto dec_out = cli.template get< cli:: DecoderOut >()){
+        std::ofstream o(*dec_out);
+        auto decGen = circ::disassm::DisassemblerPrinter(circuit, o);
         decGen.print_file();
     }
 
