@@ -90,7 +90,7 @@ namespace circ::dot
     struct Printer : UniqueVisitor<Printer> {
         using value_map_t = std::unordered_map<Operation *, std::string>;
         using highlight_names_t = std::vector< std::string >;
-        using opt_highlight_name_t = std::optional<std::reference_wrapper<std::string>>;
+        using opt_highlight_name_t = std::optional<std::string_view>;
         using color_styles_t = std::array< std::string_view, 5 >;
 
 
@@ -120,11 +120,11 @@ namespace circ::dot
             os << NodeID(op) << "[";
             auto opt_highlight_name = highlight_name_for_op( op );
             if(opt_highlight_name.has_value()) {
-                if(!node_to_color_map.contains( opt_highlight_name->get())){
-                    node_to_color_map[opt_highlight_name->get()] = color_counter % colors.size();
+                if(!node_to_color_map.contains( opt_highlight_name.value())){
+                    node_to_color_map[opt_highlight_name.value()] = color_counter % colors.size();
                     color_counter++;
                 }
-                os << colors[node_to_color_map[opt_highlight_name->get()]];
+                os << colors[node_to_color_map[opt_highlight_name.value()]];
             }
             os << "label = \" { " << AsID(NodeID(op)) << " " << op->name();
             if (node_values.count(op)) {
