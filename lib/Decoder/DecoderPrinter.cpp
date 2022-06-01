@@ -1,10 +1,10 @@
-#include <circuitous/Disassembler/DisassemblerPrinter.hpp>
+#include <circuitous/Decoder/DecoderPrinter.hpp>
 #include <circuitous/Printers.hpp>
 
 #include <circuitous/IR/Shapes.hpp>
 #include <circuitous/IR/Visitors.hpp>
 #include <cstdlib>
-namespace circ::disassm {
+namespace circ::decoder {
 
 const char dont_care_bit =
     '1';  // value that indicates a don't care inside the input_byte
@@ -87,16 +87,16 @@ std::string callFunction(std::string funcName, std::string parameters){
 }
 };  // namespace CodeGen
 
-std::string DisassemblerPrinter::array_index(uint index) {
+std::string DecoderPrinter::array_index(uint index) {
   return "[" + std::to_string(index) + "]";
 }
 
 
-std::string DisassemblerPrinter::swap_endian(const std::string &input) {
+std::string DecoderPrinter::swap_endian(const std::string &input) {
   return std::string(input.rbegin(), input.rend());
 }
 
-void DisassemblerPrinter::print_decoder_condition(InputCheck check,
+void DecoderPrinter::print_decoder_condition(InputCheck check,
                                                   const std::string &name_output_var,
                                                   const std::string &name_fuc_input) {
     // for check all relevant bytes for check
@@ -171,7 +171,7 @@ void DisassemblerPrinter::print_decoder_condition(InputCheck check,
     }
 }
 
-void DisassemblerPrinter::print_padding(uint startByte, uint endByte,
+void DecoderPrinter::print_padding(uint startByte, uint endByte,
                                         const std::string& input_name,
                                         uint8_t padding_len_lsb, uint8_t padding_len_msb) {
     if(startByte == endByte){
@@ -187,7 +187,7 @@ void DisassemblerPrinter::print_padding(uint startByte, uint endByte,
     }
 }
 
-void DisassemblerPrinter::flip_bits_to_dont_care(const PaddingBits& padding, const std::string& variable_name) {
+void DecoderPrinter::flip_bits_to_dont_care(const PaddingBits& padding, const std::string& variable_name) {
     auto bitTarget = std::string(padding.msb, dont_care_bit)
             + std::string(8 - padding.lsb - padding.msb, dont_care_bit_neg)
             + std::string(padding.lsb, dont_care_bit);
@@ -198,7 +198,7 @@ void DisassemblerPrinter::flip_bits_to_dont_care(const PaddingBits& padding, con
 }
 
 
-void DisassemblerPrinter::print_decoder_func(const ExtractedVI &evi) {
+void DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
   auto vi = evi.VI;
   std::cout << "// Generating function for VI: " << vi->id()
             << " name: " << evi.generated_name << std::endl;
@@ -256,7 +256,7 @@ void DisassemblerPrinter::print_decoder_func(const ExtractedVI &evi) {
 }
 
 
-void DisassemblerPrinter::print_file() {
+void DecoderPrinter::print_file() {
   SubtreeCollector<VerifyInstruction> sc;
   auto VIs = sc.Run(circuit.get()->operands[0]).collected;
   for (auto &vi : VIs) {
@@ -275,7 +275,7 @@ void DisassemblerPrinter::print_file() {
   print_circuit_decoder();
 }
 
-void DisassemblerPrinter::print_circuit_decoder() {
+void DecoderPrinter::print_circuit_decoder() {
   os << "bool " << circuit_decode_function_name << "(std::array<uint8_t,15> "
      << function_parameter_name << ") {" << std::endl;
 

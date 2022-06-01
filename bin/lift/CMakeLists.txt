@@ -9,5 +9,5 @@ add_circuitous_executable( lift
     circuitous::ir
     circuitous::printers
     circuitous::transforms
-    circuitous::disassembler
+    circuitous::decoder
 )
