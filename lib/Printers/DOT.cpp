@@ -90,9 +90,12 @@ namespace circ::dot
     struct Printer : UniqueVisitor<Printer> {
         using value_map_t = std::unordered_map<Operation *, std::string>;
         using highlight_names_t = std::vector< std::string >;
+        using opt_highlight_name_t = std::optional<std::reference_wrapper<std::string>>;
+        using color_styles_t = std::array< std::string_view, 5 >;
+
+
         explicit Printer(std::ostream &os_, const value_map_t &vals, const highlight_names_t &highlight_nodes)
             : os(os_), node_values(vals), highlight_nodes(highlight_nodes) {}
-
 
         std::string Operand(Operation *of, std::size_t i) {
             return NodeID(of) + ':' + NodeID(of) + std::to_string(i);
@@ -115,8 +118,13 @@ namespace circ::dot
 
         void Node(Operation *op) {
             os << NodeID(op) << "[";
-            if(should_highlight(op)) {
-                os << "fillcolor=red;style=filled;";
+            auto opt_highlight_name = highlight_name_for_op( op );
+            if(opt_highlight_name.has_value()) {
+                if(!node_to_color_map.contains( opt_highlight_name->get())){
+                    node_to_color_map[opt_highlight_name->get()] = color_counter % colors.size();
+                    color_counter++;
+                }
+                os << colors[node_to_color_map[opt_highlight_name->get()]];
             }
             os << "label = \" { " << AsID(NodeID(op)) << " " << op->name();
             if (node_values.count(op)) {
@@ -165,23 +173,32 @@ namespace circ::dot
         const value_map_t &node_values;
 
        private:
-          highlight_names_t highlight_nodes;
+        highlight_names_t highlight_nodes;
+        uint32_t color_counter = 0;
+        std::unordered_map< std::string_view, uint32_t > node_to_color_map;
+        static constexpr const color_styles_t colors = color_styles_t{
+                "fillcolor=red;fontcolor=white;style=filled;",
+                "fillcolor=yellow;fontcolor=black;style=filled;",
+                "fillcolor=green;fontcolor=black;style=filled;",
+                "fillcolor=blue;fontcolor=yellow;style=filled;",
+                "fillcolor=violet;fontcolor=white;style=filled;"
+        };
 
-          bool should_highlight(Operation* op){
-              auto is_prefix_case_insensitive = [](const std::string &str1, const std::string &str2) {
-                  return std::equal(str1.begin(), str1.end(), str2.begin(), [](auto a, auto b) {
-                      return std::tolower(a) == std::tolower(b);
-                  });
-              };
-;
-              auto highlight = std::find_if(highlight_nodes.begin(), highlight_nodes.end(),
-                                            [&](const std::string& hl) {
-                                                return is_prefix_case_insensitive(hl, op->name());
-                                            }) != highlight_nodes.end();
-              return highlight;
-          }
+        opt_highlight_name_t highlight_name_for_op(Operation *op) {
+            auto is_prefix_to_op_name = [&](const std::string &lhs) {
+                return std::equal( lhs.begin(), lhs.end(), op->name().begin(),
+                                   [](char a, char b) {
+                                       return std::tolower( a ) == std::tolower( b );
+                                   } );
+            };
+            auto highlight = std::find_if( highlight_nodes.begin(), highlight_nodes.end(),
+                                           is_prefix_to_op_name );
+            if ( highlight != highlight_nodes.end()) {
+                return opt_highlight_name_t{*highlight};
+            }
+            return std::nullopt;
+        }
     };
-
 } // namespace circ::dot
 
 namespace circ
