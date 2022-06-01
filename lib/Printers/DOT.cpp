@@ -95,7 +95,12 @@ namespace circ::dot
 
 
         explicit Printer(std::ostream &os_, const value_map_t &vals, const highlight_names_t &highlight_nodes)
-            : os(os_), node_values(vals), highlight_nodes(highlight_nodes) {}
+            : os(os_), node_values(vals), highlight_nodes(highlight_nodes) {
+            for(auto& hl: highlight_nodes){
+                node_to_color_map[hl] = color_counter % colors.size();
+                color_counter++;
+            }
+        }
 
         std::string Operand(Operation *of, std::size_t i) {
             return NodeID(of) + ':' + NodeID(of) + std::to_string(i);
@@ -118,12 +123,7 @@ namespace circ::dot
 
         void Node(Operation *op) {
             os << NodeID(op) << "[";
-            auto opt_highlight_name = highlight_name_for_op( op );
-            if(opt_highlight_name.has_value()) {
-                if(!node_to_color_map.contains( opt_highlight_name.value())){
-                    node_to_color_map[opt_highlight_name.value()] = color_counter % colors.size();
-                    color_counter++;
-                }
+            if(auto opt_highlight_name = highlight_name_for_op( op )) {
                 os << colors[node_to_color_map[opt_highlight_name.value()]];
             }
             os << "label = \" { " << AsID(NodeID(op)) << " " << op->name();
