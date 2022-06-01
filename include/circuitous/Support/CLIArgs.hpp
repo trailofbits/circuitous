@@ -74,7 +74,7 @@ namespace circ::cli
         cast(std::vector< std::string > tokens) {
             return tokens;
         }
-    }
+    };
 
     struct DecoderOut : circ::DefaultCmdOpt, PathArg
     {
