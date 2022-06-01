@@ -524,7 +524,7 @@ namespace circ
         const std::string &peek()
         {
             if (eof())
-                fail("Out of bonds read");
+                fail("Out of bounds read");
             return tokens[current];
         }
 
