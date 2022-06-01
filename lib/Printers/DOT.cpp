@@ -91,7 +91,7 @@ namespace circ::dot
         using value_map_t = std::unordered_map<Operation *, std::string>;
         using highlight_names_t = std::vector< std::string >;
         using opt_highlight_name_t = std::optional<std::string_view>;
-        using color_styles_t = std::array< std::string_view, 5 >;
+        using color_styles_t = std::array< std::string_view, 7 >;
 
 
         explicit Printer(std::ostream &os_, const value_map_t &vals, const highlight_names_t &highlight_nodes)
@@ -176,12 +176,14 @@ namespace circ::dot
         highlight_names_t highlight_nodes;
         uint32_t color_counter = 0;
         std::unordered_map< std::string_view, uint32_t > node_to_color_map;
-        static constexpr const color_styles_t colors = color_styles_t{
+        static constexpr const color_styles_t colors = {
                 "fillcolor=red;fontcolor=white;style=filled;",
                 "fillcolor=yellow;fontcolor=black;style=filled;",
                 "fillcolor=green;fontcolor=black;style=filled;",
                 "fillcolor=blue;fontcolor=yellow;style=filled;",
-                "fillcolor=violet;fontcolor=white;style=filled;"
+                "fillcolor=violet;fontcolor=white;style=filled;",
+                "fillcolor=gray;fontcolor=white;style=filled;",
+                "fillcolor=orange;fontcolor=black;style=filled;"
         };
 
         opt_highlight_name_t highlight_name_for_op(Operation *op) {
