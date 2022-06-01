@@ -6,7 +6,7 @@
 #include <vector>
 #include <string>
 
-namespace circ::disassm{
+namespace circ::decoder{
   /*
    * Mirrors decoding condition which consts of comparing a CONST to an extract node
    */
@@ -30,17 +30,17 @@ namespace circ::disassm{
       uint8_t msb;
   };
 
-  class DisassemblerPrinter{
+  class DecoderPrinter{
     /*
      * Eventually needs two different files, one for header and one for body?
      */
-   public: DisassemblerPrinter(const circ::CircuitPtr & circ) : circuit(circ), os(std::cout){}
+    public: DecoderPrinter(const circ::CircuitPtr & circ) : circuit(circ), os(std::cout){}
+    public: DecoderPrinter(const circ::CircuitPtr & circ, std::ostream& os) : circuit(circ), os(os){}
     void print_file(); // TODO remove os from constructor?, no this whole class should be just functions
 
 
     //TODO Create functions which exports names of generated functions
   private:
-
     const std::string circuitous_decoder_name_prefix = "circ__";
     const std::string function_parameter_name = "input";
     const std::string circuit_decode_function_name = "circuit_decode";
@@ -52,16 +52,16 @@ namespace circ::disassm{
     void print_decoder_func(const ExtractedVI &evi);
     void print_circuit_decoder();
 
-    void printInputCheck(InputCheck check, const std::string &name_output_var,
-                         const std::string &name_fuc_input);
+    void print_decoder_condition(InputCheck check, const std::string &name_output_var,
+                                 const std::string &name_fuc_input);
     std::string array_index(uint index);
 
     std::string swap_endian(const std::string &input);
 
     void flip_bits_to_dont_care(const PaddingBits& padding, const std::string& variable_name);
 
-      void print_padding(uint startByte, uint endByte,
-                         const std::basic_string<char, std::char_traits<char>, std::allocator<char>> &input_name,
+    void print_padding(uint startByte, uint endByte,
+                         const std::string &input_name,
                          uint8_t padding_len_lsb, uint8_t padding_len_msb);
   };
 }
