@@ -96,9 +96,9 @@ std::string DisassemblerPrinter::swap_endian(const std::string &input) {
   return std::string(input.rbegin(), input.rend());
 }
 
-void DisassemblerPrinter::printInputCheck(InputCheck check,
-                                          const std::string &name_output_var,
-                                          const std::string &name_fuc_input) {
+void DisassemblerPrinter::print_decoder_condition(InputCheck check,
+                                                  const std::string &name_output_var,
+                                                  const std::string &name_fuc_input) {
     // for check all relevant bytes for check
     // relevant bytes are from indices floor(x)/8 to floor(y)/8
     auto startByte = check.low / 8;  //integer div <==> floor(x)/8
@@ -116,7 +116,7 @@ void DisassemblerPrinter::printInputCheck(InputCheck check,
     // local variable inside a function that we control, so this won't give conflicts
     auto input_name = name_output_var + "_copy";
     os << CodeGen::declareStatement(
-            "auto", input_name, "std::vector<uint8_t>(" + name_fuc_input + ")")
+            "auto", input_name, "std::array<uint8_t,15>(" + name_fuc_input + ")")
        << std::endl;
 
     uint8_t padding_len_lsb = (check.low % 8);
@@ -203,7 +203,7 @@ void DisassemblerPrinter::print_decoder_func(const ExtractedVI &evi) {
   std::cout << "// Generating function for VI: " << vi->id()
             << " name: " << evi.generated_name << std::endl;
   auto inputName = function_parameter_name;
-  os << "bool " << evi.generated_name << "(std::vector<uint8_t> " << inputName
+  os << "bool " << evi.generated_name << "(std::array<uint8_t,15> " << inputName
      << ") {" << std::endl;
 
   std::vector<InputCheck> checks;
@@ -241,9 +241,9 @@ void DisassemblerPrinter::print_decoder_func(const ExtractedVI &evi) {
     if (rhs->high_bit_exc != 120) {
       auto ret_val_name = "dc_" + std::to_string(decOp->id());
       boolCheckNames.push_back(ret_val_name);
-      this->printInputCheck(
-          InputCheck(lhs->bits, rhs->low_bit_inc, rhs->high_bit_exc),
-          ret_val_name, inputName);
+        this->print_decoder_condition(
+                InputCheck( lhs->bits, rhs->low_bit_inc, rhs->high_bit_exc ),
+                ret_val_name, inputName );
       os << std::endl;
       os << std::endl;
     }
@@ -264,8 +264,7 @@ void DisassemblerPrinter::print_file() {
         vi, "generated_decoder_prefix_" + std::to_string(vi->id())));
   }
 
-//    os << "#pragma once" << std::endl << std::endl;
-    os << "#inlcude <vector>" << std::endl << std::endl;
+    os << "#include <array>" << std::endl << std::endl;
     os << "#include <stdint.h>" << std::endl << std::endl;
 
   for (auto &evi : extractedVIs) {
@@ -277,7 +276,7 @@ void DisassemblerPrinter::print_file() {
 }
 
 void DisassemblerPrinter::print_circuit_decoder() {
-  os << "bool " << circuit_decode_function_name << "(std::vector<uint8_t> "
+  os << "bool " << circuit_decode_function_name << "(std::array<uint8_t,15> "
      << function_parameter_name << ") {" << std::endl;
 
   std::vector<std::string> funcCalls;
