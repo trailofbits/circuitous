@@ -186,6 +186,9 @@ namespace circ::dot
 
         opt_highlight_name_t highlight_name_for_op(Operation *op) {
             auto is_prefix_to_op_name = [&](const std::string &lhs) {
+                if(lhs.size() > op->name().size()) {
+                    return false;
+                }
                 return std::equal( lhs.begin(), lhs.end(), op->name().begin(),
                                    [](char a, char b) {
                                        return std::tolower( a ) == std::tolower( b );
