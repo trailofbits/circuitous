@@ -47,16 +47,29 @@ namespace circ::run
 
     auto Memory::deconstruct(const llvm::APInt &value) -> Parsed
     {
-        auto extractor = [](auto thing, auto from, auto size) -> llvm::APInt {
-            return thing.extractBits(size, from);
-        };
-        check(value.getBitWidth() == irops::memory::size(hint_size));
-        return irops::memory::parse< llvm::APInt >(value, extractor, hint_size);
+        return deconstruct(value, hint_size);
     }
 
     llvm::APInt Memory::construct(const Parsed &parsed)
     {
-        llvm::APInt out { irops::memory::size(hint_size), 0, false };
+        return construct(parsed, hint_size);
+    }
+
+
+    auto Memory::deconstruct(const llvm::APInt &value, std::size_t hint_size) -> Parsed
+    {
+        uint32_t casted_hint_size = static_cast< uint32_t >(hint_size);
+        auto extractor = [](auto thing, auto from, auto size) -> llvm::APInt {
+            return thing.extractBits(size, from);
+        };
+        check(value.getBitWidth() == casted_hint_size);
+        return irops::memory::parse< llvm::APInt >(value, extractor, hint_size);
+    }
+
+    llvm::APInt Memory::construct(const Parsed &parsed, std::size_t hint_size)
+    {
+        auto mem_size = irops::memory::size(static_cast< uint32_t >(hint_size));
+        llvm::APInt out { mem_size, 0, false };
         auto inserter_ = [&](auto thing, auto from, auto size) {
             check(size == thing.getBitWidth());
             out.insertBits(thing, from);
@@ -64,6 +77,4 @@ namespace circ::run
         irops::memory::construct(parsed, inserter_);
         return out;
     }
-
-
 } // namespace circ::run
