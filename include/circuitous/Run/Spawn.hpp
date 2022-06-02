@@ -18,115 +18,6 @@
 
 namespace circ::run
 {
-    struct State
-    {
-        std::deque< Operation * > todo;
-        std::unordered_map< uint64_t, std::vector< Operation * > > waiting;
-        std::unordered_map< Operation *, uint64_t > blocked;
-
-        MemoryOrdering mem_order;
-
-        State(MemoryOrdering mem_order_) : mem_order(std::move(mem_order_)) {}
-        State(const State &) = default;
-        State(State &&) = default;
-
-        State& operator=(State) = delete;
-
-        std::string status(Operation *op)
-        {
-            std::stringstream ss;
-            ss << "[ " << blocked[op] << " / " << op->operands.size() << "]";
-            return ss.str();
-        }
-
-        auto Pop()
-        {
-            auto x = todo.front();
-            todo.pop_front();
-            return x;
-        }
-
-        auto push_todo(Operation *op)
-        {
-            if (is_one_of< InputInstructionBits, Extract, Concat, DecodeCondition >(op))
-                return todo.push_back(op);
-            return todo.push_back(op);
-        }
-
-        void Push(Operation *op)
-        {
-            if (!is_one_of<ReadConstraint, WriteConstraint>(op))
-                return push_todo(op);
-            auto mem_idx = mem_order.mem_idx(op);
-            if (*mem_idx == mem_order.allowed)
-                return push_todo(op);
-            waiting[*mem_idx].push_back(op);
-        }
-
-        // Generic notify call, allows for callback - either extra preprocessing or dbg info
-        template<typename F>
-        void notify(Operation *from, Operation *to, F &&fn)
-        {
-            _notify(to);
-            fn(from, to);
-        }
-
-        // Verbose notification for debug purposes
-        void notify_verbose(Operation *from, Operation *to)
-        {
-            auto dbg_info = [&](auto from, auto to) {
-                auto tail = [&]() -> std::string
-                {
-                    if (blocked.count(to))
-                        return std::to_string(blocked[to]);
-                    return "(unknown)";
-                }();
-
-                log_dbg() << pretty_print< false >(from) << " -- notifies -> "
-                          << pretty_print< false >(to)
-                          << "which is blocked by: [ " << tail << " / "
-                          << to->operands.size() << " ].";
-            };
-            return notify(from, to, dbg_info);
-        }
-
-        // General notify that does no extra work
-        void notify(Operation *from, Operation *to)
-        {
-            return notify_verbose(from, to);
-        }
-
-        // Implementation
-        void _notify(Operation *op)
-        {
-            auto [it, inserted] = blocked.emplace(op, op->operands.size());
-            if (it->second <= 1) {
-                Push(it->first);
-                it->second = 0;
-                return;
-            }
-            --it->second;
-        }
-
-        void notify_mem(Operation *op)
-        {
-            if (!mem_order.enable(op))
-                return;
-
-            for (auto x : waiting[mem_order.allowed])
-                Push(x);
-            waiting[mem_order.allowed].clear();
-        }
-
-        void SetNodeVal(Operation *op)
-        {
-            for (auto user : op->users)
-                notify(op, user);
-            notify_mem(op);
-        }
-
-    };
-
     template< typename Semantics >
     struct Spawn : StateOwner
     {
@@ -193,7 +84,7 @@ namespace circ::run
                 return;
             }
             this->node_state.set(op, val);
-            state.SetNodeVal(op);
+            state.notify_from(op);
         }
 
         value_type get_node_val(Operation *op) const override { return node_state.get(op); }
@@ -337,8 +228,8 @@ namespace circ::run
 
         bool Run() {
             init();
-            while (!state.todo.empty()) {
-                auto x = state.Pop();
+            while (!state.empty()) {
+                auto x = state.pop();
                 log_dbg() << "Dispatching" << pretty_print< true >(x);
                 dispatch(x);
                 if (auto r = short_circuit(x)) {
