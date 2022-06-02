@@ -74,4 +74,18 @@ namespace circ::run
 
         auto take() { return std::move(node_values); }
     };
+
+    struct StateOwner
+    {
+        virtual ~StateOwner() = default;
+
+        virtual void set_node_val(Operation *, const value_type &) = 0;
+        virtual value_type get_node_val(Operation *) const = 0;
+        virtual bool has_value(Operation *) const = 0;
+
+        virtual void store(uint64_t addr, const raw_value_type &data) = 0;
+        virtual value_type load(uint64_t addr, std::size_t size) const = 0;
+        virtual bool defined(uint64_t addr, std::size_t size) const = 0;
+    };
+
 } // namespace circ::run
