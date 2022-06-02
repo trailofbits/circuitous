@@ -4,10 +4,12 @@
 
 #pragma once
 
-#include <optional>
-
 #include <circuitous/Util/TypeList.hpp>
 
+#include <circuitous/Support/Check.hpp>
+
+#include <array>
+#include <optional>
 
 namespace circ::irops::memory {
   struct Layout {
