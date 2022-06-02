@@ -44,9 +44,9 @@ namespace circ::run
 
         memory_map_t take_memory() { return std::move(memory); }
 
-        bool defined(uint64_t addr, std::size_t size);
+        bool defined(uint64_t addr, std::size_t size) const;
 
-        value_type load(uint64_t addr, std::size_t size_);
+        value_type load(uint64_t addr, std::size_t size_) const;
         void store(uint64_t addr, raw_value_type val);
 
         using Parsed = irops::memory::Parsed< llvm::APInt >;
