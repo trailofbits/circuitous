@@ -16,7 +16,7 @@ namespace circ::run
 {
     Memory::Memory(Circuit *circuit) : hint_size(circuit->ptr_size) {}
 
-    bool Memory::defined(uint64_t addr, std::size_t size)
+    bool Memory::defined(uint64_t addr, std::size_t size) const
     {
         for (auto i = 0u; i < size; ++i)
             if (!memory.count(addr + i))
@@ -24,14 +24,14 @@ namespace circ::run
         return true;
     }
 
-    auto Memory::load(uint64_t addr, std::size_t size) -> value_type
+    auto Memory::load(uint64_t addr, std::size_t size) const -> value_type
     {
         if (!defined(addr, size))
             return {};
 
         llvm::APInt build{ static_cast< uint32_t >(size * 8), 0, false };
         for (auto i = 0u; i < size; ++i)
-            build.insertBits( memory[addr + i], i * 8 );
+            build.insertBits( memory.find(addr + i)->second, i * 8 );
 
         return build;
     }
