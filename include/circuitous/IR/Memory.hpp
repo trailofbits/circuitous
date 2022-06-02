@@ -100,7 +100,7 @@ namespace circ::irops::memory {
     parsed.apply(exec);
   }
 
-  template< typename V = llvm::Value *, typename Extractor >
+  template< typename V, typename Extractor >
   static Parsed< V > parse(V call, Extractor extract_, auto size)
   {
     auto current = 0u;
