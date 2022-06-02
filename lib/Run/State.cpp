@@ -77,4 +77,22 @@ namespace circ::run
         irops::memory::construct(parsed, inserter_);
         return out;
     }
+
+    bool NodeState::set(Operation *op, value_type value)
+    {
+        if (has_value(op))
+            return false;
+        node_values[op] = value;
+        return true;
+    }
+
+    auto NodeState::get(Operation *op) const -> value_type
+    {
+        // TODO(lukas): Yield error instead.
+        check(has_value(op), [&](){
+            return pretty_print(op) + " does not have value.";
+        });
+        return node_values.find(op)->second;
+    }
+
 } // namespace circ::run
