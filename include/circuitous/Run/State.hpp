@@ -59,4 +59,19 @@ namespace circ::run
         static llvm::APInt construct(const Parsed &parsed, std::size_t hint_size);
     };
 
+    struct NodeState
+    {
+        using node_values_t = std::unordered_map< Operation *, value_type >;
+        node_values_t node_values;
+
+        bool set(Operation *op, value_type val);
+        value_type get(Operation *op) const;
+
+        bool has_value(Operation *op) const
+        {
+            return node_values.count(op);
+        }
+
+        auto take() { return std::move(node_values); }
+    };
 } // namespace circ::run
