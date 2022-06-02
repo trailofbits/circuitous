@@ -20,6 +20,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 namespace circ
 {
     struct Circuit;
+    struct Operation;
 } // namespace circ
 
 namespace circ::run
@@ -53,6 +54,9 @@ namespace circ::run
 
         Parsed deconstruct(const llvm::APInt &value);
         llvm::APInt construct(const Parsed &parsed);
+
+        static Parsed deconstruct(const llvm::APInt &value, std::size_t hint_size);
+        static llvm::APInt construct(const Parsed &parsed, std::size_t hint_size);
     };
 
 } // namespace circ::run
