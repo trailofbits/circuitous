@@ -43,9 +43,6 @@ namespace circ::run {
   struct Inspector_ {
     using spawn_t = typename Interpreter::spawn_t;
 
-    using value_type = typename spawn_t::value_type;
-    using raw_value_type = typename spawn_t::raw_value_type;
-
     Interpreter *what;
     spawn_t *lenses;
     Circuit *circuit;
@@ -57,7 +54,7 @@ namespace circ::run {
     bool focus() { focus(what->acceptor); return lenses; }
     void focus(spawn_t *s) { lenses = s; }
     void focus(uint32_t i) {
-      focus(&(std::next(what->runners.begin(), i)->second));
+      focus(&*(std::next(what->runners.begin(), i)->second));
     }
 
 

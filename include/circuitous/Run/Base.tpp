@@ -3,43 +3,17 @@
  */
 
 template<typename S>
-void Base_<S>::SetNodeVal(Operation *op, const value_type &val)
-{
-    log_dbg() << "Assign:"
-              << pretty_print< false >(op) << ":="
-              << ((val.has_value()) ? llvm::toString(*val, 16, false) : "( no value }");
-    this->node_values[op] = val;
-}
-
-template<typename S>
-auto Base_<S>::GetNodeVal(Operation *op) const -> value_type
-{
-    auto iter{this->node_values.find(op)};
-    check(iter != this->node_values.end()) << op->name();
-    log_dbg() << "Retrieve:" << pretty_print< false >(op) << " =>> "
-              << ((iter->second) ? llvm::toString(*iter->second, 16, false) : "( no value )");
-    return iter->second;
-}
-
-template<typename S>
-void Base_<S>::visit(Operation *op)
-{
-    unreachable() << "Unhandled operation: " << op->name() << " " << op->id();
-}
-
-template<typename S>
 void OpSem<S>::visit(Constant *op)
 {
     std::string bits{op->bits.rbegin(), op->bits.rend()};
-    self().SetNodeVal(op, llvm::APInt(op->size, bits, /*radix=*/2U));
+    this->set_node_val(op, llvm::APInt(op->size, bits, /*radix=*/2U));
 }
 
 template<typename S>
 void OpSem<S>::visit(Undefined *op)
 {
-    // TODO(surovic): See visit()
-    if (!this->node_values.count(op)) {
-        self().SetNodeVal(op, this->Undef());
+    if (!this->state->has_value(op)) {
+        this->set_node_val(op, this->undef());
     }
 }
 
@@ -49,7 +23,7 @@ void OpSem<S>::visit(Extract *op)
     auto extract = [&](Extract *op) {
         auto pos{ op->low_bit_inc };
         auto num{ op->high_bit_exc - pos };
-        return self().get(op, 0)->extractBits(num, pos);
+        return this->get_node_val(op, 0)->extractBits(num, pos);
     };
     safe(op, extract);
 }
@@ -63,8 +37,8 @@ void OpSem<S>::visit(Concat *op)
         llvm::APInt build{ op->size, 0, false };
         auto current = 0u;
         for (auto i = 0u; i < op->operands.size(); ++i) {
-            build.insertBits( *( self().get(op, i) ), current );
-            current += (*op)[i]->size;
+            build.insertBits( *( this->get_node_val(op, i) ), current );
+            current += op->operands[i]->size;
         }
         return build;
     };
@@ -77,7 +51,7 @@ void OpSem<S>::visit(Not *op)
     auto negate = [&](Not *op) {
         // NOTE(lukas): To avoid confusion the copy is here explicitly, since `negate` does
         //              change the APInt instead of returning a new one.
-        llvm::APInt copy { *self().get(op, 0) };
+        llvm::APInt copy { *this->get_node_val(op, 0) };
         copy.negate();
         return copy;
     };
@@ -87,19 +61,19 @@ void OpSem<S>::visit(Not *op)
 template<typename S>
 void OpSem<S>::visit(Select *op)
 {
-    if (!self().get(op, 0)) {
-        return self().SetNodeVal(op, {});
+    if (!this->get_node_val(op, 0)) {
+        return this->set_node_val(op, {});
     }
-    auto selector = self().get( ( *op )[ 0 ] );
-    auto chosen = self().get( ( *op )[ selector->getLimitedValue() + 1 ] );
-    return self().SetNodeVal(op, chosen);
+    auto selector = this->get_node_val( op->operands[ 0 ] );
+    auto chosen = this->get_node_val( op->operands[ selector->getLimitedValue() + 1 ] );
+    return this->set_node_val(op, chosen);
 }
 
 template<typename S>
 void OpSem<S>::visit(Parity *op)
 {
     auto parity = [&](Parity *op) {
-        return llvm::APInt(1, self().get( op, 0 )->countPopulation() % 2 );
+        return llvm::APInt(1, this->get_node_val( op, 0 )->countPopulation() % 2 );
     };
     return safe(op, parity);
 }
@@ -108,7 +82,7 @@ template<typename S>
 void OpSem<S>::visit(PopulationCount *op)
 {
     auto popcount = [&](PopulationCount *op) {
-        return llvm::APInt(op->size, self().get(op, 0)->countPopulation());
+        return llvm::APInt(op->size, this->get_node_val(op, 0)->countPopulation());
     };
     return safe(op, popcount);
 }
@@ -118,9 +92,9 @@ void OpSem<S>::visit(Or *op)
 {
     auto or_ = [&](Or *op_)
     {
-        auto out = *self().get(op_->operands[0]);
+        auto out = *this->get_node_val(op_->operands[0]);
         for (std::size_t i = 1; i < op_->operands.size(); ++i)
-            out |= *self().get(op_->operands[i]);
+            out |= *this->get_node_val(op_->operands[i]);
         return out;
     };
     return safe(op, or_);
@@ -131,9 +105,9 @@ void OpSem<S>::visit(And *op)
 {
     auto and_ = [&](And *op_)
     {
-        auto out = *self().get(op_->operands[0]);
+        auto out = *this->get_node_val(op_->operands[0]);
         for (std::size_t i = 1; i < op_->operands.size(); ++i)
-            out &= *self().get(op_->operands[i]);
+            out &= *this->get_node_val(op_->operands[i]);
         return out;
     };
     return safe(op, and_);
@@ -145,69 +119,34 @@ void OpSem<S>::visit(DecoderResult *op)
 {
     auto and_ = [&](DecoderResult *op_) {
         for (const auto &child : op_->operands) {
-            if (self().get(child) == this->FalseVal()) {
-                return this->FalseVal();
+            if (this->get_node_val(child) == this->false_val()) {
+                return this->false_val();
             }
         }
-        return this->TrueVal();
+        return this->true_val();
     };
     return safe(op, and_);
 }
 
-template<typename S>
-void Base_<S>::visit(Circuit *op)
+void BaseSemantics::visit(Circuit *op)
 {
-    self().SetNodeVal(op, self().GetNodeVal(op->operands[0]));
+    this->set_node_val(op, this->get_node_val(op->operands[0]));
 }
 
-template<typename S>
-void Base_<S>::set_input_state(const trace::Entry &in)
+void BaseSemantics::set_input_state(const trace::Entry &in)
 {
-    auto inst_bits = circuit->input_inst_bits();
-    self().SetNodeVal(inst_bits, in.get_inst_bits(inst_bits->size));
-
-    self().SetNodeVal(circuit->input_ebit(), in.get_ebit());
-    self().SetNodeVal(circuit->input_timestamp(), in.get_timestamp());
-    for (auto &[name, val] : in.regs) {
-        if (auto reg = circuit->input_reg(name)) {
-            self().SetNodeVal(reg, llvm::APInt(reg->size, val));
-        }
-    }
-
-    self()._dbg << "Loading memory hints:\n";
-    for (auto hint : circuit->attr<circ::Memory>()) {
-        if (auto val = in.get_mem_hint(std::to_string(hint->mem_idx))) {
-            self()._dbg << "Setting memory: " << hint->mem_idx << std::endl;
-            self().SetNodeVal(hint, *val);
-        }
-    }
-    self()._dbg << "\tDone.\n";
+    // REFACTOR(lukas): Remove alltogether.
+    not_implemented();
 }
 
-template<typename S>
-void Base_<S>::set_output_state(const trace::Entry &out)
+void BaseSemantics::set_output_state(const trace::Entry &out)
 {
-    self().SetNodeVal(circuit->output_ebit(), out.get_ebit());
-    self().SetNodeVal(circuit->output_timestamp(), out.get_timestamp());
-    for (auto &[name, val] : out.regs) {
-        if (auto reg = circuit->output_reg(name)) {
-            self().SetNodeVal(reg, llvm::APInt(reg->size, val));
-        }
-    }
+    // REFACTOR(lukas): Remove alltogether.
+    not_implemented();
 }
 
-template<typename S>
-bool Base_<S>::get_result() const { return get(circuit) == TrueVal(); }
-
-template<typename S>
-trace::Entry Base_<S>::get_output_state() const
+trace::Entry BaseSemantics::get_output_state() const
 {
-    trace::Entry out;
-
-    for (auto op : circuit->attr<OutputRegister>()) {
-        out.regs[op->reg_name] = get(op)->getLimitedValue();
-    }
-    out.ebit = get(circuit->output_ebit()) == TrueVal();
-    out.timestamp = get(circuit->output_timestamp())->getLimitedValue();
-    return out;
+    // REFACTOR(lukas): Remove alltogether.
+    not_implemented();
 }

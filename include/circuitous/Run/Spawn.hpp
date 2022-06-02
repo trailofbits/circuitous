@@ -105,8 +105,7 @@ namespace circ::run
 
         MemoryOrdering mem_order;
 
-        State(MemoryOrdering mem_order_) : mem_order(std::move(mem_order_)) {
-        }
+        State(MemoryOrdering mem_order_) : mem_order(std::move(mem_order_)) {}
         State(const State &) = default;
         State(State &&) = default;
 
@@ -147,8 +146,8 @@ namespace circ::run
         template<typename F>
         void notify(Operation *from, Operation *to, F &&fn)
         {
-            fn(from, to);
             _notify(to);
+            fn(from, to);
         }
 
         // Verbose notification for debug purposes
@@ -164,7 +163,8 @@ namespace circ::run
 
                 log_dbg() << pretty_print< false >(from) << " -- notifies -> "
                           << pretty_print< false >(to)
-                          << "which is blocked by:" << tail;
+                          << "which is blocked by: [ " << tail << " / "
+                          << to->operands.size() << " ].";
             };
             return notify(from, to, dbg_info);
         }
@@ -206,52 +206,56 @@ namespace circ::run
 
     };
 
-    template<typename Base>
-    struct Spawn : Base {
-        using value_type = typename Base::value_type;
-        using Base::node_values;
-        using Base::circuit;
+    template< typename Semantics >
+    struct Spawn : StateOwner
+    {
+        using semantics_t = Semantics;
 
-        using parent_t = Base;
-
+        Circuit *circuit;
         VerifyInstruction *current;
         CtxCollector *collector;
         State state;
         std::optional<bool> result;
 
+        Semantics semantics;
+        NodeState node_state;
+        Memory memory;
+
         std::stringstream _dbg;
 
-        Spawn(Circuit *circuit_, VerifyInstruction *current_,
+        Spawn(Circuit *circuit, VerifyInstruction *current_,
               CtxCollector *collector_)
-        : parent_t(circuit_), current(current_),
+        : circuit(circuit),
+          current(current_),
           collector(collector_),
-          state(MemoryOrdering(circuit_, collector_, current_))
+          state(MemoryOrdering(circuit, collector_, current_)),
+          semantics(this, circuit),
+          memory(circuit)
         {}
 
         Spawn(const Spawn &) = delete;
-        Spawn(Spawn &&) = default;
+        Spawn(Spawn &&) = delete;
 
         Spawn &operator=(Spawn) = delete;
 
-        using Base::SetNodeVal;
-
-        void SetNodeVal(Operation *op, const value_type &val)
+        void set_node_val(Operation *op, const value_type &val) override
         {
-            if (node_values.count(op))
+            if (node_state.has_value(op))
             {
                 auto fmt = [](auto what) -> std::string
                 {
                     if (!what)
                         return "( no value )";
                     std::stringstream ss;
-                    ss << "[ "<< what->getBitWidth() << "b: " << llvm::toString(*what, 16, false)
+                    ss << "[ "<< what->getBitWidth()
+                       << "b: " << llvm::toString(*what, 16, false)
                        << " ]";
                     return ss.str();
                 };
-                check(this->get(op) == val, [&](){
+                check(node_state.get(op) == val, [&](){
                     std::stringstream ss;
                     ss << pretty_print(op) << " already has value "
-                       << fmt(this->get(op))
+                       << fmt(node_state.get(op))
                        << " yet we try to set "
                        << fmt(val);
                        return ss.str();
@@ -267,15 +271,37 @@ namespace circ::run
                           << "node not in the current context, do not set value.";
                 return;
             }
-            this->parent_t::SetNodeVal(op, val);
+            this->node_state.set(op, val);
             state.SetNodeVal(op);
+        }
+
+        value_type get_node_val(Operation *op) const override { return node_state.get(op); }
+        bool has_value(Operation *op) const override { return node_state.has_value(op); }
+
+        void store(uint64_t addr, const raw_value_type &data) override
+        {
+            memory.store(addr, data);
+        }
+
+        value_type load(uint64_t addr, std::size_t size) const override
+        {
+            return memory.load(addr, size);
+        }
+
+        bool defined(uint64_t addr, std::size_t size) const override
+        {
+            return memory.defined(addr, size);
+        }
+
+        void visit(Operation *op)
+        {
+            semantics.dispatch(op);
         }
 
         void dispatch(Operation *op)
         {
-            log_dbg() << "Dispatching: " << pretty_print(op);
             if (collector->op_to_ctxs[op].count(current))
-                parent_t::dispatch(op);
+                semantics.dispatch(op);
         }
 
         void set_memory(uint64_t addr, const std::string &data)
@@ -305,9 +331,9 @@ namespace circ::run
                 }
             };
 
-            for (auto node : circuit->template attr<T>())
+            for (auto node : circuit->template attr< T >())
             {
-                if (this->node_values.count(node))
+                if (this->node_state.has_value(node))
                     continue;
 
                 if (!collector->op_to_ctxs[node].count(current))
@@ -329,7 +355,7 @@ namespace circ::run
 
         void init()
         {
-            parent_t::init();
+            semantics.init();
             init_notify< Advice, OutputRegister, OutputErrorFlag, OutputTimestamp,
                          circ::Memory >();
         }
@@ -345,7 +371,7 @@ namespace circ::run
 
             auto inject = [&](auto &where, auto op, auto &field) {
                 const auto &[start, size, _] = field;
-                auto maybe_value = this->GetNodeVal(op);
+                auto maybe_value = node_state.get(op);
                 check(maybe_value);
 
                 auto val_as_str = maybe_value->toString(2, false);
@@ -372,111 +398,15 @@ namespace circ::run
             return { current_trace, next_trace };
         }
 
-        template< typename S >
-        struct DBGPrint
-        {
-            S *parent;
-
-            std::unordered_set< Operation * > seen;
-            std::stringstream ss;
-
-            DBGPrint(S *parent_) : parent(parent_) { ss << parent->_dbg.str(); }
-
-            void dispatch(Operation *op, bool skip_unset)
-            {
-                if (seen.count(op)) return;
-                seen.insert(op);
-
-                auto next = [&]() {
-                    for (auto o : op->operands)
-                        this->dispatch(o, skip_unset);
-                };
-
-                ss << " [" << op->id() << "] " << op->name() << " ";
-                if (!parent->node_values.count(op))
-                {
-                      ss << "(no value set)";
-                      if (skip_unset) {
-                          ss << std::endl;
-                          return;
-                      }
-                } else {
-                    auto val = parent->GetNodeVal(op);
-                    ss << (val ? llvm::toString(*val, 16, false) : "(undef)");
-                }
-
-                if (op->operands.size() == 0) {
-                    ss << std::endl;
-                    return;
-                }
-
-                ss << " ->\n";
-
-                auto fmt_node_value = [&](auto o) {
-                    ss << o->id() << " ";
-                    if (!parent->node_values.count(op))
-                        ss << " (no value set)";
-                    else {
-                        auto val = parent->GetNodeVal(o);
-                        ss << (val ? llvm::toString(*val, 16, false) : "(undef)");
-                    }
-                };
-
-                if (op->op_code == VerifyInstruction::kind) {
-                    for (auto o : op->operands) {
-                        if (o->op_code == DecodeCondition::kind) {
-                            ss << " ~~~> decode: ";
-                            fmt_node_value(o);
-                            ss << std::endl;
-                        }
-                    }
-                }
-
-                for (auto o : op->operands) {
-                    ss << "\t - ";
-                    fmt_node_value(o);
-                    ss << std::endl;
-                }
-                next();
-            }
-
-            DBGPrint &gather(bool skip_unset = true)
-            {
-                dispatch(parent->current, skip_unset);
-                return *this;
-            }
-
-            std::string get() { return ss.str(); }
-        };
-
-        std::string dbg_context_dump()
-        {
-            std::stringstream ss;
-            if (!this->has_value(current))
-                ss << state.status(current) << std::endl;
-            for (auto x : current->operands)
-            {
-                ss << state.status(x) << " " << this->has_value(x)
-                   << " " << pretty_print< false >(x) << " "
-                   << this->val_as_str(x) << std::endl;
-
-                for (auto y : x->operands)
-                  ss << "\t" << state.status(y) << " " << this->has_value(y)
-                     << " " << pretty_print< false >(y) << " "
-                     << this->val_as_str(y) << std::endl;
-            }
-            return ss.str();
-        }
-
         std::optional< bool > short_circuit(Operation *op)
         {
             // This can happen if `op` is not in `current` context.
-            if (!this->has_value(op))
+            if (!node_state.has_value(op))
                 return {};
             switch (op->op_code) {
                 case DecoderResult::kind:
                 {
-                    if (this->GetNodeVal(op) == this->FalseVal())
+                    if (node_state.get(op) == semantics.false_val())
                         return std::make_optional(false);
                     return {};
                 }
@@ -488,6 +418,7 @@ namespace circ::run
             init();
             while (!state.todo.empty()) {
                 auto x = state.Pop();
+                log_dbg() << "Dispatching" << pretty_print< true >(x);
                 dispatch(x);
                 if (auto r = short_circuit(x)) {
                     log_dbg() << "Short circuiting to result, as decode was not satisfied.";
@@ -497,28 +428,77 @@ namespace circ::run
             }
             log_dbg() << "Run done, fetching result.";
             result = [&](){
-                if (auto res = this->GetNodeVal(current)) {
-                    return *res == this->TrueVal();
+                if (auto res = node_state.get(current)) {
+                    return *res == semantics.true_val();
                 }
                 return false;
             }();
             return *result;
         }
+
+        void set_input_state(const trace::Entry &in)
+        {
+            auto inst_bits = circuit->input_inst_bits();
+            this->set_node_val(inst_bits, in.get_inst_bits(inst_bits->size));
+
+            this->set_node_val(circuit->input_ebit(), in.get_ebit());
+            this->set_node_val(circuit->input_timestamp(), in.get_timestamp());
+            for (auto &[name, val] : in.regs) {
+                if (auto reg = circuit->input_reg(name)) {
+                    this->set_node_val(reg, llvm::APInt(reg->size, val));
+                }
+            }
+
+            for (auto hint : circuit->attr<circ::Memory>()) {
+                if (auto val = in.get_mem_hint(std::to_string(hint->mem_idx))) {
+                    this->set_node_val(hint, *val);
+                }
+            }
+        }
+
+        void set_output_state(const trace::Entry &out)
+        {
+            this->set_node_val(circuit->output_ebit(), out.get_ebit());
+            this->set_node_val(circuit->output_timestamp(), out.get_timestamp());
+            for (auto &[name, val] : out.regs) {
+                if (auto reg = circuit->output_reg(name)) {
+                    this->set_node_val(reg, llvm::APInt(reg->size, val));
+                }
+            }
+        }
+
+        trace::Entry get_output_state() const
+        {
+            trace::Entry out;
+
+            for (auto op : circuit->attr< OutputRegister >())
+                out.regs[op->reg_name] = node_state.get(op)->getLimitedValue();
+
+            out.ebit = node_state.get(circuit->output_ebit()) == semantics.true_val();
+            out.timestamp = node_state.get(circuit->output_timestamp())->getLimitedValue();
+
+            return out;
+        }
+
+        template< typename T >
+        auto get_derived() const { return semantics.template get_derived< T >(); }
+
+        auto get_derived_mem()
+        {
+            std::vector< Memory::Parsed > out;
+            for (auto op : circuit->attr< circ::Memory >())
+            {
+                if (node_state.has_value(op))
+                    out.push_back(memory.deconstruct(*node_state.get(op)));
+            }
+            return out;
+        }
     };
 
-    struct DSpawn : Spawn<DBase<DSpawn>>
-    {
-        using parent_t = Spawn<DBase<DSpawn>>;
-        using parent_t::parent_t;
-    };
+    using DSpawn = Spawn< DBase >;
+    using VSpawn = Spawn< VBase >;
 
-    struct VSpawn : Spawn<VBase<VSpawn>>
-    {
-        using parent_t = Spawn<VBase<VSpawn>>;
-        using parent_t::parent_t;
-    };
-
-    static_assert(valid_interpreter<DSpawn>());
-    static_assert(valid_interpreter<VSpawn>());
+    static_assert(valid_interpreter< typename DSpawn::semantics_t >());
+    static_assert(valid_interpreter< typename VSpawn::semantics_t >());
 
 } // namespace circ::run
