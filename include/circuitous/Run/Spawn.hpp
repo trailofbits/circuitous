@@ -26,7 +26,7 @@ namespace circ::run
         Circuit *circuit;
         VerifyInstruction *current;
         CtxCollector *collector;
-        State state;
+        TodoQueue todo;
         std::optional<bool> result;
 
         Semantics semantics;
@@ -40,7 +40,7 @@ namespace circ::run
         : circuit(circuit),
           current(current_),
           collector(collector_),
-          state(MemoryOrdering(circuit, collector_, current_)),
+          todo(MemoryOrdering(circuit, collector_, current_)),
           semantics(this, circuit),
           memory(circuit)
         {}
@@ -84,7 +84,7 @@ namespace circ::run
                 return;
             }
             this->node_state.set(op, val);
-            state.notify_from(op);
+            todo.notify_from(op);
         }
 
         value_type get_node_val(Operation *op) const override { return node_state.get(op); }
@@ -154,7 +154,7 @@ namespace circ::run
                 for (auto user : node->users)
                 {
                     if (constrained_by(node, user) && check_position(node, user))
-                        state.notify(node, user);
+                        todo.notify(node, user);
                 }
             }
         }
@@ -228,8 +228,8 @@ namespace circ::run
 
         bool Run() {
             init();
-            while (!state.empty()) {
-                auto x = state.pop();
+            while (!todo.empty()) {
+                auto x = todo.pop();
                 log_dbg() << "Dispatching" << pretty_print< true >(x);
                 dispatch(x);
                 if (auto r = short_circuit(x)) {

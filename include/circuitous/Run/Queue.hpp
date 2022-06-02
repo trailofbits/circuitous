@@ -58,7 +58,7 @@ namespace circ::run
         void extend(uint32_t desired);
     };
 
-    struct State
+    struct TodoQueue
     {
       private:
         std::deque< Operation * > todo;
@@ -68,11 +68,11 @@ namespace circ::run
         MemoryOrdering mem_order;
 
       public:
-        State(MemoryOrdering mem_order_) : mem_order(std::move(mem_order_)) {}
-        State(const State &) = default;
-        State(State &&) = default;
+        TodoQueue(MemoryOrdering mem_order_) : mem_order(std::move(mem_order_)) {}
+        TodoQueue(const TodoQueue &) = default;
+        TodoQueue(TodoQueue &&) = default;
 
-        State& operator=(State) = delete;
+        TodoQueue& operator=(TodoQueue) = delete;
 
         Operation *pop()
         {

@@ -69,14 +69,14 @@ namespace circ::run
     }
 
 
-    std::string State::status(Operation *op)
+    std::string TodoQueue::status(Operation *op)
     {
         std::stringstream ss;
         ss << "[ " << blocked[op] << " / " << op->operands.size() << "]";
         return ss.str();
     }
 
-    void State::push(Operation *op)
+    void TodoQueue::push(Operation *op)
     {
         if (!is_one_of<ReadConstraint, WriteConstraint>(op))
             return todo.push_back(op);
@@ -87,7 +87,7 @@ namespace circ::run
     }
 
     // Verbose notification for debug purposes
-    void State::notify_verbose(Operation *from, Operation *to)
+    void TodoQueue::notify_verbose(Operation *from, Operation *to)
     {
         auto dbg_info = [&](auto from, auto to) {
             auto tail = [&]() -> std::string
@@ -107,13 +107,13 @@ namespace circ::run
     }
 
     // General notify that does no extra work
-    void State::notify(Operation *from, Operation *to)
+    void TodoQueue::notify(Operation *from, Operation *to)
     {
         return _notify(to);
     }
 
     // Implementation
-    void State::_notify(Operation *op)
+    void TodoQueue::_notify(Operation *op)
     {
         auto [it, inserted] = blocked.emplace(op, op->operands.size());
         if (it->second <= 1) {
@@ -124,7 +124,7 @@ namespace circ::run
         --it->second;
     }
 
-    void State::notify_mem(Operation *op)
+    void TodoQueue::notify_mem(Operation *op)
     {
         if (!mem_order.enable(op))
             return;
@@ -134,7 +134,7 @@ namespace circ::run
         waiting[mem_order.allowed].clear();
     }
 
-    void State::notify_from(Operation *op)
+    void TodoQueue::notify_from(Operation *op)
     {
         for (auto user : op->users)
             notify(op, user);
