@@ -62,7 +62,7 @@ namespace circ::run
         auto extractor = [](auto thing, auto from, auto size) -> llvm::APInt {
             return thing.extractBits(size, from);
         };
-        check(value.getBitWidth() == casted_hint_size);
+        check(value.getBitWidth() == irops::memory::size(casted_hint_size));
         return irops::memory::parse< llvm::APInt >(value, extractor, hint_size);
     }
 

@@ -9,63 +9,17 @@
 
 #include <circuitous/Support/Check.hpp>
 
-namespace circ::run {
-
-  struct BasicInterpreter : DBase<BasicInterpreter> {
-    using parent_t = DBase<BasicInterpreter>;
-
-    using parent_t::parent_t;
-
-    void Dispatch(Operation *op) {
-      op->traverse(*this);
-      if (node_values.count(op)) {
-        // Remember previous node value
-        auto prev_val{GetNodeVal(op)};
-        // Compute new node value
-        parent_t::dispatch(op);
-        // Was there a change?
-        changed |= prev_val != GetNodeVal(op);
-      } else {
-        // We have no value. Just do it!
-        parent_t::dispatch(op);
-        changed = true;
-      }
-    }
-
-    bool Run() {
-      // Save initial node values
-      auto node_values_init{node_values};
-      // Run verification nodes until one succeeds
-      for (auto op : circuit->attr<VerifyInstruction>()) {
-        // Re-initialize node values
-        node_values = node_values_init;
-        // Reset
-        changed = true;
-        // Evaluate verification node until fixpoint
-        while (changed) {
-          changed = false;
-          Dispatch(op);
-        }
-        // Verification successful
-        check(GetNodeVal(op));
-        if (GetNodeVal(op)->getBoolValue()) {
-          return true;
-        }
-      }
-      // All verifications failed
-      return false;
-    }
-  };
+namespace circ::run
+{
 
   template<typename Spawn>
   struct QueueInterpreter {
-    using value_type = typename Spawn::value_type;
     using spawn_t = Spawn;
 
     Circuit *circuit;
 
     CtxCollector collector;
-    std::vector< std::pair< VerifyInstruction *, Spawn > > runners;
+    std::vector< std::pair< VerifyInstruction *, std::unique_ptr< Spawn > > > runners;
 
     Spawn *acceptor = nullptr;
 
@@ -73,15 +27,14 @@ namespace circ::run {
       collector.Run(circuit);
 
       for (auto vi : circuit->attr<VerifyInstruction>()) {
-        Spawn spawn{ circuit, vi, &collector };
-        runners.emplace_back( vi, std::move(spawn) );
+        runners.emplace_back( vi, std::make_unique< Spawn >(circuit, vi, &collector) );
       }
     }
 
     template<typename F>
     void runners_do(F &&f) {
       for (auto &[_, runner] : runners) {
-        f(runner);
+        f(*runner);
       }
     }
 
@@ -111,10 +64,13 @@ namespace circ::run {
     auto values() const {
       // TODO(lukas): This is dubious once we consider verify mode
       check(acceptor);
-      return acceptor->values();
+      return acceptor->node_state.take();
     }
 
-    void init() { init<Undefined, Constant>(); }
+    void init()
+    {
+        init< Undefined, Constant >();
+    }
 
     bool result() {
       uint32_t acceptors = 0;
@@ -137,8 +93,7 @@ namespace circ::run {
     std::string dump_runners() {
       std::stringstream ss;
       runners_do([ & ](auto &runner){
-          using dbg_printer = typename Spawn::template DBGPrint< Spawn >;
-          ss << dbg_printer{&runner}.gather(false).get();
+          ss << "TODO(lukas); Implement\n";
       });
       return ss.str();
     }
@@ -148,8 +103,8 @@ namespace circ::run {
 
       std::unordered_set<Spawn *> successes;
       for (auto &[_, runner] : runners) {
-        if (runner.Run()) {
-          successes.emplace(&runner);
+        if (runner->Run()) {
+          successes.emplace(runner.get());
         }
       }
       if (successes.size() == 1) {

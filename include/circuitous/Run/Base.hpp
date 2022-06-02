@@ -27,109 +27,91 @@ CIRCUITOUS_UNRELAX_WARNINGS
 namespace circ::run
 {
 
-    template< typename Self >
-    struct Base_ : public Visitor<Self>
+    struct BaseSemantics
     {
-        using raw_value_type = llvm::APInt;
-        // If no value is held <=> value is undefined
-        using value_type = std::optional<raw_value_type>;
-        using node_values_t = std::unordered_map<Operation *, value_type>;
+        StateOwner *state = nullptr;
+        Circuit *circuit = nullptr;
 
-        Circuit *circuit{nullptr};
-        bool changed{false};
+        BaseSemantics(StateOwner *state, Circuit *circuit)
+            : state(state), circuit(circuit)
+        {}
 
-        Memory memory;
-        std::unordered_map< Operation *, value_type > node_values;
-
-        value_type Undef() const { return {}; }
-        llvm::APInt TrueVal() const { return llvm::APInt(1, 1); }
-        llvm::APInt FalseVal() const { return llvm::APInt(1, 0); }
-        llvm::APInt BoolVal(bool v) const { return (v) ? TrueVal() : FalseVal(); }
-
-        Base_(Circuit *circuit_) :  circuit(circuit_), memory(circuit_) {}
-
-        void init() {}
+        BaseSemantics() = default;
 
         template< typename ...Args >
-        bool ValidVals(Args &&... args)
+        bool valid_values(Args &&... args)
         {
             return (has_value(args) && ...);
         }
 
-        bool ValidChildren(Operation *op)
+        bool valid_children_values(Operation *op)
         {
             for (auto child : op->operands)
-                if (!GetNodeVal(child))
+                if (!state->has_value(child) || !state->get_node_val(child))
                     return false;
             return true;
         }
 
-        std::unordered_map<Operation *, value_type> values() const
+        value_type undef() { return {}; }
+        raw_value_type true_val() const { return llvm::APInt(1, 1); }
+        raw_value_type false_val() const { return llvm::APInt(1, 0); }
+
+        raw_value_type value(bool v) const { return (v) ? true_val() : false_val(); }
+
+        bool has_value(Operation *op) const
         {
-            return node_values;
+            return state->has_value(op);
         }
 
-        auto &self() { return static_cast<Self &>(*this); }
-
-        void SetNodeVal(Operation *op, const value_type &val);
+        void set_node_val(Operation *op, const value_type &val)
+        {
+            state->set_node_val(op, val);
+        }
 
         template< typename I > requires std::is_integral_v< I >
-        auto SetNodeVal(Operation *op, I &&i)
+        auto set_node_val(Operation *op, I &&i)
         {
-            return self().SetNodeVal(op, llvm::APInt(op->size, i, false));
+            return set_node_val(op, llvm::APInt(op->size, i, false));
+        }
+
+        auto get_node_val(Operation *op) const { return state->get_node_val(op); }
+        auto get_node_val(Operation *op, std::size_t idx) const
+        {
+            return this->get_node_val(op->operands[idx]);
         }
 
         template< typename Op, typename F >
         auto safe(Op *op, F &&f)
         {
-            if (!ValidChildren(op))
-                return self().SetNodeVal(op, Undef());
-            return self().SetNodeVal(op, f(op));
+            if (!valid_children_values(op))
+                return set_node_val(op, undef());
+            return set_node_val(op, f(op));
         }
-
-        template< typename Op, typename F >
-        auto account(Op *op, F &&f)
-        {
-            return self().SetNodeVal(op, f(op));
-        }
-
-        value_type GetNodeVal(Operation *op) const;
-        value_type get(Operation *op) const
-        {
-            return GetNodeVal(op);
-        }
-
-        value_type get(Operation *op, std::size_t idx)
-        {
-            check(op->operands.size() > idx);
-            return get( ( *op )[ idx ] );
-        }
-
-        bool has_value(Operation *op) const { return node_values.count(op); }
 
         void set_input_state(const trace::Entry &in);
         void set_output_state(const trace::Entry &out);
 
-        bool get_result() const;
         trace::Entry get_output_state() const;
 
         template<typename T>
         std::unordered_map<T *, value_type> get_derived() const
         {
-            log_kill() << "Base_ cannot export derived values.";
+            log_kill() << "BaseSemantics cannot export derived values.";
         }
 
-        std::string val_as_str(Operation *op)
+        std::vector< Memory::Parsed > get_derived_mem()
         {
-            if (self().has_value(op))
-                return self().GetNodeVal(op)->toString(16, false);
-            return "(no value)";
+            log_kill() << "BaseSemantics cannot export derived mem.";
         }
 
-        // Default
-        void visit(Operation *op);
-        // Circuit
         void visit(Circuit *op);
+        void visit(URem *)            { not_implemented(); }
+        void visit(SRem *)            { not_implemented(); }
+        void visit(circ::Memory *)    { not_implemented(); }
+        void visit(InputTimestamp *)  { not_implemented(); }
+        void visit(OutputTimestamp *) { not_implemented(); }
+
+        void init() {};
     };
 
     // Tags that tells us about which visits are implemented by a layer
@@ -157,13 +139,8 @@ namespace circ::run
     template< typename Next >
     struct OpSem : Next, op_sem
     {
-        using value_type = typename Next::value_type;
-        using raw_value_type = typename Next::raw_value_type;
-
-        using Next::self;
         using Next::visit;
         using Next::safe;
-
 
         using Next::Next;
 
@@ -180,19 +157,19 @@ namespace circ::run
         void visit(PopulationCount *op);
         void visit(CountLeadingZeroes *op)
         {
-            safe(op, [&](auto o){ return self().get(o, 0)->countLeadingZeros(); } );
+            safe(op, [&](auto o){ return this->get_node_val(o, 0)->countLeadingZeros(); } );
         }
         void visit(CountTrailingZeroes *op)
         {
-            safe(op, [&](auto o){ return self().get(o, 0)->countTrailingZeros(); } );
+            safe(op, [&](auto o){ return this->get_node_val(o, 0)->countTrailingZeros(); } );
         }
         void visit(Or *op);
         void visit(And *op);
         void visit(DecoderResult *op);
 
         // Must be called in `safe` context.
-        auto lhs(Operation *op) { return *self().get(op, 0); }
-        auto rhs(Operation *op) { return *self().get(op, 1); }
+        auto lhs(Operation *op) { return *this->get_node_val(op, 0); }
+        auto rhs(Operation *op) { return *this->get_node_val(op, 1); }
         bool is_zero(const llvm::APInt &i) { return i.isNullValue(); }
 
         void visit(Add *op) { safe(op, [&](auto o){ return lhs(o) + rhs(o); } ); }
@@ -229,7 +206,7 @@ namespace circ::run
         void visit(ZExt *op) { safe(op, [&](auto o){ return lhs(o).zext(o->size);   } ); }
         void visit(SExt *op) { safe(op, [&](auto o){ return lhs(o).sext(o->size);  } ); }
 
-        auto bv(bool b) { return this->BoolVal(b); }
+        auto bv(bool b) { return this->value(b); }
 
         void visit(Icmp_ult *op) { safe(op, [&](auto o){ return bv(lhs(o).ult(rhs(o))); } ); }
         void visit(Icmp_slt *op) { safe(op, [&](auto o){ return bv(lhs(o).slt(rhs(o))); } ); }
@@ -250,11 +227,11 @@ namespace circ::run
     template< typename Next >
     struct Ctx_ : Next
     {
-        using Next::self;
         using Next::safe;
         using Next::visit;
 
         using Next::Next;
+        using Next::get_node_val;
 
         std::unordered_set<Operation *> supplied;
         std::unordered_set<Operation *> derived;
@@ -289,25 +266,13 @@ namespace circ::run
             return verify_cond(op);
         }
 
-        std::vector< Memory::Parsed > get_derived_mem()
-        {
-            std::vector< Memory::Parsed > out;
-            for (auto op : this->circuit->template attr< circ::Memory >()) {
-                // TODO(lukas): Check if memory was derived or supplied
-                // TODO(lukas): This should never happen once we enforce zeroed unused hints
-                if (this->has_value(op))
-                    out.push_back(this->memory.deconstruct(*this->get(op)));
-            }
-            return out;
-        }
-
         template< typename T >
         auto get_derived() const
         {
-            std::unordered_map< T *, typename Next::value_type > out;
+            std::unordered_map< T *, value_type > out;
             for (auto op : derived)
                 if (op->op_code == T::kind)
-                    out[dynamic_cast<T *>(op)] = this->get(op);
+                    out[dynamic_cast<T *>(op)] = this->get_node_val(op);
             return out;
         }
     };
@@ -315,10 +280,6 @@ namespace circ::run
     template< typename Next >
     struct IOSem : Next, io_sem
     {
-        using value_type = typename Next::value_type;
-        using raw_value_type = typename Next::raw_value_type;
-
-        using Next::self;
         using Next::safe;
         using Next::visit;
 
@@ -339,10 +300,6 @@ namespace circ::run
     template< typename Next >
     struct CSem : Next, c_sem
     {
-        using value_type = typename Next::value_type;
-        using raw_value_type = typename Next::raw_value_type;
-
-        using Next::self;
         using Next::safe;
         using Next::visit;
 
@@ -370,8 +327,8 @@ namespace circ::run
         {
             using parent_t = Ctx_< Next >;
 
-            using Next::self;
             using parent_t::parent_t;
+            using parent_t::visit;
 
 
             void init()
@@ -384,7 +341,7 @@ namespace circ::run
                         continue;
                     }
                     this->supplied.insert(op);
-                    self().SetNodeVal(op, this->Undef());
+                    this->set_node_val(op, this->undef());
                 }
                 this->derived = std::move(preserved);
             }
@@ -400,10 +357,15 @@ namespace circ::run
         using Base = CSem< IOSem< Ctx_< S > > >;
     } // namespace derive
 
-    template< typename S >
-    using DBase = derive::Base< OpSem< Base_< S > > >;
+    template< typename N >
+    struct SemanticsAdapter : N, NonDefaultingVisitor< SemanticsAdapter< N > >
+    {
+        using N::visit;
+        using N::N;
+        using NonDefaultingVisitor< SemanticsAdapter< N > >::dispatch;
+    };
 
-    template<typename S>
-    using VBase = verify::Base< OpSem< Base_< S > > >;
+    using DBase = SemanticsAdapter< derive::Base< OpSem< BaseSemantics > > >;
+    using VBase = SemanticsAdapter< verify::Base< OpSem< BaseSemantics > > >;
 
 } // namespace circ::run
