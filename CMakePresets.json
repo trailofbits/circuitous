@@ -224,6 +224,16 @@
         "name": "ninja-cxx-common-linux-rel-test",
         "displayName": "Test linux with cxx-common config",
         "configurePreset": "ninja-cxx-common-x64-linux-rel"
+    },
+    {
+      "name": "ninja-system-remill-x64-linux-rel-test",
+      "displayName": "Test linux with cxx-common config with system remill",
+      "configurePreset": "ninja-system-remill-x64-linux-rel"
+    },
+    {
+      "name": "ninja-system-remill-x64-linux-deb-test",
+      "displayName": "Test linux with cxx-common config with system remill",
+      "configurePreset": "ninja-system-remill-x64-linux-deb"
     }
   ]
 }
