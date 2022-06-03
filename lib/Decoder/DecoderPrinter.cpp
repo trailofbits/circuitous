@@ -12,8 +12,10 @@ const char dont_care_bit_neg = '0';  // negated value of don't care
 
 namespace CodeGen {
 std::string default_index = std::string(4, ' ');
+
+
 std::string castToUint8(std::string expr) {
-  return "(uint8_t) " + expr;
+  return "(int16_t) " + expr;
 }
 
 std::string wrap_in_quotes(const std::string& s){
@@ -23,7 +25,7 @@ std::string wrap_in_quotes(const std::string& s){
 std::string xorInputWithNegatedTarget(std::string variable,
                                       std::string targetVal, uint pad_msb,
                                       uint pad_lsb) {
-  return wrap_in_quotes(variable + " ^~(0b" + std::string(pad_msb, dont_care_bit_neg) +
+  return wrap_in_quotes(variable + " ^~(0b" + std::string(8,'1') + std::string(pad_msb, dont_care_bit_neg) +
          targetVal + std::string(pad_lsb, dont_care_bit_neg) + ")");
 }
 
@@ -34,7 +36,7 @@ std::string prepareInputByte(std::string variable, std::string targetVal,
 }
 //  std::string transformInput
 std::string getTarget(uint pad_msb, uint pad_lsb) {
-  return "0b" + std::string(pad_msb, dont_care_bit_neg) +
+  return "0b" + std::string(8,'0') + std::string(pad_msb, dont_care_bit_neg) +
          std::string(8 - pad_msb - pad_lsb, dont_care_bit) +
          std::string(pad_lsb, dont_care_bit_neg);
 }
@@ -75,11 +77,21 @@ std::string orExpressions(std::vector<std::string> exprs) {
 
 // assumes rhs_bits is a string of consecutive bits with 0b in the string
 std::string bitwiseOR(std::string lhs, std::string rhs_bits) {
-  return lhs + " | " + wrap_in_quotes("0b" + rhs_bits);
+  return lhs + " | " + wrap_in_quotes("0b" + std::string(8,'0') +rhs_bits);
 }
 
 std::string returnStatement(std::string expr) {
   return default_index + "return " + expr + ";";
+}
+
+
+std::string ifStatement(const std::string& condition_string, const std::string& body){
+    return "if (" + condition_string + ") {\n" + body + "\n}\n";
+}
+
+
+std::string forLoop(const std::string& condition_string, const std::string& body){
+    return "for (" + condition_string + ") {\n" + body + "\n}\n";
 }
 
 std::string callFunction(std::string funcName, std::string parameters){
@@ -116,7 +128,7 @@ void DecoderPrinter::print_decoder_condition(InputCheck check,
     // local variable inside a function that we control, so this won't give conflicts
     auto input_name = name_output_var + "_copy";
     os << CodeGen::declareStatement(
-            "auto", input_name, "std::array<uint8_t,15>(" + name_fuc_input + ")")
+            "auto", input_name, "std::array<int16_t,15>(" + name_fuc_input + ")")
        << std::endl;
 
     uint8_t padding_len_lsb = (check.low % 8);
@@ -203,7 +215,7 @@ void DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
   std::cout << "// Generating function for VI: " << vi->id()
             << " name: " << evi.generated_name << std::endl;
   auto inputName = function_parameter_name;
-  os << "bool " << evi.generated_name << "(std::array<uint8_t,15> " << inputName
+  os << "bool " << evi.generated_name << "(std::array<int16_t,15> " << inputName
      << ") {" << std::endl;
 
   std::vector<InputCheck> checks;
@@ -224,10 +236,9 @@ void DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
         "Invalid decoder structure, missing node indicating end");
   } else {
     auto rhs = dynamic_cast<circ::Extract *>((*x)->operands[1]);
-    os << "\tif(" << inputName << ".size() != " << ceil(rhs->low_bit_inc / 8.0)
-       << ") { " << std::endl
-       << "\t\treturn false; " << std::endl
-       << "\t}" << std::endl;
+    auto size = ceil(rhs->low_bit_inc / 8.0);
+    auto check_if_invalid_val = CodeGen::ifStatement(inputName + "[i] < 0", CodeGen::returnStatement("false"));
+    os << CodeGen::forLoop("auto i =0; i < " + std::to_string(size) + ";i++", check_if_invalid_val);
   }
 
   for (auto &decOp : decNodes) {
@@ -276,7 +287,7 @@ void DecoderPrinter::print_file() {
 }
 
 void DecoderPrinter::print_circuit_decoder() {
-  os << "bool " << circuit_decode_function_name << "(std::array<uint8_t,15> "
+  os << "bool " << circuit_decode_function_name << "(std::array<int16_t,15> "
      << function_parameter_name << ") {" << std::endl;
 
   std::vector<std::string> funcCalls;
