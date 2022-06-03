@@ -14,7 +14,7 @@ namespace CodeGen {
 std::string default_index = std::string(4, ' ');
 
 
-std::string castToUint8(std::string expr) {
+std::string castToUint8(const std::string &expr) {
   return "(int16_t) " + expr;
 }
 
@@ -22,14 +22,14 @@ std::string wrap_in_quotes(const std::string& s){
     return "(" + s + ")";
 }
 
-std::string xorInputWithNegatedTarget(std::string variable,
-                                      std::string targetVal, uint pad_msb,
+std::string xorInputWithNegatedTarget(const std::string &variable,
+                                      const std::string &targetVal, uint pad_msb,
                                       uint pad_lsb) {
   return wrap_in_quotes(variable + " ^~(0b" + std::string(8,'1') + std::string(pad_msb, dont_care_bit_neg) +
          targetVal + std::string(pad_lsb, dont_care_bit_neg) + ")");
 }
 
-std::string prepareInputByte(std::string variable, std::string targetVal,
+std::string prepareInputByte(const std::string &variable, const std::string &targetVal,
                              uint pad_msb, uint pad_lsb) {
   return castToUint8(
       xorInputWithNegatedTarget(variable, targetVal, pad_msb, pad_lsb));
@@ -45,16 +45,16 @@ std::string compare(std::string lhs, std::string rhs) {
   return wrap_in_quotes(lhs + " == " + rhs);
 }
 
-std::string assignStatement(std::string lhs, std::string rhs) {
+std::string assignStatement(const std::string &lhs, const std::string &rhs) {
   return default_index + lhs + " = " + rhs + ";";
 }
 
-std::string declareStatement(std::string typeName, std::string variableName,
-                             std::string expr) {
+std::string declareStatement(const std::string &typeName, const std::string &variableName,
+                             const std::string &expr) {
   return default_index + typeName + " " + variableName + " = " + expr + ";";
 }
 
-std::string concatExprs(std::vector<std::string> exprs, std::string delimiter){
+std::string concatExprs(const std::vector< std::string > &exprs, const std::string &delimiter){
   std::stringstream s;
   for (ulong i = 0; i < exprs.size(); i++) {
     s << exprs[i];
@@ -66,21 +66,21 @@ std::string concatExprs(std::vector<std::string> exprs, std::string delimiter){
 }
 
 
-std::string andExpressions(std::vector<std::string> exprs) {
+std::string andExpressions(const std::vector< std::string > &exprs) {
   return concatExprs(exprs, " && ");
 }
 
 
-std::string orExpressions(std::vector<std::string> exprs) {
+std::string orExpressions(const std::vector< std::string > &exprs) {
   return concatExprs(exprs, " || ");
 }
 
 // assumes rhs_bits is a string of consecutive bits with 0b in the string
-std::string bitwiseOR(std::string lhs, std::string rhs_bits) {
+std::string bitwiseOR(const std::string &lhs, const std::string &rhs_bits) {
   return lhs + " | " + wrap_in_quotes("0b" + std::string(8,'0') +rhs_bits);
 }
 
-std::string returnStatement(std::string expr) {
+std::string returnStatement(const std::string &expr) {
   return default_index + "return " + expr + ";";
 }
 
@@ -94,7 +94,7 @@ std::string forLoop(const std::string& condition_string, const std::string& body
     return "for (" + condition_string + ") {\n" + body + "\n}\n";
 }
 
-std::string callFunction(std::string funcName, std::string parameters){
+std::string callFunction(const std::string &funcName, const std::string &parameters){
   return funcName + "(" + parameters + ")";
 }
 };  // namespace CodeGen
