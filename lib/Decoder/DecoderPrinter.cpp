@@ -6,15 +6,15 @@
 #include <cstdlib>
 namespace circ::decoder {
 
-const char dont_care_bit =
+const char ignore_magic_const =
     '1';  // value that indicates a don't care inside the input_byte
-const char dont_care_bit_neg = '0';  // negated value of don't care
+const char ignore_magic_const_neg = '0';  // negated value of don't care
 
 namespace CodeGen {
 std::string default_index = std::string(4, ' ');
 
 
-std::string castToUint8(const std::string &expr) {
+std::string cast_to_int16_t(const std::string &expr) {
   return "(int16_t) " + expr;
 }
 
@@ -22,23 +22,23 @@ std::string wrap_in_quotes(const std::string& s){
     return "(" + s + ")";
 }
 
-std::string xorInputWithNegatedTarget(const std::string &variable,
-                                      const std::string &targetVal, uint pad_msb,
-                                      uint pad_lsb) {
-  return wrap_in_quotes(variable + " ^~(0b" + std::string(8,'1') + std::string(pad_msb, dont_care_bit_neg) +
-         targetVal + std::string(pad_lsb, dont_care_bit_neg) + ")");
+std::string xor_variable_with_negated_target(const std::string &variable,
+                                             const std::string &targetVal, uint pad_msb,
+                                             uint pad_lsb) {
+  return wrap_in_quotes( variable + " ^~(0b" + std::string(8,'1') + std::string( pad_msb, ignore_magic_const_neg) +
+                         targetVal + std::string( pad_lsb, ignore_magic_const_neg) + ")");
 }
 
 std::string prepareInputByte(const std::string &variable, const std::string &targetVal,
                              uint pad_msb, uint pad_lsb) {
-  return castToUint8(
-      xorInputWithNegatedTarget(variable, targetVal, pad_msb, pad_lsb));
+  return cast_to_int16_t(
+          xor_variable_with_negated_target( variable, targetVal, pad_msb, pad_lsb ));
 }
 //  std::string transformInput
 std::string getTarget(uint pad_msb, uint pad_lsb) {
-  return "0b" + std::string(8,'0') + std::string(pad_msb, dont_care_bit_neg) +
-         std::string(8 - pad_msb - pad_lsb, dont_care_bit) +
-         std::string(pad_lsb, dont_care_bit_neg);
+  return "0b" + std::string(8,'0') + std::string( pad_msb, ignore_magic_const_neg) +
+         std::string(8 - pad_msb - pad_lsb, ignore_magic_const) +
+         std::string( pad_lsb, ignore_magic_const_neg);
 }
 
 std::string compare(std::string lhs, std::string rhs) {
@@ -56,7 +56,7 @@ std::string declareStatement(const std::string &typeName, const std::string &var
 
 std::string concatExprs(const std::vector< std::string > &exprs, const std::string &delimiter){
   std::stringstream s;
-  for (ulong i = 0; i < exprs.size(); i++) {
+  for (std::size_t i = 0; i < exprs.size(); i++) {
     s << exprs[i];
     if (i != exprs.size() - 1) {
       s << delimiter;
@@ -99,7 +99,7 @@ std::string callFunction(const std::string &funcName, const std::string &paramet
 }
 };  // namespace CodeGen
 
-std::string DecoderPrinter::array_index(uint index) {
+std::string DecoderPrinter::array_index(const uint index) {
   return "[" + std::to_string(index) + "]";
 }
 
@@ -183,26 +183,27 @@ void DecoderPrinter::print_decoder_condition(InputCheck check,
     }
 }
 
-void DecoderPrinter::print_padding(uint startByte, uint endByte,
-                                        const std::string& input_name,
-                                        uint8_t padding_len_lsb, uint8_t padding_len_msb) {
+void DecoderPrinter::print_padding(const uint startByte, const uint endByte,
+                                   const std::string& input_name,
+                                   const uint8_t padding_len_lsb, const uint8_t padding_len_msb) {
     if(startByte == endByte){
-        flip_bits_to_dont_care(PaddingBits(padding_len_lsb, padding_len_msb), input_name + array_index(startByte));
+        ignore_bits( PaddingBits( padding_len_lsb, padding_len_msb ),
+                     input_name + array_index( startByte ));
     }
-    else{
-        if(padding_len_lsb > 0){
-            flip_bits_to_dont_care(PaddingBits(padding_len_lsb, 0), input_name + array_index(startByte));
-        }
-        if(padding_len_msb > 0){
-            flip_bits_to_dont_care(PaddingBits(0, padding_len_msb), input_name + array_index(endByte));
-        }
+    else {
+        ignore_bits( PaddingBits( padding_len_lsb, 0 ), input_name + array_index( startByte ));
+        ignore_bits( PaddingBits( 0, padding_len_msb ), input_name + array_index( endByte ));
     }
 }
 
-void DecoderPrinter::flip_bits_to_dont_care(const PaddingBits& padding, const std::string& variable_name) {
-    auto bitTarget = std::string(padding.msb, dont_care_bit)
-            + std::string(8 - padding.lsb - padding.msb, dont_care_bit_neg)
-            + std::string(padding.lsb, dont_care_bit);
+void DecoderPrinter::ignore_bits(const PaddingBits& padding, const std::string& variable_name) {
+    if(padding.msb == 0 && padding.lsb == 0){
+        return;
+    }
+
+    auto bitTarget = std::string( padding.msb, ignore_magic_const)
+            + std::string(8 - padding.lsb - padding.msb, ignore_magic_const_neg)
+            + std::string( padding.lsb, ignore_magic_const);
 
     os << CodeGen::assignStatement(variable_name,
                                    CodeGen::bitwiseOR(variable_name, bitTarget))

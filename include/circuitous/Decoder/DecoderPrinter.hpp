@@ -54,15 +54,15 @@ namespace circ::decoder{
 
     void print_decoder_condition(InputCheck check, const std::string &name_output_var,
                                  const std::string &name_fuc_input);
-    std::string array_index(uint index);
+    std::string array_index(const uint index);
 
     std::string swap_endian(const std::string &input);
 
-    void flip_bits_to_dont_care(const PaddingBits& padding, const std::string& variable_name);
+    void ignore_bits(const PaddingBits& padding, const std::string& variable_name);
 
-    void print_padding(uint startByte, uint endByte,
-                         const std::string &input_name,
-                         uint8_t padding_len_lsb, uint8_t padding_len_msb);
+    void print_padding(const uint startByte, const uint endByte,
+                       const std::string &input_name,
+                       const uint8_t padding_len_lsb, const uint8_t padding_len_msb);
   };
 }
 
