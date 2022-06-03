@@ -41,9 +41,9 @@ namespace circ::decoder{
 
     //TODO Create functions which exports names of generated functions
   private:
-    const std::string circuitous_decoder_name_prefix = "circ__";
-    const std::string function_parameter_name = "input";
-    const std::string circuit_decode_function_name = "circuit_decode";
+    static constexpr const auto circuitous_decoder_name_prefix = "circ__";
+    static constexpr const auto function_parameter_name = "input";
+    static constexpr const auto circuit_decode_function_name = "circuit_decode";
 
     const circ::CircuitPtr & circuit;
     std::ostream& os;
@@ -54,15 +54,15 @@ namespace circ::decoder{
 
     void print_decoder_condition(InputCheck check, const std::string &name_output_var,
                                  const std::string &name_fuc_input);
-    std::string array_index(uint index);
+    std::string array_index(const uint index);
 
     std::string swap_endian(const std::string &input);
 
-    void flip_bits_to_dont_care(const PaddingBits& padding, const std::string& variable_name);
+    void ignore_bits(const PaddingBits& padding, const std::string& variable_name);
 
-    void print_padding(uint startByte, uint endByte,
-                         const std::string &input_name,
-                         uint8_t padding_len_lsb, uint8_t padding_len_msb);
+    void print_padding(const uint startByte, const uint endByte,
+                       const std::string &input_name,
+                       const uint8_t padding_len_lsb, const uint8_t padding_len_msb);
   };
 }
 
