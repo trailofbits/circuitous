@@ -41,9 +41,9 @@ namespace circ::decoder{
 
     //TODO Create functions which exports names of generated functions
   private:
-    const std::string circuitous_decoder_name_prefix = "circ__";
-    const std::string function_parameter_name = "input";
-    const std::string circuit_decode_function_name = "circuit_decode";
+    static constexpr const auto circuitous_decoder_name_prefix = "circ__";
+    static constexpr const auto function_parameter_name = "input";
+    static constexpr const auto circuit_decode_function_name = "circuit_decode";
 
     const circ::CircuitPtr & circuit;
     std::ostream& os;
