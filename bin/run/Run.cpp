@@ -159,7 +159,7 @@ void export_derived(I inspect, const std::string &export_derived_to)
         for (auto [_, val] : inspect->template get_derived<circ::OutputErrorFlag>()) {
             output_obj["ebit"] = (val == llvm::APInt(1, 1));
         }
-        output_obj["timestamp"] = as_str(inspect->get(inspect.circuit->output_timestamp()));
+        output_obj["timestamp"] = as_str(inspect->get_node_val(inspect.circuit->output_timestamp()));
 
         auto str = [](auto val) {
             return llvm::toString(val, 10, false);
