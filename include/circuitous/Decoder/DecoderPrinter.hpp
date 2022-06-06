@@ -18,7 +18,17 @@ namespace circ::decoder{
     uint high; // same as low, but exclusive
   };
 
-  struct ExtractedVI{
+    enum class InputType : uint32_t
+    {
+        zero = 0, one = 1, ignore = 2
+    };
+
+    
+    std::string to_str(const InputType& ty);
+
+    std::string to_str_negated(const InputType& ty);
+
+    struct ExtractedVI{
     ExtractedVI(VerifyInstruction* VI, std::string name): VI(VI), generated_name(std::move(name)){}
     VerifyInstruction* VI;
     std::string generated_name;
@@ -42,7 +52,8 @@ namespace circ::decoder{
     //TODO Create functions which exports names of generated functions
   private:
     static constexpr const auto circuitous_decoder_name_prefix = "circ__";
-    static constexpr const auto function_parameter_name = "input";
+    static constexpr const auto max_length_variable_name = "max_length";
+    static constexpr const auto bytes_input_variable = "input";
     static constexpr const auto circuit_decode_function_name = "circuit_decode";
 
     const circ::CircuitPtr & circuit;
@@ -52,8 +63,10 @@ namespace circ::decoder{
     void print_decoder_func(const ExtractedVI &evi);
     void print_circuit_decoder();
 
-    void print_decoder_condition(InputCheck check, const std::string &name_output_var,
-                                 const std::string &name_fuc_input);
+//    void print_decoder_condition(InputCheck check, const std::string &name_output_var,
+//                                 const std::string &name_fuc_input);
+    void print_decoder_condition(const std::vector<std::array<InputType, 8>>& input, const std::string &name_output_var,
+                                   const std::string &name_fuc_input);
     std::string array_index(const uint index);
 
     std::string swap_endian(const std::string &input);
@@ -63,6 +76,8 @@ namespace circ::decoder{
     void print_padding(const uint startByte, const uint endByte,
                        const std::string &input_name,
                        const uint8_t padding_len_lsb, const uint8_t padding_len_msb);
+
+      bool contains_ignore_bit(const std::array< InputType, 8 > &byte) const;
   };
 }
 
