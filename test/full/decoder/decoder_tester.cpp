@@ -6,7 +6,7 @@
 #include <array>
 #include <fstream>
 #include <sstream>
-extern bool circuit_decode(std::array<int16_t,15> input);
+extern bool circuit_decode(std::array<uint8_t,15> input, int size = 15);
 
 int main(int argc, char** argv){
     if(argc != 2){
@@ -22,7 +22,7 @@ int main(int argc, char** argv){
     {
         std::string line;
         while (getline(myfile, line) ) {
-            std::array<int16_t, 15> out = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
+            std::array<uint8_t, 15> out = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
             if ( line.find("---") != std::string::npos ) {
                 before_marker = false;
                 continue;
