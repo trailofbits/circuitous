@@ -13,8 +13,12 @@ const char ignore_magic_const_neg = '0';  // negated value of don't care
 namespace CodeGen {
 std::string default_index = std::string(4, ' ');
 
+std::string include(const std::string &expr) {
+    return "#include <" + expr + ">\n";
+}
+
 std::string cast_to_int16_t(const std::string &expr) {
-  return "(uint8_t) " + expr;
+  return "(uint64_t) " + expr;
 }
 
 std::string wrap_in_quotes(const std::string& s){
@@ -182,6 +186,9 @@ std::string DecoderPrinter::swap_endian(const std::string &input) {
 //    }
 //}
 
+    const std::string DecoderPrinter::uint64_input1 = "input1";
+    const std::string DecoderPrinter::uint64_input2 = "input2";
+
 void DecoderPrinter::print_padding(const uint startByte, const uint endByte,
                                    const std::string& input_name,
                                    const uint8_t padding_len_lsb, const uint8_t padding_len_msb) {
@@ -212,60 +219,35 @@ void DecoderPrinter::ignore_bits(const PaddingBits& padding, const std::string& 
 
 
 void DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
-  auto vi = evi.VI;
-  std::cout << "// Generating function for VI: " << vi->id()
-            << " name: " << evi.generated_name << std::endl;
-  auto inputName = bytes_input_variable;
-    os << "bool " << evi.generated_name << "(std::array<uint8_t,15> " << inputName << ", int "
-       << max_length_variable_name << " ) {" << std::endl;
+    auto vi = evi.VI;
+    std::cout << "// Generating function for VI: " << vi->id()
+              << " name: " << evi.generated_name << std::endl;
+//    auto inputName = bytes_input_variable;
+    os << "bool " << evi.generated_name << "(uint64_t " << uint64_input1 << ", uint64_t " << uint64_input2 << ") {" << std::endl;
 
-  std::vector<InputCheck> checks;
-  SubtreeCollector<DecodeCondition> dc_collector;
-  dc_collector.Run(vi->operands);
-  auto decNodes = dc_collector.collected;
-
-
-  std::vector<std::string> boolCheckNames;
-
-
-
-  auto x =
-      std::find_if(decNodes.begin(), decNodes.end(), [&](DecodeCondition *dc) {
-        auto rhs = dynamic_cast<circ::Extract *>(dc->operands[1]);
-        return rhs->high_bit_exc == 120;
-      });
-  if (x == decNodes.end()) {
-    throw std::invalid_argument(
-        "Invalid decoder structure, missing node indicating end");
-  } else {
-    auto rhs = dynamic_cast<circ::Extract *>((*x)->operands[1]);
-    auto size = static_cast<std::size_t>(ceil(rhs->low_bit_inc / 8.0));
-    auto check_if_invalid_val = CodeGen::ifStatement(std::string(max_length_variable_name) + " < " +
-                                                             std::to_string(size), CodeGen::returnStatement("false"));
-    os << check_if_invalid_val;
-    //TODO size init this
-    std::vector<std::array<InputType,8 >> input_checks;
-    for(std::size_t i = 0; i < size; i++){
+    // TODO size init?
+    std::vector< std::array< InputType, 8 >> input_checks;
+//    std::vector< std::array< InputType, 8 >> input_checks( evi.encoding_size_in_bytes );
+    for (std::size_t i = 0; i < 16; i++) {
         auto a = std::array< InputType, 8 >{InputType::ignore, InputType::ignore,
                                             InputType::ignore, InputType::ignore,
                                             InputType::ignore, InputType::ignore,
                                             InputType::ignore, InputType::ignore};
-        for(auto& n : decNodes) {
+        for (auto &n: evi.decodeConditions) {
             auto lhsn = dynamic_cast<circ::Constant *>(n->operands[ 0 ]);
             auto extract = dynamic_cast<circ::Extract *>(n->operands[ 1 ]);
             auto low = extract->low_bit_inc;
-            auto high_inc = extract->high_bit_exc -1;
+            auto high_inc = extract->high_bit_exc - 1;
 
             // out of range of considered byte
-            if(low > (i+1)*8 || high_inc < i*8 || high_inc == 119){
+            if ( low > (i + 1) * 8 || high_inc < i * 8 || high_inc == 119 ) {
                 continue;
             }
 
-            for(std::size_t c = 0; c < 8; c++) {
+            for (std::size_t c = 0; c < 8; c++) {
                 auto bit_index = (i * 8) + c;
                 if ( low <= bit_index && bit_index <= high_inc ) {
                     auto new_val = [&]() {
-                        // TODO Check byte endianess
                         if ( lhsn->bits[ bit_index - low ] == '1' )
                             return InputType::one;
                         else return InputType::zero;
@@ -274,36 +256,26 @@ void DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
                 }
             }
         }
-        input_checks.push_back(a);
+        input_checks.push_back( a );
     }
-      auto ret_val_name = "dc_retval";
-      boolCheckNames.push_back(ret_val_name);
-      print_decoder_condition(input_checks, ret_val_name, inputName );
-      os << std::endl;
-      os << std::endl;
+    std::array< InputType, 64 > val;
+    for(std::size_t i = 0; i < 64; i++){
+        val[i] = input_checks[i/8][i % 8];
+    }
+    auto arg1 = innerFunctionArguments(val, uint64_input1) ;
+    std::array< InputType, 64 > val2;
+    for(std::size_t i = 0; i < 64; i++){
+        val2[i] = input_checks[8+i/8][i % 8];
+    }
+    auto lval2 = std::string(uint64_input2);
 
-  }
-//
-//  for (auto &decOp : decNodes) {
-//    auto lhs = dynamic_cast<circ::Constant *>(decOp->operands[0]);
-//    auto rhs = dynamic_cast<circ::Extract *>(decOp->operands[1]);
-//
-//    if (lhs == NULL || rhs == NULL) {
-//      throw std::invalid_argument(
-//          "Decoder Condition does not consist of const//extract");
-//    }
-//    if (rhs->high_bit_exc != 120) {
-////      auto ret_val_name = "dc_" + std::to_string(decOp->id());
-////      boolCheckNames.push_back(ret_val_name);
-////        this->print_decoder_condition(
-////                InputCheck( lhs->bits, rhs->low_bit_inc, rhs->high_bit_exc ),
-////                ret_val_name, inputName );
-//      os << std::endl;
-//      os << std::endl;
-//    }
-//  }
-  os << "}" << std::endl;
-  return;
+
+    auto arg2 = innerFunctionArguments(val2, uint64_input2);
+
+
+    new_print(arg1, arg2);
+    os << std::endl << std::endl;
+    os << "}" << std::endl;
 }
 
 
@@ -311,46 +283,102 @@ void DecoderPrinter::print_file() {
   SubtreeCollector<VerifyInstruction> sc;
   auto VIs = sc.Run(circuit.get()->operands[0]).collected;
   for (auto &vi : VIs) {
-    extractedVIs.push_back(ExtractedVI(
-        vi, "generated_decoder_prefix_" + std::to_string(vi->id())));
+      SubtreeCollector<DecodeCondition> dc_collector;
+      dc_collector.Run(vi->operands);
+      std::unordered_multiset<DecodeCondition *> decNodes = dc_collector.collected;
+      auto x =
+              std::find_if(decNodes.begin(), decNodes.end(), [&](DecodeCondition *dc) {
+                  auto rhs = dynamic_cast<circ::Extract *>(dc->operands[1]);
+                  return rhs->high_bit_exc == 120;
+              });
+      if(x == decNodes.end()){
+          throw std::invalid_argument("No decode condition that specifies end");
+      }
+      auto rhs = dynamic_cast<circ::Extract *>((*x)->operands[1]);
+      auto encoding_length = floor(rhs->low_bit_inc /8);
+      if(encoding_length >15){
+          throw std::invalid_argument("Instruction is longer than 15 bytes");
+      }
+      extractedVIs.push_back(ExtractedVI(
+        vi, "generated_decoder_prefix_" + std::to_string(vi->id()), static_cast<uint8_t>(encoding_length),
+        std::move(decNodes)));
   }
 
-    os << "#include <array>" << std::endl << std::endl;
-    os << "#include <stdint.h>" << std::endl << std::endl;
+    os << CodeGen::include("array") << std::endl;
+    os << CodeGen::include("stdint.h") << std::endl << std::endl;
 
-  for (auto &evi : extractedVIs) {
-    print_decoder_func(evi);
+    for (auto &evi : extractedVIs) {
+        print_decoder_func( evi );
+    }
+    print_circuit_decoder();
     os << std::endl;
-  }
-
-  print_circuit_decoder();
 }
 
 void DecoderPrinter::print_circuit_decoder() {
-  os << "bool " << circuit_decode_function_name << "(std::array<uint8_t,15> "
-     << bytes_input_variable << ", int " << max_length_variable_name <<" = 15 ) {" << std::endl;
+    os << "bool " << circuit_decode_function_name << "(std::array<uint8_t,15> "
+       << bytes_input_variable << ", int " << max_length_variable_name << " = 15 ) {"
+       << std::endl;
 
-  std::vector<std::string> funcCalls;
-  for(auto& evi : extractedVIs){
-    funcCalls.push_back(CodeGen::callFunction( evi.generated_name, std::string(bytes_input_variable) + ", " + max_length_variable_name));
-  }
+    std::stringstream retrieveStuff;
+    for(int i =0; i < 8; i++){
 
-  os << CodeGen::returnStatement(CodeGen::orExpressions(funcCalls)) << std::endl;
-  os << "}" << std::endl;
+        retrieveStuff << "((uint64_t)" << bytes_input_variable << "[" << i << "] << (8*" << i << "))";
+        if (i != 7){
+            retrieveStuff << " + ";
+        }
+    }
+    os << CodeGen::declareStatement("uint64_t", uint64_input1, retrieveStuff.str());
+
+    std::stringstream retrieveStuff2;
+    for(int i =0; i < 8; i++){
+        retrieveStuff2 << "((uint64_t)" << bytes_input_variable << "[8+" << i << "] << (8*" << i << "))";
+        if (i != 7){
+            retrieveStuff2 << " + ";
+        }
+    }
+    os << CodeGen::declareStatement("uint64_t", uint64_input2, retrieveStuff2.str());
+
+
+    std::vector< std::string > funcCalls;
+    for (auto &evi: extractedVIs) {
+        funcCalls.push_back( CodeGen::callFunction( evi.generated_name,uint64_input1 + ", " + uint64_input2));
+    }
+
+    os << CodeGen::returnStatement( CodeGen::orExpressions( funcCalls )) << std::endl;
+    os << "}" << std::endl;
 }
 
 // TODO what endian do I expect as input?
 // it takes an array of bytes, so byte[0] lsb?
 // and bit[0][7] msb?
 // and byte[1][0] lsb?
-void DecoderPrinter::print_decoder_condition(const std::vector< std::array<InputType,8 >>& input,
-                                             const std::string &name_output_var,
-                                             const std::string &name_fuc_input) {
+// TODO if we only need to check bytes > 2, don't check byte 1
+void DecoderPrinter::print_decoder_condition(
+    const std::vector< std::array< InputType, 8 >> &input8,
+    const std::string &name_fuc_input) {
+    std::vector< std::array< InputType, 64 >> input;
+    if(input8.size() != 16){
+        throw std::invalid_argument("expected 8*i8");
+    }
+
+    std::array< InputType, 64 > val;
+    for(std::size_t i = 0; i < 64; i++){
+        val[i] = input8[i/8][i % 8];
+    }
+    input.push_back(val);
+
+    for(std::size_t i = 0; i < 64; i++){
+        val[i] = input8[8+i/8][i % 8];
+    }
+    input.push_back(val);
+
     std::vector<std::string> exprs;
     for(std::size_t byte_index = 0; byte_index < input.size(); byte_index++) {
-        auto current_byte = name_fuc_input + array_index( static_cast<uint>(byte_index));
-        std::stringstream ss;
-        if(contains_ignore_bit(input[byte_index])) {
+        //TODO if we only have ignored bits, then we don't need to emit a check and hence not pad it
+        if(contains_ignore_bit(input[byte_index]) && !contains_only_ignore_bit(input[byte_index])) {
+            auto current_byte = name_fuc_input + array_index( static_cast<uint>(byte_index));
+            std::stringstream ss;
+
             for(auto i = input[byte_index].rbegin(); i != input[byte_index].rend(); i++){
                 if(*i == InputType::ignore)
                     ss << to_str(InputType::ignore);
@@ -361,6 +389,9 @@ void DecoderPrinter::print_decoder_condition(const std::vector< std::array<Input
         }
     }
     for(std::size_t byte_index = 0; byte_index < input.size(); byte_index++) {
+        if( contains_only_ignore_bit(input[byte_index]))
+            continue;
+
         auto current_byte = name_fuc_input + array_index( static_cast<uint>(byte_index));
         auto byte = input[byte_index];
         std::stringstream ss;
@@ -387,7 +418,7 @@ void DecoderPrinter::print_decoder_condition(const std::vector< std::array<Input
     os << CodeGen::returnStatement(CodeGen::andExpressions(exprs));
 }
 
-bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 8 > &byte) const {
+bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 64 > &byte) const {
     for(auto& b: byte){
         if(b == InputType::ignore){
             return true;
@@ -396,7 +427,73 @@ bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 8 > &byte)
     return false;
 }
 
-std::string to_str(const InputType& ty){
+    bool
+    DecoderPrinter::contains_only_ignore_bit(const std::array< InputType, 64 > &byte) const {
+        for(auto& b: byte){
+            if(b != InputType::ignore){
+                return false;
+            }
+        }
+        return true;
+    }
+
+    void DecoderPrinter::new_print(const innerFunctionArguments& arg1, const innerFunctionArguments& arg2) {
+        print_ignore_bits( arg1 );
+        print_ignore_bits( arg2 );
+
+        std::vector<std::string> compare_exprs;
+        if( !contains_only_ignore_bit(arg1.byte))
+            compare_exprs.push_back( get_comparison(arg1));
+
+        if( !contains_only_ignore_bit(arg2.byte))
+            compare_exprs.push_back( get_comparison(arg2));
+
+        os <<std::endl;
+        os << CodeGen::returnStatement(CodeGen::andExpressions(compare_exprs));
+    }
+
+    std::string DecoderPrinter::get_comparison(
+            const innerFunctionArguments &arg) const {
+        std::stringstream ss;
+        for(auto i = arg.byte.rbegin(); i != arg.byte.rend(); i++) {
+            if(*i == InputType::ignore)
+                ss << to_str_negated(InputType::ignore);
+            else
+                ss << to_str(*i);
+        }
+
+        auto s = ss.str();
+        auto lhs = CodeGen::cast_to_int16_t(CodeGen::xor_variable_with_negated_target(arg.input_name, s,0,0));
+
+        std::stringstream output;
+        for(auto i = arg.byte.rbegin(); i != arg.byte.rend(); i++) {
+            if ( *i == InputType::ignore )
+                output << to_str_negated(InputType::ignore);
+            else
+                output << to_str(InputType::ignore);
+        }
+        auto rhs = "0b" + output.str();
+        auto cmp = CodeGen::compare(lhs, rhs);
+        return cmp;
+    }
+
+    void DecoderPrinter::print_ignore_bits(const innerFunctionArguments &arg) {
+        if( contains_ignore_bit( arg.byte) && !contains_only_ignore_bit( arg.byte)) {
+            auto current_byte = arg.input_name;
+            std::stringstream ss;
+
+            for(auto i = arg.byte.rbegin(); i != arg.byte.rend(); i++){
+                if(*i == InputType::ignore)
+                    ss << to_str(InputType::ignore);
+                else
+                    ss << to_str_negated(InputType::ignore);
+            }
+            os << CodeGen::assignStatement( current_byte, CodeGen::bitwiseOR( current_byte, ss.str()));
+        }
+    }
+
+
+    std::string to_str(const InputType& ty){
     switch (ty) {
         case InputType::zero: return "0";
         case InputType::one: return "1";

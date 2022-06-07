@@ -29,15 +29,23 @@ namespace circ::decoder{
     std::string to_str_negated(const InputType& ty);
 
     struct ExtractedVI{
-    ExtractedVI(VerifyInstruction* VI, std::string name): VI(VI), generated_name(std::move(name)){}
-    VerifyInstruction* VI;
-    std::string generated_name;
+        ExtractedVI(VerifyInstruction* VI, std::string name, uint8_t size, std::unordered_multiset<DecodeCondition *> decodeConditions): VI(VI), generated_name(std::move(name)), encoding_size_in_bytes(size), decodeConditions(decodeConditions){}
+        VerifyInstruction* VI;
+        std::string generated_name;
+        uint8_t encoding_size_in_bytes;
+        std::unordered_multiset<DecodeCondition *> decodeConditions;
   };
 
   struct PaddingBits{
       PaddingBits(uint8_t lsb, uint8_t msb) : lsb(lsb), msb(msb){};
       uint8_t lsb;
       uint8_t msb;
+  };
+
+  struct innerFunctionArguments {
+      innerFunctionArguments(std::array< InputType, 64 > &byte, const std::string &input_name) :byte(byte), input_name(input_name){}
+      const std::array< InputType, 64 > &byte;
+      const std::string &input_name;
   };
 
   class DecoderPrinter{
@@ -54,6 +62,8 @@ namespace circ::decoder{
     static constexpr const auto circuitous_decoder_name_prefix = "circ__";
     static constexpr const auto max_length_variable_name = "max_length";
     static constexpr const auto bytes_input_variable = "input";
+    static  const std::string uint64_input1;
+    static  const std::string uint64_input2;
     static constexpr const auto circuit_decode_function_name = "circuit_decode";
 
     const circ::CircuitPtr & circuit;
@@ -65,8 +75,10 @@ namespace circ::decoder{
 
 //    void print_decoder_condition(InputCheck check, const std::string &name_output_var,
 //                                 const std::string &name_fuc_input);
-    void print_decoder_condition(const std::vector<std::array<InputType, 8>>& input, const std::string &name_output_var,
+      void print_decoder_condition(const std::vector< std::array< InputType, 8 >> &input,
                                    const std::string &name_fuc_input);
+
+      void new_print(const innerFunctionArguments& arg1, const innerFunctionArguments& arg2);
     std::string array_index(const uint index);
 
     std::string swap_endian(const std::string &input);
@@ -77,7 +89,12 @@ namespace circ::decoder{
                        const std::string &input_name,
                        const uint8_t padding_len_lsb, const uint8_t padding_len_msb);
 
-      bool contains_ignore_bit(const std::array< InputType, 8 > &byte) const;
+    bool contains_ignore_bit(const std::array< InputType, 64 > &byte) const;
+    bool contains_only_ignore_bit(const std::array< InputType, 64 > &byte) const;
+
+    void print_ignore_bits(const innerFunctionArguments &arg);
+
+    std::string get_comparison(const innerFunctionArguments &arg) const;
   };
 }
 
