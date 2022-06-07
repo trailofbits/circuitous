@@ -171,3 +171,11 @@ def test_two_different_instructions():
     res = run_test("test_two_different_instructions",
                    [([0x90], [(0, 8)]), ([0x48, 0x8b, 0xc0], [(1, 2), (3, 16), (22, 24)])])
     assert res == 1
+
+
+def test_two_different_instructions():
+    res = run_test("test_two_different_instructions",
+                   [([0x90], [(0, 8)]), ([0x48, 0x8b, 0xc0], [(1, 2), (3, 16), (22, 24)])])
+    assert res == 1
+
+
