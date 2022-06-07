@@ -78,10 +78,6 @@ std::string orExpressions(const std::vector< std::string > &exprs) {
   return concatExprs(exprs, " || ");
 }
 
-std::string sumExpressions(const std::vector< std::string > &exprs) {
-    return concatExprs(exprs, " + ");
-}
-
 // assumes rhs_bits is a string of consecutive bits with 0b in the string
 std::string bitwiseOR(const std::string &lhs, const std::string &rhs_bits) {
   return lhs + " | " + wrap_in_quotes("0b" + rhs_bits);
@@ -154,7 +150,7 @@ void DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
     std::cout << "// Generating function for VI: " << vi->id()
               << " name: " << evi.generated_name << std::endl;
 //    auto inputName = bytes_input_variable;
-    os << "static int " << evi.generated_name << "(uint64_t " << uint64_input1 << ", uint64_t " << uint64_input2 << ") {" << std::endl;
+    os << "bool " << evi.generated_name << "(uint64_t " << uint64_input1 << ", uint64_t " << uint64_input2 << ") {" << std::endl;
 
     // TODO size init?
     std::vector< std::array< InputType, 8 >> input_checks;
@@ -199,10 +195,12 @@ void DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
         val2[i] = input_checks[8+i/8][i % 8];
     }
     auto lval2 = std::string(uint64_input2);
+
+
     auto arg2 = innerFunctionArguments(val2, uint64_input2);
 
 
-    new_print( arg1, arg2, evi.encoding_size_in_bytes );
+    new_print( arg1, arg2, 0 );
     os << std::endl << std::endl;
     os << "}" << std::endl;
 }
@@ -250,30 +248,25 @@ void DecoderPrinter::print_circuit_decoder() {
 
     print_conversion_input_to_uints64();
 
-    std::vector< std::string > funcCalls;
+    std::unordered_multimap<int, ExtractedVI*> group_by_enc_size;
     for (auto &evi: extractedVIs) {
-        funcCalls.push_back( CodeGen::callFunction( evi.generated_name,uint64_input1 + ", " + uint64_input2));
+        group_by_enc_size.insert( std::make_pair(evi.encoding_size_in_bytes, &evi));
     }
 
-//    std::unordered_multimap<int, ExtractedVI*> group_by_enc_size;
-//    for (auto &evi: extractedVIs) {
-//        group_by_enc_size.insert( std::make_pair(evi.encoding_size_in_bytes, &evi));
-//    }
-//
-//    for(int i = 1; i <= 15; i++){
-//        std::vector< std::string > funcCalls;
-//        if(group_by_enc_size.contains(i)){
-//            auto range = group_by_enc_size.equal_range(i);
-//            for (auto it = range.first; it != range.second; ++it) {
-//                funcCalls.push_back( CodeGen::callFunction( (*it).second->generated_name,uint64_input1 + ", " + uint64_input2));
-//            }
-//
-//            os << CodeGen::ifStatement(CodeGen::orExpressions( funcCalls ), CodeGen::returnStatement(std::to_string(i)));
-//        }
-//    }
+    for(int i = 1; i <= 15; i++){
+        std::vector< std::string > funcCalls;
+        if(group_by_enc_size.contains(i)){
+            auto range = group_by_enc_size.equal_range(i);
+            for (auto it = range.first; it != range.second; ++it) {
+                funcCalls.push_back( CodeGen::callFunction( (*it).second->generated_name,uint64_input1 + ", " + uint64_input2));
+            }
+
+            os << CodeGen::ifStatement(CodeGen::orExpressions( funcCalls ), CodeGen::returnStatement(std::to_string(i)));
+        }
+    }
 
 
-    os << CodeGen::returnStatement(CodeGen::sumExpressions( funcCalls)) << std::endl;
+    os << CodeGen::returnStatement( "-1") << std::endl;
 
     os << "}" << std::endl;
 }
@@ -400,8 +393,8 @@ bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 64 > &byte
             compare_exprs.push_back( get_comparison(arg2));
 
         os <<std::endl;
-        auto cmps = CodeGen::wrap_in_quotes(CodeGen::andExpressions(compare_exprs));
-        os << CodeGen::returnStatement(CodeGen::mul(cmps, std::to_string(encoding_length)));
+        auto cmps = CodeGen::andExpressions(compare_exprs);
+        os << CodeGen::returnStatement(cmps);
     }
 
     std::string DecoderPrinter::get_comparison(
