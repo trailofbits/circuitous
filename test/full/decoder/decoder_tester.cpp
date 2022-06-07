@@ -6,7 +6,7 @@
 #include <array>
 #include <fstream>
 #include <sstream>
-extern bool circuit_decode(std::array<uint8_t,15> input, int size = 15);
+extern int circuit_decode(std::array<uint8_t,15> input, int size = 15);
 
 int main(int argc, char** argv){
     if(argc != 2){
@@ -34,7 +34,7 @@ int main(int argc, char** argv){
                 out[i] = val;
             }
 
-            if(circuit_decode(out) != before_marker){
+            if((circuit_decode(out) > 0) != before_marker){
                 success = false;
                 std::cerr << "error:: should ";
                 if(before_marker){

@@ -78,7 +78,8 @@ namespace circ::decoder{
       void print_decoder_condition(const std::vector< std::array< InputType, 8 >> &input,
                                    const std::string &name_fuc_input);
 
-      void new_print(const innerFunctionArguments& arg1, const innerFunctionArguments& arg2);
+      void new_print(const innerFunctionArguments &arg1,
+                     const innerFunctionArguments &arg2, int encoding_length);
     std::string array_index(const uint index);
 
     std::string swap_endian(const std::string &input);
@@ -95,6 +96,8 @@ namespace circ::decoder{
     void print_ignore_bits(const innerFunctionArguments &arg);
 
     std::string get_comparison(const innerFunctionArguments &arg) const;
+
+      void print_conversion_input_to_uints64();
   };
 }
 
