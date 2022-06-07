@@ -78,6 +78,10 @@ std::string orExpressions(const std::vector< std::string > &exprs) {
   return concatExprs(exprs, " || ");
 }
 
+std::string sumExpressions(const std::vector< std::string > &exprs) {
+    return concatExprs(exprs, " + ");
+}
+
 // assumes rhs_bits is a string of consecutive bits with 0b in the string
 std::string bitwiseOR(const std::string &lhs, const std::string &rhs_bits) {
   return lhs + " | " + wrap_in_quotes("0b" + rhs_bits);
@@ -87,7 +91,9 @@ std::string returnStatement(const std::string &expr) {
   return default_index + "return " + expr + ";";
 }
 
-
+std::string mul(const std::string &lhs, const std::string &rhs ) {
+    return CodeGen::wrap_in_quotes(lhs + " * " + rhs);
+}
 std::string ifStatement(const std::string& condition_string, const std::string& body){
     return "if (" + condition_string + ") {\n" + body + "\n}\n";
 }
@@ -111,83 +117,8 @@ std::string DecoderPrinter::swap_endian(const std::string &input) {
   return std::string(input.rbegin(), input.rend());
 }
 
-//void DecoderPrinter::print_decoder_condition(InputCheck check,
-//                                                  const std::string &name_output_var,
-//                                                  const std::string &name_fuc_input) {
-//    // for check all relevant bytes for check
-//    // relevant bytes are from indices floor(x)/8 to floor(y)/8
-//    auto startByte = check.low / 8;  //integer div <==> floor(x)/8
-//    auto endByte = (check.high - 1) / 8;  //exclusive so need to subtract one
-//
-//    /*
-//     * we will need the check.bits in little endian otherwise we reverse the _entire_ constant
-//     * but, we will need to swap the endianness on byte level, so keep this like now
-//     */
-//    auto littleEndianBits = std::string(check.bits.begin(), check.bits.end());
-//    os << "\t // Generating for const: " << littleEndianBits
-//       << " start: " << std::to_string(check.low)
-//       << " end: " << std::to_string(check.high) << std::endl;
-//
-//    // local variable inside a function that we control, so this won't give conflicts
-//    auto input_name = name_output_var + "_copy";
-//    os << CodeGen::declareStatement(
-//            "auto", input_name, "std::array<int16_t,15>(" + name_fuc_input + ")")
-//       << std::endl;
-//
-//    uint8_t padding_len_lsb = (check.low % 8);
-//    uint8_t padding_len_msb = (8 - (check.high % 8)) % 8;
-//
-//    print_padding(startByte, endByte, input_name, padding_len_lsb, padding_len_msb);
-//
-//    // if start==end ==> only 1 byte to check
-//    if (startByte == endByte) {
-//        auto consideredInputByte = input_name + array_index(startByte);
-//        auto preparedInput = CodeGen::prepareInputByte(
-//                consideredInputByte, swap_endian(littleEndianBits), padding_len_msb,
-//                padding_len_lsb);
-//        auto compExpression = CodeGen::compare(
-//                preparedInput, CodeGen::getTarget(padding_len_msb, padding_len_lsb));
-//        os << CodeGen::declareStatement("bool", name_output_var, compExpression);
-//    } else {  // check spans multiple bytes
-//        std::vector<std::string> exprs;
-//        for (auto currByte = startByte; currByte <= endByte; currByte++) {
-//            auto considerdByte = input_name + array_index(currByte);
-//            auto bytesDeepIntoExtract = currByte - startByte - 1;
-//            auto startOffset = 8 - padding_len_lsb + (bytesDeepIntoExtract * 8);
-//
-//            std::string target = "";
-//            std::string preparedInput = "";
-//            if (currByte == startByte) {
-//                auto checkBytes =
-//                        swap_endian(littleEndianBits.substr(0, 8 - padding_len_lsb));
-//                preparedInput = CodeGen::prepareInputByte(considerdByte, checkBytes, 0,
-//                                                          padding_len_lsb);
-//                target = CodeGen::getTarget(0, padding_len_lsb);
-//            } else if (currByte != startByte && currByte != endByte) {
-//                auto checkBytes =
-//                        swap_endian(littleEndianBits.substr(startOffset, startOffset + 8));
-//                preparedInput =
-//                        CodeGen::prepareInputByte(considerdByte, checkBytes, 0, 0);
-//                target = CodeGen::getTarget(0, 0);
-//            } else {  //currByte == endByte
-//                auto checkBytes = swap_endian(
-//                        littleEndianBits.substr(startOffset, 8 - padding_len_msb));
-//                preparedInput = CodeGen::prepareInputByte(considerdByte, checkBytes,
-//                                                          padding_len_msb, 0);
-//                target = CodeGen::getTarget(padding_len_msb, 0);
-//            }
-//
-//            auto compExpression = CodeGen::compare(preparedInput, target);
-//            exprs.push_back(compExpression);
-//        }
-//
-//        os << CodeGen::declareStatement("bool", name_output_var,
-//                                        CodeGen::andExpressions(exprs));
-//    }
-//}
-
-    const std::string DecoderPrinter::uint64_input1 = "input1";
-    const std::string DecoderPrinter::uint64_input2 = "input2";
+const std::string DecoderPrinter::uint64_input1 = "input1";
+const std::string DecoderPrinter::uint64_input2 = "input2";
 
 void DecoderPrinter::print_padding(const uint startByte, const uint endByte,
                                    const std::string& input_name,
@@ -223,7 +154,7 @@ void DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
     std::cout << "// Generating function for VI: " << vi->id()
               << " name: " << evi.generated_name << std::endl;
 //    auto inputName = bytes_input_variable;
-    os << "bool " << evi.generated_name << "(uint64_t " << uint64_input1 << ", uint64_t " << uint64_input2 << ") {" << std::endl;
+    os << "static int " << evi.generated_name << "(uint64_t " << uint64_input1 << ", uint64_t " << uint64_input2 << ") {" << std::endl;
 
     // TODO size init?
     std::vector< std::array< InputType, 8 >> input_checks;
@@ -268,12 +199,10 @@ void DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
         val2[i] = input_checks[8+i/8][i % 8];
     }
     auto lval2 = std::string(uint64_input2);
-
-
     auto arg2 = innerFunctionArguments(val2, uint64_input2);
 
 
-    new_print(arg1, arg2);
+    new_print( arg1, arg2, evi.encoding_size_in_bytes );
     os << std::endl << std::endl;
     os << "}" << std::endl;
 }
@@ -315,38 +244,59 @@ void DecoderPrinter::print_file() {
 }
 
 void DecoderPrinter::print_circuit_decoder() {
-    os << "bool " << circuit_decode_function_name << "(std::array<uint8_t,15> "
+    os << "int " << circuit_decode_function_name << "(std::array<uint8_t,15> "
        << bytes_input_variable << ", int " << max_length_variable_name << " = 15 ) {"
        << std::endl;
 
-    std::stringstream retrieveStuff;
-    for(int i =0; i < 8; i++){
-
-        retrieveStuff << "((uint64_t)" << bytes_input_variable << "[" << i << "] << (8*" << i << "))";
-        if (i != 7){
-            retrieveStuff << " + ";
-        }
-    }
-    os << CodeGen::declareStatement("uint64_t", uint64_input1, retrieveStuff.str());
-
-    std::stringstream retrieveStuff2;
-    for(int i =0; i < 8; i++){
-        retrieveStuff2 << "((uint64_t)" << bytes_input_variable << "[8+" << i << "] << (8*" << i << "))";
-        if (i != 7){
-            retrieveStuff2 << " + ";
-        }
-    }
-    os << CodeGen::declareStatement("uint64_t", uint64_input2, retrieveStuff2.str());
-
+    print_conversion_input_to_uints64();
 
     std::vector< std::string > funcCalls;
     for (auto &evi: extractedVIs) {
         funcCalls.push_back( CodeGen::callFunction( evi.generated_name,uint64_input1 + ", " + uint64_input2));
     }
 
-    os << CodeGen::returnStatement( CodeGen::orExpressions( funcCalls )) << std::endl;
+//    std::unordered_multimap<int, ExtractedVI*> group_by_enc_size;
+//    for (auto &evi: extractedVIs) {
+//        group_by_enc_size.insert( std::make_pair(evi.encoding_size_in_bytes, &evi));
+//    }
+//
+//    for(int i = 1; i <= 15; i++){
+//        std::vector< std::string > funcCalls;
+//        if(group_by_enc_size.contains(i)){
+//            auto range = group_by_enc_size.equal_range(i);
+//            for (auto it = range.first; it != range.second; ++it) {
+//                funcCalls.push_back( CodeGen::callFunction( (*it).second->generated_name,uint64_input1 + ", " + uint64_input2));
+//            }
+//
+//            os << CodeGen::ifStatement(CodeGen::orExpressions( funcCalls ), CodeGen::returnStatement(std::to_string(i)));
+//        }
+//    }
+
+
+    os << CodeGen::returnStatement(CodeGen::sumExpressions( funcCalls)) << std::endl;
+
     os << "}" << std::endl;
 }
+
+    void DecoderPrinter::print_conversion_input_to_uints64() {
+        std::stringstream retrieveStuff;
+        for(int i =0; i < 8; i++){
+            retrieveStuff << "((uint64_t)" << bytes_input_variable << "[" << i << "] << (8*" << i << "))";
+            if (i != 7){
+                retrieveStuff << " + ";
+            }
+        }
+        os << CodeGen::declareStatement( "uint64_t", uint64_input1, retrieveStuff.str());
+
+        std::stringstream retrieveStuff2;
+        for(int i =0; i < 8; i++){
+            retrieveStuff2 << "((uint64_t)" << bytes_input_variable << "[8+" << i << "] << (8*" << i << "))";
+            if (i != 7){
+                retrieveStuff2 << " + ";
+            }
+        }
+        os << CodeGen::declareStatement( "uint64_t", uint64_input2, retrieveStuff2.str());
+    }
 
 // TODO what endian do I expect as input?
 // it takes an array of bytes, so byte[0] lsb?
@@ -437,7 +387,8 @@ bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 64 > &byte
         return true;
     }
 
-    void DecoderPrinter::new_print(const innerFunctionArguments& arg1, const innerFunctionArguments& arg2) {
+    void DecoderPrinter::new_print(const innerFunctionArguments &arg1,
+                                   const innerFunctionArguments &arg2, int encoding_length) {
         print_ignore_bits( arg1 );
         print_ignore_bits( arg2 );
 
@@ -449,7 +400,8 @@ bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 64 > &byte
             compare_exprs.push_back( get_comparison(arg2));
 
         os <<std::endl;
-        os << CodeGen::returnStatement(CodeGen::andExpressions(compare_exprs));
+        auto cmps = CodeGen::wrap_in_quotes(CodeGen::andExpressions(compare_exprs));
+        os << CodeGen::returnStatement(CodeGen::mul(cmps, std::to_string(encoding_length)));
     }
 
     std::string DecoderPrinter::get_comparison(
