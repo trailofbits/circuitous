@@ -27,7 +27,6 @@ namespace circ::run
         VerifyInstruction *current;
         CtxCollector *collector;
         TodoQueue todo;
-        std::optional<bool> result;
 
         Semantics semantics;
         NodeState node_state;
@@ -36,13 +35,14 @@ namespace circ::run
         std::stringstream _dbg;
 
         Spawn(Circuit *circuit, VerifyInstruction *current_,
-              CtxCollector *collector_)
+              CtxCollector *collector_, const NodeState &node_state, const Memory &memory)
         : circuit(circuit),
           current(current_),
           collector(collector_),
           todo(MemoryOrdering(circuit, collector_, current_)),
           semantics(this, circuit),
-          memory(circuit)
+          memory(memory),
+          node_state(node_state)
         {}
 
         Spawn(const Spawn &) = delete;
@@ -116,18 +116,6 @@ namespace circ::run
                 semantics.dispatch(op);
         }
 
-        void set_memory(uint64_t addr, const std::string &data)
-        {
-            check(data.size() % 2 == 0);
-            uint64_t offset = 0;
-            for (std::size_t i = 0; i < data.size(); i += 2)
-            {
-                auto str = data.substr(i, 2);
-                auto val = llvm::APInt(8, str, 16);
-                this->memory.store(addr + offset, val);
-                ++offset;
-            }
-        }
 
         template<typename T>
         void init_notify_()
@@ -234,49 +222,14 @@ namespace circ::run
                 dispatch(x);
                 if (auto r = short_circuit(x)) {
                     log_dbg() << "Short circuiting to result, as decode was not satisfied.";
-                    result = *r;
-                    return *result;
+                    return *r;
                 }
             }
             log_dbg() << "Run done, fetching result.";
-            result = [&](){
-                if (auto res = node_state.get(current)) {
-                    return *res == semantics.true_val();
-                }
-                return false;
-            }();
-            return *result;
-        }
-
-        void set_input_state(const trace::Entry &in)
-        {
-            auto inst_bits = circuit->input_inst_bits();
-            this->set_node_val(inst_bits, in.get_inst_bits(inst_bits->size));
-
-            this->set_node_val(circuit->input_ebit(), in.get_ebit());
-            this->set_node_val(circuit->input_timestamp(), in.get_timestamp());
-            for (auto &[name, val] : in.regs) {
-                if (auto reg = circuit->input_reg(name)) {
-                    this->set_node_val(reg, llvm::APInt(reg->size, val));
-                }
+            if (auto res = node_state.get(current)) {
+                return *res == semantics.true_val();
             }
-
-            for (auto hint : circuit->attr<circ::Memory>()) {
-                if (auto val = in.get_mem_hint(std::to_string(hint->mem_idx))) {
-                    this->set_node_val(hint, *val);
-                }
-            }
-        }
-
-        void set_output_state(const trace::Entry &out)
-        {
-            this->set_node_val(circuit->output_ebit(), out.get_ebit());
-            this->set_node_val(circuit->output_timestamp(), out.get_timestamp());
-            for (auto &[name, val] : out.regs) {
-                if (auto reg = circuit->output_reg(name)) {
-                    this->set_node_val(reg, llvm::APInt(reg->size, val));
-                }
-            }
+            return false;
         }
 
         trace::Entry get_output_state() const
