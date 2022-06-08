@@ -125,4 +125,37 @@ namespace circ::run
     using DQueueInterpreter = QueueInterpreter<DSpawn>;
     using VQueueInterpreter =  QueueInterpreter<VSpawn>;
 
+    struct NodeStateBuilder
+    {
+        using self_t = NodeStateBuilder;
+
+      private:
+        NodeState node_state;
+        Circuit *circuit;
+
+      public:
+        NodeStateBuilder(Circuit *circuit) : circuit(circuit) {}
+
+        auto take() { return std::move(node_state); }
+        self_t &input_trace(const trace::Entry &in);
+        self_t &output_trace(const trace::Entry &out);
+    };
+
+    struct MemoryBuilder
+    {
+        using self_t = MemoryBuilder;
+      private:
+        Memory memory;
+
+      public:
+        MemoryBuilder(Circuit *circuit) : memory(circuit) {}
+
+        auto take() { return std::move(memory); }
+        self_t &set(std::size_t addr, const std::string &val);
+        self_t &set(const trace::Entry &trace);
+    };
+
+    using interpreter_state_t = std::tuple< Memory, NodeState >;
+
+
 }  // namespace circ::run
