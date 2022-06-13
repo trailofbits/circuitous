@@ -181,9 +181,9 @@ void DecoderPrinter::ignore_bits(const PaddingBits& padding, const std::string& 
 
 
 void DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
-    auto vi = evi.VI;
-    std::cout << "// Generating function for VI: " << vi->id()
-              << " name: " << evi.generated_name << std::endl;
+//    auto vi = evi.VI;
+//    std::cout << "// Generating function for VI: " << vi->id()
+//              << " name: " << evi.generated_name << std::endl;
 //    auto inputName = bytes_input_variable;
     os << "bool " << evi.generated_name << "(uint64_t " << uint64_input1 << ", uint64_t " << uint64_input2 << ") {" << std::endl;
 
@@ -286,8 +286,8 @@ void DecoderPrinter::print_circuit_decoder() {
     for(auto& evi: extractedVIs) {
         to_split.push_back(&evi);
     }
-    os << print_split(to_split, std::vector<std::size_t>());
-
+    os << print_split(to_split, std::vector<std::pair<std::size_t, int>>(), 0);
+    std::cout << "max depth during gen: " << max_depth << " for size of: " << std::to_string(extractedVIs.size()) <<std::endl;
 
     /*
      * ok were gonna do this optimally
@@ -483,7 +483,9 @@ bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 64 > &byte
      * either if(check bit == 1) { split(ones) } else split(zeros)
      * or if split.size() == 1 :return evi(input)
      */
-    std::string DecoderPrinter::print_split(std::vector< ExtractedVI * > to_split, std::vector<std::size_t> already_chosen_bits ) {
+    std::string DecoderPrinter::print_split(std::vector< ExtractedVI * > to_split, std::vector<std::pair<std::size_t, int>> already_chosen_bits, int depth ) {
+        if(this->max_depth < depth)
+            max_depth = depth;
         std::array<DTI, 120> indice_values;
 
         if(to_split.size() == 0){
@@ -496,7 +498,7 @@ bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 64 > &byte
 
         for (std::size_t i = 0; i < 120; i++) {
             for(auto& evi: to_split){
-                if(std::find(already_chosen_bits.begin(), already_chosen_bits.end(), i) != already_chosen_bits.end()){
+                if(std::find_if(already_chosen_bits.begin(), already_chosen_bits.end(), [&](std::pair<std::size_t, int> p){return p.first == i;}) != already_chosen_bits.end()){
                     continue;
                 }
 
@@ -536,19 +538,20 @@ bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 64 > &byte
         auto max = std::max_element(indice_values.begin(), indice_values.end());
         std::size_t ci = static_cast<std::size_t>(std::distance(indice_values.begin(), max));
 
-        already_chosen_bits.push_back(ci);
+        already_chosen_bits.push_back( std::make_pair(ci, depth));
         // if max is 1 for one of them recurse fill with dont cares, just print
         // if ones == 1, codegen return func call, else flip
 
         //recurse both
-        if(indice_values[ci].zeros.size() > 1 && indice_values[ci].ones.size() > 1){
-            for(auto& ignored : indice_values[ci].ignores){
-                if(indice_values[ci].zeros.size() < indice_values[ci].ones.size())
-                    indice_values[ci].zeros.push_back(ignored);
-                else
-                    indice_values[ci].ones.push_back(ignored);
-            }
+//        if(indice_values[ci].zeros.size() > 1 && indice_values[ci].ones.size() > 1){
+        for(auto& ignored : indice_values[ci].ignores){
+            // we didn't learn anything so they need to be added to both : (
+//            if(indice_values[ci].zeros.size() < indice_values[ci].ones.size())
+                indice_values[ci].zeros.push_back(ignored);
+//            else
+                indice_values[ci].ones.push_back(ignored);
         }
+//        }
 
 
         /*
@@ -564,17 +567,17 @@ bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 64 > &byte
          *      yes if there is only don't cares and a single 1 for each position
          *
          */
-        if(indice_values[ci].zeros.size() < 2){
-            for(auto& ignored : indice_values[ci].ignores) {
-                indice_values[ci].ones.push_back(ignored);
-            }
-        }
-
-        else if(indice_values[ci].ones.size() < 2){
-            for(auto& ignored : indice_values[ci].ignores) {
-                indice_values[ci].zeros.push_back(ignored);
-            }
-        }
+//        if(indice_values[ci].zeros.size() < 2){
+//            for(auto& ignored : indice_values[ci].ignores) {
+//                indice_values[ci].ones.push_back(ignored);
+//            }
+//        }
+//
+//        else if(indice_values[ci].ones.size() < 2){
+//            for(auto& ignored : indice_values[ci].ignores) {
+//                indice_values[ci].zeros.push_back(ignored);
+//            }
+//        }
 
         /*
          * dead branches could be checked
@@ -589,7 +592,7 @@ bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 64 > &byte
         if(ones.size() == 0 && zeros.size() == 0){
             return CodeGen::returnStatement("-1");;
         }
-        return CodeGen::ifElse( c , print_split(ones, already_chosen_bits), print_split(zeros, already_chosen_bits) );
+        return CodeGen::ifElse( c , print_split(ones, already_chosen_bits, depth +1), print_split(zeros, already_chosen_bits, depth+1) );
     }
 
     std::string DecoderPrinter::print_evi_call(const ExtractedVI &evi) {
