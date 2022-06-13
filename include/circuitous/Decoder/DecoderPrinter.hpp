@@ -103,13 +103,14 @@ namespace circ::decoder{
 
     void print_ignore_bits(const innerFunctionArguments &arg);
 
-      std::string print_split(std::vector<ExtractedVI*> split, std::vector<std::size_t> already_chosen_bits);
+      std::string print_split(std::vector<ExtractedVI*> split, std::vector<std::pair<std::size_t, int>> already_chosen_bits, int depth);
 
     std::string get_comparison(const innerFunctionArguments &arg) const;
 
       void print_conversion_input_to_uints64();
 
       std::string print_evi_call(const ExtractedVI& evi);
+      int max_depth =0 ;
   };
 }
 
