@@ -128,24 +128,24 @@ void OpSem<S>::visit(DecoderResult *op)
     return safe(op, and_);
 }
 
-void BaseSemantics::visit(Circuit *op)
+inline void BaseSemantics::visit(Circuit *op)
 {
     this->set_node_val(op, this->get_node_val(op->operands[0]));
 }
 
-void BaseSemantics::set_input_state(const trace::Entry &in)
+inline void BaseSemantics::set_input_state(const trace::Entry &in)
 {
     // REFACTOR(lukas): Remove alltogether.
     not_implemented();
 }
 
-void BaseSemantics::set_output_state(const trace::Entry &out)
+inline void BaseSemantics::set_output_state(const trace::Entry &out)
 {
     // REFACTOR(lukas): Remove alltogether.
     not_implemented();
 }
 
-trace::Entry BaseSemantics::get_output_state() const
+inline trace::Entry BaseSemantics::get_output_state() const
 {
     // REFACTOR(lukas): Remove alltogether.
     not_implemented();

@@ -29,17 +29,15 @@ namespace circ::run
         TodoQueue todo;
 
         Semantics semantics;
-        NodeState node_state;
         Memory memory;
+        NodeState node_state;
 
-        std::stringstream _dbg;
-
-        Spawn(Circuit *circuit, VerifyInstruction *current_,
-              CtxCollector *collector_, const NodeState &node_state, const Memory &memory)
+        Spawn(Circuit *circuit, VerifyInstruction *current,
+              CtxCollector *collector, const NodeState &node_state, const Memory &memory)
         : circuit(circuit),
-          current(current_),
-          collector(collector_),
-          todo(MemoryOrdering(circuit, collector_, current_)),
+          current(current),
+          collector(collector),
+          todo(MemoryOrdering(circuit, collector, current)),
           semantics(this, circuit),
           memory(memory),
           node_state(node_state)
@@ -84,8 +82,10 @@ namespace circ::run
                 return;
             }
             this->node_state.set(op, val);
-            todo.notify_from(op);
+            notify_from(op);
         }
+
+        /* StateOwner interface */
 
         value_type get_node_val(Operation *op) const override { return node_state.get(op); }
         bool has_value(Operation *op) const override { return node_state.has_value(op); }
@@ -116,50 +116,43 @@ namespace circ::run
                 semantics.dispatch(op);
         }
 
-
-        template<typename T>
-        void init_notify_()
+        auto is_in_current_ctx()
         {
-            auto check_position = [&](auto node, auto user)
+            return [&](const auto &op)
             {
-                if constexpr (!std::is_same_v< T, Advice >) return true;
-                else {
-                    for (std::size_t i = 0; i < user->operands.size(); ++i)
-                        if (node == user->operands[i])
-                            return i == 1;
-                    unreachable();
-                }
+                return collector->op_to_ctxs[op].count(current);
             };
-
-            for (auto node : circuit->template attr< T >())
-            {
-                if (this->node_state.has_value(node))
-                    continue;
-
-                if (!collector->op_to_ctxs[node].count(current))
-                    continue;
-
-                for (auto user : node->users)
-                {
-                    if (constrained_by(node, user) && check_position(node, user))
-                        todo.notify(node, user);
-                }
-            }
         }
 
-        template<typename ...Ts>
-        void init_notify()
+        void notify_advice_constraints()
         {
-            return (init_notify_<Ts>(), ...);
+            for (auto undef : circuit->attr< Undefined >())
+                notify_from(undef);
+        }
+
+        void notify_from(Operation *op)
+        {
+            todo.notify_from(op, is_in_current_ctx());
+        }
+
+        void derive(const std::unordered_set< Operation * > &ops)
+        {
+            for (auto op : ops)
+            {
+                if (is_in_current_ctx()(op))
+                {
+                    semantics.to_derive(op->operands[1], op);
+                    todo.notify_self(op);
+                }
+            }
         }
 
         void init()
         {
             semantics.init();
-            init_notify< Advice, OutputRegister, OutputErrorFlag, OutputTimestamp,
-                         circ::Memory >();
+            for (const auto &[op, _] : node_state.node_values)
+                notify_from(op);
         }
-
 
         // `[ current, next ]`.
         // In `next` only values "visible" by this transition are updated.
@@ -214,8 +207,11 @@ namespace circ::run
             }
         }
 
-        bool Run() {
+        bool run() {
             init();
+            for (const auto &constant : circuit->attr< Constant >())
+                dispatch(constant);
+
             while (!todo.empty()) {
                 auto x = todo.pop();
                 log_dbg() << "Dispatching" << pretty_print< true >(x);
@@ -226,10 +222,43 @@ namespace circ::run
                 }
             }
             log_dbg() << "Run done, fetching result.";
+            if (!node_state.has_value(current))
+            {
+                no_value_reached();
+                return false;
+            }
             if (auto res = node_state.get(current)) {
                 return *res == semantics.true_val();
             }
             return false;
+        }
+
+        void no_value_reached()
+        {
+            std::stringstream ss;
+
+            auto fmt = [&](auto what, auto &prefix)
+            {
+                ss << prefix << pretty_print< false >(what)
+                   << " : " << todo.status(what) << "\n";
+            };
+
+            auto rec_print = [&](auto what, std::size_t indent, auto &rec) -> void
+            {
+                std::string prefix(indent * 2, ' ');
+                if (has_value(what))
+                {
+                    ss << prefix << " * \n";
+                    return;
+                }
+
+                fmt(what, prefix);
+                for (auto op : what->operands)
+                    rec(op, indent + 1, rec);
+            };
+
+            rec_print(current, 0, rec_print);
+            log_dbg() << ss.str();
         }
 
         trace::Entry get_output_state() const
@@ -260,10 +289,6 @@ namespace circ::run
         }
     };
 
-    using DSpawn = Spawn< DBase >;
-    using VSpawn = Spawn< VBase >;
-
-    static_assert(valid_interpreter< typename DSpawn::semantics_t >());
-    static_assert(valid_interpreter< typename VSpawn::semantics_t >());
+    static_assert(valid_interpreter< typename Spawn< Base >::semantics_t >());
 
 } // namespace circ::run

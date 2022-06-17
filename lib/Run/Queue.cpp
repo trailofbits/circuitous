@@ -28,16 +28,20 @@ namespace circ::run
 
     bool MemoryOrdering::do_enable(Operation *op, uint64_t mem_idx)
     {
-        check(mem_idx == allowed);
+        // mem_idx must be on current level
+        if (mem_idx != allowed)
+            return false;
         auto &[count, ops] = constraints[mem_idx];
         if (!ops.count(op))
             return false;
 
         --count;
         ops.erase(op);
+        // There are still operations on this level
         if (count != 0)
             return false;
 
+        // There are no more operations on this level -> raise it.
         raise_level();
         return true;
     }
@@ -72,44 +76,46 @@ namespace circ::run
     std::string TodoQueue::status(Operation *op)
     {
         std::stringstream ss;
-        ss << "[ " << blocked[op] << " / " << op->operands.size() << "]";
+        if (blocked.count(op))
+            ss << "[ " << blocked[op] << " / " << op->operands.size() << "]";
+        else
+            ss << " [ NOT SET ]";
         return ss.str();
     }
 
     void TodoQueue::push(Operation *op)
     {
-        if (!is_one_of<ReadConstraint, WriteConstraint>(op))
+        // TODO(lukas): What about `UnusedConstraint`.
+        if (!is_one_of< ReadConstraint, WriteConstraint >(op))
             return todo.push_back(op);
+
+        // Fetch ordering id for this memory op.
         auto mem_idx = mem_order.mem_idx(op);
+        check(mem_idx);
+
+        if (*mem_idx > mem_order.allowed)
+        {
+            waiting[*mem_idx].push_back(op);
+            return;
+        }
+
         if (*mem_idx == mem_order.allowed)
-            return todo.push_back(op);
-        waiting[*mem_idx].push_back(op);
-    }
+            todo.push_back(op);
 
-    // Verbose notification for debug purposes
-    void TodoQueue::notify_verbose(Operation *from, Operation *to)
-    {
-        auto dbg_info = [&](auto from, auto to) {
-            auto tail = [&]() -> std::string
-            {
-                if (blocked.count(to))
-                    return std::to_string(blocked[to]);
-                return "(unknown)";
-            }();
+        if (!mem_order.enable(op))
+            return;
 
-            log_dbg() << pretty_print< false >(from) << " -- notifies -> "
-                      << pretty_print< false >(to)
-                      << "which is blocked by: [ " << tail << " / "
-                      << to->operands.size() << " ].";
-        };
-        notify(from, to);
-        dbg_info(from, to);
+        for (auto x : waiting[mem_order.allowed])
+            push(x);
+        waiting[mem_order.allowed].clear();
     }
 
     // General notify that does no extra work
     void TodoQueue::notify(Operation *from, Operation *to)
     {
-        return _notify(to);
+        _notify(to);
+        log_dbg() << pretty_print< false >(from) << " -- notifies --> "
+                  << pretty_print< false >(to) << status(to);
     }
 
     // Implementation
@@ -134,10 +140,4 @@ namespace circ::run
         waiting[mem_order.allowed].clear();
     }
 
-    void TodoQueue::notify_from(Operation *op)
-    {
-        for (auto user : op->users)
-            notify(op, user);
-        notify_mem(op);
-    }
 } // namespace circ::run

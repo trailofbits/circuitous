@@ -225,7 +225,7 @@ namespace circ::run
     #include "Base.tpp"
 
     template< typename Next >
-    struct Ctx_ : Next
+    struct Derive : Next
     {
         using Next::safe;
         using Next::visit;
@@ -233,48 +233,42 @@ namespace circ::run
         using Next::Next;
         using Next::get_node_val;
 
-        std::unordered_set<Operation *> supplied;
-        std::unordered_set<Operation *> derived;
+        std::unordered_map< Operation *, Operation * > cond_to_value;
 
-        template< typename T, typename ...Ts >
-        void init()
-        {
-            for (auto op : this->circuit->template attr< T >())
-            {
-                if (this->has_value(op)) {
-                    supplied.insert(op);
-                } else {
-                    derived.insert(op);
-                }
-            }
-            if constexpr (sizeof ... (Ts) != 0) {
-                init< Ts... >();
-            }
-        }
-
-        void init();
-        void verify_cond(Operation *op);
         void derive_cond(Operation *op);
+        void derive_cond(ReadConstraint *op);
+        void derive_cond(WriteConstraint *op);
+        void derive_cond(UnusedConstraint *op);
+
+        void to_derive(Operation *op, Operation *define_cond)
+        {
+            check(!cond_to_value.count(define_cond));
+            cond_to_value[ define_cond ] = op;
+        }
 
         template< typename T >
         void handle_cond(T *op)
         {
-            if (supplied.count(op->operands[1]))
-                return verify_cond(op);
-            if (derived.count(op->operands[1]))
+            if (cond_to_value.count(op))
                 return derive_cond(op);
-            return verify_cond(op);
+            return Next::visit(op);
         }
 
         template< typename T >
         auto get_derived() const
         {
             std::unordered_map< T *, value_type > out;
-            for (auto op : derived)
+            for (auto [_, op] : cond_to_value)
                 if (op->op_code == T::kind)
-                    out[dynamic_cast<T *>(op)] = this->get_node_val(op);
+                    out[dynamic_cast< T * >(op)] = this->get_node_val(op);
             return out;
         }
+
+        void visit(AdviceConstraint *op){ return handle_cond( op ); }
+        void visit(ReadConstraint *op)  { return handle_cond( op ); }
+        void visit(RegConstraint *op)   { return handle_cond( op ); }
+        void visit(WriteConstraint *op) { return handle_cond( op ); }
+        void visit(UnusedConstraint *op){ return handle_cond( op ); }
     };
 
     template< typename Next >
@@ -318,44 +312,10 @@ namespace circ::run
         void visit(UnusedConstraint *op);
     };
 
+    template< typename N >
+    using SemBase = IOSem< CSem< OpSem< N > > >;
+
     #include <circuitous/Run/Derive.tpp>
-
-    namespace verify
-    {
-        template< typename Next >
-        struct Ctx : Ctx_< Next >
-        {
-            using parent_t = Ctx_< Next >;
-
-            using parent_t::parent_t;
-            using parent_t::visit;
-
-
-            void init()
-            {
-                parent_t::init();
-                std::unordered_set<Operation *> preserved;
-                for (auto op : this->derived) {
-                    if (op->op_code == Advice::kind || op->op_code == circ::Memory::kind) {
-                        preserved.insert(op);
-                        continue;
-                    }
-                    this->supplied.insert(op);
-                    this->set_node_val(op, this->undef());
-                }
-                this->derived = std::move(preserved);
-            }
-        };
-
-        template<typename Next>
-        using Base = CSem< IOSem< Ctx < Next > > >;
-    } // namespace verify
-
-    namespace derive
-    {
-        template< typename S >
-        using Base = CSem< IOSem< Ctx_< S > > >;
-    } // namespace derive
 
     template< typename N >
     struct SemanticsAdapter : N, NonDefaultingVisitor< SemanticsAdapter< N > >
@@ -365,7 +325,6 @@ namespace circ::run
         using NonDefaultingVisitor< SemanticsAdapter< N > >::dispatch;
     };
 
-    using DBase = SemanticsAdapter< derive::Base< OpSem< BaseSemantics > > >;
-    using VBase = SemanticsAdapter< verify::Base< OpSem< BaseSemantics > > >;
+    using Base = SemanticsAdapter< Derive< SemBase< BaseSemantics > > >;
 
 } // namespace circ::run

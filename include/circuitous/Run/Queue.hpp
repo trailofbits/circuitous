@@ -17,6 +17,7 @@ namespace circ::run
     struct MemoryOrdering
     {
         using mem_ops_t = std::unordered_set< Operation * >;
+        // [count of snd, set of operations]
         using level_t = std::tuple< uint32_t, mem_ops_t >;
         using constraints_t = std::vector< level_t >;
 
@@ -81,14 +82,27 @@ namespace circ::run
             return x;
         }
 
-        void notify_from(Operation *op);
+        template< typename Predicate >
+        void notify_from(Operation *op, Predicate &&p)
+        {
+            for (auto user : op->users)
+                if (p(user))
+                    notify(op, user);
+        }
+
+        void notify_from(Operation *op)
+        {
+            return notify_from(op, [](const auto &){ return true; });
+        }
+
         void notify(Operation *from, Operation *to);
-        void notify_verbose(Operation *from, Operation *to);
+        void notify_self(Operation *op) { notify(op, op); }
 
         bool empty() const { return todo.empty(); }
-      private:
 
         std::string status(Operation *op);
+      private:
+
         void push(Operation *op);
         void _notify(Operation *op);
         void notify_mem(Operation *op);

@@ -93,7 +93,7 @@ namespace circ::run::trace {
         }
     };
 
-    auto load_json(const std::string &path) {
+    static inline auto load_json(const std::string &path) {
         // Open JSON
         auto maybe_buff = llvm::MemoryBuffer::getFile(path);
         check(maybe_buff) << "Error while opening JSON at: " << path;
