@@ -144,12 +144,6 @@ namespace circ::run
             };
         }
 
-        void notify_advice_constraints()
-        {
-            for (auto undef : circuit->attr< Undefined >())
-                notify_from(undef);
-        }
-
         void notify_from(Operation *op)
         {
             todo.notify_from(op, is_in_current_ctx());
