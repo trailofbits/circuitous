@@ -26,24 +26,15 @@ namespace circ::run
         ++allowed;
     }
 
-    bool MemoryOrdering::do_enable(Operation *op, uint64_t mem_idx)
+    void MemoryOrdering::remove_constraint(Operation *op)
     {
-        // mem_idx must be on current level
-        if (mem_idx != allowed)
-            return false;
-        auto &[count, ops] = constraints[mem_idx];
-        if (!ops.count(op))
-            return false;
+        auto idx = mem_idx(op);
+        check(idx);
+        auto &[count, ops] = constraints[*idx];
+        check(ops.count(op));
 
         --count;
         ops.erase(op);
-        // There are still operations on this level
-        if (count != 0)
-            return false;
-
-        // There are no more operations on this level -> raise it.
-        raise_level();
-        return true;
     }
 
     std::optional< uint64_t > MemoryOrdering::mem_idx(Operation *op) const
@@ -56,11 +47,12 @@ namespace circ::run
         unreachable() << "Unreachable";
     }
 
-    bool MemoryOrdering::enable(Operation *op)
+    bool MemoryOrdering::enable_next_level()
     {
-        if (auto mi = mem_idx(op))
-            return do_enable(op, *mi);
-        return false;
+        auto &[count, ops] = constraints[allowed];
+        if (count == 0)
+            raise_level();
+        return count == 0;
     }
 
     MemoryOrdering::MemoryOrdering(Circuit *circuit,
@@ -93,21 +85,24 @@ namespace circ::run
         auto mem_idx = mem_order.mem_idx(op);
         check(mem_idx);
 
+        if (mem_idx < mem_order.allowed)
+            return;
+
         if (*mem_idx > mem_order.allowed)
         {
             waiting[*mem_idx].push_back(op);
             return;
         }
 
-        if (*mem_idx == mem_order.allowed)
-            todo.push_back(op);
+        todo.push_back(op);
+        mem_order.remove_constraint(op);
+        if (mem_order.enable_next_level())
+        {
+            for (auto x : waiting[mem_order.allowed])
+                push(x);
+            waiting[mem_order.allowed].clear();
+        }
 
-        if (!mem_order.enable(op))
-            return;
-
-        for (auto x : waiting[mem_order.allowed])
-            push(x);
-        waiting[mem_order.allowed].clear();
     }
 
     // General notify that does no extra work
@@ -128,16 +123,6 @@ namespace circ::run
             return;
         }
         --it->second;
-    }
-
-    void TodoQueue::notify_mem(Operation *op)
-    {
-        if (!mem_order.enable(op))
-            return;
-
-        for (auto x : waiting[mem_order.allowed])
-            push(x);
-        waiting[mem_order.allowed].clear();
     }
 
 } // namespace circ::run
