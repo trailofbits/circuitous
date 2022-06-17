@@ -24,6 +24,8 @@ namespace circ::run
         NodeState initial_node_state;
         Memory initial_memory;
 
+        std::unordered_set< Operation * > to_derive;
+
         QueueInterpreter(Circuit *circuit,
                          const NodeState &node_state, const Memory &memory)
             : circuit(circuit), initial_node_state(node_state), initial_memory(memory)
@@ -38,15 +40,22 @@ namespace circ::run
             {
                 auto runner = std::make_unique< Spawn >(
                         circuit, ctx, &collector, initial_node_state, initial_memory);
-                if (runner->Run())
+                runner->derive( to_derive );
+                if (runner->run())
                     out.push_back(std::move(runner));
             }
             return out;
         }
+
+        template< typename T >
+        void derive()
+        {
+            auto &ops = circuit->attr< T >();
+            to_derive.insert( ops.begin(), ops.end() );
+        }
     };
 
-    using DQueueInterpreter = QueueInterpreter<DSpawn>;
-    using VQueueInterpreter =  QueueInterpreter<VSpawn>;
+    using Interpreter = QueueInterpreter< Spawn< Base > >;
 
     struct NodeStateBuilder
     {
@@ -62,6 +71,14 @@ namespace circ::run
         auto take() { return std::move(node_state); }
         self_t &input_trace(const trace::Entry &in);
         self_t &output_trace(const trace::Entry &out);
+
+        template< typename T >
+        self_t &all(const value_type &v)
+        {
+            for (auto op : circuit->attr< T >())
+                node_state.set(op, v);
+            return *this;
+        }
     };
 
     struct MemoryBuilder
