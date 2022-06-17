@@ -11,6 +11,13 @@
 
 namespace circ::run
 {
+    // For each context a `Spawn` object is created and run to interpreter it. Initial node
+    // state and memory is copied to each spawn - there is no option to specialize the input
+    // per spawn.
+    // If one is interested in output states, `Spawn` classes do contain those (and can be
+    // retrieved as result of call to `run_all`).
+    // NOTE(lukas): Currently there is no way to run only one spawn - if it is desired
+    // the `Spawn` class can be constructed directly instead of using this manager.
     template< typename Spawn >
     struct QueueInterpreter
     {
@@ -19,6 +26,7 @@ namespace circ::run
         using spawn_state_t = std::tuple< Memory, NodeState >;
 
         Circuit *circuit;
+        // For each context, we want to only interpret operations that are relevant for it.
         CtxCollector collector;
 
         NodeState initial_node_state;
@@ -33,6 +41,9 @@ namespace circ::run
             collector.Run(circuit);
         }
 
+        // Returns all the spawns that accepted this run. In case of successful run,
+        // there should be one - if there are more there is probably a bug in the lifter
+        // or runner.
         spawns_t run_all()
         {
             spawns_t out;
@@ -47,6 +58,10 @@ namespace circ::run
             return out;
         }
 
+        // Mark some `Operation` types as being able to derive values for some of their
+        // operands. This will almost always be `AdviceConstraint` for example.
+        // Value is derived only if the operation does not have a value - otherwise normal
+        // semantic is used.
         template< typename T >
         void derive()
         {
@@ -72,6 +87,8 @@ namespace circ::run
         self_t &input_trace(const trace::Entry &in);
         self_t &output_trace(const trace::Entry &out);
 
+        // Set all operations of type `T` to value `v` (can be empty value - for example to
+        // model undefined values).
         template< typename T >
         self_t &all(const value_type &v)
         {
