@@ -18,6 +18,10 @@
 
 namespace circ::run
 {
+    // Class that glues together all pieces needed to interpret a context in the circuit.
+    // NOTE(lukas): Implementation of `StateOwner` interface is a way to reduce the template
+    //              load of this class - another approach is to let `Semantics` be a CRTP
+    //              class instead and inject `Spawn` into it.
     template< typename Semantics >
     struct Spawn : StateOwner
     {
@@ -26,10 +30,15 @@ namespace circ::run
         Circuit *circuit;
         VerifyInstruction *current;
         CtxCollector *collector;
+        // Queue of Operations to be dispatched.
         TodoQueue todo;
 
+        // Class that tells what are Operation doing with their values.
         Semantics semantics;
+        // Memory state - in strict verify mode this is not needed (as memory operations
+        // are provided by memory hints).
         Memory memory;
+        // Mapping of `Operation * -> value`
         NodeState node_state;
 
         Spawn(Circuit *circuit, VerifyInstruction *current,
@@ -43,15 +52,26 @@ namespace circ::run
           node_state(node_state)
         {}
 
+        // NOTE(lukas): `semantics` are holding a pointer to `this` -> therefore if it is
+        //              decided that move/copy ctor is needed, keep that in mind.
         Spawn(const Spawn &) = delete;
         Spawn(Spawn &&) = delete;
 
         Spawn &operator=(Spawn) = delete;
 
+        // If `op` already has a value different than `val` hard error is hit -> this most
+        // likely means a bug occurred.
+        // NOTE(lukas): The best option would be if we never try to set *any* value to `op`
+        //              that already has some. Unfortunately, this would require some hack
+        //              elsewhere, as when deriving a value -> parent sets value to child ->
+        //              notification is fired again and adds parent to queue. One option
+        //              is to never add again things into queue that were processes once,
+        //              but I think it exposes a bigger surface for bugs than current approach.
         void set_node_val(Operation *op, const value_type &val) override
         {
             if (node_state.has_value(op))
             {
+                // Helpful formatter to report error.
                 auto fmt = [](auto what) -> std::string
                 {
                     if (!what)
@@ -209,6 +229,7 @@ namespace circ::run
 
         bool run() {
             init();
+            // Set constants first, as they are never blocked by anything.
             for (const auto &constant : circuit->attr< Constant >())
                 dispatch(constant);
 
@@ -216,6 +237,8 @@ namespace circ::run
                 auto x = todo.pop();
                 log_dbg() << "Dispatching" << pretty_print< true >(x);
                 dispatch(x);
+                // If decoder result failed, we can just return a false as the result will
+                // be false.
                 if (auto r = short_circuit(x)) {
                     log_dbg() << "Short circuiting to result, as decode was not satisfied.";
                     return *r;
@@ -233,6 +256,9 @@ namespace circ::run
             return false;
         }
 
+        // If context does not have a value -> something is blocking it.
+        // Report a trace that highlights which nodes are not interpreted and what is blocking
+        // them.
         void no_value_reached()
         {
             std::stringstream ss;

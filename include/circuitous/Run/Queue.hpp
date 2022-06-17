@@ -14,6 +14,11 @@
 
 namespace circ::run
 {
+    // Memory operations are ordered by `op->mem_idx()`. They are allowed to be interpreted in
+    // levels - to interpret op on level `N + 1` first all operation with level lower than
+    // `N + 1` must be resolved.
+    // NOTE(lukas): In pure verification mode, this may be redundant - but it does not hurt
+    //              correctness.
     struct MemoryOrdering
     {
         using mem_ops_t = std::unordered_set< Operation * >;
@@ -31,6 +36,7 @@ namespace circ::run
 
         MemoryOrdering(Circuit *circuit, CtxCollector *collector, VerifyInstruction *current);
 
+        // Check what is memory index of given operation.
         std::optional< uint64_t > mem_idx(Operation *op) const;
 
         // Returns `true` if next level should be enabled.
@@ -39,6 +45,7 @@ namespace circ::run
 
       private:
 
+        // Initialise ordering for operation `MO` - usually for all memory constraints.
         template< typename MO >
         void init(Circuit *circuit, VerifyInstruction *current)
         {
@@ -83,6 +90,7 @@ namespace circ::run
             return x;
         }
 
+        // Notify all users of `op` that satisfy predicate `p`.
         template< typename Predicate >
         void notify_from(Operation *op, Predicate &&p)
         {
@@ -91,11 +99,13 @@ namespace circ::run
                     notify(op, user);
         }
 
+        // All users of `op` are notified.
         void notify_from(Operation *op)
         {
             return notify_from(op, [](const auto &){ return true; });
         }
 
+        // Operation `from` was set and therefore `to` is notified.
         void notify(Operation *from, Operation *to);
         void notify_self(Operation *op) { notify(op, op); }
 
