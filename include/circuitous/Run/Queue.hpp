@@ -33,7 +33,9 @@ namespace circ::run
 
         std::optional< uint64_t > mem_idx(Operation *op) const;
 
-        bool enable(Operation *op);
+        // Returns `true` if next level should be enabled.
+        bool enable_next_level();
+        void remove_constraint(Operation *op);
 
       private:
 
@@ -55,7 +57,6 @@ namespace circ::run
 
         void raise_level();
 
-        bool do_enable(Operation *op, uint64_t mem_idx);
         void extend(uint32_t desired);
     };
 
@@ -105,7 +106,6 @@ namespace circ::run
 
         void push(Operation *op);
         void _notify(Operation *op);
-        void notify_mem(Operation *op);
     };
 
 } // namespace circ::run
