@@ -16,62 +16,33 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <fstream>
 
-namespace circ::run::trace {
+namespace circ::run::trace
+{
 
-    struct Entry {
+    struct Entry
+    {
         // `trace_id` is used to identify traces from batches
         uint64_t trace_id = 0;
 
         // Actual timestamp of this `Entry`.
         uint64_t timestamp = 0;
-        std::unordered_map<std::string, uint64_t> regs;
+        std::unordered_map< std::string, uint64_t > regs;
+        std::unordered_map< std::string, uint64_t > advices;
+
         std::string inst_bits;
         bool ebit;
 
         // TOOD(lukas): Once we support it
-        std::unordered_map<std::string, uint64_t> hints;
         std::unordered_map<std::string, std::string> mem_hints;
 
-        std::unordered_map<uint64_t, std::string> initial_memory;
+        // REFACTOR(lukas): Move to `Trace` as this is not a property of `Entry`.
+        std::unordered_map< uint64_t, std::string > initial_memory;
 
-        std::string to_string(uint8_t indent = 0, bool skip_header=true) const {
-            std::stringstream ss;
-            std::string prefix(indent * 2, ' ');
+        std::string to_string(uint8_t indent = 0, bool skip_header=true) const;
+        std::optional< llvm::APInt > get_mem_hint(const std::string &key) const;
 
-            if (!skip_header) {
-                ss << prefix << "trace_id: " << trace_id << std::endl;
-                ss << prefix << "......" << std::endl;
-            }
-            ss << prefix << "timestamp: " << timestamp << std::endl;
-            ss << prefix << "ibits: " << inst_bits << std::endl;
-            ss << prefix << "ebits: " << ebit << std::endl;
-            ss << prefix << "regs:" << std::endl;
-            for (const auto &[reg, val] : regs) {
-                ss << prefix << "  |- " << reg << " -> " << val << std::endl;
-            }
-            return ss.str();
-        }
+        llvm::APInt get_inst_bits(uint32_t size) const;
 
-        std::optional< llvm::APInt > get_mem_hint(const std::string &key) const {
-            // TODO(lukas): I do not want to include from `IR` here.
-            //              It would probably help to pull out all constants into
-            //              separate lightweight header.
-            auto it = mem_hints.find(key);
-            if (it == mem_hints.end()) {
-                return {};
-            }
-            return { llvm::APInt(208, it->second, 10) };
-        }
-
-        llvm::APInt get_inst_bits(uint32_t size) const {
-            std::string reoredered;
-            check(inst_bits.size() >= 2);
-            for (int i = static_cast< int >(inst_bits.size() - 2); i >= 0; i -= 2)
-            {
-                reoredered += inst_bits.substr(static_cast< unsigned long >(i), 2);
-            }
-            return llvm::APInt(size, reoredered, /* radix = */ 16U);
-        }
         llvm::APInt get_ebit() const { return (ebit) ? llvm::APInt(1, 1) : llvm::APInt(1, 0); }
         llvm::APInt get_timestamp() const {
             return llvm::APInt(64, timestamp);
