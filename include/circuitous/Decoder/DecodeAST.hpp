@@ -3,86 +3,111 @@
 #include <variant>
 #include <vector>
 #include <memory>
+#include <circuitous/IR/Circuit.hpp>
 
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
 
-namespace circ::decoder::ast {
+namespace circ::decoder {
 
     struct Expr;
     using Id = std::string;
     struct Var { Id name; Id type; explicit Var(Id s, Id t = "auto"): name(std::move(s)), type(std::move(t)){};};
     struct Int { int v; explicit Int(const int& v):v(v){}; };
+    struct Uint64 {
+        uint64_t value;
+        explicit Uint64(uint64_t val) :value(val){};
+    };
 
+    struct IndexVar{
+        IndexVar(const Var &var, uint32_t index): var( var ), index( index ) {}
+
+        Var var;
+        uint32_t index;
+    };
     template <typename T>
-    struct UnaryOperator{
-        explicit UnaryOperator(const std::shared_ptr< T > &expr) : value( expr ) {}
-        explicit UnaryOperator(const T&& expression) {
-            value = std::make_shared<T>(expression);
+    struct Operator{
+        template <typename... U>
+        Operator(U&& ... expression ){
+            (ops.template emplace_back(expression), ...);
         }
 
-        explicit UnaryOperator(const T& expression) {
-            value = std::make_shared<T>(expression);
-        }
-        std::shared_ptr<T> value;
+        std::vector<T> ops;
     };
 
-    struct BinaryOperator {
-        BinaryOperator(std::shared_ptr<Expr>& lhs, std::shared_ptr<Expr>& rhs) : lhs(lhs), rhs(rhs) {}
-
-        BinaryOperator(std::shared_ptr<Expr>& lhs, const Expr&& right) : lhs(lhs) {
-            rhs = std::make_shared<Expr>(right);
-        }
-
-        BinaryOperator(const Expr&& left, std::shared_ptr<Expr>& rhs) : rhs(rhs) {
-            lhs = std::make_shared<Expr>(left);
-        }
-
-        BinaryOperator(const Expr&& left, const Expr&& right) {
-            lhs = std::make_shared<Expr>(left);
-            rhs = std::make_shared<Expr>(right);
-        }
-
-        std::shared_ptr<Expr> lhs;
-        std::shared_ptr<Expr> rhs;
+    template<typename T>
+    struct BinaryOp : Operator<T>{
+        using Operator<T>::Operator;
+        T& lhs(){ return this->ops[0]; };
+        T& rhs(){ return this->ops[1]; };
     };
+
+    template<typename T>
+    struct UnaryOp : Operator<T>{
+        using Operator<T>::Operator;
+        T& value(){ return this->ops[0]; };
+    };
+
 
 #define GenUnaryOperator(name, T) \
-    struct name : UnaryOperator<T>{ using UnaryOperator::UnaryOperator; };
+    struct name : UnaryOp<T>{ using UnaryOp::UnaryOp; };
 
 
     GenUnaryOperator(VarDecl, Var)
     GenUnaryOperator(Statement, Expr)
 
 
+#undef GenUnaryOperator
+
 #define GenUnaryExpression(name) \
-        struct name : UnaryOperator<Expr>{ using UnaryOperator::UnaryOperator; };
+        struct name : UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
 
     GenUnaryExpression(Return)
-    GenUnaryExpression(TypeExpr) // maybe seperate from declare, like in func args
-    GenUnaryExpression(Parenthesis)
     GenUnaryExpression(CastToUint64)
+    GenUnaryExpression(BitwiseNegate)
+    GenUnaryExpression(Parenthesis)
+    GenUnaryExpression(CurlyBrackets)
 
-#define BinOpStruct(name) \
-        struct name : BinaryOperator{ using BinaryOperator::BinaryOperator; };
+#undef GenUnaryExpression
+
+#define GenBinaryExpression(name) \
+        struct name : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
 
 
-    BinOpStruct(Plus)
-    BinOpStruct(Mul)
-    BinOpStruct(BitwiseOr)
-    BinOpStruct(BitwiseXor)
-    BinOpStruct(BitwiseNegate)
-    BinOpStruct(Assign)
-    BinOpStruct(Shfl)
-    BinOpStruct(Equal)
-    BinOpStruct(Index) //?
+    GenBinaryExpression(Plus)
+    GenBinaryExpression(Mul)
+    GenBinaryExpression(BitwiseOr)
+    GenBinaryExpression(BitwiseXor)
+    GenBinaryExpression(BitwiseAnd)
+    GenBinaryExpression(Assign)
+    GenBinaryExpression(Shfl)
+    GenBinaryExpression(Equal)
+    GenBinaryExpression(And)
+    GenBinaryExpression(If)
+//GenBinaryExpression(Index) //?
 
+#undef GenBinaryExpression
+    using StatementBlock = std::vector<Expr>;
 
     struct FunctionDeclaration {
         Id retType;
         Id function_name;
         std::vector<VarDecl> args;
-        std::vector<Statement> body;
+        StatementBlock body;
+    };
+
+
+//    struct IfElse{
+//        Expr cond;
+//        StatementBlock& ifBody;
+//    };
+
+
+    struct IfElse: Operator<Expr>{
+        using Operator<Expr>::Operator;
+        Expr& cond(){ return this->ops[0]; };
+        Expr& ifBody(){ return this->ops[1]; };
+        Expr& elseBody(){ return this->ops[2]; };
     };
 
 
@@ -91,91 +116,40 @@ namespace circ::decoder::ast {
         std::vector<Expr> args;
     };
 
+    struct Empty{};
 
-//TODO Is there a way in where we can merge the declare through macros and writing it down here?
-    using op_t = std::variant< Expr, Int, Id,
-            Var, VarDecl, Statement,
-            Return, TypeExpr, Parenthesis, CastToUint64,
-            Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, Assign, Shfl, Equal, Index,
-            FunctionDeclaration, FunctionCall >;
+    //TODO Is there a way in where we can merge the declare through macros and writing it down here?
+    using op_t = std::variant<
+            Expr, Int, Uint64, Id, //primitive types Expr, int, std::string
+            Var, VarDecl, Statement, Return, CastToUint64, Parenthesis, CurlyBrackets, IndexVar,// unary
+            Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, BitwiseAnd, Assign, Shfl, Equal, And, // binary
+            If, IfElse,
+            FunctionDeclaration, FunctionCall, // function
+            StatementBlock, Empty
+    >;
 
 
 
     struct Expr
     {
-        // Implicit constructors help a lot for prettier calling
-        Expr(const std::shared_ptr<op_t> &op) : op(op) {}
-        Expr(std::shared_ptr<op_t> &op) : op(op) {}
         template<typename T>
         Expr(T&& operand){
             //TODO get saner error handling, this just segfaults if T is not in op_T
-            op  = std::make_shared<op_t>(operand);
+            op  = std::make_shared<op_t>(std::forward<op_t>(operand));
         }
-
         std::shared_ptr<op_t> op;
     };
 
-    void printExpr(const Expr& op);
+
+    enum class Wrapper :uint32_t {
+        Parenthesis,
+        CurlyBrackets,
+    };
+
+
 
     template <typename T>
-    void printExpr(const std::vector<T>& ops, const std::string& delim = " "){
-        for(std::size_t i =0 ; i< ops.size(); i++){
-            printExpr(ops[i]);
-            if(i != ops.size()-1){
-                printExpr(Var{delim});
-            }
-        }
-    }
-
-
-    void printExpr(const Expr& op){
-        return std::visit(overloaded {
-                [&](const Plus& arg) {
-                    printExpr(*arg.lhs); std::cout << " + ";
-                    printExpr(*arg.rhs);
-                },
-                [&](const Mul& arg) {
-                    printExpr(*arg.lhs); std::cout << " * ";
-                    printExpr(*arg.rhs);
-                },
-
-                [&](const BitwiseOr& arg) {  },
-                [&](const BitwiseXor& arg) {  },
-                [&](const BitwiseNegate& arg) {  },
-                [&](const Assign& arg) {  },
-
-                [&](const Int& arg) { std::cout << arg.v; },
-                [&](const Var& arg) { std::cout << arg.name; },
-                [&](const FunctionDeclaration& arg) {
-                    std::cout << arg.retType << " " << arg.function_name << "(";
-                    printExpr(arg.args, ", ");
-                    std::cout << ") { \n";
-                    printExpr(arg.body, "");
-                    std::cout << "}";
-                },
-                [&](const Expr& arg) { std::cout << "dont want this"; throw std::invalid_argument("throw! ");},
-                [&](const VarDecl& arg) { std::cout << arg.value->type << " " << arg.value->name;},
-                [&](const Statement& arg) { printExpr(*arg.value); std::cout << ";" << std::endl;},
-        }, *op.op);
-    }
-
-    int main()
-    {
-        FunctionDeclaration funcDecl;
-        funcDecl.function_name = "sum";
-        funcDecl.retType = "int";
-        Var a("a", "int");
-        Var b("b", "int");
-
-        funcDecl.args.emplace_back(VarDecl(a));
-        funcDecl.args.emplace_back(VarDecl(b));
-
-        auto p = Plus(a,b);
-        funcDecl.body.emplace_back(Statement(p));
-        printExpr(funcDecl);
-
-        return 0;
-    }
-
-
+    void printExprWrappedIn(const std::vector<T>& ops, std::ostream& os, const Wrapper wrappedIn = Wrapper::Parenthesis, const std::string& delim = " ");
+    void printExpr(const Expr& expr, std::ostream& os);
+    std::string printExpr(const Expr& expr);
 }
