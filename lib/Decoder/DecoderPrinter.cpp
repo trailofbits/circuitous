@@ -6,142 +6,8 @@
 #include <cstdlib>
 
 namespace circ::decoder {
-
-//    const char ignore_magic_const =
-//            '1';  // value that indicates a don't care inside the input_byte
-//    const char ignore_magic_const_neg = '0';  // negated value of don't care
-
-    namespace CodeGen {
-        std::string default_index = std::string( 4, ' ' );
-
-        std::string include(const std::string &expr) {
-            return "#include <" + expr + ">\n";
-        }
-
-//        std::string cast_to_int16_t(const std::string &expr) {
-//            return "(uint64_t) " + expr;
-//        }
-
-//        std::string parens(const std::string &s) {
-//            return "(" + s + ")";
-//        }
-//
-//
-//        std::string bitAnd(const std::string &lhs, const std::string &rhs) {
-//            return lhs + " & " + rhs;
-//        }
-//
-//        std::string shl(const std::string &value, int shift_times) {
-//            return value + " << " + std::to_string( shift_times );
-//        }
-//
-//        std::string check(const std::string &s, int bit) {
-//            // ((var) & (1<<(pos)))
-//            return parens( bitAnd( s, parens( shl( "1", bit ))));
-//        }
-
-
-//        std::string xor_variable_with_negated_target(const std::string &variable,
-//                                                     const std::string &targetVal, uint pad_msb,
-//                                                     uint pad_lsb) {
-//            return parens(
-//                    variable + " ^~(0b" + std::string( pad_msb, ignore_magic_const_neg ) +
-//                    targetVal + std::string( pad_lsb, ignore_magic_const_neg ) + ")" );
-//        }
-//
-//        std::string prepareInputByte(const std::string &variable, const std::string &targetVal,
-//                                     uint pad_msb, uint pad_lsb) {
-//            return cast_to_int16_t(
-//                    xor_variable_with_negated_target( variable, targetVal, pad_msb, pad_lsb ));
-//        }
-
-//  std::string transformInput
-//        std::string getTarget(uint pad_msb, uint pad_lsb) {
-//            return "0b" + std::string( pad_msb, ignore_magic_const_neg ) +
-//                   std::string( 8 - pad_msb - pad_lsb, ignore_magic_const ) +
-//                   std::string( pad_lsb, ignore_magic_const_neg );
-//        }
-
-//        std::string compare(std::string lhs, std::string rhs) {
-//            return parens( lhs + " == " + rhs );
-//        }
-//
-//        std::string assignStatement(const std::string &lhs, const std::string &rhs) {
-//            return default_index + lhs + " = " + rhs + ";";
-//        }
-
-//        std::string
-//        declareStatement(const std::string &typeName, const std::string &variableName,
-//                         const std::string &expr) {
-//            return default_index + typeName + " " + variableName + " = " + expr + ";";
-//        }
-//
-//        std::string
-//        concatExprs(const std::vector< std::string > &exprs, const std::string &delimiter) {
-//            std::stringstream s;
-//            for (std::size_t i = 0; i < exprs.size(); i++) {
-//                s << exprs[ i ];
-//                if ( i != exprs.size() - 1 ) {
-//                    s << delimiter;
-//                }
-//            }
-//            return s.str();
-//        }
-//
-//
-//        std::string andExpressions(const std::vector< std::string > &exprs) {
-//            return concatExprs( exprs, " && " );
-//        }
-//
-//
-//        std::string orExpressions(const std::vector< std::string > &exprs) {
-//            return concatExprs( exprs, " || " );
-//        }
-
-// assumes rhs_bits is a string of consecutive bits with 0b in the string
-//        std::string bitwiseOR(const std::string &lhs, const std::string &rhs_bits) {
-//            return lhs + " | " + parens( "0b" + rhs_bits );
-//        }
-//
-//        std::string returnStatement(const std::string &expr) {
-//            return default_index + "return " + expr + ";";
-//        }
-//
-//        std::string mul(const std::string &lhs, const std::string &rhs) {
-//            return CodeGen::parens( lhs + " * " + rhs );
-//        }
-
-//        std::string ifStatement(const std::string &condition_string, const std::string &body) {
-//            return "if (" + condition_string + ") {\n" + body + "\n}\n";
-//        }
-//
-//        std::string ifElse(const std::string &condition_string, const std::string &bodyIf,
-//                           const std::string &bodyElse) {
-//            return "if (" + condition_string + ") {\n" + bodyIf + "\n}\nelse{\n" + bodyElse +
-//                   "\n}";
-//        }
-//
-//
-//        std::string forLoop(const std::string &condition_string, const std::string &body) {
-//            return "for (" + condition_string + ") {\n" + body + "\n}\n";
-//        }
-//
-//        std::string callFunction(const std::string &funcName, const std::string &parameters) {
-//            return funcName + "(" + parameters + ")";
-//        }
-//    };  // namespace CodeGen
-//
-//    std::string DecoderPrinter::array_index(const uint index) {
-//        return "[" + std::to_string( index ) + "]";
-//    }
-//
-//
-//    std::string DecoderPrinter::swap_endian(const std::string &input) {
-//        return std::string( input.rbegin(), input.rend());
-    };
-
-    const std::string DecoderPrinter::uint64_input1 = "input1";
-    const std::string DecoderPrinter::uint64_input2 = "input2";
+    const Var DecoderPrinter::innerFuncArg1 = Var("first8bytes", "uint64_t");
+    const Var DecoderPrinter::innerFuncArg2 = Var("second8bytes", "uint64_t");
 
     bool operator<(const DTI &x, const DTI &y) {
         std::size_t min_x = 0;
@@ -159,37 +25,7 @@ namespace circ::decoder {
         return min_x < min_y;
     };
 
-//    void DecoderPrinter::print_padding(const uint startByte, const uint endByte,
-//                                       const std::string &input_name,
-//                                       const uint8_t padding_len_lsb,
-//                                       const uint8_t padding_len_msb) {
-//        if ( startByte == endByte ) {
-//            ignore_bits( PaddingBits( padding_len_lsb, padding_len_msb ),
-//                         input_name + array_index( startByte ));
-//        } else {
-//            ignore_bits( PaddingBits( padding_len_lsb, 0 ),
-//                         input_name + array_index( startByte ));
-//            ignore_bits( PaddingBits( 0, padding_len_msb ),
-//                         input_name + array_index( endByte ));
-//        }
-//    }
-
-//    void
-//    DecoderPrinter::ignore_bits(const PaddingBits &padding, const std::string &variable_name) {
-//        if ( padding.msb == 0 && padding.lsb == 0 ) {
-//            return;
-//        }
-//
-//        auto bitTarget = std::string( padding.msb, ignore_magic_const )
-//                         + std::string( 8 - padding.lsb - padding.msb, ignore_magic_const_neg )
-//                         + std::string( padding.lsb, ignore_magic_const );
-//
-//        os << CodeGen::assignStatement( variable_name,
-//                                        CodeGen::bitwiseOR( variable_name, bitTarget ))
-//           << std::endl;
-//    }
-
-// Assumes lsb is placed first
+    // Assumes lsb is placed first
     uint64_t it_ignored_bits_to_uint(std::array< InputType, 64 > input) {
         uint64_t val = 0;
         for (std::size_t i = 0; i < 64; i++) {
@@ -213,28 +49,22 @@ namespace circ::decoder {
     }
 
 
-    void DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
-//    std::cout << "// Generating function for VI: " << vi->id()
-//              << " name: " << evi.generated_name << std::endl;
-
+    Expr DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
         FunctionDeclaration funcDecl;
         funcDecl.function_name = evi.generated_name;
         funcDecl.retType = "static bool";
 
-        auto var1 = Var( uint64_input1, "uint64_t" );
-        auto var2 = Var( uint64_input2, "uint64_t" );
-        funcDecl.args = {VarDecl( var1 ), VarDecl( var2 )};
+        funcDecl.args = {VarDecl( innerFuncArg1 ), VarDecl( innerFuncArg2 )};
 
         auto args = get_decode_context_function_args( evi );
         funcDecl.body.emplace_back(
                 get_decode_context_function_body( args.first, args.second ));
-        printExpr( funcDecl, os );
+        return funcDecl;
     }
 
     std::vector< std::array< InputType, 8>>
-    DecoderPrinter::convert_circIR_to_input_type_array(const ExtractedVI &evi) const {
+    DecoderPrinter::convert_circIR_to_input_type_array(const ExtractedVI &evi) {
         std::vector< std::array< InputType, 8 >> input_checks;
-//    std::vector< std::array< InputType, 8 >> input_checks( evi.encoding_size_in_bytes );
         for (std::size_t i = 0; i < 16; i++) {
             auto a = std::array< InputType, 8 >{InputType::ignore, InputType::ignore,
                                                 InputType::ignore, InputType::ignore,
@@ -270,6 +100,18 @@ namespace circ::decoder {
 
 
     void DecoderPrinter::print_file() {
+        extract_evi();
+
+        os << "#include <array>" << std::endl;
+        os << "#include <stdint.h>" << std::endl << std::endl;
+        for (auto &evi: extractedVIs) {
+            printExpr(print_decoder_func( evi ), os);
+        }
+        printExpr(print_circuit_decoder(), os);
+        os << std::endl;
+    }
+
+    void DecoderPrinter::extract_evi() {
         SubtreeCollector< VerifyInstruction > sc;
         auto VIs = sc.Run( circuit.get()->operands[ 0 ] ).collected;
         for (auto &vi: VIs) {
@@ -289,77 +131,45 @@ namespace circ::decoder {
             if ( encoding_length > 15 ) {
                 throw std::invalid_argument( "Instruction is longer than 15 bytes" );
             }
-            extractedVIs.push_back( ExtractedVI(
+            extractedVIs.emplace_back( ExtractedVI(
                     vi, "generated_decoder_prefix_" + std::to_string( vi->id()),
                     static_cast<uint8_t>(encoding_length),
                     std::move( decNodes )));
         }
-
-        os << CodeGen::include( "array" ) << std::endl;
-        os << CodeGen::include( "stdint.h" ) << std::endl << std::endl;
-
-        for (auto &evi: extractedVIs) {
-            print_decoder_func( evi );
-        }
-        print_circuit_decoder();
-        os << std::endl;
     }
 
-    void DecoderPrinter::print_circuit_decoder() {
+    Expr DecoderPrinter::print_circuit_decoder() {
         FunctionDeclaration funcDecl;
         funcDecl.function_name = circuit_decode_function_name;
         funcDecl.retType = "int";
-        auto decode_func_input = Var(bytes_input_variable, "std::array<uint8_t,15>");
+        funcDecl.args.emplace_back(Var(bytes_input_variable, "std::array<uint8_t,15>"));
 
-        os << "int " << circuit_decode_function_name << "(std::array<uint8_t,15> "
-           << bytes_input_variable << ", int " << max_length_variable_name << " = 15 ) {"
-           << std::endl;
+        funcDecl.body.emplace_back(print_conversion_input_to_uints64());
 
-        print_conversion_input_to_uints64();
         std::vector< ExtractedVI * > to_split;
         for (auto &evi: extractedVIs) {
             to_split.push_back( &evi );
         }
-        os << print_split( to_split, std::vector< std::pair< std::size_t, int>>(), 0 );
+        auto tree = print_split( to_split, std::vector< std::pair< std::size_t, int>>(), 0 );
+        funcDecl.body.emplace_back(tree);
+
         std::cout << "max depth during gen: " << max_depth << " for size of: "
                   << std::to_string( extractedVIs.size()) << std::endl;
 
-        /*
-         * ok were gonna do this optimally
-         *
-         * we will consider for each context the bit string that represents the instruction
-         * with this we will count at every index if they prefer a 1 or 0
-         * so we now have
-         *
-         * index 0 1 2 3 4 5 6
-         * zeros 3 0 2 3 1 4 5
-         * ones  2 3 4 0 2 3 4
-         *
-         * take pairs (0,1) for each the same index
-         * we take the maximum of the minimum value of a pair (0,1) and use that as split point for
-         * binary search, note that the sums of each pair do not need to sum to the same amount due to dont cares
-         *
-         * best case: log(f) with f #decode functions
-         * worse case: f (?)
-         */
-
-        os << printExpr(Return(Int(-1))) << std::endl;
-        os << "}" << std::endl;
+        funcDecl.body.emplace_back(Return(Int(-1)));
+        return funcDecl;
     }
 
-    void DecoderPrinter::print_conversion_input_to_uints64() {
+    Expr DecoderPrinter::print_conversion_input_to_uints64() {
         auto array_input = Var( bytes_input_variable);
-        auto arg1 = Var(uint64_input1, "uint64_t");
-        auto arg2 = Var(uint64_input2, "uint64_t");
-
         StatementBlock b;
-        convert_array_input_to_uint64( array_input, arg1, b, false );
-        convert_array_input_to_uint64( array_input, arg2, b, true );
-        printExpr(b,os);
+        convert_array_input_to_uint64( array_input, innerFuncArg1, b, false );
+        convert_array_input_to_uint64( array_input, innerFuncArg2, b, true );
+        return b;
     }
 
     void DecoderPrinter::convert_array_input_to_uint64(const Var &array_input, const Var &arg,
-                                                       StatementBlock &b, bool second_uint) const {
+                                                       StatementBlock &b, bool second_uint) {
         b.emplace_back(Statement(Assign(VarDecl(arg),Int(0))));
         for (uint i = 0; i < 8; i++) {
             auto indexdVar = IndexVar( array_input, i);
@@ -371,83 +181,8 @@ namespace circ::decoder {
         }
     }
 
-//
-//// TODO what endian do I expect as input?
-//// it takes an array of bytes, so byte[0] lsb?
-//// and bit[0][7] msb?
-//// and byte[1][0] lsb?
-//// TODO if we only need to check bytes > 2, don't check byte 1
-//    void DecoderPrinter::print_decoder_condition(
-//            const std::vector< std::array< InputType, 8 >> &input8,
-//            const std::string &name_fuc_input) {
-//        std::vector< std::array< InputType, 64 >> input;
-//        if ( input8.size() != 16 ) {
-//            throw std::invalid_argument( "expected 8*i8" );
-//        }
-//
-//        std::array< InputType, 64 > val;
-//        for (std::size_t i = 0; i < 64; i++) {
-//            val[ i ] = input8[ i / 8 ][ i % 8 ];
-//        }
-//        input.push_back( val );
-//
-//        for (std::size_t i = 0; i < 64; i++) {
-//            val[ i ] = input8[ 8 + i / 8 ][ i % 8 ];
-//        }
-//        input.push_back( val );
-//
-//        std::vector< std::string > exprs;
-//        for (std::size_t byte_index = 0; byte_index < input.size(); byte_index++) {
-//            //TODO if we only have ignored bits, then we don't need to emit a check and hence not pad it
-//            if ( contains_ignore_bit( input[ byte_index ] ) &&
-//                 !contains_only_ignore_bit( input[ byte_index ] )) {
-//                auto current_byte =
-//                        name_fuc_input + array_index( static_cast<uint>(byte_index));
-//                std::stringstream ss;
-//
-//                for (auto i = input[ byte_index ].rbegin();
-//                     i != input[ byte_index ].rend(); i++) {
-//                    if ( *i == InputType::ignore )
-//                        ss << to_str( InputType::ignore );
-//                    else
-//                        ss << to_str_negated( InputType::ignore );
-//                }
-//                os << CodeGen::assignStatement( current_byte,
-//                                                CodeGen::bitwiseOR( current_byte, ss.str()));
-//            }
-//        }
-//        for (std::size_t byte_index = 0; byte_index < input.size(); byte_index++) {
-//            if ( contains_only_ignore_bit( input[ byte_index ] ))
-//                continue;
-//            auto current_byte = name_fuc_input + array_index( static_cast<uint>(byte_index));
-//            auto byte = input[ byte_index ];
-//
-//            std::stringstream ss;
-//            for (auto i = byte.rbegin(); i != byte.rend(); i++) {
-//                if ( *i == InputType::ignore )
-//                    ss << to_str_negated( InputType::ignore );
-//                else
-//                    ss << to_str( *i );
-//            }
-//
-//            auto s = ss.str();
-//            auto lhs = CodeGen::cast_to_int16_t(
-//                    CodeGen::xor_variable_with_negated_target( current_byte, s, 0, 0 ));
-//
-//            std::stringstream output;
-//            for (auto i = byte.rbegin(); i != byte.rend(); i++) {
-//                if ( *i == InputType::ignore )
-//                    output << to_str_negated( InputType::ignore );
-//                else
-//                    output << to_str( InputType::ignore );
-//            }
-//            auto rhs = "0b" + output.str();
-//            exprs.push_back( CodeGen::compare( lhs, rhs ));
-//        }
-//        os << CodeGen::returnStatement( CodeGen::andExpressions( exprs ));
-//    }
 
-    bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 64 > &byte) const {
+    bool DecoderPrinter::contains_ignore_bit(const std::array< InputType, 64 > &byte) {
         for (auto &b: byte) {
             if ( b == InputType::ignore ) {
                 return true;
@@ -456,8 +191,7 @@ namespace circ::decoder {
         return false;
     }
 
-    bool
-    DecoderPrinter::contains_only_ignore_bit(const std::array< InputType, 64 > &byte) const {
+    bool DecoderPrinter::contains_only_ignore_bit(const std::array< InputType, 64 > &byte) {
         for (auto &b: byte) {
             if ( b != InputType::ignore ) {
                 return false;
@@ -474,7 +208,7 @@ namespace circ::decoder {
                                         return p.first == i;
                                     } );
             if ( it != chosen.end()) {
-//                ss << std::hex << std::to_string((*it).second);
+                // ss << std::hex << std::to_string((*it).second);
                 ss << "x";
             } else {
                 ss << "~";
@@ -490,7 +224,7 @@ namespace circ::decoder {
         block.emplace_back( print_ignore_bits( arg1 ));
         block.emplace_back( print_ignore_bits( arg2 ));
 
-        std::vector< std::string > compare_exprs;
+        std::vector< Expr> compare_exprs;
         if ( !contains_only_ignore_bit( arg1.byte ))
             compare_exprs.push_back( get_comparison( arg1 ));
 
@@ -505,24 +239,22 @@ namespace circ::decoder {
         return block;
     }
 
-    std::string DecoderPrinter::get_comparison(
-            const decode_context_function_arg &arg) const {
-        auto uint = Uint64{it_to_uint( arg.byte )};
-        auto lhs = printExpr( CastToUint64(
-                Parenthesis( BitwiseXor( arg.input_name, BitwiseNegate( uint )))));
+    Expr DecoderPrinter::get_comparison(const decode_context_function_arg &arg ) {
+        auto uint = Uint64(it_to_uint( arg.byte ));
+        auto lhs = CastToUint64( Parenthesis( BitwiseXor( arg.var.name, BitwiseNegate( uint ))));
 
         // negation of ignore bits are the bits we care about
-        auto neg_ignore = Uint64{~(it_ignored_bits_to_uint( arg.byte ))};
-        return printExpr( Equal( lhs, neg_ignore ));
+        auto neg_ignore = Uint64(~(it_ignored_bits_to_uint( arg.byte )));
+        return  Equal( lhs, neg_ignore );
     }
 
     Expr DecoderPrinter::print_ignore_bits(const decode_context_function_arg &arg) {
         if ( contains_ignore_bit( arg.byte ) && !contains_only_ignore_bit( arg.byte )) {
-            auto name = Id{arg.input_name};
-            auto ignoringValues = printExpr( Uint64{it_ignored_bits_to_uint( arg.byte )} );
-            return Statement( Assign( arg.input_name, BitwiseOr( name, ignoringValues )));
+            auto name = arg.var.name;
+            auto ignoringValues = Uint64( it_ignored_bits_to_uint( arg.byte ));
+            return Statement( Assign( name, BitwiseOr( name, ignoringValues )));
         }
-        return Empty(); //TODO Dirty hack, maybe make this NULL?
+        return Empty();
     }
 
     std::string get_bits_string(ExtractedVI *evi) {
@@ -561,19 +293,38 @@ namespace circ::decoder {
      * either if(check bit == 1) { split(ones) } else split(zeros)
      * or if split.size() == 1 :return evi(input)
      */
-    std::string DecoderPrinter::print_split(std::vector< ExtractedVI * > to_split,
+    /*
+        * ok were gonna do this optimally
+        *
+        * we will consider for each context the bit string that represents the instruction
+        * with this we will count at every index if they prefer a 1 or 0
+        * so we now have
+        *
+        * index 0 1 2 3 4 5 6
+        * zeros 3 0 2 3 1 4 5
+        * ones  2 3 4 0 2 3 4
+        *
+        * take pairs (0,1) for each the same index
+        * we take the maximum of the minimum value of a pair (0,1) and use that as split point for
+        * binary search, note that the sums of each pair do not need to sum to the same amount due to dont cares
+        *
+        * best case: log(f) with f #decode functions
+        * worse case: f (?)
+        */
+
+    Expr DecoderPrinter::print_split(std::vector< ExtractedVI * > to_split,
                                             std::vector< std::pair< std::size_t, int>> already_chosen_bits,
                                             int depth) {
         if ( this->max_depth < depth )
             max_depth = depth;
         std::array< DTI, 120 > indice_values;
 
-        if ( to_split.size() == 0 ) {
-            return printExpr(Return(Int(-1)));
+        if ( to_split.empty() ) {
+            return Return(Int(-1));
         }
 
         if ( to_split.size() == 1 ) {
-            return printExpr(Return( print_evi_call(*to_split[0])));
+            return Return( evi_call( *to_split[ 0 ] ));
         }
 
         for (std::size_t i = 0; i < 120; i++) {
@@ -619,61 +370,25 @@ namespace circ::decoder {
         }
 
         auto max = std::max_element( indice_values.begin(), indice_values.end());
-        std::size_t ci = static_cast<std::size_t>(std::distance( indice_values.begin(), max ));
-
+        auto ci = static_cast<std::size_t>(std::distance( indice_values.begin(), max ));
         already_chosen_bits.push_back( std::make_pair( ci, depth ));
-        // if max is 1 for one of them recurse fill with dont cares, just print
-        // if ones == 1, codegen return func call, else flip
 
-        //recurse both
-//        if(indice_values[ci].zeros.size() > 1 && indice_values[ci].ones.size() > 1){
+
+        /*
+         * The encodings with dont care on the candidate index can both be a 0 or 1
+         * Hence they need to be in both candidates sets from this point onwards
+         */
         for (auto &ignored: indice_values[ ci ].ignores) {
-            // we didn't learn anything so they need to be added to both : (
-//            if(indice_values[ci].zeros.size() < indice_values[ci].ones.size())
             indice_values[ ci ].zeros.push_back( ignored );
-//            else
             indice_values[ ci ].ones.push_back( ignored );
         }
-//        }
 
 
-        /*
-         * we can't promote a single check to the if statement of the branch
-         * as we need to stop the execution if that check fails
-         * but we don't know if its because just that bit wasn't set correctly
-         * or the entire encoding was incorrect
-         * Hence we will only fill the don't cares in the tree of the other
-         * Would putting don't cares in the tree with the least, even if its 1
-         * be a good option?
-         *      probably? I think so
-         *      Can that even happen though?
-         *      yes if there is only don't cares and a single 1 for each position
-         *
-         */
-//        if(indice_values[ci].zeros.size() < 2){
-//            for(auto& ignored : indice_values[ci].ignores) {
-//                indice_values[ci].ones.push_back(ignored);
-//            }
-//        }
-//
-//        else if(indice_values[ci].ones.size() < 2){
-//            for(auto& ignored : indice_values[ci].ignores) {
-//                indice_values[ci].zeros.push_back(ignored);
-//            }
-//        }
 
-        /*
-         * dead branches could be checked
-//         */
-//        auto c = CodeGen::check(
-//                std::string( bytes_input_variable ) + "[" + std::to_string( ci / 8 ) + "]",
-//                ci % 8 );
         auto ci_byte = static_cast<uint32_t>(ci / 8);
         auto lhs = IndexVar(Var(bytes_input_variable), ci_byte);
-//        int x = ci % 8;
         auto rhs2 =   Parenthesis(Shfl(Int(1), Int(ci % 8)));
-        // var & (1<< ci)
-        auto c = printExpr(BitwiseAnd( lhs, rhs2));
+        auto c = BitwiseAnd( lhs, rhs2); // var & (1<< ci)
 
         std::vector< ExtractedVI * > ones = indice_values[ ci ].ones;
         std::vector< ExtractedVI * > zeros = indice_values[ ci ].zeros;
@@ -699,35 +414,30 @@ namespace circ::decoder {
                           << get_bits_string( ones[ i ] ) << std::endl;
             }
             std::cout << "----------------" << std::endl << std::endl;
-//            std::cout << "zero: " << zeros[0].
         }
         //if one of the branches is zero, dont create an if else statement, just create an if
         //TODO I think there is a bug with that still allows this to be reached where both ones and zeros is empty
         if ( ones.size() == 0 && zeros.size() == 0 ) {
-            return printExpr(Return(Int(-1)));
+            return Return(Int(-1));
         }
 
-        return printExpr(IfElse(c,
-                                print_split( ones, already_chosen_bits, depth + 1 ),
-                                print_split( zeros, already_chosen_bits, depth + 1 )));
+        auto lhs_split =print_split( ones, already_chosen_bits, depth + 1 );
+        auto rhs_split =print_split( zeros, already_chosen_bits, depth + 1 );
+
+        return IfElse(c,lhs_split, rhs_split);
     }
 
-    std::string DecoderPrinter::print_evi_call(const ExtractedVI &evi) {
+    Expr DecoderPrinter::evi_call(const ExtractedVI &evi) {
         FunctionCall fc;
         fc.function_name = evi.generated_name;
-        fc.args.emplace_back(Var(uint64_input1));
-        fc.args.emplace_back(Var(uint64_input2));
-        return printExpr(fc);
+        fc.args.emplace_back(innerFuncArg1);
+        fc.args.emplace_back(innerFuncArg2);
+        return fc;
     }
 
-    Expr DecoderPrinter::print_split(std::vector< ExtractedVI * > split,
-                                     std::vector< std::pair< std::size_t, int>> already_chosen_bits) {
-        return Expr( Int{2} );
-    }
 
     std::pair< decode_context_function_arg, decode_context_function_arg >
     DecoderPrinter::get_decode_context_function_args(const ExtractedVI &evi) {
-        // TODO size init?
         std::vector< std::array< InputType, 8>> input_checks = convert_circIR_to_input_type_array(
                 evi );
         std::array< InputType, 64 > val;
@@ -738,22 +448,10 @@ namespace circ::decoder {
         for (std::size_t i = 0; i < 64; i++) {
             val2[ i ] = input_checks[ 8 + i / 8 ][ i % 8 ];
         }
-        auto arg1 = decode_context_function_arg( val, uint64_input1 );
-        auto arg2 = decode_context_function_arg( val2, uint64_input2 );
+        auto arg1 = decode_context_function_arg( val, innerFuncArg1 );
+        auto arg2 = decode_context_function_arg( val2, innerFuncArg2 );
         return std::pair< decode_context_function_arg, decode_context_function_arg >( arg1,
                                                                                       arg2 );
-    }
-
-
-    std::string to_str(const InputType &ty) {
-        switch (ty) {
-            case InputType::zero:
-                return "0";
-            case InputType::one:
-                return "1";
-            case InputType::ignore:
-                return "1";
-        }
     }
 
     uint64_t to_val(const InputType &ty) {
@@ -775,17 +473,6 @@ namespace circ::decoder {
                 return 0;
             case InputType::ignore:
                 return 0;
-        }
-    }
-
-    std::string to_str_negated(const InputType &ty) {
-        switch (ty) {
-            case InputType::zero:
-                return "1";
-            case InputType::one:
-                return "0";
-            case InputType::ignore:
-                return "0";
         }
     }
 
