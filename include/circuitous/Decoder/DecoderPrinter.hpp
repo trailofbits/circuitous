@@ -5,6 +5,7 @@
 #include <ostream>
 #include <vector>
 #include <string>
+#include "DecodeAST.hpp"
 
 namespace circ::decoder{
   /*
@@ -25,8 +26,11 @@ namespace circ::decoder{
 
     
     std::string to_str(const InputType& ty);
-
     std::string to_str_negated(const InputType& ty);
+
+    uint64_t to_val(const InputType& ty);
+    uint64_t to_val_negated(const InputType& ty);
+
 
     struct ExtractedVI{
         ExtractedVI(VerifyInstruction* VI, std::string name, uint8_t size, std::unordered_multiset<DecodeCondition *> decodeConditions): VI(VI), generated_name(std::move(name)), encoding_size_in_bytes(size), decodeConditions(decodeConditions){}
@@ -50,13 +54,14 @@ namespace circ::decoder{
 
 
 
-  struct innerFunctionArguments {
-      innerFunctionArguments(std::array< InputType, 64 > &byte, const std::string &input_name) :byte(byte), input_name(input_name){}
+  struct decode_context_function_arg {
+      decode_context_function_arg(std::array< InputType, 64 > &byte, const std::string &input_name) : byte( byte), input_name( input_name){}
       const std::array< InputType, 64 > &byte;
       const std::string &input_name;
   };
 
   class DecoderPrinter{
+
     /*
      * Eventually needs two different files, one for header and one for body?
      */
@@ -86,8 +91,8 @@ namespace circ::decoder{
       void print_decoder_condition(const std::vector< std::array< InputType, 8 >> &input,
                                    const std::string &name_fuc_input);
 
-      void new_print(const innerFunctionArguments &arg1,
-                     const innerFunctionArguments &arg2, int encoding_length);
+      Expr get_decode_context_function_body(const decode_context_function_arg &arg1,
+                                            const decode_context_function_arg &arg2);
     std::string array_index(const uint index);
 
     std::string swap_endian(const std::string &input);
@@ -98,19 +103,37 @@ namespace circ::decoder{
                        const std::string &input_name,
                        const uint8_t padding_len_lsb, const uint8_t padding_len_msb);
 
-    bool contains_ignore_bit(const std::array< InputType, 64 > &byte) const;
-    bool contains_only_ignore_bit(const std::array< InputType, 64 > &byte) const;
+      bool contains_ignore_bit(const std::array< InputType, 64 > &byte) const;
 
-    void print_ignore_bits(const innerFunctionArguments &arg);
+      bool contains_only_ignore_bit(const std::array< InputType, 64 > &byte) const;
 
-      std::string print_split(std::vector<ExtractedVI*> split, std::vector<std::pair<std::size_t, int>> already_chosen_bits, int depth);
+      Expr print_ignore_bits(const decode_context_function_arg &arg);
 
-    std::string get_comparison(const innerFunctionArguments &arg) const;
+      std::string print_split(std::vector< ExtractedVI * > split,
+                              std::vector< std::pair< std::size_t, int>> already_chosen_bits,
+                              int depth);
+
+      Expr print_split(std::vector< ExtractedVI * > split,
+                       std::vector< std::pair< std::size_t, int>> already_chosen_bits);
+
+      std::string get_comparison(const decode_context_function_arg &arg) const;
 
       void print_conversion_input_to_uints64();
 
-      std::string print_evi_call(const ExtractedVI& evi);
-      int max_depth =0 ;
+      std::string print_evi_call(const ExtractedVI &evi);
+
+      int max_depth = 0;
+
+      std::vector< std::array< InputType, 8>>
+      convert_circIR_to_input_type_array(const ExtractedVI &evi) const;
+
+      std::pair<decode_context_function_arg, decode_context_function_arg>
+      get_decode_context_function_args(const ExtractedVI &evi);
+
+      Expr getSet(uint i) const;
+
+      void convert_array_input_to_uint64(const Var &array_input, const Var &arg,
+                                         StatementBlock &b, bool second_uint) const;
   };
 }
 
