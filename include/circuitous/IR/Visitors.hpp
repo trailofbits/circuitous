@@ -160,4 +160,5 @@ namespace circ
 
         std::unordered_set< Operation * > seen_ops;
     };
+    
 } // namespace circ
