@@ -49,21 +49,20 @@ namespace circ::decoder {
     }
 
 
-    Expr DecoderPrinter::print_decoder_func(const ExtractedVI &evi) {
+    Expr DecoderPrinter::print_context_decoder_function(const ExtractedVI &evi) {
         FunctionDeclaration funcDecl;
         funcDecl.function_name = evi.generated_name;
-        funcDecl.retType = "static bool";
+        funcDecl.retType = "static int";
 
         funcDecl.args = {VarDecl( innerFuncArg1 ), VarDecl( innerFuncArg2 )};
 
         auto args = get_decode_context_function_args( evi );
-        funcDecl.body.emplace_back(
-                get_decode_context_function_body( args.first, args.second ));
+        funcDecl.body.emplace_back( get_decode_context_function_body( args, evi.encoding_size_in_bytes ));
         return funcDecl;
     }
 
-    std::vector< std::array< InputType, 8>>
-    DecoderPrinter::convert_circIR_to_input_type_array(const ExtractedVI &evi) {
+    auto DecoderPrinter::convert_circIR_to_input_type_array(
+            const ExtractedVI &evi) -> std::vector< input_type_byte > {
         std::vector< std::array< InputType, 8 >> input_checks;
         for (std::size_t i = 0; i < 16; i++) {
             auto a = std::array< InputType, 8 >{InputType::ignore, InputType::ignore,
@@ -105,9 +104,9 @@ namespace circ::decoder {
         os << "#include <array>" << std::endl;
         os << "#include <stdint.h>" << std::endl << std::endl;
         for (auto &evi: extractedVIs) {
-            printExpr(print_decoder_func( evi ), os);
+            print_expr( print_context_decoder_function( evi ), os );
         }
-        printExpr(print_circuit_decoder(), os);
+        print_expr( print_top_level_function(), os );
         os << std::endl;
     }
 
@@ -138,19 +137,21 @@ namespace circ::decoder {
         }
     }
 
-    Expr DecoderPrinter::print_circuit_decoder() {
+    Expr DecoderPrinter::print_top_level_function() {
         FunctionDeclaration funcDecl;
         funcDecl.function_name = circuit_decode_function_name;
         funcDecl.retType = "int";
         funcDecl.args.emplace_back(Var(bytes_input_variable, "std::array<uint8_t,15>"));
 
-        funcDecl.body.emplace_back(print_conversion_input_to_uints64());
+        funcDecl.body.emplace_back( convert_input_to_uints64());
 
         std::vector< ExtractedVI * > to_split;
         for (auto &evi: extractedVIs) {
             to_split.push_back( &evi );
         }
-        auto tree = print_split( to_split, std::vector< std::pair< std::size_t, int>>(), 0 );
+        auto tree = generate_decoder_selection_tree( to_split,
+                                                     std::vector< std::pair< std::size_t, int>>(),
+                                                     0 );
         funcDecl.body.emplace_back(tree);
 
         std::cout << "max depth during gen: " << max_depth << " for size of: "
@@ -160,7 +161,7 @@ namespace circ::decoder {
         return funcDecl;
     }
 
-    Expr DecoderPrinter::print_conversion_input_to_uints64() {
+    Expr DecoderPrinter::convert_input_to_uints64() {
         auto array_input = Var( bytes_input_variable);
         StatementBlock b;
         convert_array_input_to_uint64( array_input, innerFuncArg1, b, false );
@@ -200,41 +201,24 @@ namespace circ::decoder {
         return true;
     }
 
-    std::string print_chosen_bits(std::vector< std::pair< std::size_t, int>> chosen) {
-        std::stringstream ss;
-        for (std::size_t i = 0; i < 120; i++) {
-            auto it = std::find_if( chosen.begin(), chosen.end(),
-                                    [&](std::pair< std::size_t, int > p) {
-                                        return p.first == i;
-                                    } );
-            if ( it != chosen.end()) {
-                // ss << std::hex << std::to_string((*it).second);
-                ss << "x";
-            } else {
-                ss << "~";
-            }
-        }
-        return ss.str();
-    }
-
-    Expr
-    DecoderPrinter::get_decode_context_function_body(const decode_context_function_arg &arg1,
-                                                     const decode_context_function_arg &arg2) {
+    Expr DecoderPrinter::get_decode_context_function_body(const decode_func_args &args,
+                                                          int encoding_size) {
         StatementBlock block;
-        block.emplace_back( print_ignore_bits( arg1 ));
-        block.emplace_back( print_ignore_bits( arg2 ));
+        block.emplace_back( print_ignore_bits( args.first ));
+        block.emplace_back( print_ignore_bits( args.second ));
 
-        std::vector< Expr> compare_exprs;
-        if ( !contains_only_ignore_bit( arg1.byte ))
-            compare_exprs.push_back( get_comparison( arg1 ));
+        std::vector< Expr > compare_exprs;
+        if ( !contains_only_ignore_bit( args.first.byte ))
+            compare_exprs.push_back( get_comparison( args.first ));
 
-        if ( !contains_only_ignore_bit( arg2.byte ))
-            compare_exprs.push_back( get_comparison( arg2 ));
+        if ( !contains_only_ignore_bit( args.second.byte ))
+            compare_exprs.push_back( get_comparison( args.second ));
 
         if ( compare_exprs.size() == 1 )
-            block.emplace_back( Return( compare_exprs[ 0 ] ));
+            block.emplace_back( Return( Mul( Parenthesis(compare_exprs[ 0 ]), Int( encoding_size ))));
         else
-            block.emplace_back( Return( And( compare_exprs[ 0 ], compare_exprs[ 1 ] )));
+            block.emplace_back( Return( Mul( Parenthesis(And( compare_exprs[ 0 ], compare_exprs[ 1 ] )),
+                                             Int( encoding_size ))));
 
         return block;
     }
@@ -257,76 +241,92 @@ namespace circ::decoder {
         return Empty();
     }
 
-    std::string get_bits_string(ExtractedVI *evi) {
-        std::stringstream ss;
-        for (std::size_t i = 0; i < 120; i++) {
-            auto val = InputType::ignore;
-            for (auto &n: evi->decodeConditions) {
-                auto lhsn = dynamic_cast<circ::Constant *>(n->operands[ 0 ]);
-                auto extract = dynamic_cast<circ::Extract *>(n->operands[ 1 ]);
-                auto low = extract->low_bit_inc;
-                auto high_inc = extract->high_bit_exc - 1;
-
-
-                // out of range of considered byte
-                if ( low > i || high_inc < i || high_inc == 119 ) {
-                    continue;
-                }
-
-                if ( lhsn->bits[ i - low ] == '0' )
-                    val = InputType::zero;
-                else
-                    val = InputType::one;
-            }
-            if ( val == InputType::zero )
-                ss << "0";
-            else if ( val == InputType::one )
-                ss << "1";
-            else
-                ss << "~";
-        }
-        return ss.str();
-    }
-
     /*
-     * prints split in os
-     * either if(check bit == 1) { split(ones) } else split(zeros)
-     * or if split.size() == 1 :return evi(input)
+     * This function is meant to find the optimal amount of checks required to identify an encoding
+     * Instead of calling every <decode_encoding> function once, we do a BST like search
+     * to first find the best closest candidate and calling that.
+     *
+     * This algorithm looks like a regular backtracking algorithm from your standard algos class
+     * but it doesn't have any backtracking since the input size can be 1000+,
+     * and leaving it naively like this gives decent results (depth 17 instead of the optimal 12)
+     *
+     * How it works:
+     *
+     * we will consider for each encoding/context the bit string that represents the instruction
+     * with this we will count at every index if the encoding _requires_ a 1 or 0.
+     * Lastly, we will make an BST tree that at each check eliminates as many possible encodings
+     *
+     * Example:
+     * index 0 1 2 3 4 5 6
+     * zeros 3 0 2 3 1 4 5
+     * ones  2 3 4 0 2 3 4
+     *
+     * We gain the most information by checking what bit is located at index 4
+     * The best heuristic I found was looking at a pair of zeros/ones at an index
+     * which had the maximal of the minimal value, as this would prevent cases weird cases
+     * where you'd had a lot of imbalance.
+     *
+     * Note that the sum of zeros and ones do not need to sum the total amount of encodings
+     * as some encodings accept both a 1 and 0 (don't cares).
+     *
+     * best case: log(f) with f #decode functions
+     * worse case: f
      */
-    /*
-        * ok were gonna do this optimally
-        *
-        * we will consider for each context the bit string that represents the instruction
-        * with this we will count at every index if they prefer a 1 or 0
-        * so we now have
-        *
-        * index 0 1 2 3 4 5 6
-        * zeros 3 0 2 3 1 4 5
-        * ones  2 3 4 0 2 3 4
-        *
-        * take pairs (0,1) for each the same index
-        * we take the maximum of the minimum value of a pair (0,1) and use that as split point for
-        * binary search, note that the sums of each pair do not need to sum to the same amount due to dont cares
-        *
-        * best case: log(f) with f #decode functions
-        * worse case: f (?)
-        */
-
-    Expr DecoderPrinter::print_split(std::vector< ExtractedVI * > to_split,
-                                            std::vector< std::pair< std::size_t, int>> already_chosen_bits,
-                                            int depth) {
+    Expr DecoderPrinter::generate_decoder_selection_tree(std::vector< ExtractedVI * > to_split,
+                                                         std::vector< std::pair< std::size_t, int>> already_chosen_bits,
+                                                         int depth) {
         if ( this->max_depth < depth )
             max_depth = depth;
-        std::array< DTI, 120 > indice_values;
 
         if ( to_split.empty() ) {
             return Return(Int(-1));
         }
 
         if ( to_split.size() == 1 ) {
-            return Return( evi_call( *to_split[ 0 ] ));
+            return Return( call_evi( *to_split[ 0 ] ));
         }
 
+        std::array< DTI, 120 > indice_values = get_decode_requirements_per_index( to_split,
+                                                                                  already_chosen_bits );
+        auto max = std::max_element( indice_values.begin(), indice_values.end());
+        auto candidate_index = static_cast<std::size_t>(std::distance( indice_values.begin(), max ));
+        already_chosen_bits.emplace_back( std::make_pair( candidate_index, depth ));
+
+
+        /*
+         * The encodings with dont care on the candidate index can both be a 0 or 1
+         * Hence they need to be in both candidates sets from this point onwards
+         */
+        for (auto &ignored: indice_values[ candidate_index ].ignores) {
+            indice_values[ candidate_index ].zeros.push_back( ignored );
+            indice_values[ candidate_index ].ones.push_back( ignored );
+        }
+
+
+        std::vector< ExtractedVI * > ones = indice_values[ candidate_index ].ones;
+        std::vector< ExtractedVI * > zeros = indice_values[ candidate_index ].zeros;
+
+        if ( ones.empty() && zeros.empty() ) {
+            return Return(Int(-1));
+        }
+
+        auto ci_byte = static_cast<uint32_t>(candidate_index / 8);
+        auto lhs = IndexVar(Var(bytes_input_variable), ci_byte);
+        auto rhs2 =   Parenthesis(Shfl(Int(1), Int( candidate_index % 8)));
+        auto condition = BitwiseAnd( lhs, rhs2); // var & (1<< ci)
+
+
+        auto lhs_split = generate_decoder_selection_tree( ones, already_chosen_bits, depth + 1 );
+        auto rhs_split = generate_decoder_selection_tree( zeros, already_chosen_bits,
+                                                          depth + 1 );
+
+        return IfElse( condition, lhs_split, rhs_split);
+    }
+
+    std::array< DTI, 120 >
+    DecoderPrinter::get_decode_requirements_per_index(std::vector< ExtractedVI * > &to_split,
+                                                      std::vector< std::pair< std::size_t, int>> &already_chosen_bits) {
+        std::array< DTI, 120 > indice_values;
         for (std::size_t i = 0; i < 120; i++) {
             for (auto &evi: to_split) {
                 if ( std::find_if( already_chosen_bits.begin(), already_chosen_bits.end(),
@@ -359,7 +359,6 @@ namespace circ::decoder {
                  * otherwise multiple decode conditions checking over other ranges would add
                  * way to many ignores
                  */
-
                 if ( val == InputType::zero )
                     indice_values[ i ].zeros.push_back( evi );
                 else if ( val == InputType::one )
@@ -368,66 +367,10 @@ namespace circ::decoder {
                     indice_values[ i ].ignores.push_back( evi );
             }
         }
-
-        auto max = std::max_element( indice_values.begin(), indice_values.end());
-        auto ci = static_cast<std::size_t>(std::distance( indice_values.begin(), max ));
-        already_chosen_bits.push_back( std::make_pair( ci, depth ));
-
-
-        /*
-         * The encodings with dont care on the candidate index can both be a 0 or 1
-         * Hence they need to be in both candidates sets from this point onwards
-         */
-        for (auto &ignored: indice_values[ ci ].ignores) {
-            indice_values[ ci ].zeros.push_back( ignored );
-            indice_values[ ci ].ones.push_back( ignored );
-        }
-
-
-
-        auto ci_byte = static_cast<uint32_t>(ci / 8);
-        auto lhs = IndexVar(Var(bytes_input_variable), ci_byte);
-        auto rhs2 =   Parenthesis(Shfl(Int(1), Int(ci % 8)));
-        auto c = BitwiseAnd( lhs, rhs2); // var & (1<< ci)
-
-        std::vector< ExtractedVI * > ones = indice_values[ ci ].ones;
-        std::vector< ExtractedVI * > zeros = indice_values[ ci ].zeros;
-
-        if ((ones.size() == 1 && zeros.size() > 3)) {
-            std::cout << "imbalance at depth " << depth << " size in other tree: "
-                      << std::to_string( zeros.size()) << std::endl;
-        }
-//
-        if ((zeros.size() == 1 && ones.size() > 3)) {
-            std::cout << "----------------" << std::endl;
-
-            std::cout << "imbalance at depth " << depth << " size in other tree: "
-                      << std::to_string( ones.size()) << " candidate index: " << ci
-                      << std::endl;
-            std::vector< std::pair< std::size_t, int>> a;
-            a.push_back( std::make_pair( ci, 0 ));
-            std::cout << "index:    " << print_chosen_bits( a ) << std::endl;
-            std::cout << "chosen:   " << print_chosen_bits( already_chosen_bits ) << std::endl;
-            std::cout << "zeros[0]: " << get_bits_string( zeros[ 0 ] ) << std::endl;
-            for (std::size_t i = 0; i < ones.size(); i++) {
-                std::cout << "ones[" + std::to_string( i ) + "]:  "
-                          << get_bits_string( ones[ i ] ) << std::endl;
-            }
-            std::cout << "----------------" << std::endl << std::endl;
-        }
-        //if one of the branches is zero, dont create an if else statement, just create an if
-        //TODO I think there is a bug with that still allows this to be reached where both ones and zeros is empty
-        if ( ones.size() == 0 && zeros.size() == 0 ) {
-            return Return(Int(-1));
-        }
-
-        auto lhs_split =print_split( ones, already_chosen_bits, depth + 1 );
-        auto rhs_split =print_split( zeros, already_chosen_bits, depth + 1 );
-
-        return IfElse(c,lhs_split, rhs_split);
+        return indice_values;
     }
 
-    Expr DecoderPrinter::evi_call(const ExtractedVI &evi) {
+    Expr DecoderPrinter::call_evi(const ExtractedVI &evi) {
         FunctionCall fc;
         fc.function_name = evi.generated_name;
         fc.args.emplace_back(innerFuncArg1);
@@ -436,8 +379,7 @@ namespace circ::decoder {
     }
 
 
-    std::pair< decode_context_function_arg, decode_context_function_arg >
-    DecoderPrinter::get_decode_context_function_args(const ExtractedVI &evi) {
+    auto DecoderPrinter::get_decode_context_function_args(const ExtractedVI &evi) -> decode_func_args{
         std::vector< std::array< InputType, 8>> input_checks = convert_circIR_to_input_type_array(
                 evi );
         std::array< InputType, 64 > val;
@@ -450,8 +392,7 @@ namespace circ::decoder {
         }
         auto arg1 = decode_context_function_arg( val, innerFuncArg1 );
         auto arg2 = decode_context_function_arg( val2, innerFuncArg2 );
-        return std::pair< decode_context_function_arg, decode_context_function_arg >( arg1,
-                                                                                      arg2 );
+        return {arg1, arg2 };
     }
 
     uint64_t to_val(const InputType &ty) {
