@@ -31,6 +31,7 @@ namespace circ::decoder {
         explicit Uint64(uint64_t val) : value( val ) {};
     };
 
+    //Indexes into a variable, i.e var[<index>]
     struct IndexVar {
         IndexVar(const Var &var, uint32_t index) : var( var ), index( index ) {}
 
@@ -42,7 +43,7 @@ namespace circ::decoder {
     struct Operator {
         template < typename... U >
         Operator(U &&... expression) {
-            (ops.template emplace_back( expression ), ...);
+            (ops.template emplace_back( std::forward(expression) ), ...);
         }
 
         std::vector< T > ops;
@@ -136,9 +137,11 @@ namespace circ::decoder {
         Expr(T&& operand) : op(std::make_shared<op_t>(std::forward<op_t>(operand))){};
 
         // For exprs we just want only copy the pointer instead of create extra
-        Expr(Expr&& e) = default;
-        Expr(Expr& e) = default;
         Expr(const Expr& e) = default;
+        Expr(Expr&& e) = default;
+        Expr& operator=(const Expr& e) = default;
+        Expr& operator=(Expr&& e) = default;
+
 
         std::shared_ptr<op_t> op;
     };
