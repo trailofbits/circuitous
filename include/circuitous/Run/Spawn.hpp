@@ -281,19 +281,6 @@ namespace circ::run
             log_dbg() << ss.str();
         }
 
-        trace::Entry get_output_state() const
-        {
-            trace::Entry out;
-
-            for (auto op : circuit->attr< OutputRegister >())
-                out.regs[op->reg_name] = node_state.get(op)->getLimitedValue();
-
-            out.ebit = node_state.get(circuit->output_ebit()) == semantics.true_val();
-            out.timestamp = node_state.get(circuit->output_timestamp())->getLimitedValue();
-
-            return out;
-        }
-
         template< typename T >
         auto get_derived() const { return semantics.template get_derived< T >(); }
 

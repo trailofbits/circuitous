@@ -14,26 +14,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ::run::trace
 {
-    std::string Entry::to_string(uint8_t indent, bool skip_header) const
-    {
-        std::stringstream ss;
-        std::string prefix(indent * 2, ' ');
-
-        if (!skip_header) {
-            ss << prefix << "trace_id: " << trace_id << std::endl;
-            ss << prefix << "......" << std::endl;
-        }
-        ss << prefix << "timestamp: " << timestamp << std::endl;
-        ss << prefix << "ibits: " << inst_bits << std::endl;
-        ss << prefix << "ebits: " << ebit << std::endl;
-        ss << prefix << "regs:" << std::endl;
-        for (const auto &[reg, val] : regs) {
-            ss << prefix << "  |- " << reg << " -> " << val << std::endl;
-        }
-        return ss.str();
-    }
-
-    std::optional< llvm::APInt > Entry::get_mem_hint(const std::string &key) const
+    value_type native::Entry::get_mem_hint(const std::string &key) const
     {
         // TODO(lukas): I do not want to include from `IR` here.
         //              It would probably help to pull out all constants into
@@ -42,18 +23,6 @@ namespace circ::run::trace
         if (it == mem_hints.end()) {
             return {};
         }
-        return { llvm::APInt(208, it->second, 10) };
+        return it->second;
     }
-
-    llvm::APInt Entry::get_inst_bits(uint32_t size) const
-    {
-        std::string reoredered;
-        check(inst_bits.size() >= 2);
-        for (int i = static_cast< int >(inst_bits.size() - 2); i >= 0; i -= 2)
-        {
-            reoredered += inst_bits.substr(static_cast< unsigned long >(i), 2);
-        }
-        return llvm::APInt(size, reoredered, /* radix = */ 16U);
-    }
-
 } // namespace circ::run::trace

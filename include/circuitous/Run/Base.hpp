@@ -88,11 +88,6 @@ namespace circ::run
             return set_node_val(op, f(op));
         }
 
-        void set_input_state(const trace::Entry &in);
-        void set_output_state(const trace::Entry &out);
-
-        trace::Entry get_output_state() const;
-
         template<typename T>
         std::unordered_map<T *, value_type> get_derived() const
         {

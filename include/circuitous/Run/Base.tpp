@@ -132,21 +132,3 @@ inline void BaseSemantics::visit(Circuit *op)
 {
     this->set_node_val(op, this->get_node_val(op->operands[0]));
 }
-
-inline void BaseSemantics::set_input_state(const trace::Entry &in)
-{
-    // REFACTOR(lukas): Remove alltogether.
-    not_implemented();
-}
-
-inline void BaseSemantics::set_output_state(const trace::Entry &out)
-{
-    // REFACTOR(lukas): Remove alltogether.
-    not_implemented();
-}
-
-inline trace::Entry BaseSemantics::get_output_state() const
-{
-    // REFACTOR(lukas): Remove alltogether.
-    not_implemented();
-}
