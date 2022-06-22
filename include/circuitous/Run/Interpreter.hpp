@@ -84,8 +84,8 @@ namespace circ::run
         NodeStateBuilder(Circuit *circuit) : circuit(circuit) {}
 
         auto take() { return std::move(node_state); }
-        self_t &input_trace(const trace::Entry &in);
-        self_t &output_trace(const trace::Entry &out);
+        self_t &input_trace(const trace::native::Entry &in);
+        self_t &output_trace(const trace::native::Entry &out);
 
         // Set all operations of type `T` to value `v` (can be empty value - for example to
         // model undefined values).
@@ -109,7 +109,7 @@ namespace circ::run
 
         auto take() { return std::move(memory); }
         self_t &set(std::size_t addr, const std::string &val);
-        self_t &set(const trace::Entry &trace);
+        self_t &set(const trace::native::Entry &trace);
     };
 
 
