@@ -6,8 +6,16 @@ namespace circ::decoder {
         expr( e );
     }
 
-    ExpressionPrinter& ExpressionPrinter::binary_op(BinaryOp <Expr> &binOp, const std::string &op) {
+    ExpressionPrinter & ExpressionPrinter::binary_op(BinaryOp <Expr> &binOp,
+                                                     const std::string &op,
+                                                     bool add_parenthesis = true) {
+        if(add_parenthesis){
+            raw("(");
+        }
         expr(binOp.lhs()).raw(" ", op, " ").expr(binOp.rhs());
+        if(add_parenthesis){
+            raw(")");
+        }
         return *this;
     }
 
@@ -44,10 +52,7 @@ namespace circ::decoder {
                 [&](const Id &arg) { raw(arg);},
                 [&](const Int &arg) { raw(arg.value);},
                 [&](const Uint64 &arg) { raw("0b", std::bitset< 64 >( arg.value ));},
-                [&](Expr &arg) {
-                    os << "dont want this";
-                    throw std::invalid_argument( "No plain expr allowed" );
-                },
+                [&](Expr &arg) { circ::unreachable() << "No plain expr allowed" ; },
                 [&](Empty &arg) {},
                 [&](const Var &arg) { raw(arg.name); },
                 [&](VarDecl &arg) { raw(arg.value().type, " ", arg.value().name); },
@@ -59,7 +64,7 @@ namespace circ::decoder {
                     raw("return ").expr( arg.value() ).raw(";");
                 },
                 [&](CastToUint64 &arg) {
-                    raw("(uint64_t)").expr( arg.value());
+                    raw("((uint64_t)").expr( arg.value()).raw(")");
                 },
                 [&](BitwiseNegate &arg) {
                     raw("~").expr( Parenthesis(*arg.value().op));
@@ -72,15 +77,15 @@ namespace circ::decoder {
                     expr(arg.value()).endl()
                     .raw("}");
                 },
-                [&](BitwiseOr &arg) {binary_op( arg, "|" );},
-                [&](BitwiseXor &arg) {binary_op( arg, "^" );},
-                [&](BitwiseAnd &arg) {binary_op( arg, "&" );},
+                [&](BitwiseOr &arg) {binary_op( arg, "|");},
+                [&](BitwiseXor &arg) {binary_op( arg, "^");},
+                [&](BitwiseAnd &arg) {binary_op( arg, "&");},
 
-                [&](Shfl &arg) {binary_op( arg, "<<" );},
-                [&](Equal &arg) {binary_op( arg, "==" );},
+                [&](Shfl &arg) {binary_op( arg, "<<");},
+                [&](Equal &arg) {binary_op( arg, "==");},
 
-                [&](Assign &arg) {binary_op( arg, "=" );},
-                [&](And &arg) {binary_op( arg, "&&" );},
+                [&](Assign &arg) {binary_op( arg, "=", false);},
+                [&](And &arg) {binary_op( arg, "&&");},
                 [&](StatementBlock &arg) {
                     for (auto &e: arg) {
                         expr( e );
