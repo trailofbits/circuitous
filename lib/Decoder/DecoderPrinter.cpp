@@ -16,16 +16,44 @@ namespace circ::decoder {
         return min_x < min_y;
     };
 
-    Expr DecoderPrinter::print_context_decoder_function(const ExtractedCtx &ctx) {
-        FunctionDeclaration funcDecl;
-        funcDecl.function_name = ctx.generated_name;
-        funcDecl.retType = "static int";
 
-        funcDecl.args = {VarDecl( inner_func_arg1 ), VarDecl( inner_func_arg2 )};
+    //TODO move this to impl
+    template < int L >
+    requires (L <= 64)
+    uint64_t OptionalBitArray< L >::to_uint64() const {
+        uint64_t val = 0;
+        for (std::size_t i = 0; i < L; i++) {
+            if ( (*this)[ i ] == InputType::ignore )
+                val |= to_val_negated( InputType::ignore ) << i;
+            else
+                val |= to_val( (*this)[ i ] ) << i;
+        }
+        return val;
+    }
+
+    template < int L >
+    requires (L <= 64)
+    uint64_t OptionalBitArray< L >::ignored_bits_to_uint64() const {
+        uint64_t val = 0;
+        for (std::size_t i = 0; i < L; i++) {
+            if ( (*this)[ i ] == InputType::ignore )
+                val |= to_val( InputType::ignore ) << i;
+            else
+                val |= to_val_negated( InputType::ignore ) << i;
+        }
+        return val;
+    }
+
+
+    Expr DecoderPrinter::print_context_decoder_function(const ExtractedCtx &ctx) {
+        FunctionDeclarationBuilder fdb;
+        fdb.name(ctx.generated_name);
+        fdb.retType("int");
+        fdb.args({VarDecl( inner_func_arg1 ), VarDecl( inner_func_arg2 )});
 
         auto args = get_decode_context_function_args( ctx );
-        funcDecl.body.emplace_back( get_decode_context_function_body( args, ctx.encoding_size_in_bytes ));
-        return funcDecl;
+        fdb.body({ get_decode_context_function_body( args, ctx.encoding_size_in_bytes )});
+        return fdb.make();
     }
 
     std::vector< OptionalBitArray<8> > ExtractedCtx::convert_circIR_to_input_type_array() const {
@@ -47,8 +75,8 @@ namespace circ::decoder {
                 for (std::size_t c = 0; c < 8; c++) {
                     auto bit_index = (i * 8) + c;
                     if ( low <= bit_index && bit_index <= high_inc ) {
-                        auto new_val = ctoit(lhsn->bits[ bit_index - low ]);
-                        val[ c ] = new_val;
+                        //char  to input type
+                        val[ c ] = ctoit(lhsn->bits[ bit_index - low ]);
                     }
                 }
             }
@@ -96,12 +124,12 @@ namespace circ::decoder {
     }
 
     Expr DecoderPrinter::print_top_level_function() {
-        FunctionDeclaration funcDecl;
-        funcDecl.function_name = circuit_decode_function_name;
-        funcDecl.retType = "int";
-        funcDecl.args.emplace_back(Var(bytes_input_variable, "std::array<uint8_t,15>"));
+        FunctionDeclarationBuilder fdb;
+        fdb.name(circuit_decode_function_name);
+        fdb.retType("int");
+        fdb.args( {Var( bytes_input_variable, "std::array<uint8_t,15>" )});
 
-        funcDecl.body.emplace_back( convert_input_to_uints64());
+        fdb.body_insert( convert_input_to_uints64());
 
         std::vector< ExtractedCtx * > to_split;
         for (auto &ctx: extracted_ctxs) {
@@ -110,13 +138,13 @@ namespace circ::decoder {
         auto tree = generate_decoder_selection_tree( to_split,
                                                      std::vector< std::pair< std::size_t, int>>(),
                                                      0 );
-        funcDecl.body.emplace_back(tree);
+        fdb.body_insert(tree);
 
         std::cout << "max depth during gen: " << max_depth << " for size of: "
                   << std::to_string( extracted_ctxs.size()) << std::endl;
 
-        funcDecl.body.emplace_back(Return(Int(-1)));
-        return funcDecl;
+        fdb.body_insert(Return(Int(-1)));
+        return fdb.make();
     }
 
     Expr DecoderPrinter::convert_input_to_uints64() {

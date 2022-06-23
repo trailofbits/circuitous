@@ -6,7 +6,7 @@ namespace circ::decoder {
         expr( e );
     }
 
-    ExpressionPrinter& ExpressionPrinter::binary_op(BinaryOp< Expr > &binOp, const std::string &op) {
+    ExpressionPrinter& ExpressionPrinter::binary_op(BinaryOp <Expr> &binOp, const std::string &op) {
         expr(binOp.lhs()).raw(" ", op, " ").expr(binOp.rhs());
         return *this;
     }
@@ -51,7 +51,7 @@ namespace circ::decoder {
                 [&](Empty &arg) {},
                 [&](const Var &arg) { raw(arg.name); },
                 [&](VarDecl &arg) { raw(arg.value().type, " ", arg.value().name); },
-                [&](IndexVar &arg) { raw(arg.var.name, "[", arg.index, "]");},
+                [&](const IndexVar &arg) { raw(arg.var.name, "[", arg.index, "]");},
                 [&](Statement &arg) {
                     expr( arg.value()).raw(";").endl();
                 },
@@ -118,4 +118,33 @@ namespace circ::decoder {
         return *this;
     }
 
+
+    FunctionDeclarationBuilder &FunctionDeclarationBuilder::retType(const Id& ret) {
+        m_retType = ret;
+        return *this;
+    }
+
+    FunctionDeclarationBuilder &FunctionDeclarationBuilder::name(const Id& name) {
+        m_function_name = name;
+        return *this;
+    }
+
+    FunctionDeclarationBuilder &FunctionDeclarationBuilder::args(const std::vector< VarDecl >& args) {
+        m_args = args;
+        return *this;
+    }
+
+    FunctionDeclarationBuilder &FunctionDeclarationBuilder::body_insert(const Expr& expr) {
+        m_body.emplace_back(expr);
+        return *this;
+    }
+
+    FunctionDeclarationBuilder &FunctionDeclarationBuilder::body(const StatementBlock& b) {
+        m_body = b;
+        return *this;
+    }
+
+    FunctionDeclaration FunctionDeclarationBuilder::make() {
+        return FunctionDeclaration( m_retType, m_function_name, m_args, m_body );
+    }
 };

@@ -61,7 +61,7 @@ namespace circ::decoder {
     struct UnaryOp : Operator< T > {
         using Operator< T >::Operator;
 
-        T &value() {return this->ops[ 0 ];};
+        const T &value() {return this->ops[ 0 ];};
     };
 
 
@@ -98,10 +98,29 @@ namespace circ::decoder {
     using StatementBlock = std::vector< Expr >;
 
     struct FunctionDeclaration {
+        FunctionDeclaration(const Id& retType, const Id& functionName,
+                            std::vector< VarDecl > args, StatementBlock body)
+        : retType( retType ), function_name( functionName ), args( args ), body( body ) {}
+
         Id retType;
         Id function_name;
         std::vector< VarDecl > args;
         StatementBlock body;
+    };
+
+    struct FunctionDeclarationBuilder{
+        FunctionDeclarationBuilder& retType(const Id& retType);
+        FunctionDeclarationBuilder& name(const Id& name);
+        FunctionDeclarationBuilder& args(const std::vector< VarDecl >& args);
+        FunctionDeclarationBuilder& body_insert(const Expr& expr);
+        FunctionDeclarationBuilder& body(const StatementBlock& b);
+        FunctionDeclaration make();
+
+    private:
+        Id m_retType;
+        Id m_function_name;
+        std::vector< VarDecl > m_args;
+        StatementBlock m_body;
     };
 
     struct IfElse : Operator< Expr > {
@@ -173,3 +192,4 @@ namespace circ::decoder {
         ExpressionPrinter& binary_op(BinaryOp <Expr> &binOp, const std::string &op);
     };
 }
+
