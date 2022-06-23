@@ -43,7 +43,7 @@ namespace circ::decoder {
     struct Operator {
         template < typename... U >
         Operator(U &&... expression) {
-            (ops.template emplace_back( std::forward(expression) ), ...);
+            (ops.template emplace_back( std::forward<U>(expression) ), ...);
         }
 
         std::vector< T > ops;
@@ -137,6 +137,7 @@ namespace circ::decoder {
         Expr(T&& operand) : op(std::make_shared<op_t>(std::forward<op_t>(operand))){};
 
         // For exprs we just want only copy the pointer instead of create extra
+        Expr(Expr& e) = default;
         Expr(const Expr& e) = default;
         Expr(Expr&& e) = default;
         Expr& operator=(const Expr& e) = default;
@@ -147,14 +148,28 @@ namespace circ::decoder {
     };
 
 
-    enum class Wrapper :uint32_t {
-        Parenthesis,
-        CurlyBrackets,
+    enum class ExprStyle : uint32_t {
+        FuncArgs,
+        FuncBody,
     };
 
 
+    class ExpressionPrinter{
+    public:
+        ExpressionPrinter(std::ostream& os) : os(os){};
+        void print(const Expr& expr);
+    private:
+        std::ostream& os;
 
-    template <typename T>
-    void print_expr_array(const std::vector<T>& ops, std::ostream& os, const Wrapper wrappedIn = Wrapper::Parenthesis, const std::string& delim = " ");
-    void print_expr(const Expr& expr, std::ostream& os);
+
+        template <typename T, typename... Ts>
+        ExpressionPrinter &raw(T&& val, Ts&&... vals);
+        ExpressionPrinter& expr(const Expr& expr);
+
+        template < typename T >
+        ExpressionPrinter& expr_array(const std::vector< T > &ops, const ExprStyle style);
+
+        ExpressionPrinter& endl();
+        ExpressionPrinter& binary_op(BinaryOp <Expr> &binOp, const std::string &op);
+    };
 }
