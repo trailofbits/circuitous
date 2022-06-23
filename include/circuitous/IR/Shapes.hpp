@@ -291,9 +291,14 @@ static inline Operation *GetContext(Operation *op) {
 }
 
 static inline std::unordered_set<Operation *> GetContexts(Operation *op) {
-  collect::UpTree<VerifyInstruction> collector;
-  collector.Run(op);
-  return collector.collected;
+  collect::UpTree<VerifyInstruction> up_collector;
+  up_collector.Run( op);
+
+  SubtreeCollector< VerifyInstruction > down_collector;
+  auto down_collected = down_collector.Run( op ).collected;
+
+  up_collector.collected.insert(down_collected.begin(), down_collected.end());
+  return up_collector.collected;
 }
 
 } // namespace circ
