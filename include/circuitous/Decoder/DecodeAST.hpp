@@ -21,8 +21,8 @@ namespace circ::decoder {
     };
 
     struct Int {
-        explicit Int(const int &v) : value( v ) {};
-        int value;
+        explicit Int(const int32_t v) : value( v ) {};
+        int32_t value;
     };
 
     struct Uint64 {
@@ -94,7 +94,8 @@ namespace circ::decoder {
     CircuitousDecoder_GenerateBinaryOperator(And)
 
 #undef CircuitousDecoder_GenerateBinaryOperator
-
+    // TODO there are subtypes of Statements like Returns which also belong here
+    // So currently we just take Expr
     using StatementBlock = std::vector< Expr >;
 
     struct FunctionDeclaration {
@@ -189,7 +190,8 @@ namespace circ::decoder {
         ExpressionPrinter& expr_array(const std::vector< T > &ops, const ExprStyle style);
 
         ExpressionPrinter& endl();
-        ExpressionPrinter& binary_op(BinaryOp <Expr> &binOp, const std::string &op);
+        ExpressionPrinter &binary_op(BinaryOp <Expr> &binOp, const std::string &op,
+                                     bool add_parenthesis);
     };
 }
 
