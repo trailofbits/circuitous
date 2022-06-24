@@ -185,7 +185,7 @@ namespace circ::decoder {
         st.emplace_back(Statement(Assign(VarDecl(arg),Int(0))));
         for (uint i = 0; i < 8; i++) {
             auto indexdVar = IndexVar( array_input, second_uint ? i +8 : i);
-            auto rhs = CastToUint64( Shfl( indexdVar, Int( static_cast<const int>(8 * i))));
+            auto rhs = CastToUint64( Shfl( CastToUint64(indexdVar), Int( static_cast<const int>(8 * i))));
             st.emplace_back(Statement(Assign(arg, Plus( arg, rhs))));
         }
         return st;
