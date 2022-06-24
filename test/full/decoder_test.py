@@ -21,33 +21,17 @@ if output_dir.exists():
 Path(output).mkdir(parents=True, exist_ok=True)
 
 
-# Decoders for circuitous are in essence a set of checks between instr_bits and constant values in the DecoderResult subtree.
-# We assume that any value bit that is not explicitly checked for in a DecodeCondition can be freely chosen.
+# Decoders for circuitous are in essence a set of checks between instr_bits and constant
+# values in the DecoderResult subtree. We assume that any value bit that is not explicitly
+# checked for in a DecodeCondition can be freely chosen.
 #
-# The way testing works is that we take an encoding of an input instruction, and test if the decoder:
-# 1. returns true only if all checked bits are equal to the constants
-# 2. accepts all encodings where a bit is flipped which can be freely chosen
+# The way testing works is that we take an encoding of an input instruction, and test if the
+# decoder: 1. returns true only if all checked bits are equal to the constants 2. accepts all
+# encodings where a bit is flipped which can be freely chosen
 #
-# As the amount of test cases can get pretty big for a single instruction, we opt to only check if flipping a single bit from the original encoding causes a change in output.
-# We do this for every possible bit in the original encoding.
-#
-#
-# Generated test files are organized in the following manner:
-# ```
-# <list of encodings which should be accepted>
-# \---
-# <list of encodings which should be rejected>
-# ```
-# The list of encodings should have a new line per encoding. Encodings are hex values in plain text.
-# Decoders for circuitous are in essence a set of checks between instr_bits and constant values in the DecoderResult subtree.
-# We assume that any value bit that is not explicitly checked for in a DecodeCondition can be freely chosen.
-#
-# The way testing works is that we take an encoding of an input instruction, and test if the decoder:
-#     1. returns true only if all checked bits are equal to the constants
-#     2. accepts all encodings where a bit is flipped which can be freely chosen
-#
-# As the amount of test cases can get pretty big for a single instruction, we opt to only check if flipping a single bit from the original encoding causes a change in output.
-# We do this for every possible bit in the original encoding.
+# As the amount of test cases can get pretty big for a single instruction, we opt to only
+# check if flipping a single bit from the original encoding causes a change in output. We do
+# this for every possible bit in the original encoding.
 #
 #
 # Generated test files are organized in the following manner:
@@ -76,8 +60,7 @@ def print_hex_bytes(byte_arr):
     h = ""
     for b in byte_arr:
         h = h + " " + hex(b)
-
-    return str(h)
+    return h
 
 
 def create_test_for_enc(enc, dc):
@@ -93,11 +76,8 @@ def create_test_for_enc(enc, dc):
     return flip_accept, flip_deny
 
 
-def concat_list(byt):
-    s = ""
-    for b in byt:
-        s = s + b
-    return s
+def concat_list(byte):
+    return "".join(byte)
 
 
 def bytes_to_str_without_leading_0x(byt):
@@ -145,7 +125,7 @@ def run_test(test_name, test_enc_conditions):
     test_file = output_file_name + ".input"
     create_input_at_file(test_file, test_enc_conditions)
 
-    res = subprocess.run(["./" + output_file_name, test_file], capture_output=True)
+    res = subprocess.run([output_file_name, test_file], capture_output=True)
     if res.returncode != 0:
         print(res.stdout)
         print(res.stderr)
