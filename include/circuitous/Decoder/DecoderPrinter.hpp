@@ -48,6 +48,7 @@ namespace circ::decoder {
         std::vector<ExtractedDecodeCondition> decodeConditions; // Extract info we need from this
 
         std::vector< OptionalBitArray<8> > convert_circIR_to_input_type_array() const;
+        InputType get_input_type_at_index(std::size_t i) const;
     };
 
 
@@ -117,7 +118,6 @@ namespace circ::decoder {
                                           std::vector< std::pair< std::size_t, int>> &already_chosen_bits) ;
 
         Expr convert_input_to_uints64();
-        static Expr call_ctx(const ExtractedCtx &ctx);
 
         static std::vector< Expr >
         convert_array_input_to_uint64(const Var &array_input, const Var &arg,
@@ -131,6 +131,8 @@ namespace circ::decoder {
 
         uint8_t
         get_encoding_length(const std::unordered_multiset< DecodeCondition * > &decNodes) const;
+
+//        static InputType get_input_type_at_index_from_ctx(size_t i, const ExtractedCtx &ctx);
     };
 }
 
