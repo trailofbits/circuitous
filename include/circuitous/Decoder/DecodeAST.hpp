@@ -133,6 +133,9 @@ namespace circ::decoder {
     };
 
     struct FunctionCall {
+        FunctionCall(const Id &functionName, std::vector< Expr > args)
+                                    : function_name( functionName ), args( args ) {} ;
+
         Id function_name;
         std::vector< Expr > args;
     };

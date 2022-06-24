@@ -152,4 +152,5 @@ namespace circ::decoder {
     FunctionDeclaration FunctionDeclarationBuilder::make() {
         return FunctionDeclaration( m_retType, m_function_name, m_args, m_body );
     }
+
 };

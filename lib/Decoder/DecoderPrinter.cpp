@@ -6,9 +6,6 @@
 #include <cstdlib>
 
 namespace circ::decoder {
-//    const Var DecoderPrinter::inner_func_arg1 = Var( "first8bytes", "uint64_t");
-//    const Var DecoderPrinter::inner_func_arg2 = Var( "second8bytes", "uint64_t");
-
     bool operator<(const Decode_Requires_Group &x, const Decode_Requires_Group &y) {
         std::size_t min_x = std::min(x.zeros, x.ones).size();
         std::size_t min_y = std::min(y.zeros, y.ones).size();
@@ -16,8 +13,6 @@ namespace circ::decoder {
         return min_x < min_y;
     };
 
-
-    //TODO move this to impl
     template < int L >
     requires (L <= 64)
     uint64_t OptionalBitArray< L >::to_uint64() const {
@@ -58,30 +53,29 @@ namespace circ::decoder {
 
     std::vector< OptionalBitArray<8> > ExtractedCtx::convert_circIR_to_input_type_array() const {
         std::vector< OptionalBitArray<8> > input_checks;
-        for (std::size_t i = 0; i < 16; i++) {
+        for (std::size_t i = 0; i < MAX_ENCODING_LENGTH/8; i++) {
             auto val = OptionalBitArray<8>();
-            std::fill( val.begin(), val.end(), InputType::ignore);
-            for (auto &dec: decodeConditions) {
-                auto low = dec.low_bit_inc;
-                auto high_inc = dec.high_bit_exc - 1;
-
-                // out of range of considered byte
-                // MAX_ENC_LEN is 1 based instead of zero based
-                if ( low > (i + 1) * 8 || high_inc < i * 8 || high_inc == (MAX_ENCODING_LENGTH-1) ) {
-                    continue;
-                }
-
-                for (std::size_t c = 0; c < 8; c++) {
-                    auto bit_index = (i * 8) + c;
-                    if ( low <= bit_index && bit_index <= high_inc ) {
-                        //char  to input type
-                        val[ c ] = ctoit(dec.bits[ bit_index - low ]);
-                    }
-                }
+            for(uint32_t j = 0; j< 8; j++){
+                val[j] = get_input_type_at_index(static_cast<std::size_t>((i*8)+j));
             }
             input_checks.push_back( val );
         }
         return input_checks;
+    }
+
+    InputType ExtractedCtx::get_input_type_at_index(std::size_t i) const {
+        auto val = InputType::ignore;
+        for (auto &dec: decodeConditions) {
+            auto low = dec.low_bit_inc;
+            auto high_inc = dec.high_bit_exc - 1;
+
+            // out of range of considered byte
+            if ( low > i || high_inc < i || high_inc == (MAX_ENCODING_LENGTH -1) ) {
+                continue;
+            }
+            val = ctoit(dec.bits[ i - low ]);
+        }
+        return val;
     }
 
 
@@ -117,7 +111,6 @@ namespace circ::decoder {
 
                 dec.emplace_back(rhs->low_bit_inc, rhs->high_bit_exc, lhs->bits);
             }
-
 
             extracted_ctxs.emplace_back(
                     "generated_decoder_prefix_" + std::to_string( vi->id()),
@@ -303,7 +296,8 @@ namespace circ::decoder {
         }
 
         if ( to_split.size() == 1 ) {
-            return Return( call_ctx( *to_split[ 0 ] ));
+            auto ctx= *to_split[ 0 ];
+            return Return( FunctionCall( ctx.generated_name, {inner_func_arg1, inner_func_arg2}));
         }
 
         auto indice_values = get_decode_requirements_per_index( to_split, already_chosen_bits );
@@ -356,39 +350,16 @@ namespace circ::decoder {
         };
 
         for (std::size_t i = 0; i < MAX_ENCODING_LENGTH; i++) {
+            if ( index_is_already_chosen(i) ) {
+                continue;
+            }
+
             for (auto &ctx: to_split) {
-                if ( index_is_already_chosen(i) ) {
-                    continue;
-                }
-
-                auto val = InputType::ignore;
-                for (auto &dec: ctx->decodeConditions) {
-                    auto low = dec.low_bit_inc;
-                    auto high_inc = dec.high_bit_exc - 1;
-
-                    // out of range of considered byte
-                    if ( low > i || high_inc < i || high_inc == (MAX_ENCODING_LENGTH -1) ) {
-                        continue;
-                    }
-                    val = ctoit(dec.bits[ i - low ]);
-                }
-                /*
-                 * The bit which gets checked should only be in a single decode condition
-                 * otherwise multiple decode conditions checking over other ranges would add
-                 * way to many ignores
-                 */
-                indice_values[i].insert(val, ctx);
+                auto it = ctx->get_input_type_at_index( i);
+                indice_values[i].insert( it, ctx);
             }
         }
         return indice_values;
-    }
-
-    Expr DecoderPrinter::call_ctx(const ExtractedCtx &ctx) {
-        FunctionCall fc;
-        fc.function_name = ctx.generated_name;
-        fc.args.emplace_back( inner_func_arg1);
-        fc.args.emplace_back( inner_func_arg2);
-        return fc;
     }
 
     OptionalBitArray<64> convert_bytes_to_uints64(const std::vector<OptionalBitArray<8>>& bytes, std::size_t offset){
@@ -401,11 +372,11 @@ namespace circ::decoder {
 
     auto DecoderPrinter::get_decode_context_function_args(const ExtractedCtx& ectx) -> decode_func_args{
         auto input_checks = ectx.convert_circIR_to_input_type_array();
-        OptionalBitArray<64> val = convert_bytes_to_uints64(input_checks, 0);
-        OptionalBitArray<64> val2 = convert_bytes_to_uints64(input_checks, 8);
+        OptionalBitArray<64> firstUint64 = convert_bytes_to_uints64(input_checks, 0);
+        OptionalBitArray<64> secondUint64 = convert_bytes_to_uints64(input_checks, 8);
 
-        auto arg1 = decode_context_function_arg( val, inner_func_arg1 );
-        auto arg2 = decode_context_function_arg( val2, inner_func_arg2 );
+        auto arg1 = decode_context_function_arg( firstUint64, inner_func_arg1 );
+        auto arg2 = decode_context_function_arg( secondUint64, inner_func_arg2 );
         return {arg1, arg2 };
     }
 
