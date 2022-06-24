@@ -24,7 +24,7 @@ namespace circ::decoder {
         uint64_t val = 0;
         for (std::size_t i = 0; i < L; i++) {
             if ( (*this)[ i ] == InputType::ignore )
-                val |= to_val_negated( InputType::ignore ) << i;
+                val |= negate( to_val(InputType::ignore) ) << i;
             else
                 val |= to_val( (*this)[ i ] ) << i;
         }
@@ -39,7 +39,7 @@ namespace circ::decoder {
             if ( (*this)[ i ] == InputType::ignore )
                 val |= to_val( InputType::ignore ) << i;
             else
-                val |= to_val_negated( InputType::ignore ) << i;
+                val |= negate( to_val(InputType::ignore) ) << i;
         }
         return val;
     }
@@ -61,11 +61,9 @@ namespace circ::decoder {
         for (std::size_t i = 0; i < 16; i++) {
             auto val = OptionalBitArray<8>();
             std::fill( val.begin(), val.end(), InputType::ignore);
-            for (auto &n: decodeConditions) {
-                auto lhsn = dynamic_cast<circ::Constant *>(n->operands[ 0 ]);
-                auto extract = dynamic_cast<circ::Extract *>(n->operands[ 1 ]);
-                auto low = extract->low_bit_inc;
-                auto high_inc = extract->high_bit_exc - 1;
+            for (auto &dec: decodeConditions) {
+                auto low = dec.low_bit_inc;
+                auto high_inc = dec.high_bit_exc - 1;
 
                 // out of range of considered byte
                 // MAX_ENC_LEN is 1 based instead of zero based
@@ -77,7 +75,7 @@ namespace circ::decoder {
                     auto bit_index = (i * 8) + c;
                     if ( low <= bit_index && bit_index <= high_inc ) {
                         //char  to input type
-                        val[ c ] = ctoit(lhsn->bits[ bit_index - low ]);
+                        val[ c ] = ctoit(dec.bits[ bit_index - low ]);
                     }
                 }
             }
@@ -88,8 +86,10 @@ namespace circ::decoder {
 
 
     void DecoderPrinter::print_file() {
-        os << "#include <array>" << std::endl;
-        os << "#include <stdint.h>" << std::endl << std::endl;
+        print_include("array");
+        print_include("stdint.h");
+        os << std::endl;
+
         ExpressionPrinter ep(os);
         for (auto &ctx: extracted_ctxs) {
             ep.print( print_context_decoder_function( ctx ));
@@ -103,25 +103,51 @@ namespace circ::decoder {
         for (auto &vi: Contexts) {
             SubtreeCollector< DecodeCondition > dc_collector;
             dc_collector.Run( vi->operands );
+
             std::unordered_multiset< DecodeCondition * > decNodes = dc_collector.collected;
-            auto x =
-                    std::find_if( decNodes.begin(), decNodes.end(), [&](DecodeCondition *dc) {
-                        auto rhs = dynamic_cast<circ::Extract *>(dc->operands[ 1 ]);
-                        return rhs->high_bit_exc == MAX_ENCODING_LENGTH;
-                    } );
-            if ( x == decNodes.end()) {
-                circ::unreachable() << "No decode condition that specifies end" ;
+
+            auto encoding_length = get_encoding_length( decNodes );
+
+            std::vector<ExtractedDecodeCondition> dec;
+            for(auto decCond : decNodes){
+                auto lhs = dynamic_cast<circ::Constant *>((*decCond).operands[ 0 ]);
+                auto rhs = dynamic_cast<circ::Extract *>((*decCond).operands[ 1 ]);
+                if(lhs == nullptr || rhs == nullptr)
+                    circ::unreachable() << "decoder condition malformed";
+
+                dec.emplace_back(rhs->low_bit_inc, rhs->high_bit_exc, lhs->bits);
             }
-            auto rhs = dynamic_cast<circ::Extract *>((*x)->operands[ 1 ]);
-            auto encoding_length = floor( rhs->low_bit_inc / 8 );
-            if ( encoding_length > 15 ) {
-                circ::unreachable() << "Instruction is longer than 15 bytes" ;
-            }
+
+
             extracted_ctxs.emplace_back(
                     "generated_decoder_prefix_" + std::to_string( vi->id()),
                     static_cast<uint8_t>(encoding_length),
-                    std::move( decNodes ));
+                    std::move( dec ));
         }
+    }
+
+    uint8_t DecoderPrinter::get_encoding_length(
+            const std::unordered_multiset< DecodeCondition * > &decNodes) const {
+        auto is_ending_check = [&](DecodeCondition *dc) {
+            auto rhs = dynamic_cast<circ::Extract *>(dc->operands[ 1 ]);
+            if ( rhs == nullptr )
+                circ::unreachable() << "invalid cast to Extract";
+            return rhs->high_bit_exc == MAX_ENCODING_LENGTH;
+        };
+        auto endingEncoding = std::find_if( decNodes.begin(), decNodes.end(),is_ending_check);
+        if ( endingEncoding == decNodes.end())
+            circ::unreachable() << "No decode condition that specifies end" ;
+
+
+        auto rhs = dynamic_cast<circ::Extract *>((*endingEncoding)->operands[ 1 ]);
+        if(rhs == nullptr)
+            circ::unreachable() << "invalid cast to Extract";
+
+        auto encoding_length= floor( rhs->low_bit_inc / 8 );
+        if ( encoding_length > 15 ) {
+            circ::unreachable() << "Instruction is longer than 15 bytes" ;
+        }
+        return static_cast<uint8_t>(encoding_length);
     }
 
     Expr DecoderPrinter::print_top_level_function() {
@@ -305,8 +331,8 @@ namespace circ::decoder {
 
         auto ci_byte = static_cast<uint32_t>(candidate_index / 8);
         auto lhs = IndexVar(Var(bytes_input_variable), ci_byte);
-        auto rhs2 =   Shfl(Int(1), Int( candidate_index % 8));
-        auto condition = BitwiseAnd( lhs, rhs2); // var & (1<< ci)
+        auto rhs = Shfl(Int(1), Int( candidate_index % 8));
+        auto condition = BitwiseAnd( lhs, rhs); // var & (1<< ci)
 
 
         auto lhs_split = generate_decoder_selection_tree( ones, already_chosen_bits, depth + 1 );
@@ -316,12 +342,12 @@ namespace circ::decoder {
         return IfElse( condition, lhs_split, rhs_split);
     }
 
-    std::array< Decode_Requires_Group, 120 >
+    std::array< Decode_Requires_Group, MAX_ENCODING_LENGTH >
     DecoderPrinter::get_decode_requirements_per_index(
             const std::vector< ExtractedCtx * > &to_split,
             std::vector< std::pair< std::size_t, int>> &already_chosen_bits) {
-        std::array< Decode_Requires_Group, 120 > indice_values;
 
+        std::array< Decode_Requires_Group, MAX_ENCODING_LENGTH > indice_values;
         auto index_is_already_chosen = [&](std::size_t i){
             return std::find_if( already_chosen_bits.begin(), already_chosen_bits.end(),
                           [&](std::pair< std::size_t, int > p) {
@@ -329,25 +355,22 @@ namespace circ::decoder {
                           } ) != already_chosen_bits.end();
         };
 
-        for (std::size_t i = 0; i < 120; i++) {
+        for (std::size_t i = 0; i < MAX_ENCODING_LENGTH; i++) {
             for (auto &ctx: to_split) {
                 if ( index_is_already_chosen(i) ) {
                     continue;
                 }
 
                 auto val = InputType::ignore;
-                for (auto &n: ctx->decodeConditions) {
-                    auto lhsn = dynamic_cast<circ::Constant *>(n->operands[ 0 ]);
-                    auto extract = dynamic_cast<circ::Extract *>(n->operands[ 1 ]);
-                    auto low = extract->low_bit_inc;
-                    auto high_inc = extract->high_bit_exc - 1;
-
+                for (auto &dec: ctx->decodeConditions) {
+                    auto low = dec.low_bit_inc;
+                    auto high_inc = dec.high_bit_exc - 1;
 
                     // out of range of considered byte
                     if ( low > i || high_inc < i || high_inc == (MAX_ENCODING_LENGTH -1) ) {
                         continue;
                     }
-                    val = ctoit(lhsn->bits[ i - low ]);
+                    val = ctoit(dec.bits[ i - low ]);
                 }
                 /*
                  * The bit which gets checked should only be in a single decode condition
@@ -386,6 +409,10 @@ namespace circ::decoder {
         return {arg1, arg2 };
     }
 
+    void DecoderPrinter::print_include(const std::string &name) {
+        os << "#include <" << name << ">" << std::endl;
+    }
+
     uint64_t to_val(const InputType &ty) {
         switch (ty) {
             case InputType::zero:
@@ -397,15 +424,8 @@ namespace circ::decoder {
         }
     }
 
-    uint64_t to_val_negated(const InputType &ty) {
-        switch (ty) {
-            case InputType::zero:
-                return 1;
-            case InputType::one:
-                return 0;
-            case InputType::ignore:
-                return 0;
-        }
+    uint64_t negate(uint64_t value) {
+        return value == 0 ? 1 : 0;
     }
 
     InputType ctoit(const char c){
