@@ -6,7 +6,7 @@
 #include <array>
 #include <fstream>
 #include <sstream>
-extern int circuit_decode(std::array<uint8_t,15> input, int size = 15);
+extern int circuit_decode(std::array<uint8_t,15> input);
 
 int main(int argc, char** argv){
     if(argc != 2){

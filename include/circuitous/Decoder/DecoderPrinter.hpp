@@ -12,7 +12,7 @@ namespace circ::decoder {
         zero = 0, one = 1, ignore = 2
     };
     uint64_t to_val(const InputType &ty);
-    uint64_t to_val_negated(const InputType &ty);
+    uint64_t negate(uint64_t value);
     InputType ctoit(const char c); //char to input type
 
     template<int L>
@@ -25,17 +25,27 @@ namespace circ::decoder {
         bool contains_only_ignore_bits() const;
     };
 
+    struct ExtractedDecodeCondition {
+        ExtractedDecodeCondition(uint32_t low_incl, uint32_t high_excl,
+                                 const std::string& bits) : low_bit_inc(
+                low_incl ), high_bit_exc( high_excl ), bits( bits ) {};
+
+        uint32_t low_bit_inc;
+        uint32_t high_bit_exc;
+        const std::string bits;
+    };
+
 
     struct ExtractedCtx {
         ExtractedCtx(const std::string &name, uint8_t size,
-                     const std::unordered_multiset< DecodeCondition * > &decodeConditions) :
+                     const std::vector<ExtractedDecodeCondition> &decodeConditions) :
                 generated_name( name ),
                 encoding_size_in_bytes( size ),
                 decodeConditions( decodeConditions ) {};
 
         std::string generated_name;
         uint8_t encoding_size_in_bytes;
-        std::unordered_multiset< DecodeCondition * > decodeConditions; // Extract info we need from this
+        std::vector<ExtractedDecodeCondition> decodeConditions; // Extract info we need from this
 
         std::vector< OptionalBitArray<8> > convert_circIR_to_input_type_array() const;
     };
@@ -92,20 +102,17 @@ namespace circ::decoder {
 
 
         using decode_func_args =  std::pair< decode_context_function_arg, decode_context_function_arg >;
-
         static decode_func_args get_decode_context_function_args(const ExtractedCtx& ctx);
 
 
         Expr print_context_decoder_function(const ExtractedCtx &ctx);
         Expr print_top_level_function();
         static Expr get_decode_context_function_body(const decode_func_args& args, int encoding_size);
-
-
         Expr generate_decoder_selection_tree(const std::vector< ExtractedCtx * > &to_split,
                                              std::vector< std::pair< std::size_t, int>> already_chosen_bits,
                                              int depth);
 
-        static std::array< Decode_Requires_Group, 120 >
+        static std::array< Decode_Requires_Group, MAX_ENCODING_LENGTH >
         get_decode_requirements_per_index(const std::vector< ExtractedCtx * > &to_split,
                                           std::vector< std::pair< std::size_t, int>> &already_chosen_bits) ;
 
@@ -116,11 +123,14 @@ namespace circ::decoder {
         convert_array_input_to_uint64(const Var &array_input, const Var &arg,
                                       bool second_uint);
 
-
+        void print_include(const std::string& name);
         static Expr print_ignore_bits(const decode_context_function_arg &arg);
         static Expr get_comparison(const decode_context_function_arg &arg) ;
 
         void extract_ctx();
+
+        uint8_t
+        get_encoding_length(const std::unordered_multiset< DecodeCondition * > &decNodes) const;
     };
 }
 
