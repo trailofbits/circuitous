@@ -23,6 +23,9 @@ namespace circ::decoder {
 
         bool contains_ignore_bit() const;
         bool contains_only_ignore_bits() const;
+
+    private:
+        uint64_t convert_to_uint64(auto if_ignore, auto if_not_ignore) const;
     };
 
     struct ExtractedDecodeCondition {
