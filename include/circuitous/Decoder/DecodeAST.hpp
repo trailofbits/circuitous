@@ -64,36 +64,26 @@ namespace circ::decoder {
         const T &value() {return this->ops[ 0 ];};
     };
 
-
-#define CircuitousDecoder_GenerateUnaryOperator(name, T) \
-    struct name : UnaryOp<T>{ using UnaryOp::UnaryOp; };
-
-
-    CircuitousDecoder_GenerateUnaryOperator(VarDecl, Var)
-    CircuitousDecoder_GenerateUnaryOperator(Statement, Expr)
-    CircuitousDecoder_GenerateUnaryOperator(Return, Expr)
-    CircuitousDecoder_GenerateUnaryOperator(CastToUint64, Expr)
-    CircuitousDecoder_GenerateUnaryOperator(BitwiseNegate, Expr)
-    CircuitousDecoder_GenerateUnaryOperator(Parenthesis, Expr)
-    CircuitousDecoder_GenerateUnaryOperator(CurlyBrackets, Expr)
-
-#undef CircuitousDecoder_GenerateUnaryOperator
-
-#define CircuitousDecoder_GenerateBinaryOperator(name) \
-        struct name : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+    struct VarDecl: UnaryOp<Var>{ using UnaryOp::UnaryOp; };
+    struct Statement: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
+    struct Return: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
+    struct CastToUint64: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
+    struct BitwiseNegate: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
+    struct Parenthesis: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
+    struct CurlyBrackets: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
 
 
-    CircuitousDecoder_GenerateBinaryOperator(Plus)
-    CircuitousDecoder_GenerateBinaryOperator(Mul)
-    CircuitousDecoder_GenerateBinaryOperator(BitwiseOr)
-    CircuitousDecoder_GenerateBinaryOperator(BitwiseXor)
-    CircuitousDecoder_GenerateBinaryOperator(BitwiseAnd)
-    CircuitousDecoder_GenerateBinaryOperator(Assign)
-    CircuitousDecoder_GenerateBinaryOperator(Shfl)
-    CircuitousDecoder_GenerateBinaryOperator(Equal)
-    CircuitousDecoder_GenerateBinaryOperator(And)
 
-#undef CircuitousDecoder_GenerateBinaryOperator
+    struct Plus : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+    struct Mul : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+    struct BitwiseOr : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+    struct BitwiseXor : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+    struct BitwiseAnd : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+    struct Assign : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+    struct Shfl : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+    struct Equal : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+    struct And : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+
     // TODO there are subtypes of Statements like Returns which also belong here
     // So currently we just take Expr
     using StatementBlock = std::vector< Expr >;
@@ -142,7 +132,6 @@ namespace circ::decoder {
 
     struct Empty { };
 
-    //TODO Is there a way in where we can merge the declare through macros and writing it down here?
     using op_t = std::variant<
             Expr, Int, Uint64, Id, //primitive types Expr, int, std::string
             Var, VarDecl, Statement, Return, CastToUint64, Parenthesis, CurlyBrackets, IndexVar,// unary
@@ -176,6 +165,19 @@ namespace circ::decoder {
         FuncBody,
     };
 
+    struct Guard{
+        Guard(const std::string &g1, std::string g2, std::ostream &os)
+                : g1( g1 ), g2( g2 ), os( os ) {
+            os << g1;
+        }
+        ~Guard(){
+            os << g2;
+        }
+
+        std::string g1;
+        std::string g2;
+        std::ostream& os;
+    };
 
     class ExpressionPrinter{
     public:
@@ -188,6 +190,7 @@ namespace circ::decoder {
         template <typename T, typename... Ts>
         ExpressionPrinter &raw(T&& val, Ts&&... vals);
         ExpressionPrinter& expr(const Expr& expr);
+        ExpressionPrinter& expr(const Expr& expr, const Guard& g);
 
         template < typename T >
         ExpressionPrinter& expr_array(const std::vector< T > &ops, const ExprStyle style);
@@ -195,6 +198,7 @@ namespace circ::decoder {
         ExpressionPrinter& endl();
         ExpressionPrinter &binary_op(BinaryOp <Expr> &binOp, const std::string &op,
                                      bool add_parenthesis);
+
     };
 }
 
