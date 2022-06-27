@@ -134,8 +134,8 @@ namespace circ::decoder {
         return *this;
     }
 
-    FunctionDeclarationBuilder &FunctionDeclarationBuilder::args(const std::vector< VarDecl >& args) {
-        m_args = args;
+    FunctionDeclarationBuilder &FunctionDeclarationBuilder::arg_insert(const VarDecl& args) {
+        m_args.emplace_back(args);
         return *this;
     }
 

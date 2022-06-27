@@ -43,11 +43,13 @@ namespace circ::decoder {
     }
 
 
-    Expr DecoderPrinter::print_context_decoder_function(const ExtractedCtx &ctx) {
+    Expr DecoderPrinter::create_context_decoder_function(const ExtractedCtx &ctx) {
         FunctionDeclarationBuilder fdb;
         fdb.name(ctx.generated_name);
         fdb.retType("int");
-        fdb.args({VarDecl( inner_func_arg1 ), VarDecl( inner_func_arg2 )});
+        for(auto& arg : inner_func_args){
+            fdb.arg_insert(arg);
+        }
 
         auto args = get_decode_context_function_args( ctx );
         fdb.body({ get_decode_context_function_body( args, ctx.encoding_size_in_bytes )});
@@ -89,9 +91,9 @@ namespace circ::decoder {
 
         ExpressionPrinter ep(os);
         for (auto &ctx: extracted_ctxs) {
-            ep.print( print_context_decoder_function( ctx ));
+            ep.print( create_context_decoder_function( ctx ));
         }
-        ep.print( print_top_level_function());
+        ep.print( create_top_level_function());
         os << std::endl;
     }
 
@@ -129,23 +131,23 @@ namespace circ::decoder {
             return rhs->high_bit_exc == MAX_ENCODING_LENGTH;
         };
         auto endingEncoding = std::find_if( decNodes.begin(), decNodes.end(),is_ending_check);
-        check(endingEncoding == decNodes.end()) << "No decode condition that specifies end" ;
+        check(endingEncoding != decNodes.end()) << "No decode condition that specifies end" ;
 
 
         auto rhs = dynamic_cast<circ::Extract *>((*endingEncoding)->operands[ 1 ]);
         check(rhs) << "invalid cast to Extract";
 
         auto encoding_length= floor( rhs->low_bit_inc / 8 );
-        check(encoding_length > 15 ) << "Instruction is longer than 15 bytes" ;
+        check(encoding_length < 15 ) << "Instruction is longer than 15 bytes" ;
 
         return static_cast<uint8_t>(encoding_length);
     }
 
-    Expr DecoderPrinter::print_top_level_function() {
+    Expr DecoderPrinter::create_top_level_function() {
         FunctionDeclarationBuilder fdb;
         fdb.name(circuit_decode_function_name);
         fdb.retType("int");
-        fdb.args( {Var( bytes_input_variable, "std::array<uint8_t,15>" )});
+        fdb.arg_insert( Var( bytes_input_variable, "std::array<uint8_t,15>" ));
 
         fdb.body_insert( convert_input_to_uints64());
 
@@ -159,7 +161,7 @@ namespace circ::decoder {
         fdb.body_insert(tree);
 
         circ::log_dbg() << "max depth during gen: " << max_depth << " for size of: "
-                  << std::to_string( extracted_ctxs.size());
+                        << std::to_string( extracted_ctxs.size());
 
         fdb.body_insert(Return(Int(-1)));
         return fdb.make();
@@ -167,22 +169,22 @@ namespace circ::decoder {
 
     Expr DecoderPrinter::convert_input_to_uints64() {
         auto array_input = Var( bytes_input_variable );
-        auto first = convert_array_input_to_uint64( array_input, inner_func_arg1, false );
-        auto second = convert_array_input_to_uint64( array_input, inner_func_arg2, true );
         StatementBlock b;
-        b.insert(b.begin(), first.begin(), first.end());
-        b.insert(b.begin(), second.begin(), second.end());
+        for(std::size_t i = 0; i < inner_func_args.size(); i++){
+            auto arg = convert_array_input_to_uint64( array_input, inner_func_args[i], i );
+            b.insert(b.begin(), arg.begin(), arg.end());
+        }
 
         return b;
     }
 
     std::vector< Expr >
     DecoderPrinter::convert_array_input_to_uint64(const Var &array_input, const Var &arg,
-                                                  bool second_uint) {
+                                                  size_t offset) {
         std::vector< Expr > st;
         st.emplace_back(Statement(Assign(VarDecl(arg),Int(0))));
         for (uint i = 0; i < 8; i++) {
-            auto indexdVar = IndexVar( array_input, second_uint ? i +8 : i);
+            auto indexdVar = IndexVar( array_input, static_cast<uint32_t>(offset*8 + i));
             auto rhs = CastToUint64( Shfl( CastToUint64(indexdVar), Int( static_cast<const int>(8 * i))));
             st.emplace_back(Statement(Assign(arg, Plus( arg, rhs))));
         }
@@ -214,15 +216,15 @@ namespace circ::decoder {
     Expr DecoderPrinter::get_decode_context_function_body(const decode_func_args &args,
                                                           int encoding_size) {
         StatementBlock block;
-        block.emplace_back( print_ignore_bits( args.first ));
-        block.emplace_back( print_ignore_bits( args.second ));
+        for(auto& arg: args){
+            block.emplace_back( create_ignore_bits_setter( arg ));
+        }
 
         std::vector< Expr > compare_exprs;
-        if ( !args.first.byte.contains_only_ignore_bits())
-            compare_exprs.push_back( get_comparison( args.first ));
-
-        if ( !args.second.byte.contains_only_ignore_bits())
-            compare_exprs.push_back( get_comparison( args.second ));
+        for(auto& arg: args){
+            if ( !arg.byte.contains_only_ignore_bits())
+                compare_exprs.push_back( get_comparison( arg ));
+        }
 
         if ( compare_exprs.size() == 1 )
             block.emplace_back( Return( Mul( compare_exprs[ 0 ], Int( encoding_size ))));
@@ -242,7 +244,7 @@ namespace circ::decoder {
         return  Equal( lhs, neg_ignore );
     }
 
-    Expr DecoderPrinter::print_ignore_bits(const decode_context_function_arg &arg) {
+    Expr DecoderPrinter::create_ignore_bits_setter(const decode_context_function_arg &arg) {
         if ( !arg.byte.contains_ignore_bit() || arg.byte.contains_only_ignore_bits())
             return Empty();
 
@@ -295,7 +297,8 @@ namespace circ::decoder {
 
         if ( to_split.size() == 1 ) {
             auto ctx= *to_split[ 0 ];
-            return Return( FunctionCall( ctx.generated_name, {inner_func_arg1, inner_func_arg2}));
+            auto args = std::vector<Expr>(inner_func_args.begin(), inner_func_args.end());
+            return Return( FunctionCall( ctx.generated_name, args));
         }
 
         auto indice_values = get_decode_requirements_per_index( to_split, already_chosen_bits );
@@ -342,9 +345,9 @@ namespace circ::decoder {
         std::array< Decode_Requires_Group, MAX_ENCODING_LENGTH > indice_values;
         auto index_is_already_chosen = [&](std::size_t i){
             return std::find_if( already_chosen_bits.begin(), already_chosen_bits.end(),
-                          [&](std::pair< std::size_t, int > p) {
-                              return p.first == i;
-                          } ) != already_chosen_bits.end();
+                                 [&](std::pair< std::size_t, int > p) {
+                                     return p.first == i;
+                                 } ) != already_chosen_bits.end();
         };
 
         for (std::size_t i = 0; i < MAX_ENCODING_LENGTH; i++) {
@@ -360,50 +363,60 @@ namespace circ::decoder {
         return indice_values;
     }
 
-    OptionalBitArray<64> convert_bytes_to_uints64(const std::vector<OptionalBitArray<8>>& bytes, std::size_t offset){
-        OptionalBitArray<64> val;
-        for (std::size_t i = 0; i < 64; i++) {
+OptionalBitArray< 64 >
+convert_bytes_to_uints64(const std::vector< OptionalBitArray< 8>> &bytes,
+                         std::size_t offset) {
+    OptionalBitArray< 64 > val;
+
+    for (std::size_t i = 0; i < 64; i++) {
+        auto bit_offset = offset*8 + i;
+        if(bit_offset >= MAX_ENCODING_LENGTH){
+            val[i] = InputType::ignore;
+        }
+        else{
             val[ i ] = bytes[ offset + (i / 8) ][ i % 8 ];
         }
-        return val;
+    }
+    return val;
+}
+
+auto DecoderPrinter::get_decode_context_function_args(const ExtractedCtx& ectx) -> decode_func_args{
+    auto input_checks = ectx.convert_circIR_to_input_type_array();
+    std::vector<decode_context_function_arg> args;
+    for(std::size_t i =0; i < inner_func_args.size(); i++){
+        auto arg1 =  convert_bytes_to_uints64(input_checks, i*8);
+        args.emplace_back(arg1, inner_func_args[i]);
     }
 
-    auto DecoderPrinter::get_decode_context_function_args(const ExtractedCtx& ectx) -> decode_func_args{
-        auto input_checks = ectx.convert_circIR_to_input_type_array();
-        OptionalBitArray<64> firstUint64 = convert_bytes_to_uints64(input_checks, 0);
-        OptionalBitArray<64> secondUint64 = convert_bytes_to_uints64(input_checks, 8);
+    return args;
+}
 
-        auto arg1 = decode_context_function_arg( firstUint64, inner_func_arg1 );
-        auto arg2 = decode_context_function_arg( secondUint64, inner_func_arg2 );
-        return {arg1, arg2 };
-    }
+void DecoderPrinter::print_include(const std::string &name) {
+    os << "#include <" << name << ">" << std::endl;
+}
 
-    void DecoderPrinter::print_include(const std::string &name) {
-        os << "#include <" << name << ">" << std::endl;
+uint64_t to_val(const InputType &ty) {
+    switch (ty) {
+        case InputType::zero:
+            return 0;
+        case InputType::one:
+            return 1;
+        case InputType::ignore:
+            return 1;
     }
+}
 
-    uint64_t to_val(const InputType &ty) {
-        switch (ty) {
-            case InputType::zero:
-                return 0;
-            case InputType::one:
-                return 1;
-            case InputType::ignore:
-                return 1;
-        }
-    }
+uint64_t negate(uint64_t value) {
+    return value == 0 ? 1 : 0;
+}
 
-    uint64_t negate(uint64_t value) {
-        return value == 0 ? 1 : 0;
+InputType ctoit(const char c){
+    switch (c) {
+        case '0': return InputType::zero;
+        case '1': return InputType::one;
+        case '~': return InputType::ignore;
+        default: circ::unreachable() << "Converting invalid value to InputType";
     }
-
-    InputType ctoit(const char c){
-        switch (c) {
-            case '0': return InputType::zero;
-            case '1': return InputType::one;
-            case '~': return InputType::ignore;
-            default: circ::unreachable() << "Converting invalid value to InputType";
-        }
-    }
+}
 
 }  // namespace circ::disassm

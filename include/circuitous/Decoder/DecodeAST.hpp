@@ -112,7 +112,7 @@ namespace circ::decoder {
     struct FunctionDeclarationBuilder{
         FunctionDeclarationBuilder& retType(const Id& retType);
         FunctionDeclarationBuilder& name(const Id& name);
-        FunctionDeclarationBuilder& args(const std::vector< VarDecl >& args);
+        FunctionDeclarationBuilder& arg_insert(const VarDecl& args);
         FunctionDeclarationBuilder& body_insert(const Expr& expr);
         FunctionDeclarationBuilder& body(const StatementBlock& b);
         FunctionDeclaration make();
