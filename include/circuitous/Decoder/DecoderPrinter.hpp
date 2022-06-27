@@ -72,10 +72,10 @@ namespace circ::decoder {
     };
 
     struct decode_context_function_arg {
-        decode_context_function_arg(OptionalBitArray<64> &byte,
+        decode_context_function_arg(const OptionalBitArray<64> &byte,
                                     const Var &var) : byte( byte ), var( var ) {};
 
-        const OptionalBitArray<64> &byte;
+        const OptionalBitArray<64> byte;
         const Var &var;
     };
 
@@ -98,6 +98,7 @@ namespace circ::decoder {
         static constexpr const auto circuit_decode_function_name = "circuit_decode";
         inline static const Var inner_func_arg1 = Var( "first8bytes", "uint64_t");
         inline static const Var inner_func_arg2 = Var( "second8bytes", "uint64_t");
+        inline static const std::array<Var,2> inner_func_args = {inner_func_arg1, inner_func_arg2};
 
         const circ::CircuitPtr &circuit;
         std::ostream &os;
@@ -105,12 +106,12 @@ namespace circ::decoder {
         int max_depth = 0;
 
 
-        using decode_func_args =  std::pair< decode_context_function_arg, decode_context_function_arg >;
+        using decode_func_args =  std::vector<decode_context_function_arg>;
         static decode_func_args get_decode_context_function_args(const ExtractedCtx& ctx);
 
 
-        Expr print_context_decoder_function(const ExtractedCtx &ctx);
-        Expr print_top_level_function();
+        Expr create_context_decoder_function(const ExtractedCtx &ctx);
+        Expr create_top_level_function();
         static Expr get_decode_context_function_body(const decode_func_args& args, int encoding_size);
         Expr generate_decoder_selection_tree(const std::vector< ExtractedCtx * > &to_split,
                                              std::vector< std::pair< std::size_t, int>> already_chosen_bits,
@@ -124,10 +125,10 @@ namespace circ::decoder {
 
         static std::vector< Expr >
         convert_array_input_to_uint64(const Var &array_input, const Var &arg,
-                                      bool second_uint);
+                                      size_t offset);
 
         void print_include(const std::string& name);
-        static Expr print_ignore_bits(const decode_context_function_arg &arg);
+        static Expr create_ignore_bits_setter(const decode_context_function_arg &arg);
         static Expr get_comparison(const decode_context_function_arg &arg) ;
 
         void extract_ctx();
