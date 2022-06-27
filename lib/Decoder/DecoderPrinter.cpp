@@ -109,8 +109,7 @@ namespace circ::decoder {
             for(auto decCond : decNodes){
                 auto lhs = dynamic_cast<circ::Constant *>((*decCond).operands[ 0 ]);
                 auto rhs = dynamic_cast<circ::Extract *>((*decCond).operands[ 1 ]);
-                if(lhs == nullptr || rhs == nullptr)
-                    circ::unreachable() << "decoder condition malformed";
+                check(lhs && rhs) <<  "decoder condition malformed";
 
                 dec.emplace_back(rhs->low_bit_inc, rhs->high_bit_exc, lhs->bits);
             }
@@ -126,23 +125,19 @@ namespace circ::decoder {
             const std::unordered_multiset< DecodeCondition * > &decNodes) const {
         auto is_ending_check = [&](DecodeCondition *dc) {
             auto rhs = dynamic_cast<circ::Extract *>(dc->operands[ 1 ]);
-            if ( rhs == nullptr )
-                circ::unreachable() << "invalid cast to Extract";
+            check(rhs) << "invalid cast to Extract";
             return rhs->high_bit_exc == MAX_ENCODING_LENGTH;
         };
         auto endingEncoding = std::find_if( decNodes.begin(), decNodes.end(),is_ending_check);
-        if ( endingEncoding == decNodes.end())
-            circ::unreachable() << "No decode condition that specifies end" ;
+        check(endingEncoding == decNodes.end()) << "No decode condition that specifies end" ;
 
 
         auto rhs = dynamic_cast<circ::Extract *>((*endingEncoding)->operands[ 1 ]);
-        if(rhs == nullptr)
-            circ::unreachable() << "invalid cast to Extract";
+        check(rhs) << "invalid cast to Extract";
 
         auto encoding_length= floor( rhs->low_bit_inc / 8 );
-        if ( encoding_length > 15 ) {
-            circ::unreachable() << "Instruction is longer than 15 bytes" ;
-        }
+        check(encoding_length > 15 ) << "Instruction is longer than 15 bytes" ;
+
         return static_cast<uint8_t>(encoding_length);
     }
 
