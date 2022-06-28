@@ -163,16 +163,27 @@ class Interpret(SimulateCWDMixin):
         for case in tc.cases:
             self.run_case(case, tc.metafiles[case.name + ".circuit"], tc)
 
+    def create_trace_json(self, case, prefix, dir=None):
+        fname = prefix + ".trace.json"
+        path = self.locate(fname)
+
+        obj = {}
+        obj["id"] = 1
+        obj["entries"] = [ case.input.get(), case.expected.get() ]
+        if case.input.memory is not None:
+            obj["initial_memory"] = case.input.memory.get()
+        with open(path, 'w') as out:
+            json.dump(obj, out, indent=4)
+        return path
+
+
     def run_case(self, case, ir, parent):
         args = [self.binary,
                 case.run_mode,
                 "--log-dir", self.test_dir,
-                "--singular-current", case.input.as_json_file(case.name, self.test_dir),
+                "--traces", self.create_trace_json(case, case.name, self.test_dir),
                 "--export-derived", self.locate(case.name + ".result.json"),
                 "--ir-in", ir]
-        if case.run_mode == '--verify':
-            args += ["--singular-next",
-                     case.expected.as_json_file(case.name + "next", self.test_dir)]
         if dbg_verbose:
             args += ["--dot-out", self.locate(case.name + ".result.dot")]
             args += ["--logtostderr"]

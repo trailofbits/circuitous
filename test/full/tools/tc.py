@@ -57,7 +57,7 @@ class MemHint:
         out += self.value << (64 + 8)
         out += self.addr << 8
         out += (self.size << 4) + (self.type << 1) + 1
-        return str(out)
+        return hex(out)[2:]
 
     def __eq__(self, other):
         if other is None:
@@ -295,27 +295,16 @@ class StateImpl(StateBase):
         return self
 
     def get(self):
-        out = {"inst_bits" : self.bytes if self.bytes is not None else "0",
-               "ebit" : self._ebit,
-               "timestamp" : self.timestamp,
+        out = {"inst_bits" : self.bytes if self.bytes is not None else "00",
+               "ebit" : hex(self._ebit)[2:],
+               "timestamp" : hex(self.timestamp)[2:],
                "regs" : {},
                "mem_hints": {},
                "memory": {}}
         for reg, val in self.registers.items():
             if val is not None:
-                out["regs"][reg] = str(val)
-        #for id, hint in enumerate(self.mem_hints):
-        #  out["mem_hints"][id] = hint.get()
-        if self.memory is not None:
-            out["memory"] = self.memory.get()
+                out["regs"][reg] = hex(val)[2:]
         return out
-
-    def as_json_file(self, prefix="def.", dir=None):
-        fname = prefix + "input.json"
-        path = fname if dir is None else os.path.join(dir, fname)
-        with open(path, 'w') as out:
-            json.dump(self.get(), out)
-        return path
 
 class State32(StateImpl):
     def __init__(self, default_val = None, default_rip = 0x87000):
