@@ -55,11 +55,32 @@ namespace circ
             std::map< std::string, std::vector< Operation * > > fields;
             uint32_t total_size;
 
-            Derived &add(Operation *op) { this->dispatch(op); return *this; }
-
             void visit(Operation *op) { unreachable() << "..."; }
 
             Trace take() { return Trace(std::move(fields), std::move(total_size)); }
+
+            template< typename Op >
+            void _add_all(Circuit *circuit)
+            {
+                for (auto op : circuit->attr< Op >())
+                    this->dispatch(op);
+            }
+
+            template< typename T, typename ... Ts >
+            Derived &add_all(Circuit *circuit)
+            {
+                _add_all< T >(circuit);
+                if constexpr (sizeof ... (Ts) != 0)
+                    return add_all< Ts ... >(circuit);
+                else
+                    return static_cast< Derived & >(*this);
+            }
+
+            template< typename ... Ts >
+            Derived &add_all(Circuit *circuit, tl::TL< Ts ... >)
+            {
+                return add_all< Ts ... >(circuit);
+            }
         };
 
         struct Builder : BuilderBase< Builder >
@@ -87,27 +108,6 @@ namespace circ
                 this->total_size += op->size;
             }
 
-            template< typename Op >
-            void _add_all(Circuit *circuit)
-            {
-                for (auto op : circuit->attr< Op >())
-                    this->dispatch(op);
-            }
-
-            template< typename T, typename ... Ts >
-            Builder &add_all(Circuit *circuit)
-            {
-                _add_all< T >(circuit);
-                if constexpr (sizeof ... (Ts) != 0)
-                    return add_all< Ts ... >(circuit);
-                return *this;
-            }
-
-            template< typename ... Ts >
-            Builder &add_all(Circuit *circuit, tl::TL< Ts ... >)
-            {
-                return add_all< Ts ... >(circuit);
-            }
         };
 
         static Trace make(Circuit *circuit)
