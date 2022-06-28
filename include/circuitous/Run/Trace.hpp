@@ -70,8 +70,9 @@ namespace circ::run::trace
         struct Trace
         {
             uint64_t id;
-            std::set< Entry > entries;
-            std::unordered_map< uint64_t, value_type > initial_memory;
+            std::multiset< Entry > entries;
+            using memory_t = std::unordered_map< uint64_t, value_type >;
+            memory_t initial_memory;
 
             std::string to_string() const;
 
@@ -81,13 +82,37 @@ namespace circ::run::trace
             auto end() const { return entries.begin(); }
         };
 
+        // Format:
+        // {
+        //  "id" = Integer
+        //  "entries" : [
+        //      {
+        //          "timestamp" = Number as string in hex
+        //          "ebit" = Number as string in hex
+        //          "inst_bits" = Number as string in hex
+        //          "regs" : [
+        //              "RAX" = Number as string in hex
+        //              ...
+        //          ]
+        //          "memory_hints" : [
+        //              Packed represenation as number in hex
+        //          ]
+        //      }
+        //  ]
+        // }
         struct FromJSON
         {
             using self_t = FromJSON;
+            using reg_sizes_map_t = std::unordered_map< std::string, std::size_t >;
+
             Trace trace;
             std::size_t inst_bits_size;
+            reg_sizes_map_t reg_sizes;
 
-            FromJSON(std::size_t inst_bits_size) : inst_bits_size(inst_bits_size) {}
+            FromJSON(std::size_t inst_bits_size,
+                     const reg_sizes_map_t &reg_sizes)
+                : inst_bits_size(inst_bits_size), reg_sizes(reg_sizes)
+            {}
 
             template< typename O >
             static auto unwrap(const O &obj)
@@ -119,13 +144,35 @@ namespace circ::run::trace
 
             auto take() { return std::move(trace); }
 
+            Trace::memory_t parse_memory(const auto &obj)
+            {
+                Trace::memory_t out;
+                for (const auto &[raw_addr, raw_val] : obj)
+                {
+                    auto maybe_addr = convert(raw_addr.str(), 64, 16);
+                    check(maybe_addr);
+                    auto addr = maybe_addr->getLimitedValue();
+                    auto val = unwrap(raw_val.getAsString());
+
+                    check(val.size() % 2 == 0);
+
+                    for (std::size_t i = 0; i < val.size() / 2; ++i)
+                        out[addr + i] = convert(val.substr(i * 2, 2), 8, 16);
+                }
+                return out;
+            }
+
             self_t &run(const std::string &path)
             {
                 auto obj = open_json(path);
                 trace.id = static_cast< uint64_t >(unwrap(obj.getInteger("id")));
+                if (auto maybe_initial_memory = obj.getObject("initial_memory"))
+                    trace.initial_memory = parse_memory(unwrap(maybe_initial_memory));
                 for (const auto &entry : unwrap(obj.getArray("entries")))
                 {
-                    auto x = ParseEntry(inst_bits_size).run(unwrap(entry.getAsObject())).take();
+                    auto x = ParseEntry(inst_bits_size, reg_sizes)
+                        .run(unwrap(entry.getAsObject()))
+                        .take();
                     trace.entries.insert(std::move(x));
                 }
                 return *this;
@@ -138,8 +185,19 @@ namespace circ::run::trace
 
                 Entry entry;
                 std::size_t inst_bits_size;
+                const reg_sizes_map_t &reg_sizes;
 
-                ParseEntry(std::size_t inst_bits_size) : inst_bits_size(inst_bits_size) {}
+                ParseEntry(std::size_t inst_bits_size, const reg_sizes_map_t &reg_sizes)
+                    : inst_bits_size(inst_bits_size), reg_sizes(reg_sizes)
+                {}
+
+                std::optional< std::size_t > reg_size(llvm::StringRef reg)
+                {
+                    auto it = reg_sizes.find(reg.str());
+                    if (it == reg_sizes.end())
+                        return {};
+                    return it->second;
+                }
 
                 self_t &run(const auto &obj)
                 {
@@ -149,8 +207,8 @@ namespace circ::run::trace
                             unwrap(obj.getString("inst_bits")).str(), inst_bits_size, 16);
 
                     for (const auto &[reg, val] : unwrap(obj.getObject("regs")))
-                        // TODO(lukas): Configurable reg_size;
-                        entry.regs[reg.str()] = convert(val.getAsString(), 64, 16);
+                        if (auto size = reg_size(reg))
+                            entry.regs[reg.str()] = convert(val.getAsString(), *size, 16);
 
                     for (const auto &[mem_hint, val] : unwrap(obj.getObject("mem_hints")))
                         // TODO(lukas): Configurable memory hint size.
@@ -163,7 +221,7 @@ namespace circ::run::trace
                 {
                     std::string reordered;
 
-                    check(str.size() >= 2);
+                    check(str.size() >= 2) << str.size() << " content:" << str;
                     for (int i = static_cast< int >(str.size() - 2); i >=0; i -=2)
                         reordered += str.substr(static_cast< unsigned long >(i), 2);
                     return llvm::APInt(static_cast< uint32_t >(size), reordered, radix);
@@ -173,9 +231,11 @@ namespace circ::run::trace
             };
         };
 
-        static inline auto load_json(const std::string &path, std::size_t inst_bits_size)
+        static inline auto load_json(const std::string &path,
+                                     std::size_t inst_bits_size,
+                                     const FromJSON::reg_sizes_map_t &reg_sizes)
         {
-            return FromJSON(inst_bits_size).run(path).take();
+            return FromJSON(inst_bits_size, reg_sizes).run(path).take();
         }
     } // namespace native
 
