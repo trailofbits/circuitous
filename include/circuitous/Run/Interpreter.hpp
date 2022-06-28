@@ -109,6 +109,7 @@ namespace circ::run
 
         auto take() { return std::move(memory); }
         self_t &set(std::size_t addr, const std::string &val);
+        self_t &set(std::size_t addr, const value_type &value);
         self_t &set(const trace::native::Entry &trace);
     };
 

@@ -31,6 +31,13 @@ namespace circ::run
         return *this;
     }
 
+    auto MemoryBuilder::set(std::size_t addr, const value_type &value) -> self_t &
+    {
+        check(value) << "TODO(lukas): Memory cannot have undefined values.";
+        memory.store(addr, *value);
+        return *this;
+    }
+
     auto MemoryBuilder::set(const trace::native::Entry &trace) -> self_t &
     {
         // REFACTOR(lukas): Consider how to change this API/keep it at all.
