@@ -52,10 +52,17 @@ namespace circ
                 {
                     check(size == op->size);
                     parse_map[op] = &storage.back();
+                    field_map[&storage.back()].insert(op);
                 }
                 current += size;
             }
         }
+
+        Trace(const Trace &) = delete;
+        Trace(Trace &&) = default;
+
+        Trace &operator=(const Trace &) = delete;
+        Trace &operator=(Trace &&) = default;
 
         template< typename Derived >
         struct BuilderBase : Visitor< Derived >
