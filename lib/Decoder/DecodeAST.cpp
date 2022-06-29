@@ -1,5 +1,7 @@
 #include <circuitous/Decoder/DecodeAST.hpp>
 #include <string>
+#include <variant>
+
 namespace circ::decoder {
 
     void ExpressionPrinter::print(const Expr &e) {
@@ -46,6 +48,10 @@ namespace circ::decoder {
     }
 
     ExpressionPrinter &ExpressionPrinter::expr(const Expr &e) {
+        std::cout << "called expr" << std::endl;
+        if(e.op->valueless_by_exception()){
+            circ::unreachable() << "valueless by excp";
+        }
         std::visit( overloaded{
                 [&](Plus &arg) {binary_op( arg, "+" );},
                 [&](Mul &arg) {binary_op( arg, "*" );},
@@ -92,18 +98,18 @@ namespace circ::decoder {
                     }
                 },
                 [&](IfElse &arg) {
-                    raw("if").expr( Parenthesis(arg.cond()) ).
-                    expr( arg.ifBody()).
-                    raw(" else ").
-                    expr( CurlyBrackets(arg.elseBody())).endl();
+                    raw("if").expr( Parenthesis(arg.cond()) )
+                    .expr( arg.ifBody()).
+                    raw(" else ")
+                    .expr( CurlyBrackets(arg.elseBody())).endl();
                 },
                 [&](const FunctionCall &arg) {
-                    raw( arg.function_name ).
-                    expr_array( arg.args, ExprStyle::FuncArgs);
+                    raw( arg.function_name )
+                    .expr_array( arg.args, ExprStyle::FuncArgs);
                 },
                 [&](const FunctionDeclaration &arg) {
                     raw( arg.retType, " ", arg.function_name ).
-                    expr_array( arg.args, ExprStyle::FuncArgs).endl().
+                    expr_array( arg.args, ExprStyle::FuncArgs).endl();
                     expr_array( arg.body, ExprStyle::FuncBody).endl();
                 },
         }, *e.op );
