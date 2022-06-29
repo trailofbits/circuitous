@@ -13,6 +13,11 @@
 
 namespace circ
 {
+    // Provides information about how the blob is parsed to circuit operations.
+    // Each instance is tied to a specific instance of `Circuit` objects both in lifetime
+    // and correctness -> two different circuits can have different traces; consider a case
+    // of circuits with different number of `Advice` nodes.
+    // This is a representation of one state during program execution.
     struct Trace
     {
         static inline auto parse_map_comparator = [](const auto &lhs, const auto &rhs)
@@ -30,6 +35,8 @@ namespace circ
         using field_t = std::tuple< uint32_t, uint32_t, std::string >;
         // We need persistent storage, because we are going to take pointers to it
         using storage_t = std::deque< field_t >;
+        // Multiple operations can point to same field - nodes that have both input and output
+        // variants will be such case (`OutputRegister`, `InputRegister` for example.
         using parse_map_t = std::map< Operation *, field_t *, decltype(parse_map_comparator) >;
 
         using field_map_t = std::unordered_map< field_t *, std::unordered_set< Operation * > >;
@@ -58,6 +65,8 @@ namespace circ
             }
         }
 
+        // TODO(lukas): Because internally raw pointers are used, this class cannot be copied.
+        //              Rework so it can, as there will most likely be use cases for it.
         Trace(const Trace &) = delete;
         Trace(Trace &&) = default;
 
@@ -66,7 +75,9 @@ namespace circ
 
         std::string to_string() const
         {
+            // Order fields by index
             std::map< uint32_t, std::tuple< uint32_t, std::string > > sorted;
+            // Group all operations that point to same index (therefore the same field)
             std::map< uint32_t, std::vector< Operation * > > op_to_fields;
             for (const auto &[x, y, z] : storage)
                 sorted[x] = std::make_tuple(y, z);
@@ -154,6 +165,7 @@ namespace circ
         }
     };
 
+    // Each field can have associated value of type `V`.
     template< typename V >
     struct ValuedTrace : Trace
     {
@@ -165,14 +177,15 @@ namespace circ
 
         mapping_t field_state;
 
-        // NOTE(lukas): Match is done by looking at suffixes.
+        // NOTE(lukas): Match is done by looking at suffixes - ie `RAX` will match both
+        //              `OutputRegister` and `InputRegister`. For now this is fine, but it
+        //              can happen later that this will require some rework.
         ValuedTrace(Trace &&trace,
                     const std::map< std::string, V > &value_mapping)
             : parent_t(std::move(trace))
         {
             for (const auto &[name, v] : value_mapping)
             {
-                log_dbg() << "Handling " << name;
                 auto field = fetch_field(suffix_match(name));
                 check(!field_state.count(field)) << name;
                 field_state[field] = v;
@@ -191,10 +204,7 @@ namespace circ
         {
             for (auto &[op, field] : parse_map)
                 if (match(op->name()))
-                {
-                    log_dbg() << op->name() << "Matched";
                     return field;
-                }
             unreachable() << "Was not able to fetch field.";
         }
 
@@ -210,6 +220,9 @@ namespace circ
             }
         }
 
+        // For given `circuit` and operation types `Ts ...` return back mapping of those
+        // operation to values of fields they are pointing at.
+        // In case it is attempted to use one field twice, hard error is emitted.
         template< typename ... Ts >
         std::unordered_map< Operation *, V > specialize(Circuit *circuit, tl::TL< Ts ... >)
         {
