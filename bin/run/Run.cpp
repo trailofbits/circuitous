@@ -29,29 +29,6 @@ CIRCUITOUS_UNRELAX_WARNINGS
 // `circuitous-run` specific command line flags.
 namespace circ::cli::run
 {
-    struct SingularCurrent : DefaultCmdOpt, PathArg
-    {
-        static inline const auto opt = CmdOpt("--singular-current", false);
-        static std::string help()
-        {
-            std::stringstream ss;
-            ss << "Path to current trace entry in singular form.\n";
-            return ss.str();
-        }
-    };
-
-    struct SingularNext : DefaultCmdOpt, PathArg
-    {
-        static inline const auto opt = CmdOpt("--singular-next", false);
-        static std::string help()
-        {
-            std::stringstream ss;
-            ss << "Path to next trace entry in a singular form.\n";
-            ss << "Usefull with --singular-current to verify a trace transition.\n";
-            return ss.str();
-        }
-    };
-
     struct ExportDerived : DefaultCmdOpt, PathArg
     {
         static inline const auto opt = CmdOpt("--export-derived", false);
@@ -125,17 +102,9 @@ auto load_circ(const std::string &file)
     return circuit;
 }
 
-auto load_singular(const std::string &path) -> std::optional< circ::run::trace::Entry >
-{
-    if (path.empty())
-        return {};
-
-    using namespace circ::run::trace;
-    return std::make_optional(get_entry(0ul, load_json(path)));
-}
 
 template< typename I >
-void export_derived(I inspect, const std::string &export_derived_to)
+void export_derived(const I &acceptors, const std::string &export_derived_to)
 {
     // Open output file
     std::error_code ec;
@@ -151,7 +120,8 @@ void export_derived(I inspect, const std::string &export_derived_to)
         return std::to_string(what->getLimitedValue());
     };
 
-    if (inspect.focus()) {
+    if (acceptors.size() != 0) {
+        const auto &inspect = acceptors[ 0 ];
         for (auto [reg, val] : inspect->template get_derived<circ::OutputRegister>()) {
             circ::check(val);
             output_regs_obj[reg->reg_name] = std::to_string(val->getLimitedValue());
@@ -159,7 +129,7 @@ void export_derived(I inspect, const std::string &export_derived_to)
         for (auto [_, val] : inspect->template get_derived<circ::OutputErrorFlag>()) {
             output_obj["ebit"] = (val == llvm::APInt(1, 1));
         }
-        output_obj["timestamp"] = as_str(inspect->get_node_val(inspect.circuit->output_timestamp()));
+        output_obj["timestamp"] = as_str(inspect->get_node_val(inspect->circuit->output_timestamp()));
 
         auto str = [](auto val) {
             return llvm::toString(val, 10, false);
@@ -180,66 +150,50 @@ void export_derived(I inspect, const std::string &export_derived_to)
 
     // Serialize
     output_obj["regs"] = std::move(output_regs_obj);
-    output_obj["result"] = inspect.g_result();
+    output_obj["result"] = acceptors.size() == 1;
     output_obj["mem_hints"] = std::move(output_mem_hints);
     output << llvm::json::Value(std::move(output_obj));
-
-    if (!inspect.lenses) {
-        inspect.focus(0u);
-    }
 }
 
 template< typename Runner, typename CLI >
 void run(const CLI &parsed_cli)
 {
     auto circuit = load_circ(*parsed_cli.template get< circ::cli::run::IRIn >());
-    Runner run(circuit.get());
+    circ::run::NodeStateBuilder node_state{ circuit.get() };
+    circ::run::MemoryBuilder memory{ circuit.get() };
 
-    if (auto singular_current = parsed_cli.template get< circ::cli::run::SingularCurrent >())
+    if (auto traces = parsed_cli.template get< circ::cli::run::Traces >())
     {
-        auto current_trace = load_singular(*singular_current);
-        circ::check(current_trace);
-        run.set_input_state(*current_trace);
-        for (auto [addr, data] : current_trace->initial_memory)
-            run.set_memory(addr, data);
+        auto trace = circ::run::trace::native::load_json(*traces);
+        circ::check(trace.entries.size() >= 2) << trace.entries.size();
+
+        auto &fst = *trace.entries.begin();
+        auto &snd = *std::next(trace.entries.begin());
+
+        auto step = circ::run::trace::native::make_step_trace(circuit.get(), fst, snd);
+        node_state.set(step);
+
+        for (const auto &[addr, val] : trace.initial_memory)
+            memory.set(addr, val);
     }
 
-    if (auto singular_next = parsed_cli.template get< circ::cli::run::SingularNext >())
-    {
-        auto next_trace = load_singular(*singular_next);
-        circ::check(next_trace);
-        run.set_output_state(*next_trace);
-    }
-
-    if (auto memory = parsed_cli.template get< circ::cli::run::Memory >())
-    {
-        // TODO(lukas): Simplify.
-        llvm::StringRef s_ref(*memory);
-        auto [addr, val] = s_ref.split(',');
-        run.set_memory(std::strtoull(addr.data(), nullptr, 16), val.str());
-    }
-
-    run.Run();
+    node_state.all< circ::Undefined >({});
+    auto interpreter = Runner(circuit.get(), node_state.take(), memory.take());
+    interpreter.template derive< circ::AdviceConstraint >();
+    interpreter.template derive< circ::ReadConstraint >();
+    interpreter.template derive< circ::WriteConstraint >();
+    interpreter.template derive< circ::UnusedConstraint >();
+    auto acceptors = interpreter.run_all();
+    circ::check(acceptors.size() < 2)
+        << "More than one acceptor, found: " << acceptors.size();
 
     if (parsed_cli.template present< circ::cli::run::Die >())
     {
-        std::cout << run.dump_runners();
         circ::log_kill() << "FLAGS_die induced death.";
     }
 
     if (auto export_derived_to = parsed_cli.template get< circ::cli::run::ExportDerived >())
-        export_derived(circ::run::Inspector<Runner>(&run), *export_derived_to);
-
-    if (auto dot_out = parsed_cli.template get< circ::cli::DotOut >(); dot_out && run.acceptor)
-    {
-        std::unordered_map<circ::Operation *, std::string> values;
-        for (auto &[op, val] : run.values()) {
-            values[op] = (val) ? llvm::toString(*val, 16, false) : std::string("{ undef }");
-        }
-        std::ofstream os(*dot_out);
-        circ::DotPrinter< circ::print::EmptyColorer > dp( values );
-        circ::print_circuit( *dot_out, dp, circuit.get() );
-    }
+        export_derived(acceptors, *export_derived_to);
 }
 
 using run_modes = circ::tl::TL<
@@ -258,8 +212,6 @@ using output_options = circ::tl::TL<
     circ::cli::DotOut
 >;
 using config_options = circ::tl::TL<
-    circ::cli::run::SingularCurrent,
-    circ::cli::run::SingularNext,
     circ::cli::run::Traces,
     circ::cli::run::Memory,
     circ::cli::run::Die
@@ -342,10 +294,15 @@ int main(int argc, char *argv[])
 
     if (cli.present< circ::cli::Dbg >())
         circ::add_sink< circ::severity::dbg >(std::cout);
+
+    // REFACTOR(lukas): Old derive/verify are no longer reasonable.
     if (cli.present< circ::cli::run::Verify >())
-        run< circ::run::VQueueInterpreter >(cli);
+        run< circ::run::Interpreter >(cli);
     else if (cli.present< circ::cli::run::Derive >())
-        run< circ::run::DQueueInterpreter >(cli);
+    {
+        circ::unreachable() << "--derive is currently broken, WIP.";
+        run< circ::run::Interpreter >(cli);
+    }
 
     return 0;
 }
