@@ -10,24 +10,23 @@ namespace circ::decoder {
 
     ExpressionPrinter & ExpressionPrinter::binary_op(const BinaryOp <Expr> &binOp,
                                                      const std::string &op,
-                                                     bool add_parenthesis = true) {
-        if(add_parenthesis){
-            raw("(");
-        }
+                                                     GuardStyle gs) {
+        auto g = guard(gs);
         expr(binOp.lhs()).raw(" ", op, " ").expr(binOp.rhs());
-        if(add_parenthesis){
-            raw(")");
-        }
+
         return *this;
     }
 
     template < typename T >
     ExpressionPrinter&
     ExpressionPrinter::expr_array(const std::vector< T > &ops, const ExprStyle style) {
-        switch (style) {
-            case ExprStyle::FuncArgs: raw("("); break;
-            case ExprStyle::FuncBody: raw("{").endl(); break;
-        }
+        auto g = [&]()
+        {
+            switch (style) {
+                case ExprStyle::FuncArgs: return guard( GuardStyle::Parens );
+                case ExprStyle::FuncBody: return guard( GuardStyle::Curly );
+            }
+        }();
 
         for (std::size_t i = 0; i < ops.size(); i++) {
             print( ops[ i ] );
@@ -40,10 +39,6 @@ namespace circ::decoder {
             }
         }
 
-        switch (style) {
-            case ExprStyle::FuncArgs: raw(")"); break;
-            case ExprStyle::FuncBody: endl().raw("}").endl(); break;
-        }
         return *this;
     }
 
@@ -90,7 +85,7 @@ namespace circ::decoder {
                 [&](const Shfl &arg) {binary_op( arg, "<<");},
 
                 [&](const Equal &arg) {binary_op( arg, "==");},
-                [&](const Assign &arg) {binary_op( arg, "=", false);},
+                [&](const Assign &arg) {binary_op( arg, "=", GuardStyle::None);},
                 [&](const StatementBlock &arg) {
                     for (auto &e: arg) {
                         expr( e );
@@ -126,5 +121,14 @@ namespace circ::decoder {
     ExpressionPrinter &ExpressionPrinter::endl() {
         os << std::endl;
         return *this;
+    }
+
+    Guard ExpressionPrinter::guard(GuardStyle g) {
+        if(g == GuardStyle::None)
+            return {"", "", os};
+        else if( g == GuardStyle::Curly)
+            return {"{", "}", os};
+        else
+            return {"(", ")", os};
     }
 };

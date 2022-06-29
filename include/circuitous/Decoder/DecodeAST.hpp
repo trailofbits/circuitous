@@ -165,6 +165,12 @@ namespace circ::decoder {
         FuncBody,
     };
 
+    enum class GuardStyle : uint32_t{
+        None,
+        Parens,
+        Curly
+    };
+
     struct Guard{
         Guard(const std::string &g1, std::string g2, std::ostream &os)
                 : g1( g1 ), g2( g2 ), os( os ) {
@@ -186,6 +192,7 @@ namespace circ::decoder {
     private:
         std::ostream& os;
         using self_t = ExpressionPrinter;
+        Guard guard(GuardStyle g);
 
         template <typename T, typename... Ts>
         self_t &raw(T &&val, Ts &&... vals) ;
@@ -196,7 +203,7 @@ namespace circ::decoder {
         self_t &expr_array(const std::vector< T > &ops, const ExprStyle style);
         self_t &endl();
         self_t &binary_op(const BinaryOp <Expr> &binOp, const std::string &op,
-                          bool add_parenthesis);
+                          GuardStyle gs = GuardStyle::Parens);
     };
 }
 
