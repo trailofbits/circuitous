@@ -85,9 +85,8 @@ namespace circ::decoder {
 
 
     void DecoderPrinter::print_file() {
-        print_include("array");
-        print_include("stdint.h");
-        os << std::endl;
+        print_file_headers();
+
 
         ExpressionPrinter ep(os);
         for (auto &ctx: extracted_ctxs) {
@@ -98,8 +97,7 @@ namespace circ::decoder {
     }
 
     void DecoderPrinter::extract_ctx() {
-        auto Contexts = GetContexts( circuit.get()->operands[ 0 ] );
-        for (auto &vi: Contexts) {
+        for (auto &vi: GetContexts( circuit.get()->operands[ 0 ] )) {
             SubtreeCollector< DecodeCondition > dc_collector;
             dc_collector.Run( vi->operands );
 
@@ -171,7 +169,7 @@ namespace circ::decoder {
         auto array_input = Var( bytes_input_variable );
         StatementBlock b;
         for(std::size_t i = 0; i < inner_func_args.size(); i++){
-            auto arg = convert_array_input_to_uint64( array_input, inner_func_args[i], i );
+            auto arg = top_to_inner_level_args( array_input, inner_func_args[ i ], i );
             b.insert(b.begin(), arg.begin(), arg.end());
         }
 
@@ -179,8 +177,8 @@ namespace circ::decoder {
     }
 
     std::vector< Expr >
-    DecoderPrinter::convert_array_input_to_uint64(const Var &array_input, const Var &arg,
-                                                  size_t offset) {
+    DecoderPrinter::top_to_inner_level_args(const Var &array_input, const Var &arg,
+                                            size_t offset) {
         std::vector< Expr > st;
         st.emplace_back(Statement(Assign(VarDecl(arg),Int(0))));
         for (uint i = 0; i < 8; i++) {
@@ -225,9 +223,11 @@ namespace circ::decoder {
             if ( !arg.byte.contains_only_ignore_bits())
                 compare_exprs.push_back( get_comparison( arg ));
         }
-
+        auto crapy = 2;
+        auto crashy = compare_exprs[ 0 ];
+        std::cout << crapy;
         if ( compare_exprs.size() == 1 )
-            block.emplace_back( Return( Mul( compare_exprs[ 0 ], Int( encoding_size ))));
+            block.emplace_back( Return( Mul( crashy, Int( encoding_size ))));
         else
             block.emplace_back( Return( Mul( (And( compare_exprs[ 0 ], compare_exprs[ 1 ] )),
                                              Int( encoding_size ))));
@@ -236,8 +236,8 @@ namespace circ::decoder {
     }
 
     Expr DecoderPrinter::get_comparison(const decode_context_function_arg &arg ) {
-        auto uint = Uint64(arg.byte.to_uint64());
-        auto lhs = CastToUint64( BitwiseXor( arg.var.name, BitwiseNegate( uint )));
+        auto arg_value = Uint64( arg.byte.to_uint64());
+        auto lhs = CastToUint64( BitwiseXor( arg.var.name, BitwiseNegate( arg_value )));
 
         // negation of ignore bits are the bits we care about
         auto neg_ignore = Uint64(~(arg.byte.ignored_bits_to_uint64()));
@@ -393,6 +393,12 @@ auto DecoderPrinter::get_decode_context_function_args(const ExtractedCtx& ectx) 
 
 void DecoderPrinter::print_include(const std::string &name) {
     os << "#include <" << name << ">" << std::endl;
+}
+
+void DecoderPrinter::print_file_headers() {
+    print_include("array");
+    print_include("stdint.h");
+    os << std::endl;
 }
 
 uint64_t to_val(const InputType &ty) {
