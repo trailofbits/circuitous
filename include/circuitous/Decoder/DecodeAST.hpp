@@ -53,15 +53,15 @@ namespace circ::decoder {
     struct BinaryOp : Operator< T > {
         using Operator< T >::Operator;
 
-        T &lhs() {return this->ops[ 0 ];};
-        T &rhs() {return this->ops[ 1 ];};
+        const T &lhs() const {return this->ops[ 0 ];};
+        const T &rhs() const {return this->ops[ 1 ];};
     };
 
     template < typename T >
     struct UnaryOp : Operator< T > {
         using Operator< T >::Operator;
 
-        const T &value() {return this->ops[ 0 ];};
+        const T &value() const {return this->ops[ 0 ];} ;
     };
 
     struct VarDecl: UnaryOp<Var>{ using UnaryOp::UnaryOp; };
@@ -90,7 +90,7 @@ namespace circ::decoder {
 
     struct FunctionDeclaration {
         FunctionDeclaration(const Id& retType, const Id& functionName,
-                            std::vector< VarDecl > args, StatementBlock body)
+                            const std::vector< VarDecl > &args, const StatementBlock &body)
         : retType( retType ), function_name( functionName ), args( args ), body( body ) {}
 
         Id retType;
@@ -101,26 +101,28 @@ namespace circ::decoder {
 
     struct FunctionDeclarationBuilder{
         using self_t = FunctionDeclarationBuilder;
-        self_t& retType(const Id& retType);
-        self_t& name(const Id& name);
-        self_t& arg_insert(const VarDecl& args);
-        self_t& body_insert(const Expr& expr);
-        self_t& body(const StatementBlock& b);
-        FunctionDeclaration make();
+        self_t& retType(const Id& retType) {_retType = retType; return *this;};
+        self_t& name(const Id& name) { _function_name = name; return *this; };
+        self_t& arg_insert(const VarDecl& args) { _args.emplace_back(args); return *this; };
+        self_t& body_insert(const Expr& expr) { _body.emplace_back(expr); return *this; };
+        self_t& body(const StatementBlock& b) { _body = b; return *this; };
+        FunctionDeclaration make() {
+            return FunctionDeclaration( _retType, _function_name, _args, _body );
+        };
 
     private:
-        Id m_retType;
-        Id m_function_name;
-        std::vector< VarDecl > m_args;
-        StatementBlock m_body;
+        Id _retType;
+        Id _function_name;
+        std::vector< VarDecl > _args;
+        StatementBlock _body;
     };
 
     struct IfElse : Operator< Expr > {
         using Operator< Expr >::Operator;
 
-        Expr &cond() {return this->ops[ 0 ];};
-        Expr &ifBody() {return this->ops[ 1 ];};
-        Expr &elseBody() {return this->ops[ 2 ];};
+        const Expr &cond() const {return this->ops[ 0 ];};
+        const Expr &ifBody() const {return this->ops[ 1 ];};
+        const Expr &elseBody() const {return this->ops[ 2 ];};
     };
 
     struct FunctionCall {
@@ -186,14 +188,14 @@ namespace circ::decoder {
         using self_t = ExpressionPrinter;
 
         template <typename T, typename... Ts>
-        self_t &raw(T &&val, Ts &&... vals);
+        self_t &raw(T &&val, Ts &&... vals) ;
         self_t &expr(const Expr &expr);
         self_t &expr(const Expr &expr, const Guard &g);
 
         template < typename T >
         self_t &expr_array(const std::vector< T > &ops, const ExprStyle style);
         self_t &endl();
-        self_t &binary_op(BinaryOp< Expr > &binOp, const std::string &op,
+        self_t &binary_op(const BinaryOp <Expr> &binOp, const std::string &op,
                           bool add_parenthesis);
     };
 }
