@@ -20,15 +20,23 @@ namespace circ
             return std::less< std::string >{}(lhs->name(), rhs->name());
         };
 
+        static inline auto field_ptr_comparator = [](const auto &lhs, const auto &rhs)
+        {
+            check(lhs && rhs);
+            return std::less< uint32_t >{}(std::get< 0 >(*lhs), std::get< 0 >(*rhs));
+        };
+
         // [ from, size, raw_name ]
         using field_t = std::tuple< uint32_t, uint32_t, std::string >;
         // We need persistent storage, because we are going to take pointers to it
         using storage_t = std::deque< field_t >;
         using parse_map_t = std::map< Operation *, field_t *, decltype(parse_map_comparator) >;
 
+        using field_map_t = std::unordered_map< field_t *, std::unordered_set< Operation * > >;
+
         storage_t storage;
         parse_map_t parse_map;
-
+        field_map_t field_map;
 
         uint32_t total_size = 0;
 
