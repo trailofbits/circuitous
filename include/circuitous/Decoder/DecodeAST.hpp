@@ -100,11 +100,12 @@ namespace circ::decoder {
     };
 
     struct FunctionDeclarationBuilder{
-        FunctionDeclarationBuilder& retType(const Id& retType);
-        FunctionDeclarationBuilder& name(const Id& name);
-        FunctionDeclarationBuilder& arg_insert(const VarDecl& args);
-        FunctionDeclarationBuilder& body_insert(const Expr& expr);
-        FunctionDeclarationBuilder& body(const StatementBlock& b);
+        using self_t = FunctionDeclarationBuilder;
+        self_t& retType(const Id& retType);
+        self_t& name(const Id& name);
+        self_t& arg_insert(const VarDecl& args);
+        self_t& body_insert(const Expr& expr);
+        self_t& body(const StatementBlock& b);
         FunctionDeclaration make();
 
     private:
@@ -182,20 +183,18 @@ namespace circ::decoder {
         void print(const Expr& expr);
     private:
         std::ostream& os;
-
+        using self_t = ExpressionPrinter;
 
         template <typename T, typename... Ts>
-        ExpressionPrinter &raw(T&& val, Ts&&... vals);
-        ExpressionPrinter& expr(const Expr& expr);
-        ExpressionPrinter& expr(const Expr& expr, const Guard& g);
+        self_t &raw(T &&val, Ts &&... vals);
+        self_t &expr(const Expr &expr);
+        self_t &expr(const Expr &expr, const Guard &g);
 
         template < typename T >
-        ExpressionPrinter& expr_array(const std::vector< T > &ops, const ExprStyle style);
-
-        ExpressionPrinter& endl();
-        ExpressionPrinter &binary_op(BinaryOp <Expr> &binOp, const std::string &op,
-                                     bool add_parenthesis);
-
+        self_t &expr_array(const std::vector< T > &ops, const ExprStyle style);
+        self_t &endl();
+        self_t &binary_op(BinaryOp< Expr > &binOp, const std::string &op,
+                          bool add_parenthesis);
     };
 }
 
