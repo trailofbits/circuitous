@@ -8,7 +8,7 @@ namespace circ::decoder {
         expr( e );
     }
 
-    ExpressionPrinter & ExpressionPrinter::binary_op(BinaryOp <Expr> &binOp,
+    ExpressionPrinter & ExpressionPrinter::binary_op(const BinaryOp <Expr> &binOp,
                                                      const std::string &op,
                                                      bool add_parenthesis = true) {
         if(add_parenthesis){
@@ -53,54 +53,53 @@ namespace circ::decoder {
             circ::unreachable() << "valueless by excp";
         }
         std::visit( overloaded{
-                [&](Plus &arg) {binary_op( arg, "+" );},
-                [&](Mul &arg) {binary_op( arg, "*" );},
+                [&](const Plus &arg) {binary_op( arg, "+" );},
+                [&](const Mul &arg) {binary_op( arg, "*" );},
                 [&](const Id &arg) { raw(arg);},
                 [&](const Int &arg) { raw(arg.value);},
                 [&](const Uint64 &arg) { raw("0b", std::bitset< 64 >( arg.value ));},
-                [&](Expr &arg) { circ::unreachable() << "No plain expr allowed" ; },
-                [&](Empty &arg) {},
+                [&](const Expr &arg) { circ::unreachable() << "No plain expr allowed" ; },
+                [&](const Empty &arg) {},
                 [&](const Var &arg) { raw(arg.name); },
-                [&](VarDecl &arg) { raw(arg.value().type, " ", arg.value().name); },
+                [&](const VarDecl &arg) { raw(arg.value().type, " ", arg.value().name); },
                 [&](const IndexVar &arg) { raw(arg.var.name, "[", arg.index, "]");},
-                [&](Statement &arg) {
+                [&](const Statement &arg) {
                     expr( arg.value()).raw(";").endl();
                 },
-                [&](Return &arg) {
+                [&](const Return &arg) {
                     raw("return ").expr( arg.value() ).raw(";");
                 },
-                [&](CastToUint64 &arg) {
+                [&](const CastToUint64 &arg) {
                     raw("((uint64_t)").expr( arg.value()).raw(")");
                 },
-                [&](BitwiseNegate &arg) {
+                [&](const BitwiseNegate &arg) {
                     raw("~").expr( Parenthesis(*arg.value().op));
                 },
-                [&](Parenthesis &arg) {
+                [&](const Parenthesis &arg) {
                     raw("(").expr(arg.value()).raw(")");
                 },
-                [&](CurlyBrackets &arg) {
+                [&](const CurlyBrackets &arg) {
                     raw("{").endl().
                     expr(arg.value()).endl()
                     .raw("}");
                 },
-                [&](BitwiseOr &arg) {binary_op( arg, "|");},
-                [&](BitwiseXor &arg) {binary_op( arg, "^");},
-                [&](BitwiseAnd &arg) {binary_op( arg, "&");},
+                [&](const BitwiseOr &arg) {binary_op( arg, "|");},
+                [&](const BitwiseXor &arg) {binary_op( arg, "^");},
+                [&](const BitwiseAnd &arg) {binary_op( arg, "&");},
+                [&](const And &arg) {binary_op( arg, "&&");},
+                [&](const Shfl &arg) {binary_op( arg, "<<");},
 
-                [&](Shfl &arg) {binary_op( arg, "<<");},
-                [&](Equal &arg) {binary_op( arg, "==");},
-
-                [&](Assign &arg) {binary_op( arg, "=", false);},
-                [&](And &arg) {binary_op( arg, "&&");},
-                [&](StatementBlock &arg) {
+                [&](const Equal &arg) {binary_op( arg, "==");},
+                [&](const Assign &arg) {binary_op( arg, "=", false);},
+                [&](const StatementBlock &arg) {
                     for (auto &e: arg) {
                         expr( e );
                     }
                 },
-                [&](IfElse &arg) {
+                [&](const IfElse &arg) {
                     raw("if").expr( Parenthesis(arg.cond()) )
-                    .expr( arg.ifBody()).
-                    raw(" else ")
+                    .expr( arg.ifBody())
+                    .raw(" else ")
                     .expr( CurlyBrackets(arg.elseBody())).endl();
                 },
                 [&](const FunctionCall &arg) {
@@ -108,9 +107,9 @@ namespace circ::decoder {
                     .expr_array( arg.args, ExprStyle::FuncArgs);
                 },
                 [&](const FunctionDeclaration &arg) {
-                    raw( arg.retType, " ", arg.function_name ).
-                    expr_array( arg.args, ExprStyle::FuncArgs).endl();
-                    expr_array( arg.body, ExprStyle::FuncBody).endl();
+                    raw( arg.retType, " ", arg.function_name )
+                    .expr_array( arg.args, ExprStyle::FuncArgs).endl()
+                    .expr_array( arg.body, ExprStyle::FuncBody).endl();
                 },
         }, *e.op );
         return *this;
@@ -128,35 +127,4 @@ namespace circ::decoder {
         os << std::endl;
         return *this;
     }
-
-
-    FunctionDeclarationBuilder &FunctionDeclarationBuilder::retType(const Id& ret) {
-        m_retType = ret;
-        return *this;
-    }
-
-    FunctionDeclarationBuilder &FunctionDeclarationBuilder::name(const Id& name) {
-        m_function_name = name;
-        return *this;
-    }
-
-    FunctionDeclarationBuilder &FunctionDeclarationBuilder::arg_insert(const VarDecl& args) {
-        m_args.emplace_back(args);
-        return *this;
-    }
-
-    FunctionDeclarationBuilder &FunctionDeclarationBuilder::body_insert(const Expr& expr) {
-        m_body.emplace_back(expr);
-        return *this;
-    }
-
-    FunctionDeclarationBuilder &FunctionDeclarationBuilder::body(const StatementBlock& b) {
-        m_body = b;
-        return *this;
-    }
-
-    FunctionDeclaration FunctionDeclarationBuilder::make() {
-        return FunctionDeclaration( m_retType, m_function_name, m_args, m_body );
-    }
-
 };
