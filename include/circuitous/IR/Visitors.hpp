@@ -6,6 +6,7 @@
 
 #include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Storage.hpp>
+#include <circuitous/IR/Circuit.hpp>
 
 #include <type_traits>
 #include <deque>
