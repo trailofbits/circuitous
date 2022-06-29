@@ -146,15 +146,12 @@ namespace circ::decoder {
     struct Expr
     {
         template<typename T>
-        Expr(T&& operand) : op(std::make_shared<op_t>(std::forward<op_t>(operand))){};
+        Expr(T operand) : op(std::make_shared<op_t>(std::forward<op_t>(operand))){};
 
-        // For exprs we just want only copy the pointer instead of create extra
-        Expr(Expr& e) = default;
         Expr(const Expr& e) = default;
         Expr(Expr&& e) = default;
         Expr& operator=(const Expr& e) = default;
         Expr& operator=(Expr&& e) = default;
-
 
         std::shared_ptr<op_t> op;
     };
