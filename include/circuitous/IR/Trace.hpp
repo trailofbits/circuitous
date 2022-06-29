@@ -153,4 +153,89 @@ namespace circ
                             .take();
         }
     };
+
+    template< typename V >
+    struct ValuedTrace : Trace
+    {
+        using parent_t = Trace;
+        using field_t = parent_t::field_t;
+
+        using value_type = V;
+        using mapping_t = std::map< field_t *, V, decltype(parent_t::field_ptr_comparator) >;
+
+        mapping_t field_state;
+
+        // NOTE(lukas): Match is done by looking at suffixes.
+        ValuedTrace(Trace &&trace,
+                    const std::map< std::string, V > &value_mapping)
+            : parent_t(std::move(trace))
+        {
+            for (const auto &[name, v] : value_mapping)
+            {
+                log_dbg() << "Handling " << name;
+                auto field = fetch_field(suffix_match(name));
+                check(!field_state.count(field)) << name;
+                field_state[field] = v;
+            }
+        }
+
+        static auto suffix_match(std::string to_match)
+        {
+            return [str = std::move(to_match)](const std::string &other)
+            {
+                return llvm::StringRef(other).consume_back_insensitive(str);
+            };
+        }
+
+        field_t *fetch_field(auto &&match)
+        {
+            for (auto &[op, field] : parse_map)
+                if (match(op->name()))
+                {
+                    log_dbg() << op->name() << "Matched";
+                    return field;
+                }
+            unreachable() << "Was not able to fetch field.";
+        }
+
+        std::string to_string() const
+        {
+            std::stringstream ss;
+            ss << parent_t::to_string();
+
+            for (const auto &[field, val] : field_state)
+            {
+                // TODO(lukas): Get rid of llvm::APInt assumption.
+                ss << std::get< 0 >(field) << ": " << toString(val, 16, false) << std::endl;
+            }
+        }
+
+        template< typename ... Ts >
+        std::unordered_map< Operation *, V > specialize(Circuit *circuit, tl::TL< Ts ... >)
+        {
+            std::unordered_map< Operation *, V > out;
+            std::unordered_set< field_t * > seen;
+            fixate_fields< Ts ... >(circuit, out, seen);
+            return out;
+        }
+
+        template< typename H, typename ... Tail >
+        void fixate_fields(Circuit *circuit,
+                           std::unordered_map< Operation *, V > &fixated,
+                           std::unordered_set< field_t * > &seen)
+        {
+            for (auto op : circuit->template attr< H >())
+            {
+                auto field = parse_map[op];
+                check(!seen.count(field));
+                seen.insert(field);
+                if (auto it = field_state.find(field); it != field_state.end())
+                    fixated[op] = it->second;
+            }
+
+            if constexpr (sizeof ... (Tail) != 0)
+                return fixate_fields< Tail ... >(circuit, fixated, seen);
+        }
+    };
+
 }// namespace circ
