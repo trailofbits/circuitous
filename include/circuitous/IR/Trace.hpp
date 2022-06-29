@@ -64,6 +64,27 @@ namespace circ
         Trace &operator=(const Trace &) = delete;
         Trace &operator=(Trace &&) = default;
 
+        std::string to_string() const
+        {
+            std::map< uint32_t, std::tuple< uint32_t, std::string > > sorted;
+            std::map< uint32_t, std::vector< Operation * > > op_to_fields;
+            for (const auto &[x, y, z] : storage)
+                sorted[x] = std::make_tuple(y, z);
+            for (const auto &[op, field] : parse_map)
+                op_to_fields[std::get< 0 >(*field)].push_back(op);
+
+            std::stringstream ss;
+            for (const auto &[from, tail] : sorted)
+            {
+                const auto &[size, raw_name] = tail;
+                ss << "[ " << from << ", " << size << " ] " << raw_name << std::endl;
+                for (auto op : op_to_fields[from])
+                    ss << "\t| " << pretty_print< false >(op) << std::endl;
+            }
+            return ss.str();
+
+        }
+
         template< typename Derived >
         struct BuilderBase : Visitor< Derived >
         {
