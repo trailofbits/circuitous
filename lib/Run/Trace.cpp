@@ -14,15 +14,37 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ::run::trace
 {
-    value_type native::Entry::get_mem_hint(const std::string &key) const
+    namespace native
     {
-        // TODO(lukas): I do not want to include from `IR` here.
-        //              It would probably help to pull out all constants into
-        //              separate lightweight header.
-        auto it = mem_hints.find(key);
-        if (it == mem_hints.end()) {
-            return {};
+        std::string Trace::to_string() const
+        {
+            static const auto fmt = [](const auto &what) -> std::string
+            {
+                if (!what)
+                    return "( none )";
+                return llvm::toString(*what, 16, false);
+            };
+
+            std::stringstream ss;
+            ss << "Trace:\n"
+               << "\tidx: " << id << "\n"
+               << "\tInitial memory:\n";
+
+            for (auto &[addr, val] : initial_memory)
+                ss << "\t | [ " << std::hex << "0x" << addr << " ] <- "
+                   << fmt(val) << "\n";
+            ss << "\tEntries:\n";
+            for (std::size_t i = 0; i < entries.size(); ++i)
+            {
+                ss << "\t" << i << "\n";
+                for (const auto &[name, val] : entries[i])
+                    ss << "\t | " << name << " = " << fmt(val) << "\n";
+            }
+
+            return ss.str();
+
         }
-        return it->second;
-    }
+
+    } // namespace native
+
 } // namespace circ::run::trace

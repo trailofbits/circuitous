@@ -38,49 +38,11 @@ namespace circ::run
         return *this;
     }
 
-    auto MemoryBuilder::set(const trace::native::Entry &trace) -> self_t &
-    {
-        // REFACTOR(lukas): Consider how to change this API/keep it at all.
-        return *this;
-    }
-
     void set_if(auto &state, Operation *op, const value_type &val)
     {
         if (!val)
             return;
 
         state.set(op, val);
-    }
-
-    auto NodeStateBuilder::output_trace(const trace::native::Entry &out) -> self_t &
-    {
-        set_if(node_state, circuit->output_ebit(), out.ebit);
-        set_if(node_state, circuit->output_timestamp(), out.timestamp);
-
-        for (auto &[name, val] : out.regs)
-            if (auto reg = circuit->output_reg(name))
-                set_if(node_state, reg, val);
-        return *this;
-    }
-
-    auto NodeStateBuilder::input_trace(const trace::native::Entry &in) -> self_t &
-    {
-        NodeState out;
-
-        // Set singletons.
-        set_if(node_state, circuit->input_inst_bits(), in.inst_bits);
-        set_if(node_state, circuit->input_ebit(), in.ebit);
-        set_if(node_state, circuit->input_timestamp(), in.timestamp);
-
-        // Set regs
-        for (auto &[name, val] : in.regs)
-            if (auto reg = circuit->input_reg(name))
-                set_if(node_state, reg, val);
-
-        for (auto hint : circuit->attr<circ::Memory>())
-            if (auto val = in.get_mem_hint(std::to_string(hint->mem_idx)))
-                set_if(node_state, hint, val);
-
-        return *this;
     }
 } // namespace circ::run
