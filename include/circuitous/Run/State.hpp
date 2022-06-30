@@ -6,6 +6,7 @@
 
 #include <circuitous/Util/Logging.hpp>
 #include <circuitous/IR/Memory.hpp>
+#include <circuitous/IR/Circuit.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/ADT/StringRef.h>
@@ -16,12 +17,6 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <cstdint>
 #include <optional>
 #include <unordered_map>
-
-namespace circ
-{
-    struct Circuit;
-    struct Operation;
-} // namespace circ
 
 namespace circ::run
 {
@@ -87,5 +82,54 @@ namespace circ::run
         virtual value_type load(uint64_t addr, std::size_t size) const = 0;
         virtual bool defined(uint64_t addr, std::size_t size) const = 0;
     };
+
+    // TODO(lukas): May be too simple now, bordering useless bolierplate.
+    struct NodeStateBuilder
+    {
+        using self_t = NodeStateBuilder;
+
+      private:
+        NodeState node_state;
+        Circuit *circuit;
+
+      public:
+        NodeStateBuilder(Circuit *circuit) : circuit(circuit) {}
+
+        auto take() { return std::move(node_state); }
+
+        template< typename MapLike >
+        self_t &set(const MapLike &mapping)
+        {
+            for (const auto &[op, val]: mapping)
+                node_state.set(op, val);
+            return *this;
+        }
+
+        // Set all operations of type `T` to value `v` (can be empty value - for example to
+        // model undefined values).
+        template< typename T >
+        self_t &all(const value_type &v)
+        {
+            for (auto op : circuit->attr< T >())
+                node_state.set(op, v);
+            return *this;
+        }
+    };
+
+    // TODO(lukas): May be too simple now, bordering useless bolierplate.
+    struct MemoryBuilder
+    {
+        using self_t = MemoryBuilder;
+      private:
+        Memory memory;
+
+      public:
+        MemoryBuilder(Circuit *circuit) : memory(circuit) {}
+
+        auto take() { return std::move(memory); }
+        self_t &set(std::size_t addr, const std::string &val);
+        self_t &set(std::size_t addr, const value_type &value);
+    };
+
 
 } // namespace circ::run
