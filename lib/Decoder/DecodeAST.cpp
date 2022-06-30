@@ -43,9 +43,8 @@ namespace circ::decoder {
     }
 
     ExpressionPrinter &ExpressionPrinter::expr(const Expr &e) {
-        std::cout << "called expr" << std::endl;
         if(e.op->valueless_by_exception()){
-            circ::unreachable() << "valueless by excp";
+            circ::unreachable() << "valueless by exception";
         }
         std::visit( overloaded{
                 [&](const Plus &arg) {binary_op( arg, "+" );},

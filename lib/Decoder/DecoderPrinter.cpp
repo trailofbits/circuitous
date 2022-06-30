@@ -57,7 +57,6 @@ namespace circ::decoder {
     void DecoderPrinter::print_file() {
         print_file_headers();
 
-
         ExpressionPrinter ep(os);
         for (auto &ctx: extracted_ctxs) {
             ep.print( create_context_decoder_function( ctx ));
@@ -171,11 +170,9 @@ namespace circ::decoder {
             if ( !arg.byte.contains_only_ignore_bits())
                 compare_exprs.push_back( get_comparison( arg ));
         }
-        auto crapy = 2;
-        auto crashy = compare_exprs[ 0 ];
-        std::cout << crapy;
+
         if ( compare_exprs.size() == 1 )
-            block.emplace_back( Return( Mul( crashy, Int( encoding_size ))));
+            block.emplace_back( Return( Mul( compare_exprs[ 0 ], Int( encoding_size ))));
         else
             block.emplace_back( Return( Mul( (And( compare_exprs[ 0 ], compare_exprs[ 1 ] )),
                                              Int( encoding_size ))));
@@ -254,7 +251,6 @@ namespace circ::decoder {
         auto candidate_index = static_cast<std::size_t>(std::distance( indice_values.begin(), max ));
         already_chosen_bits.emplace_back( candidate_index, depth );
 
-
         /*
          * The encodings with dont care on the candidate index can both be a 0 or 1
          * Hence they need to be in both candidates sets from this point onwards
@@ -263,7 +259,6 @@ namespace circ::decoder {
             indice_values[ candidate_index ].zeros.push_back( ignored );
             indice_values[ candidate_index ].ones.push_back( ignored );
         }
-
 
         auto ones = std::move(indice_values[ candidate_index ].ones);
         auto zeros = std::move(indice_values[ candidate_index ].zeros);
