@@ -62,6 +62,10 @@ namespace circ::run::trace
             auto begin() const { return entries.begin(); }
             auto end() { return entries.begin(); }
             auto end() const { return entries.begin(); }
+
+            std::size_t size() const { return entries.size(); }
+            auto &operator[](std::size_t idx) { return entries[idx]; }
+            const auto &operator[](std::size_t idx) const { return entries[idx]; }
         };
 
         // Format:
