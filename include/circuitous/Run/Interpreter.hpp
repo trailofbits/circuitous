@@ -21,6 +21,8 @@ namespace circ::run
     template< typename Spawn >
     struct QueueInterpreter
     {
+        using self_t = QueueInterpreter< Spawn >;
+
         using spawn_t = Spawn;
         using spawns_t = std::vector< std::unique_ptr< Spawn > >;
         using spawn_state_t = std::tuple< Memory, NodeState >;
@@ -62,15 +64,27 @@ namespace circ::run
         // operands. This will almost always be `AdviceConstraint` for example.
         // Value is derived only if the operation does not have a value - otherwise normal
         // semantic is used.
-        template< typename T >
-        void derive()
+        template< typename T, typename ... Ts >
+        self_t &derive()
         {
             auto &ops = circuit->attr< T >();
             to_derive.insert( ops.begin(), ops.end() );
+            if constexpr (sizeof ... (Ts) != 0)
+                return derive< Ts ... >();
+            return *this;
+        }
+
+        self_t &derive_memory()
+        {
+            return derive< ReadConstraint, WriteConstraint, UnusedConstraint >();
+        }
+
+        self_t &derive_advices()
+        {
+            return derive< AdviceConstraint >();
         }
     };
 
     using Interpreter = QueueInterpreter< Spawn< Base > >;
-
 
 }  // namespace circ::run
