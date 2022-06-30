@@ -288,7 +288,7 @@ namespace circ::decoder {
     std::array< Decode_Requires_Group, MAX_ENCODING_LENGTH >
     DecoderPrinter::get_decode_requirements_per_index(
             const std::vector< ExtractedCtx * > &to_split,
-            std::vector< std::pair< std::size_t, int>> &already_chosen_bits) {
+            const std::vector< std::pair< std::size_t, int>> &already_chosen_bits) {
 
         std::array< Decode_Requires_Group, MAX_ENCODING_LENGTH > indice_values;
         auto index_is_already_chosen = [&](std::size_t i){

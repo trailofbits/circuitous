@@ -134,7 +134,7 @@ namespace circ::decoder {
 
         static std::array< Decode_Requires_Group, MAX_ENCODING_LENGTH >
         get_decode_requirements_per_index(const std::vector< ExtractedCtx * > &to_split,
-                                          std::vector< std::pair< std::size_t, int>> &already_chosen_bits) ;
+                                          const std::vector< std::pair< std::size_t, int>> &already_chosen_bits) ;
 
         static Expr get_top_level_arg_conversion();
 
