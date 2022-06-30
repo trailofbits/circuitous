@@ -183,8 +183,6 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 
     if (auto bitblast_smt = cli.template get< cli::BitBlastSmtOut >())
         circ::print_circuit(*bitblast_smt, circ::print_bitblasted_smt, circuit.get());
-
-//      circ::print_circuit(*bitblast_smt, circ::print_bitblasted_smt, circuit.get());
 }
 
 template< typename OptsList >

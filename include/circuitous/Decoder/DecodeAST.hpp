@@ -63,8 +63,6 @@ namespace circ::decoder {
     struct Return: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
     struct CastToUint64: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
     struct BitwiseNegate: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
-    struct Parenthesis: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
-    struct CurlyBrackets: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
 
 
 
@@ -132,7 +130,7 @@ namespace circ::decoder {
 
     using op_t = std::variant<
             Expr, Int, Uint64, Id, //primitive types Expr, int, std::string
-            Var, VarDecl, Statement, Return, CastToUint64, Parenthesis, CurlyBrackets, IndexVar,// unary
+            Var, VarDecl, Statement, Return, CastToUint64, IndexVar,// unary
             Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, BitwiseAnd, Assign, Shfl, Equal, And, // binary
             IfElse,
             FunctionDeclaration, FunctionCall, // function
@@ -168,7 +166,7 @@ namespace circ::decoder {
     };
 
     struct Guard{
-        Guard(const std::string &g1, std::string g2, std::ostream &os, bool endl_on_insides = false)
+        Guard(const std::string &g1, const std::string& g2, std::ostream &os, bool endl_on_insides = false)
                 : g1( g1 ), g2( g2 ), os( os ), endl_on_insides(endl_on_insides) {
             os << g1;
             if(endl_on_insides)
@@ -193,7 +191,7 @@ namespace circ::decoder {
     private:
         std::ostream& os;
         using self_t = ExpressionPrinter;
-        Guard guard(GuardStyle g);
+        Guard make_guard(GuardStyle g);
 
         template <typename T, typename... Ts>
         self_t &raw(T &&val, Ts &&... vals) ;

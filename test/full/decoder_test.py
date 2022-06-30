@@ -112,14 +112,12 @@ def run_test(test_name, test_enc_conditions):
     output_file_name = output + test_name
     bytes_in = reduce(lambda str, enc_cond: str + bytes_to_str_without_leading_0x(enc_cond[0]),
                       test_enc_conditions, "")
+    output_cpp = output_file_name + ".cpp"
     print(subprocess.run(
         [circuitous_decoder, "--arch", "amd64", "--os", "linux", "--bytes-in", bytes_in,
-         "--dec-out", output_file_name + ".cpp"]))
+         "--dec-out", output_cpp]))
     print(subprocess.run(
-        ["clang++", output_file_name + ".cpp", "-c", "-o", output_file_name + ".o"],
-        capture_output=True))
-    print(subprocess.run(
-        ["clang++", decoder_test_runner, output_file_name + ".o", "-o", output_file_name],
+        ["clang++", decoder_test_runner, output_cpp, "-o", output_file_name],
         capture_output=True))
 
     test_file = output_file_name + ".input"

@@ -12,6 +12,7 @@ add_executable( test-circuitous
   ADT/UnionFind.cpp
   ADT/EGraph.cpp
 
+  Decoder/DecodeAST.cpp
   Transforms/Pattern.cpp
   Transforms/EqualitySaturation.cpp
 )
@@ -20,6 +21,8 @@ target_link_libraries( test-circuitous
   PRIVATE
     doctest::doctest
     circuitous::settings
+    circuitous::ir
+    circuitous::decoder
     circuitous::testing
 )
 

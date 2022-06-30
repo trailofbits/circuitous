@@ -118,9 +118,6 @@ namespace circ::decoder {
         std::vector< ExtractedCtx > extracted_ctxs;
         int max_depth = 0;
 
-
-
-
         using decode_func_args =  std::vector<decode_context_function_arg>;
         static decode_func_args get_decode_context_function_args(const ExtractedCtx& ctx);
 
