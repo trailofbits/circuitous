@@ -6,6 +6,7 @@ find_package( Python3 REQUIRED COMPONENTS Interpreter )
 
 configure_file( run.py.in run.py @ONLY )
 configure_file( decoder_test.py decoder_test.py @ONLY )
+configure_file( decoder/decoder_tester.cpp decoder/decoder_tester.cpp @ONLY )
 
 file( COPY defs DESTINATION . )
 file( COPY tools DESTINATION . )
