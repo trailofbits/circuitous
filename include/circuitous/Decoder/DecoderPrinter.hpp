@@ -80,14 +80,6 @@ namespace circ::decoder {
         const Var &var;
     };
 
-
-    constexpr bool my_size(int val) {
-        if (val == 64) return 64;
-        else if (val ==32) return 32;
-        else
-            return 8;
-    }
-
     // Currently only x86 is supported, 120 bits = 15 bytes
     const static std::size_t MAX_ENCODING_LENGTH = 120; // first = 1
 
