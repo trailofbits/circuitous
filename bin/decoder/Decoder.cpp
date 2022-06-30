@@ -1,11 +1,8 @@
 /*
- * Copyright (c) 2020 Trail of Bits, Inc.
+ * Copyright (c) 2022 Trail of Bits, Inc.
  */
-
-#include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Verify.hpp>
 #include <circuitous/IR/SMT.hpp>
-#include <circuitous/Printers.hpp>
 #include <circuitous/Transforms.hpp>
 #include <circuitous/IR/Cost.hpp>
 
@@ -20,6 +17,8 @@
 
 #include <circuitous/Lifter/CircuitSmithy.hpp>
 
+#include <circuitous/Decoder/DecoderPrinter.hpp>
+
 CIRCUITOUS_RELAX_WARNINGS
 #include <gflags/gflags.h>
 #include <glog/logging.h>
@@ -27,10 +26,8 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <remill/OS/OS.h>
 
-#include <fstream>
 #include <iostream>
 #include <unordered_map>
-#include <circuitous/Decoder/DecoderPrinter.hpp>
 
 // TODO(lukas): Clean this up once remill gets rid of gflags.
 DEFINE_string(arch, "", "");

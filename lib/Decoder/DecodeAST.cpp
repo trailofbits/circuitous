@@ -11,7 +11,7 @@ namespace circ::decoder {
     ExpressionPrinter & ExpressionPrinter::binary_op(const BinaryOp <Expr> &binOp,
                                                      const std::string &op,
                                                      GuardStyle gs) {
-        auto g = guard(gs);
+        auto g = make_guard(gs);
         expr(binOp.lhs()).raw(" ", op, " ").expr(binOp.rhs());
 
         return *this;
@@ -23,8 +23,8 @@ namespace circ::decoder {
         auto g = [&]()
         {
             switch (style) {
-                case ExprStyle::FuncArgs: return guard( GuardStyle::Parens );
-                case ExprStyle::FuncBody: return guard( GuardStyle::Curly );
+                case ExprStyle::FuncArgs: return make_guard( GuardStyle::Parens );
+                case ExprStyle::FuncBody: return make_guard( GuardStyle::Curly );
             }
         }();
 
@@ -65,13 +65,11 @@ namespace circ::decoder {
                     raw("return ").expr( arg.value() ).raw(";");
                 },
                 [&](const CastToUint64 &arg) {
-                    raw("((uint64_t)").expr( arg.value()).raw(")");
+                    raw("static_cast<uint64_t>").expr( arg.value(), GuardStyle::Parens);
                 },
                 [&](const BitwiseNegate &arg) {
                     raw("~").expr( *arg.value().op, GuardStyle::Parens);
                 },
-                [&](const Parenthesis &arg) { expr(arg.value(), GuardStyle::Parens); },
-                [&](const CurlyBrackets &arg) { expr(arg.value(), GuardStyle::Curly); },
                 [&](const BitwiseOr &arg) {binary_op( arg, "|");},
                 [&](const BitwiseXor &arg) {binary_op( arg, "^");},
                 [&](const BitwiseAnd &arg) {binary_op( arg, "&");},
@@ -115,7 +113,7 @@ namespace circ::decoder {
         return *this;
     }
 
-    Guard ExpressionPrinter::guard(GuardStyle g) {
+    Guard ExpressionPrinter::make_guard(GuardStyle g) {
         switch(g){
             case GuardStyle::None :return {"", "", os};
             case GuardStyle::Square :return {"[", "]", os};
@@ -126,7 +124,7 @@ namespace circ::decoder {
     }
 
     ExpressionPrinter::self_t &ExpressionPrinter::expr(const Expr &e, const GuardStyle gs) {
-        auto g = guard(gs); // needs to be bound to a variable to force proper scoping
+        auto g = make_guard(gs); // needs to be bound to a variable to force proper scoping
         expr(e);
         return *this;
     }
