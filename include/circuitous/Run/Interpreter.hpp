@@ -72,51 +72,5 @@ namespace circ::run
 
     using Interpreter = QueueInterpreter< Spawn< Base > >;
 
-    struct NodeStateBuilder
-    {
-        using self_t = NodeStateBuilder;
-
-      private:
-        NodeState node_state;
-        Circuit *circuit;
-
-      public:
-        NodeStateBuilder(Circuit *circuit) : circuit(circuit) {}
-
-        auto take() { return std::move(node_state); }
-
-        template< typename MapLike >
-        self_t &set(const MapLike &mapping)
-        {
-            for (const auto &[op, val]: mapping)
-                node_state.set(op, val);
-            return *this;
-        }
-
-        // Set all operations of type `T` to value `v` (can be empty value - for example to
-        // model undefined values).
-        template< typename T >
-        self_t &all(const value_type &v)
-        {
-            for (auto op : circuit->attr< T >())
-                node_state.set(op, v);
-            return *this;
-        }
-    };
-
-    struct MemoryBuilder
-    {
-        using self_t = MemoryBuilder;
-      private:
-        Memory memory;
-
-      public:
-        MemoryBuilder(Circuit *circuit) : memory(circuit) {}
-
-        auto take() { return std::move(memory); }
-        self_t &set(std::size_t addr, const std::string &val);
-        self_t &set(std::size_t addr, const value_type &value);
-    };
-
 
 }  // namespace circ::run
