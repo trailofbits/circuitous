@@ -42,43 +42,13 @@ DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 DEFINE_string(ciff_in, "", "Load input from circuitous-seed --dbg produced file");
 
 
-DEFINE_bool(dbg, false, "Enable various debug dumps");
-DEFINE_bool(quiet, false, "");
 
 namespace cli = circ::cli;
 
-namespace
+std::string_view as_string_view(std::vector< uint8_t > &buf)
 {
-    std::string_view as_string_view(std::vector< uint8_t > &buf)
-    {
-        return std::string_view( reinterpret_cast<char *>(buf.data()), buf.size());
-    }
-
-    using circuit_ptr_t = circ::Circuit::circuit_ptr_t;
-
-    // optimize the circuit.
-    template< typename Optimizer, typename CLI >
-    circuit_ptr_t optimize(circuit_ptr_t &&circuit, const CLI &cli)
-    {
-        Optimizer opt;
-
-        if (cli.template present<cli::EqSat>()) {
-          auto &[name, pass] = opt.add_pass("eqsat");
-          if (auto patterns = cli.template get<cli::Patterns>()) {
-            auto eqpass =
-                std::dynamic_pointer_cast<circ::EqualitySaturationPass>(pass);
-            eqpass->add_rules(circ::eqsat::parse_rules(patterns.value()));
-          }
-        }
-
-        auto result = opt.run(std::move(circuit));
-        circ::log_info() << "Optimizations done.";
-        circ::log_info() << opt.report();
-        return result;
-    }
-
-}  // namespace
-
+    return std::string_view( reinterpret_cast<char *>(buf.data()), buf.size());
+}
 
 using input_options = circ::tl::TL<
     cli::CiffIn,
@@ -96,8 +66,6 @@ using remill_config_options = circ::tl::TL<
 >;
 
 using other_options = circ::tl::TL<
-    circ::cli::Quiet,
-    circ::cli::Dbg,
     circ::cli::Help,
     circ::cli::Version
 >;
@@ -192,22 +160,6 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    if (!parsed_cli.template present< circ::cli::Quiet >())
-    {
-        circ::add_sink< circ::severity::kill >(std::cerr);
-        circ::add_sink< circ::severity::error >(std::cerr);
-        circ::add_sink< circ::severity::warn >(std::cerr);
-        circ::add_sink< circ::severity::info >(std::cout);
-        circ::add_sink< circ::severity::trace >(std::cout);
-
-        circ::Tracers::trace_all = true;
-
-        // TODO(lukas): Allow filename as option? And maybe same for other logging
-        //              sinks?
-        if (parsed_cli.present< cli::Dbg >())
-            circ::add_sink< circ::severity::dbg >(std::cout);
-
-    }
     // NOTE(lukas): Support libraries still need to be initialized, since
     //              remill may be using/relying on them.
     google::ParseCommandLineFlags(&argc, &argv, true);
@@ -222,13 +174,6 @@ int main(int argc, char *argv[]) {
 
     VerifyCircuit("Verifying loaded circuit.", circuit.get(), "Circuit is valid.");
 
-    if (parsed_cli.present< cli::Dbg >())
-        circuit = optimize< circ::DebugOptimizer >(std::move(circuit), parsed_cli);
-    else
-        circuit = optimize< circ::DefaultOptimizer >(std::move(circuit), parsed_cli);
-
-
-
     if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >()){
         if ( *dec_out != "cout" ) {
             auto o = std::ofstream ( *dec_out );
@@ -241,7 +186,7 @@ int main(int argc, char *argv[]) {
         }
     }
     else{
-        circ::unreachable() << "Shouldn't happen";
+        circ::unreachable() << "Decoder out was not specified";
     }
 
 

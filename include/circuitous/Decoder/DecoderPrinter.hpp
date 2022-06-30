@@ -103,10 +103,6 @@ namespace circ::decoder {
 
         void print_file();
     private:
-
-
-
-//        using my_int = std::conditional_t< my_size(32), uint64_t , uint32_t  >;
         static constexpr const auto bytes_input_variable = "input";
         static constexpr const auto circuit_decode_function_name = "circuit_decode";
         inline static const Var inner_func_arg1 = Var( "first8bytes", "uint64_t");
@@ -148,8 +144,6 @@ namespace circ::decoder {
 
         uint8_t
         get_encoding_length(const std::unordered_multiset< DecodeCondition * > &decNodes) const;
-
-//        static InputType get_input_type_at_index_from_ctx(size_t i, const ExtractedCtx &ctx);
     };
 }
 
