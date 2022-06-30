@@ -12,7 +12,6 @@ add_executable( test-circuitous
   ADT/UnionFind.cpp
   ADT/EGraph.cpp
 
-  Decoder/DecodeAST.cpp
   Transforms/Pattern.cpp
   Transforms/EqualitySaturation.cpp
 )
