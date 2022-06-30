@@ -173,13 +173,6 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
     return parsed;
 }
 
-void reload_test(const circ::CircuitPtr &circuit)
-{
-    circuit->serialize("reload_test.circir");
-    auto reload = circ::Circuit::deserialize("reload_test.circir");
-    VerifyCircuit("Reload test starting ...\n", reload.get(), "Reload test successful.\n");
-}
-
 int main(int argc, char *argv[]) {
     auto maybe_parsed_cli = parse_and_validate_cli< cmd_opts_list >(argc, argv);
     if (!maybe_parsed_cli)
@@ -226,7 +219,7 @@ int main(int argc, char *argv[]) {
     auto circuit = get_input_circuit(parsed_cli);
     if (!circuit)
     {
-        std::cerr << "Not able to load circuit.\n";
+        circ::unreachable() << "Not able to load circuit.";
         return 3;
     }
 
@@ -238,13 +231,7 @@ int main(int argc, char *argv[]) {
         circuit = optimize< circ::DefaultOptimizer >(std::move(circuit), parsed_cli);
 
 
-    if (parsed_cli.present< cli::Dbg >())
-    {
-        circ::log_dbg() << "Stats of final circuit:\n";
-        circ::log_dbg() << circ::GetStats(circuit.get());
-    }
 
-    circ::log_info() << "Storing circuit.";
     if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >()){
         if ( *dec_out != "cout" ) {
             auto o = std::ofstream ( *dec_out );
@@ -257,7 +244,7 @@ int main(int argc, char *argv[]) {
         }
     }
     else{
-        std::cout << "Shouldn't happen";
+        circ::unreachable() << "Shouldn't happen";
     }
 
 
