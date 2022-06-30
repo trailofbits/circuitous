@@ -100,10 +100,9 @@ def create_input_at_file(test_file, test_enc_conditions):
 
     with open(test_file, 'w') as tf:
         for enc in accept:
-            tf.write(print_hex_bytes(enc) + "\n")
-        tf.write("---\n")
+            tf.write("A " + print_hex_bytes(enc) + "\n")
         for enc in deny:
-            tf.write(print_hex_bytes(enc) + "\n")
+            tf.write("R " + print_hex_bytes(enc) + "\n")
 
 
 # Expects output file name, and a list of ([<instr_encoding_bytes>],
