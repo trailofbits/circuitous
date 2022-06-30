@@ -31,8 +31,9 @@ namespace circ::decoder {
         explicit Uint64(uint64_t val) : value( val ) {};
     };
 
-
-
+    /*
+     * Main easy storage class.
+     */
     template < typename T >
     struct NAryOperation {
         template < typename... U >
@@ -138,7 +139,12 @@ namespace circ::decoder {
     >;
 
 
-
+    /*
+     * Expr is meant to emulate a recursive sum type.
+     * To the best of my knowledge c++ does not support this directly
+     * As it is only a wrapper over a shared_ptr it allows for safe/heavy use of implicit conversion
+     * between the instantiations of the sum type.
+     */
     struct Expr
     {
         template<typename T>
@@ -151,7 +157,6 @@ namespace circ::decoder {
 
         std::shared_ptr<op_t> op;
     };
-
 
     enum class ExprStyle : uint32_t {
         FuncArgs,
@@ -172,6 +177,7 @@ namespace circ::decoder {
             if(endl_on_insides)
                 os << std::endl;
         }
+
         ~Guard(){
             if(endl_on_insides)
                 os << std::endl;
