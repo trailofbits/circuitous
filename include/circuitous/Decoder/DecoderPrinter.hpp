@@ -6,8 +6,10 @@
 #include <vector>
 #include <string>
 #include "DecodeAST.hpp"
+template <int L> concept SupportedEncodingSize =  L <= 64;
 
 namespace circ::decoder {
+
     enum class InputType : uint32_t {
         zero = 0, one = 1, ignore = 2
     };
@@ -15,8 +17,7 @@ namespace circ::decoder {
     uint64_t negate(uint64_t value);
     InputType ctoit(const char c); //char to input type
 
-    template<int L>
-    requires (L <= 64)
+    template<int L> requires SupportedEncodingSize<L>
     struct OptionalBitArray : std::array< InputType, L >{
         uint64_t ignored_bits_to_uint64() const;
         uint64_t to_uint64() const;
@@ -79,6 +80,14 @@ namespace circ::decoder {
         const Var &var;
     };
 
+
+    constexpr bool my_size(int val) {
+        if (val == 64) return 64;
+        else if (val ==32) return 32;
+        else
+            return 8;
+    }
+
     // Currently only x86 is supported, 120 bits = 15 bytes
     const static std::size_t MAX_ENCODING_LENGTH = 120; // first = 1
 
@@ -94,6 +103,10 @@ namespace circ::decoder {
 
         void print_file();
     private:
+
+
+
+//        using my_int = std::conditional_t< my_size(32), uint64_t , uint32_t  >;
         static constexpr const auto bytes_input_variable = "input";
         static constexpr const auto circuit_decode_function_name = "circuit_decode";
         inline static const Var inner_func_arg1 = Var( "first8bytes", "uint64_t");
@@ -104,6 +117,8 @@ namespace circ::decoder {
         std::ostream &os;
         std::vector< ExtractedCtx > extracted_ctxs;
         int max_depth = 0;
+
+
 
 
         using decode_func_args =  std::vector<decode_context_function_arg>;
@@ -121,12 +136,13 @@ namespace circ::decoder {
         get_decode_requirements_per_index(const std::vector< ExtractedCtx * > &to_split,
                                           std::vector< std::pair< std::size_t, int>> &already_chosen_bits) ;
 
-        Expr convert_input_to_uints64();
+        static Expr get_top_level_arg_conversion();
 
         static std::vector< Expr >
-        convert_array_input_to_uint64(const Var &array_input, const Var &arg,
-                                      size_t offset);
+        top_to_inner_level_args(const Var &array_input, const Var &arg,
+                                size_t offset);
 
+        void print_file_headers();
         void print_include(const std::string& name);
         static Expr create_ignore_bits_setter(const decode_context_function_arg &arg);
         static Expr get_comparison(const decode_context_function_arg &arg) ;
@@ -140,6 +156,4 @@ namespace circ::decoder {
     };
 }
 
-
-
-
+#include "DecoderPrinter.tpp"

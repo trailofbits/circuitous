@@ -13,36 +13,6 @@ namespace circ::decoder {
         return min_x < min_y;
     };
 
-    template < int L >
-    requires (L <= 64)
-    uint64_t OptionalBitArray< L >::to_uint64() const {
-        auto if_ignore = [&](InputType i){return negate(to_val(InputType::ignore));};
-        auto if_not_ignore = [&](InputType i){return to_val(i);};
-        return convert_to_uint64( if_ignore, if_not_ignore );
-    }
-
-    template < int L >
-    requires (L <= 64)
-    uint64_t OptionalBitArray< L >::ignored_bits_to_uint64() const {
-        auto if_ignore = [&](InputType i){return to_val(InputType::ignore);};
-        auto if_not_ignore = [&](InputType i){return negate(to_val(InputType::ignore));};
-        return convert_to_uint64( if_ignore, if_not_ignore );
-    }
-
-    template < int L >
-    requires (L <= 64)
-    uint64_t OptionalBitArray< L >::convert_to_uint64(auto if_ignore, auto if_not_ignore) const {
-        uint64_t val = 0;
-        for (std::size_t i = 0; i < L; i++) {
-            if ( (*this)[ i ] == InputType::ignore )
-                val |= if_ignore((*this)[ i ]) << i;
-            else
-                val |= if_not_ignore((*this)[ i ]) << i;
-        }
-        return val;
-    }
-
-
     Expr DecoderPrinter::create_context_decoder_function(const ExtractedCtx &ctx) {
         FunctionDeclarationBuilder fdb;
         fdb.name(ctx.generated_name);
@@ -135,7 +105,7 @@ namespace circ::decoder {
         auto rhs = dynamic_cast<circ::Extract *>((*endingEncoding)->operands[ 1 ]);
         check(rhs) << "invalid cast to Extract";
 
-        auto encoding_length= floor( rhs->low_bit_inc / 8 );
+        auto encoding_length= std::floor( rhs->low_bit_inc / 8 );
         check(encoding_length < 15 ) << "Instruction is longer than 15 bytes" ;
 
         return static_cast<uint8_t>(encoding_length);
@@ -147,7 +117,7 @@ namespace circ::decoder {
         fdb.retType("int");
         fdb.arg_insert( Var( bytes_input_variable, "std::array<uint8_t,15>" ));
 
-        fdb.body_insert( convert_input_to_uints64());
+        fdb.body_insert( get_top_level_arg_conversion());
 
         std::vector< ExtractedCtx * > to_split;
         for (auto &ctx: extracted_ctxs) {
@@ -165,12 +135,12 @@ namespace circ::decoder {
         return fdb.make();
     }
 
-    Expr DecoderPrinter::convert_input_to_uints64() {
+    Expr DecoderPrinter::get_top_level_arg_conversion() {
         auto array_input = Var( bytes_input_variable );
         StatementBlock b;
         for(std::size_t i = 0; i < inner_func_args.size(); i++){
             auto arg = top_to_inner_level_args( array_input, inner_func_args[ i ], i );
-            b.insert(b.begin(), arg.begin(), arg.end());
+            b.push_back(arg);
         }
 
         return b;
@@ -182,33 +152,11 @@ namespace circ::decoder {
         std::vector< Expr > st;
         st.emplace_back(Statement(Assign(VarDecl(arg),Int(0))));
         for (uint i = 0; i < 8; i++) {
-            auto indexdVar = IndexVar( array_input, static_cast<uint32_t>(offset*8 + i));
+            auto indexdVar = IndexVar( array_input, Int( static_cast<int64_t>(offset * 8 + i)));
             auto rhs = CastToUint64( Shfl( CastToUint64(indexdVar), Int( static_cast<const int>(8 * i))));
             st.emplace_back(Statement(Assign(arg, Plus( arg, rhs))));
         }
         return st;
-    }
-
-    template<int L>
-    requires (L <= 64)
-    bool OptionalBitArray<L>::contains_ignore_bit() const {
-        for (auto &b: (*this)) {
-            if ( b == InputType::ignore ) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    template<int L>
-    requires (L <= 64)
-    bool OptionalBitArray<L>::contains_only_ignore_bits() const {
-        for (auto &b: (*this)) {
-            if ( b != InputType::ignore ) {
-                return false;
-            }
-        }
-        return true;
     }
 
     Expr DecoderPrinter::get_decode_context_function_body(const decode_func_args &args,
@@ -317,15 +265,15 @@ namespace circ::decoder {
         }
 
 
-        std::vector< ExtractedCtx * > ones = indice_values[ candidate_index ].ones;
-        std::vector< ExtractedCtx * > zeros = indice_values[ candidate_index ].zeros;
+        auto ones = std::move(indice_values[ candidate_index ].ones);
+        auto zeros = std::move(indice_values[ candidate_index ].zeros);
 
         if ( ones.empty() && zeros.empty() ) {
             return Return(Int(-1));
         }
 
         auto ci_byte = static_cast<uint32_t>(candidate_index / 8);
-        auto lhs = IndexVar(Var(bytes_input_variable), ci_byte);
+        auto lhs = IndexVar(Var(bytes_input_variable), Int(ci_byte));
         auto rhs = Shfl(Int(1), Int( candidate_index % 8));
         auto condition = BitwiseAnd( lhs, rhs); // var & (1<< ci)
 

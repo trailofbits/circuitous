@@ -21,8 +21,8 @@ namespace circ::decoder {
     };
 
     struct Int {
-        explicit Int(const int32_t v) : value( v ) {};
-        int32_t value;
+        explicit Int(const int64_t v) : value( v ) {};
+        int64_t value;
     };
 
     struct Uint64 {
@@ -31,18 +31,12 @@ namespace circ::decoder {
         explicit Uint64(uint64_t val) : value( val ) {};
     };
 
-    //Indexes into a variable, i.e var[<index>]
-    struct IndexVar {
-        IndexVar(const Var &var, uint32_t index) : var( var ), index( index ) {}
 
-        Var var;
-        uint32_t index;
-    };
 
     template < typename T >
-    struct Operator {
+    struct NAryOperation {
         template < typename... U >
-        Operator(U &&... expression) {
+        NAryOperation(U &&... expression) {
             (ops.template emplace_back( std::forward<U>(expression) ), ...);
         }
 
@@ -50,16 +44,16 @@ namespace circ::decoder {
     };
 
     template < typename T >
-    struct BinaryOp : Operator< T > {
-        using Operator< T >::Operator;
+    struct BinaryOp : NAryOperation< T > {
+        using NAryOperation< T >::NAryOperation;
 
         const T &lhs() const {return this->ops[ 0 ];};
         const T &rhs() const {return this->ops[ 1 ];};
     };
 
     template < typename T >
-    struct UnaryOp : Operator< T > {
-        using Operator< T >::Operator;
+    struct UnaryOp : NAryOperation< T > {
+        using NAryOperation< T >::NAryOperation;
 
         const T &value() const {return this->ops[ 0 ];} ;
     };
@@ -83,6 +77,7 @@ namespace circ::decoder {
     struct Shfl : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
     struct Equal : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
     struct And : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+    struct IndexVar : BinaryOp<Expr>{ using BinaryOp::BinaryOp; }; // //Indexes into a variable, i.e var[<index>]
 
     // TODO there are subtypes of Statements like Returns which also belong here
     // So currently we just take Expr
@@ -117,8 +112,8 @@ namespace circ::decoder {
         StatementBlock _body;
     };
 
-    struct IfElse : Operator< Expr > {
-        using Operator< Expr >::Operator;
+    struct IfElse : NAryOperation< Expr > {
+        using NAryOperation< Expr >::NAryOperation;
 
         const Expr &cond() const {return this->ops[ 0 ];};
         const Expr &ifBody() const {return this->ops[ 1 ];};
@@ -168,21 +163,27 @@ namespace circ::decoder {
     enum class GuardStyle : uint32_t{
         None,
         Parens,
-        Curly
+        Curly,
+        Square
     };
 
     struct Guard{
-        Guard(const std::string &g1, std::string g2, std::ostream &os)
-                : g1( g1 ), g2( g2 ), os( os ) {
+        Guard(const std::string &g1, std::string g2, std::ostream &os, bool endl_on_insides = false)
+                : g1( g1 ), g2( g2 ), os( os ), endl_on_insides(endl_on_insides) {
             os << g1;
+            if(endl_on_insides)
+                os << std::endl;
         }
         ~Guard(){
+            if(endl_on_insides)
+                os << std::endl;
             os << g2;
         }
 
         std::string g1;
         std::string g2;
         std::ostream& os;
+        bool endl_on_insides;
     };
 
     class ExpressionPrinter{
@@ -197,7 +198,7 @@ namespace circ::decoder {
         template <typename T, typename... Ts>
         self_t &raw(T &&val, Ts &&... vals) ;
         self_t &expr(const Expr &expr);
-        self_t &expr(const Expr &expr, const Guard &g);
+        self_t &expr(const Expr &e, const GuardStyle gs);
 
         template < typename T >
         self_t &expr_array(const std::vector< T > &ops, const ExprStyle style);

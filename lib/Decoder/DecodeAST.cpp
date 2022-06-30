@@ -57,7 +57,7 @@ namespace circ::decoder {
                 [&](const Empty &arg) {},
                 [&](const Var &arg) { raw(arg.name); },
                 [&](const VarDecl &arg) { raw(arg.value().type, " ", arg.value().name); },
-                [&](const IndexVar &arg) { raw(arg.var.name, "[", arg.index, "]");},
+                [&](const IndexVar &arg) { expr(arg.lhs()).expr(arg.rhs(), GuardStyle::Square); },
                 [&](const Statement &arg) {
                     expr( arg.value()).raw(";").endl();
                 },
@@ -68,16 +68,10 @@ namespace circ::decoder {
                     raw("((uint64_t)").expr( arg.value()).raw(")");
                 },
                 [&](const BitwiseNegate &arg) {
-                    raw("~").expr( Parenthesis(*arg.value().op));
+                    raw("~").expr( *arg.value().op, GuardStyle::Parens);
                 },
-                [&](const Parenthesis &arg) {
-                    raw("(").expr(arg.value()).raw(")");
-                },
-                [&](const CurlyBrackets &arg) {
-                    raw("{").endl().
-                    expr(arg.value()).endl()
-                    .raw("}");
-                },
+                [&](const Parenthesis &arg) { expr(arg.value(), GuardStyle::Parens); },
+                [&](const CurlyBrackets &arg) { expr(arg.value(), GuardStyle::Curly); },
                 [&](const BitwiseOr &arg) {binary_op( arg, "|");},
                 [&](const BitwiseXor &arg) {binary_op( arg, "^");},
                 [&](const BitwiseAnd &arg) {binary_op( arg, "&");},
@@ -92,19 +86,18 @@ namespace circ::decoder {
                     }
                 },
                 [&](const IfElse &arg) {
-                    raw("if").expr( Parenthesis(arg.cond()) )
-                    .expr( arg.ifBody())
+                    raw("if").expr( arg.cond(), GuardStyle::Parens )
+                    .expr( arg.ifBody(), GuardStyle::Curly)
                     .raw(" else ")
-                    .expr( CurlyBrackets(arg.elseBody())).endl();
+                    .expr( arg.elseBody(), GuardStyle::Curly).endl();
                 },
                 [&](const FunctionCall &arg) {
-                    raw( arg.function_name )
-                    .expr_array( arg.args, ExprStyle::FuncArgs);
+                    raw( arg.function_name ).expr_array( arg.args, ExprStyle::FuncArgs);
                 },
                 [&](const FunctionDeclaration &arg) {
                     raw( arg.retType, " ", arg.function_name )
                     .expr_array( arg.args, ExprStyle::FuncArgs).endl()
-                    .expr_array( arg.body, ExprStyle::FuncBody).endl();
+                    .expr_array( arg.body, ExprStyle::FuncBody).endl().endl();
                 },
         }, *e.op );
         return *this;
@@ -117,18 +110,24 @@ namespace circ::decoder {
         return *this;
     }
 
-
     ExpressionPrinter &ExpressionPrinter::endl() {
         os << std::endl;
         return *this;
     }
 
     Guard ExpressionPrinter::guard(GuardStyle g) {
-        if(g == GuardStyle::None)
-            return {"", "", os};
-        else if( g == GuardStyle::Curly)
-            return {"{", "}", os};
-        else
-            return {"(", ")", os};
+        switch(g){
+            case GuardStyle::None :return {"", "", os};
+            case GuardStyle::Square :return {"[", "]", os};
+            case GuardStyle::Parens :return {"  (", ") ", os};
+            case GuardStyle::Curly :return {"{", "}", os, true};
+            default: circ::unreachable() << "invalid guard style";
+        }
+    }
+
+    ExpressionPrinter::self_t &ExpressionPrinter::expr(const Expr &e, const GuardStyle gs) {
+        auto g = guard(gs); // needs to be bound to a variable to force proper scoping
+        expr(e);
+        return *this;
     }
 };
