@@ -295,10 +295,10 @@ static inline std::unordered_set<Operation *> GetContexts(Operation *op) {
   up_collector.Run( op);
 
   SubtreeCollector< VerifyInstruction > down_collector;
-  auto down_collected = down_collector.Run( op ).collected;
+  auto down_collected = std::move(down_collector.Run( op ).collected);
 
   up_collector.collected.insert(down_collected.begin(), down_collected.end());
-  return up_collector.collected;
+  return std::move(up_collector.collected);
 }
 
 } // namespace circ
