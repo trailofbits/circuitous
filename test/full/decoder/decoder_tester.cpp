@@ -28,8 +28,6 @@ void print_error(bool before_marker, std::array<uint8_t, 15> &input_bytes) {
     std::cerr << (before_marker ? "accept" : "fail");
     std::cerr << " but did not: ";
     for (auto &b: input_bytes) {
-        if (b == -1)
-            break;
         std::cerr << std::hex << b;
     }
     std::cerr << std::endl;
@@ -42,27 +40,32 @@ int main(int argc, char **argv) {
     }
     auto filename = argv[1];
     std::ifstream myfile(filename);
-    auto before_marker = true;
+    auto should_reject = true;
     auto success = true;
 
     if (!myfile.is_open())
         throw std::invalid_argument("can't open file");
 
     for (std::string line; std::getline(myfile, line);) {
-        // from this point we should check that the output is false
-        if (line.find("---") != std::string::npos) {
-            before_marker = false;
+        if (line[0] == 'A') {
+            should_reject = false;
             continue;
         }
+        else if (line[0] == 'R'){
+            should_reject = true;
+            continue;
+        }
+        else{
+            throw std::invalid_argument("incorrect input format, expected: [A|R] <encoding>");
+        }
 
-        auto input_bytes = get_input_bytes(line);
+        auto input_bytes = get_input_bytes(line.substr(1));
 
-        if ((circuit_decode(input_bytes) > 0) != before_marker) {
+        if ((circuit_decode(input_bytes) > 0) != should_reject) {
             success = false;
-            print_error(before_marker, input_bytes);
+            print_error( should_reject, input_bytes);
         }
     }
-
 
     std::cout << "success: " << success << std::endl;
     return success;
