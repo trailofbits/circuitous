@@ -77,8 +77,6 @@ namespace circ::eqsat {
     OpTemplate visit(SRem *op) { return sized(op); }
     OpTemplate visit(URem *op) { return sized(op); }
 
-    OpTemplate visit(Xor *op) { return sized(op); }
-
     OpTemplate visit(Shl *op)  { return sized(op); }
     OpTemplate visit(LShr *op) { return sized(op); }
     OpTemplate visit(AShr *op) { return sized(op); }
@@ -119,8 +117,9 @@ namespace circ::eqsat {
     OpTemplate visit(VerifyInstruction *op) { return opcode(op); }
     OpTemplate visit(OnlyOneCondition *op)  { return opcode(op); }
 
-    OpTemplate visit(Or *op)  { return opcode(op); }
-    OpTemplate visit(And *op) { return opcode(op); }
+    OpTemplate visit(Or *op)  { return sized(op); }
+    OpTemplate visit(And *op) { return sized(op); }
+    OpTemplate visit(Xor *op) { return sized(op); }
 
     OpTemplate visit(Circuit *) { unreachable() << "Unexpected case encountered in visit."; }
   };
@@ -259,11 +258,13 @@ namespace circ::eqsat {
         // .Case(Select::op_code_str())
 
         .Case("DecodeCondition",   opcode(name))
-        .Case("DecoderResult",   opcode(name))
+        .Case("DecoderResult",     opcode(name))
         .Case("VerifyInstruction", opcode(name))
         .Case("OnlyOneCondition",  opcode(name))
-        .Case("Or",  opcode(name))
-        .Case("And", opcode(name))
+
+        .Case("Or",  sized(name))
+        .Case("And", sized(name))
+        .Case("Xor", sized(name))
 
         .Default( std::nullopt );
 
@@ -535,7 +536,7 @@ namespace circ::eqsat {
         .Case("read_constraint",      circuit->create< ReadConstraint >())
         .Case("unused_constraint",    circuit->create< UnusedConstraint >())
 
-        .Case("parity",                circuit->create< Parity >())
+        .Case("parity",               circuit->create< Parity >())
 
         .Case("DecodeCondition",      circuit->create< DecodeCondition >())
         .Case("DecoderResult",        circuit->create< DecoderResult >())
@@ -575,9 +576,6 @@ namespace circ::eqsat {
         .Case("ZExt",  circuit->create< ZExt >( size ))
         .Case("SExt",  circuit->create< SExt >( size ))
 
-        .Case("Or",  circuit->create< Or >( size ))
-        .Case("And", circuit->create< And >( size ))
-
         .Case("Icmp_ult", circuit->create< Icmp_ult >( size ))
         .Case("Icmp_slt", circuit->create< Icmp_slt >( size ))
         .Case("Icmp_ugt", circuit->create< Icmp_ugt >( size ))
@@ -592,6 +590,10 @@ namespace circ::eqsat {
         .Case("input_immediate", circuit->create< InputImmediate >( size ))
 
         .Case("concat", circuit->create< Concat >( size ))
+
+        .Case("Or",                    circuit->create< Or >( size ))
+        .Case("And",                   circuit->create< And >( size ))
+        .Case("Xor",                   circuit->create< Xor >( size ))
 
         .Case("pop_count",             circuit->create< PopulationCount >( size ))
         .Case("count_lead_zeroes",     circuit->create< CountLeadingZeroes >( size ))
