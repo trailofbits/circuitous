@@ -216,7 +216,7 @@ namespace circ::eqsat {
         .Case("SDiv",  sized(name))
         .Case("SRem",  sized(name))
         .Case("URem",  sized(name))
-        .Case("Xor",  sized(name))
+        .Case("Xor",   sized(name))
         .Case("Shl",   sized(name))
         .Case("<<",    sized("Shl"))
         .Case("LShr",  sized(name))
@@ -244,10 +244,6 @@ namespace circ::eqsat {
         .Case("Icmp_sle", sized(name))
 
         .Case("BSelect",  sized(name))
-
-        .Case("CAnd", sized(name))
-        .Case("COr",  sized(name))
-        .Case("CXor", sized(name))
 
         .Case("input_immediate", opcode(name))
         // .Case("extract")
