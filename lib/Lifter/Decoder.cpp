@@ -79,6 +79,13 @@ namespace circ
     auto Decoder::decode(const InstBytes &bytes) -> std::optional< remill::Instruction >
     {
         auto [maybe_inst, tail] = decode(bytes.raw());
+        // TODO(lukas): Refactor using result type.
+        auto tail_size = tail.size();
+        check(tail.size() == 0, [&](){
+            return "Expected " + bytes.as_hex_str() + " to decode as one inst, got tail " +
+                   "of size " + std::to_string(tail_size);
+        });
+
         if (!maybe_inst || tail.size() != 0)
             return {};
         return maybe_inst;
