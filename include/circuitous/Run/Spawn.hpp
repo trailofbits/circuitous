@@ -9,6 +9,7 @@
 #include <circuitous/Run/Base.hpp>
 #include <circuitous/Run/Queue.hpp>
 #include <circuitous/Run/State.hpp>
+#include <circuitous/Run/Result.hpp>
 
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
@@ -26,6 +27,7 @@ namespace circ::run
     struct Spawn : StateOwner
     {
         using semantics_t = Semantics;
+        using result_t = result_t;
 
         Circuit *circuit;
         VerifyInstruction *current;
@@ -221,7 +223,7 @@ namespace circ::run
             }
         }
 
-        bool run() {
+        result_t run() {
             init();
             // Set constants first, as they are never blocked by anything.
             for (const auto &constant : circuit->attr< Constant >())
@@ -235,25 +237,26 @@ namespace circ::run
                 // be false.
                 if (auto r = short_circuit(x)) {
                     log_dbg() << "Short circuiting to result, as decode was not satisfied.";
-                    return *r;
+                    return result_t::not_decoded;
                 }
             }
             log_dbg() << "Run done, fetching result.";
             if (!node_state.has_value(current))
             {
-                no_value_reached();
-                return false;
+                no_value_reached_witness();
+                return result_t::value_not_reached;
             }
-            if (auto res = node_state.get(current)) {
-                return *res == semantics.true_val();
-            }
-            return false;
+
+            if (auto res = node_state.get(current))
+                return (*res == semantics.true_val()) ? result_t::accepted : result_t::rejected;
+
+            unreachable() << "Spawn::run() did not reach any result!";
         }
 
         // If context does not have a value -> something is blocking it.
         // Report a trace that highlights which nodes are not interpreted and what is blocking
         // them.
-        void no_value_reached()
+        void no_value_reached_witness()
         {
             std::stringstream ss;
 
