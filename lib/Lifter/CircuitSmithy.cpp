@@ -33,7 +33,7 @@ namespace circ
         for (const auto &x : insts)
         {
             auto maybe_inst = decoder.decode(x);
-            check(maybe_inst);
+            check(maybe_inst) << "Decoder failed on:" << x.as_hex_str();
             rinsts.push_back(std::move(*maybe_inst));
         }
         return smelt(std::move(rinsts));
