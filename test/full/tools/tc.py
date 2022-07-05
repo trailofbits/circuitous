@@ -44,6 +44,9 @@ class MemHint:
     def write(addr_, val_, size_):
         return MemHint(addr_, val_, MemHint.WRITE, size_)
 
+    def as_tuple(self):
+        return (self.used, self.addr, self.value, self.type, self.size, self.ts)
+
     def zero_hint():
         x = MemHint(None, None, MemHint.READ, None)
         x.used = False
@@ -295,12 +298,10 @@ class StateImpl(StateBase):
         return self
 
     def get(self):
-        out = {"inst_bits" : self.bytes if self.bytes is not None else "00",
-               "ebit" : hex(self._ebit)[2:],
+        out = {"instruction_bits" : self.bytes if self.bytes is not None else "00",
+               "error_flag" : hex(self._ebit)[2:],
                "timestamp" : hex(self.timestamp)[2:],
-               "regs" : {},
-               "mem_hints": {},
-               "memory": {}}
+               "regs" : {}}
         for reg, val in self.registers.items():
             if val is not None:
                 out["regs"][reg] = hex(val)[2:]
