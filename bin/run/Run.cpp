@@ -8,6 +8,7 @@
 
 #include <circuitous/Support/CLIArgs.hpp>
 
+#include <circuitous/Run/Execute.hpp>
 #include <circuitous/Run/Inspect.hpp>
 #include <circuitous/Run/Interpreter.hpp>
 #include <circuitous/Run/Trace.hpp>
@@ -102,98 +103,87 @@ auto load_circ(const std::string &file)
     return circuit;
 }
 
+std::string str(const llvm::APInt &what) { return llvm::toString(what, 16, false); }
+template< typename I > requires ( std::is_integral_v< I > )
+std::string hex(I what) { std::stringstream ss; ss << std::hex << what; return ss.str(); }
 
-template< typename I >
-void export_derived(const I &acceptors, const std::string &export_derived_to)
+llvm::json::Object serialize_mem_hint(const auto &val)
+{
+    llvm::json::Object mem_hint;
+    mem_hint["used"]  = str(val.used());
+    mem_hint["mode"]  = str(val.mode());
+    mem_hint["id"]    = str(val.id());
+    mem_hint["size"]  = str(val.size());
+    mem_hint["addr"]  = str(val.addr());
+    mem_hint["value"] = str(val.value());
+    mem_hint["ts"]    = str(val.timestamp());
+    return mem_hint;
+}
+
+template< typename E >
+llvm::json::Object serialize_mem_hints(const std::vector< E > &vals)
+{
+    llvm::json::Object out;
+    for (const auto &val : vals)
+        out[str(val.id())] = serialize_mem_hint(val);
+
+    return out;
+}
+
+llvm::json::Object serialize(const circ::run::ExportMemory &entry)
+{
+    llvm::json::Object out;
+    out["result"] = entry.result;
+    out["memory_hints"] = serialize_mem_hints(entry.hints);
+    return out;
+}
+
+// TODO(lukas): Generalize.
+llvm::json::Object serialize(const circ::run::DefaultControl &ctl)
+{
+    llvm::json::Object out;
+
+    out["result"] = ctl.result();
+
+    llvm::json::Object traces;
+    for (std::size_t i = 0; i < ctl.to_export.size(); ++i)
+        traces[hex(i)] = serialize(ctl.to_export[i]);
+
+    out["traces"] = std::move(traces);
+    return out;
+}
+
+void store_json(const std::string &path, llvm::json::Object obj)
 {
     // Open output file
     std::error_code ec;
-    llvm::raw_fd_ostream output(export_derived_to, ec, llvm::sys::fs::OF_Text);
+    llvm::raw_fd_ostream output(path, ec, llvm::sys::fs::OF_Text);
     circ::check(!ec) << "Error while opening output state JSON file: " << ec.message();
 
-    // Dump output register values to JSON
-    llvm::json::Object output_obj;
-    llvm::json::Object output_regs_obj;
-    llvm::json::Object output_mem_hints;
-
-    auto as_str = [](const auto &what) -> std::string {
-        return std::to_string(what->getLimitedValue());
-    };
-
-    if (acceptors.size() != 0) {
-        const auto &inspect = acceptors[ 0 ];
-        for (auto [reg, val] : inspect->template get_derived<circ::OutputRegister>()) {
-            circ::check(val);
-            output_regs_obj[reg->reg_name] = std::to_string(val->getLimitedValue());
-        }
-        for (auto [_, val] : inspect->template get_derived<circ::OutputErrorFlag>()) {
-            output_obj["ebit"] = (val == llvm::APInt(1, 1));
-        }
-        output_obj["timestamp"] = as_str(inspect->get_node_val(inspect->circuit->output_timestamp()));
-
-        auto str = [](auto val) {
-            return llvm::toString(val, 10, false);
-        };
-
-        for (const auto &val : inspect->get_derived_mem()) {
-            llvm::json::Object mem_hint;
-            mem_hint["used"]  = str(val.used());
-            mem_hint["mode"]  = str(val.mode());
-            mem_hint["id"]    = str(val.id());
-            mem_hint["size"]  = str(val.size());
-            mem_hint["addr"]  = str(val.addr());
-            mem_hint["value"] = str(val.value());
-            mem_hint["ts"]    = str(val.timestamp());
-            output_mem_hints[str(val.id())] = std::move(mem_hint);
-        }
-    }
-
-    // Serialize
-    output_obj["regs"] = std::move(output_regs_obj);
-    output_obj["result"] = acceptors.size() == 1;
-    output_obj["mem_hints"] = std::move(output_mem_hints);
-    output << llvm::json::Value(std::move(output_obj));
+    output << llvm::formatv("{0:2}", llvm::json::Value(std::move(obj)));
 }
 
 template< typename Runner, typename CLI >
 void run(const CLI &parsed_cli)
 {
     auto circuit = load_circ(*parsed_cli.template get< circ::cli::run::IRIn >());
-    circ::run::NodeStateBuilder node_state{ circuit.get() };
-    circ::run::MemoryBuilder memory{ circuit.get() };
 
-    if (auto traces = parsed_cli.template get< circ::cli::run::Traces >())
-    {
-        auto trace = circ::run::trace::native::load_json(*traces);
-        circ::check(trace.entries.size() >= 2) << trace.entries.size();
+    auto json_trace = parsed_cli.template get< circ::cli::run::Traces >();
+    circ::check(json_trace);
 
-        auto &fst = *trace.entries.begin();
-        auto &snd = *std::next(trace.entries.begin());
+    auto trace = circ::run::trace::native::load_json(*json_trace);
+    circ::check(trace.entries.size() >= 2) << trace.entries.size();
 
-        auto step = circ::run::trace::native::make_step_trace(circuit.get(), fst, snd);
-        node_state.set(step);
+    circ::run::DefaultControl ctrl;
+    circ::run::test_trace(circuit.get(), trace, ctrl);
 
-        for (const auto &[addr, val] : trace.initial_memory)
-            memory.set(addr, val);
-    }
+    auto as_json = serialize(ctrl);
 
-    node_state.all< circ::Undefined >({});
-    auto interpreter = Runner(circuit.get(), node_state.take(), memory.take());
-    interpreter.template derive< circ::AdviceConstraint >();
-    interpreter.template derive< circ::ReadConstraint >();
-    interpreter.template derive< circ::WriteConstraint >();
-    interpreter.template derive< circ::UnusedConstraint >();
-    auto acceptors = interpreter.run_all();
-    circ::check(acceptors.size() < 2)
-        << "More than one acceptor, found: " << acceptors.size();
+    auto result_path = parsed_cli.template get< circ::cli::run::ExportDerived >();
+    store_json(*result_path, std::move(as_json));
 
-    if (parsed_cli.template present< circ::cli::run::Die >())
-    {
-        circ::log_kill() << "FLAGS_die induced death.";
-    }
-
-    if (auto export_derived_to = parsed_cli.template get< circ::cli::run::ExportDerived >())
-        export_derived(acceptors, *export_derived_to);
+   if (parsed_cli.template present< circ::cli::run::Die >())
+       circ::log_kill() << "FLAGS_die induced death.";
 }
 
 using run_modes = circ::tl::TL<
