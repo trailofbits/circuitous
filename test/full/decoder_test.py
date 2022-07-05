@@ -11,13 +11,7 @@ circuitous_decoder = os.path.abspath(
     os.path.join(circuitous_prefix, "decoder/circuitous-decoder"))
 decoder_test_runner = "decoder/decoder_tester.cpp"
 
-output = "tmp/"
-output_dir = Path(output)
-if output_dir.exists():
-    if output_dir.is_dir():
-        shutil.rmtree(output)
-    else:
-        shutil.rm(output)
+output = "decoder/"
 Path(output).mkdir(parents=True, exist_ok=True)
 
 
@@ -35,13 +29,10 @@ Path(output).mkdir(parents=True, exist_ok=True)
 #
 #
 # Generated test files are organized in the following manner:
-# ```
-# <list of encodings which should be accepted>
-# \---
-# <list of encodings which should be rejected>
-# ```
+# Each line _starts_ with A or R stating the encoding should be Accepted or Rejected
+# The encoding should directly follow.
+# i.e: A 488b
 # The list of encodings should have a new line per encoding. Encodings are hex values in plain text.
-
 def toggle_bit(value, bit_index):
     val_cpy = value.copy()
     val_cpy[math.floor(bit_index / 8)] = val_cpy[math.floor(bit_index / 8)] ^ (
