@@ -268,7 +268,12 @@ namespace circ
       public:
 
         static std::string op_code_str() { return "register"; }
-        std::string name() const override { return "register." + reg_name; }
+        std::string name() const override { return make_name(reg_name); }
+
+        static std::string make_name(const std::string &reg)
+        {
+            return op_code_str() + "." + reg;
+        }
 
         std::string reg_name;
     };
