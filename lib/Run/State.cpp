@@ -45,12 +45,12 @@ namespace circ::run
             memory[addr + i] = val.extractBits(8, i);
     }
 
-    auto Memory::deconstruct(const llvm::APInt &value) -> Parsed
+    auto Memory::deconstruct(const llvm::APInt &value) const -> Parsed
     {
         return deconstruct(value, hint_size);
     }
 
-    llvm::APInt Memory::construct(const Parsed &parsed)
+    llvm::APInt Memory::construct(const Parsed &parsed) const
     {
         return construct(parsed, hint_size);
     }
