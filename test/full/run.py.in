@@ -150,7 +150,7 @@ class Lifter(SimulateCWDMixin):
 
         return self.locate(self.circuit_name(bytes))
 
-class Interpret(SimulateCWDMixin):
+class Interpreter(SimulateCWDMixin):
     __slots__ = ('binary', 'test_dir')
 
     component = "circuitous interpret"
@@ -160,8 +160,10 @@ class Interpret(SimulateCWDMixin):
         self.test_dir = test_dir_
 
     def run(self, tc):
+        out = {}
         for case in tc.cases:
-            self.run_case(case, tc.metafiles[case.name + ".circuit"], tc)
+            out[case] = self.run_case(case, tc.metafiles[case.name + ".circuit"], tc)
+        return out
 
     def create_trace_json(self, case, prefix, dir=None):
         fname = prefix + ".trace.json"
@@ -204,28 +206,31 @@ class Interpret(SimulateCWDMixin):
 
         parent.metafiles[case.name + ".result.json"] = self.locate(case.name + ".result.json")
 
-        self.update_state(case, self.locate(case.name + ".result.json"))
+        #self.update_state(case, self.locate(case.name + ".result.json"))
+        return self.parse_result(self.locate(case.name + ".result.json"))
 
-    def update_state(self, case, result):
-        with open(result) as f:
-            result = json.load(f)
-            for reg, val in result["regs"].items():
-                case.simulated.set_reg(reg, int(val, 10))
-            case.simulated.result = result["result"]
-            case.simulated._ebit = result.get("ebit")
-            mt = result.get("timestamp")
-            for _, hint in result["mem_hints"].items():
-                if (int(hint["used"]) == 0):
-                    continue
-                mh = TC.MemHint(
-                  int(hint["addr"]),
-                  int(hint["value"]),
-                  int(hint["mode"]),
-                  int(hint["size"])
-                )
-                case.simulated.mem_hint(mh)
-            case.simulated.timestamp = mt if mt is None else int(mt)
+    def get_mem_hints(self, mem_hints):
+        out = set()
+        for _, hint in mem_hints.items():
+            out.add((int(hint["used"], 16),
+                     int(hint["addr"], 16),
+                     int(hint["value"], 16),
+                     int(hint["mode"], 16),
+                     int(hint["size"], 16),
+                     int(hint["ts"], 16)))
+        return out
 
+    def parse_result(self, path):
+        with open(path) as f:
+            as_json = json.load(f)
+            result = as_json["result"]
+
+            traces = as_json["traces"]
+            assert(len(traces) == 1)
+
+            mem_hints = self.get_mem_hints(traces["0"]["memory_hints"])
+
+            return (result, mem_hints)
 
 class TestResult:
     ok = 0
@@ -250,14 +255,48 @@ class Comparator(SimulateCWDMixin):
     def __init__(self, test_dir_):
         self.test_dir = test_dir_
 
-    def compare(self, tc):
+    def compare_case(self, case, result, mem_hints):
+        assert(result in ["accept", "reject"])
+
+        message = "Expected: " + str(case.expected.result) + "\n"
+        message += "Got: " + result + "\n"
+
+        if not case.expected.result:
+            return result == "reject", message
+
+        # Expected to accept
+        if result == "reject":
+            return False, message
+
+        c, m = self.mem_hint_compare(case.expected.mem_hints, mem_hints)
+        if not c:
+            return c, message + m
+
+        return True, ""
+
+    def mem_hint_compare(self, expected, real):
+        used = set()
+        for item in real:
+            if item[0] != 0:
+                used.add(item)
+
+        e = set()
+        for item in expected:
+            e.add(item.as_tuple())
+
+        message = "Expected:\n" + str(e)
+        message += "\nGot:\n" + str(used)
+
+        return e == used, message
+
+    def compare(self, tc, real):
         out = {}
         for case in tc.cases:
-            if case.run_mode == "--verify":
-                accept, msg = self.compare_verify(case.input, case.simulated, case.expected)
-            else:
-                accept, msg = self.compare_case(case.input, case.simulated, case.expected)
-            assert case.name not in out
+            r, m = real[case]
+            if r == "error":
+                out[case.name] = TestResult(TestResult.error, "")
+                continue
+            accept, msg = self.compare_case(case, r, m)
             out[case.name] = TestResult(TestResult.ok if accept else TestResult.fail, msg)
             if not out[case.name]:
                 msg = out[case.name].msg
@@ -272,84 +311,6 @@ class Comparator(SimulateCWDMixin):
                     msg += "\n\t" + tc.metafiles[case.name + ".result.dot"]
                 out[case.name].msg = msg
         return out
-
-    # MemHints are still compared because we cannot guess their order - microx and remill
-    # can do independent reads/writes in different orders.
-    def compare_verify(self, input, after, expected):
-        accept = True
-        message = ""
-        # `expected.result` because if circuit did not accept, then it did not
-        # derive memhints.
-        if expected.result and not TC.compare_hints(after.mem_hints, expected.mem_hints):
-            accept = False
-            message += "mem_hints do not match\n---\n"
-            message += "".join(str(x) for x in after.mem_hints) + "\n"
-            message += "---\n"
-            message += "".join(str(x) for x in expected.mem_hints) + "\n"
-            message += "---\n"
-        if expected.result == after.result:
-            # Above ^ was asserted that circuit did or did not accept correctly,
-            # therefore it should never check memhints in the first place.
-            if not accept:
-                assert expected.result
-                return accept, message + "But result seems fine.\n"
-            return accept, message
-
-        if expected.result:
-            return False, message + "Should accept, but did not.\n"
-        return False, message + "Should not accept, but did.\n"
-
-    def compare_case(self, input, after, expected):
-        accept = True
-        message = ""
-        for reg, val in after.registers.items():
-            if reg in expected.undefined or val is None:
-                continue
-            e_val = expected.registers.get(reg, input.registers.get(reg))
-            if e_val != int(val):
-                accept = False
-                message += "Register " + reg + " (expected != actual): " + \
-                           maybe_hex(e_val) + " != " + maybe_hex(val) + "\n"
-
-        if after.timestamp != expected.timestamp:
-            accept = False
-            message += "timestamp: " + str(after.timestamp) + " != " + str(expected.timestamp)
-            message += "\n"
-
-        if after._ebit != expected._ebit:
-            accept =  False
-            message += "ebits do not match \n"
-
-        if not TC.compare_hints(after.mem_hints, expected.mem_hints):
-            accept = False
-            message += "mem_hints do not match\n---\n"
-            message += "".join(str(x) for x in after.mem_hints) + "\n"
-            message += "---\n"
-            message += "".join(str(x) for x in expected.mem_hints) + "\n"
-            message += "---\n"
-
-        skipped = []
-        for reg in expected.registers.keys():
-            if reg not in after.registers  and reg not in input.registers.keys():
-                accept = False
-                skipped.append(reg)
-
-        if skipped:
-            message += "Registers that were expected but not present in result:\n["
-        for reg in skipped:
-            message += " " + reg
-        if skipped:
-            message += " ]\n"
-
-        if expected.result:
-            if after.result == False or accept == False:
-                if after.result == False:
-                    message += "Should accept, did not.\n"
-                return False, message
-        if not expected.result:
-            if accept and after.result:
-                return False, "Should reject, did not.\n"
-        return True, ""
 
 class Results:
     __slots__ = ('results', 'fails', 'fragile')
@@ -371,7 +332,10 @@ class Results:
                 self.results["pass"] += 1
             elif verdict == TestResult.error:
                 self.results["error"] += 1
-                print(yellow(test_name + ": Pipeline fail in: " + e._component))
+                if e is not None:
+                    print(yellow(test_name + ": Pipeline fail in: " + e._component))
+                else:
+                    print(yellow(test_name + ": error: " + message))
                 if dbg_verbose:
                     print(e)
 
@@ -439,8 +403,7 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
             #os.chdir(test_dir)
             try:
                 Lifter(test_dir).lift_test(x, extra_args)
-                Interpret(test_dir).run(x)
-                r = Comparator(test_dir).compare(x)
+                r = Comparator(test_dir).compare(x, Interpreter(test_dir).run(x))
                 results.put((x.name, r))
             except PipelineFail as e:
                 results.put((x.name, {"pipeline" : TestResult(TestResult.error, "", e)}))
