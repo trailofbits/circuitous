@@ -44,6 +44,7 @@ namespace circ::run
             collector.Run(circuit);
         }
 
+        using result_t = typename Spawn::result_t;
         // Result of the run + the entire spawn for end state investigation.
         using spawn_result_t = std::tuple< typename Spawn::result_t, spawn_ptr_t >;
         // Grouped for the whole batch.
