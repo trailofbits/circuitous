@@ -297,6 +297,8 @@ namespace circ::run
             }
             return out;
         }
+
+        Memory take_memory() { return std::move(memory); }
     };
 
     static_assert(valid_interpreter< typename Spawn< Base >::semantics_t >());
