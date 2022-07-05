@@ -1,17 +1,15 @@
-import operator
 import os.path
 import subprocess
 from functools import reduce
 import math
 from pathlib import Path
-import shutil
 
 circuitous_prefix = "@PROJECT_BINARY_DIR@/bin"
 circuitous_decoder = os.path.abspath(
     os.path.join(circuitous_prefix, "decoder/circuitous-decoder"))
-decoder_test_runner = "decoder/decoder_tester.cpp"
+decoder_test_runner = "decoder_tester.cpp"
 
-output = "decoder/"
+output = "tests/"
 Path(output).mkdir(parents=True, exist_ok=True)
 
 
