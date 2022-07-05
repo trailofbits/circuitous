@@ -287,7 +287,7 @@ namespace circ::run
         template< typename T >
         auto get_derived() const { return semantics.template get_derived< T >(); }
 
-        auto get_derived_mem()
+        auto get_derived_mem() const
         {
             std::vector< Memory::Parsed > out;
             for (auto op : circuit->attr< circ::Memory >())

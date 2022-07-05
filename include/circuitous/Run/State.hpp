@@ -47,8 +47,8 @@ namespace circ::run
 
         using Parsed = irops::memory::Parsed< llvm::APInt >;
 
-        Parsed deconstruct(const llvm::APInt &value);
-        llvm::APInt construct(const Parsed &parsed);
+        Parsed deconstruct(const llvm::APInt &value) const;
+        llvm::APInt construct(const Parsed &parsed) const;
 
         static Parsed deconstruct(const llvm::APInt &value, std::size_t hint_size);
         static llvm::APInt construct(const Parsed &parsed, std::size_t hint_size);
