@@ -66,6 +66,8 @@ jobs:
             --install /usr/bin/clang clang /usr/bin/clang-12 10 \
             --slave   /usr/bin/clang++ clang++ /usr/bin/clang++-12
 
+        pip3 install pytest
+
     - name: Setup paths
       shell: bash
       id: paths
