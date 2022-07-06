@@ -6,11 +6,11 @@ add_headers( Transforms CIRCUITOUS_TRANSFORMS_HEADERS
   EqualitySaturation.hpp
   PassBase.hpp
   Passes.hpp
-  Pattern.hpp
 )
 
 add_circuitous_library( transforms
   SOURCES
+    EqualityNode.cpp
     EqualitySaturation.cpp
     OverflowFlagFix.cpp
     ConjureALU.cpp

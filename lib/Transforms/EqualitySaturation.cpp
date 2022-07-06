@@ -13,7 +13,8 @@
 #include <circuitous/IR/Memory.hpp>
 #include <circuitous/IR/Verify.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
-#include <circuitous/Transforms/Pattern.hpp>
+#include <circuitous/Transforms/eqsat/cost_graph.hpp>
+#include <circuitous/Transforms/eqsat/pattern.hpp>
 #include <cstddef>
 #include <cstdint>
 #include <fstream>
@@ -172,7 +173,7 @@ namespace circ::eqsat {
 
     OpTemplate make_constant_template(const constant &con) const
     {
-      unreachable() << "not implemented";
+      throw std::runtime_error("make_constant_template not implemented");
     }
 
     OpTemplate make_operation_template(const operation &op) const
@@ -397,6 +398,8 @@ namespace circ::eqsat {
       return std::nullopt;
     }
 
+    Graph&& get_graph() { return std::move(_egraph); }
+
     const Graph& egraph() const { return _egraph; }
     const PatternCircuitBuilder& builder() const { return _builder; }
 
@@ -416,8 +419,44 @@ namespace circ::eqsat {
   using Scheduler = BasicRulesScheduler< Graph, PatternCircuitBuilder< Graph > >;
   using DefaultRunner = EqSatRunner< CircuitEGraph, Scheduler >;
 
-  using cost_t = std::uint64_t;
-  using maybe_cost_t = std::optional< cost_t >;
+  //
+  // begin new version
+  //
+
+  using namespace ::eqsat;
+
+  struct circuit_cost_function {
+    using node_pointer = circuit_egraph::node_pointer;
+
+    cost_t operator()(const node_pointer node) {
+      // TODO(Heno) implement cost function
+      // if (name(node) == "Mul") {
+      //   return 1000;  // * bitwidth(node).value();
+      // }
+      // if (name(node) == "Add") {
+      //   return 100;  // * bitwidth(node).value();
+      // }
+      return 1;
+    }
+  };
+
+  using circuit_cost_graph = cost_graph< circuit_egraph, circuit_cost_function >;
+  static_assert( gap::graph::graph_like< circuit_cost_graph > );
+
+  auto make_circuit_cost_graph(circuit_egraph &&graph) -> circuit_cost_graph {
+    return circuit_cost_graph(std::move(graph), circuit_cost_function{});
+  }
+
+  using optimal_circuit_graph_view = optimal_graph_view< circuit_egraph, circuit_cost_function >;
+  static_assert( gap::graph::graph_like< optimal_circuit_graph_view > );
+
+  auto make_optimal_circuit_graph_view(circuit_egraph &&graph) -> optimal_circuit_graph_view {
+    return optimal_graph_view(std::move(graph), circuit_cost_function{});
+  }
+
+  //
+  // end new version
+  //
 
   // CostGraph precomputes cost for all equality nodes
   // in the underlying egraph according to a given cost function
@@ -434,13 +473,19 @@ namespace circ::eqsat {
 
     using CostMap = std::map< const ENode *, cost_t >;
 
+    static constexpr auto inf = std::numeric_limits< cost_t >::infinity();
+
     CostGraph(const Graph &graph, CostFunction eval)
       : graph(graph), eval(eval)
     {
+      for (const auto &[node, _] : graph.nodes()) {
+        costs.emplace(node, inf);
+      }
+
+      // TODO topo-sort
+
       for (const auto &[node, id] : graph.nodes()) {
-        if (auto cost = eval_cost(node)) {
-          costs.try_emplace(node, cost.value());
-        }
+        costs.try_emplace(node, eval_cost(node));
       }
     }
 
@@ -469,6 +514,7 @@ namespace circ::eqsat {
 
       ENodePtr splice_bond_edge(ENodePtr child, ENodePtr parent_node) const
       {
+        assert( child );
         if (!child->is_bond_node())
           return child;
 
@@ -486,9 +532,14 @@ namespace circ::eqsat {
       std::vector< ENodePtr > children(ENodePtr enode) const
       {
         std::vector< ENodePtr > res;
+        llvm::errs() << node_name(*enode) << "\n";
         for (const auto &child : enode->children()) {
           auto child_class = graph.find(child);
-          auto optimal_child = splice_bond_edge( optimal.at( child_class ), enode );
+          auto child_candidate = optimal.at( child_class );
+          llvm::errs() << "child: " << node_name(*child_candidate) << "\n";
+          assert( child_candidate );
+          auto optimal_child = splice_bond_edge( child_candidate, enode );
+          assert( optimal_child );
           res.push_back( optimal_child );
         }
         return res;
@@ -503,12 +554,12 @@ namespace circ::eqsat {
 
     const ENode* minimal(const EClass &eclass) const
     {
-      maybe_cost_t minimal = std::nullopt;
+      cost_t minimal = inf;
       const ENode *result = nullptr;
       for (auto n : eclass.nodes) {
         if (costs.count(n)) {
           auto cost = costs.at(n);
-          if (!minimal || (cost < minimal)) {
+          if (cost < minimal) {
             minimal = cost;
             result = n;
           }
@@ -518,7 +569,7 @@ namespace circ::eqsat {
     }
 
   private:
-    maybe_cost_t eval_cost(const ENode *node) {
+    cost_t eval_cost(const ENode *node) {
       if (auto cost = costs.find(node); cost != costs.end()) {
         return cost->second;
       }
@@ -526,16 +577,14 @@ namespace circ::eqsat {
       std::set< const ENode * > seen;
       seen.insert(node);
 
-      auto fold = [&](cost_t cost, auto id) -> maybe_cost_t {
+      auto fold = [&](cost_t cost, auto id) -> cost_t {
         const auto &eclass = graph.eclass(id);
         for (const auto *node : eclass.nodes) {
           if (seen.count(node)) {
-            return std::nullopt;
+            return inf;
           }
           seen.insert(node);
-          if (auto res = eval_cost(node)) {
-            costs.try_emplace(node, res.value());
-          }
+          costs.try_emplace(node, eval_cost(node));
         }
 
         return cost + costs[minimal(eclass)];
@@ -543,11 +592,7 @@ namespace circ::eqsat {
 
       cost_t result = eval(node);
       for (auto ch : node->children()) {
-        if (auto res = fold(result, ch)) {
-          result += res.value();
-        } else {
-          return std::nullopt;
-        }
+        result += fold(result, ch);
       }
 
       return result;
@@ -601,7 +646,7 @@ namespace circ::eqsat {
         .Case("UDiv",  circuit->create< UDiv >( size ))
         .Case("SDiv",  circuit->create< SDiv >( size ))
         .Case("URem",  circuit->create< URem >( size ))
-        .Case("Xor",  circuit->create< Xor >( size ))
+        .Case("Xor",   circuit->create< Xor >( size ))
         .Case("SRem",  circuit->create< SRem >( size ))
         .Case("Shl",   circuit->create< Shl >( size ))
         .Case("LShr",  circuit->create< LShr >( size ))
@@ -705,6 +750,8 @@ namespace circ::eqsat {
 
     bool needs_compute_bitwidth(const auto &op)
     {
+      if (!op->is_storage_node())
+        return false;
       return holds_alternative< SizedOp, AdviceOp >(op->data()) && !bitwidth(op).has_value();
     }
 
@@ -767,6 +814,12 @@ namespace circ::eqsat {
     const OptimalGraphView &graph;
   };
 
+  //
+  // extract optimal circuit from egraph
+  //
+
+  using circuit_owning_ptr = CircuitPtr;
+
   Operation *getSingleAdviceContraint(Operation *advice, const auto &users) {
     if (users.size() == 1) {
       auto user = *(users.begin());
@@ -777,7 +830,7 @@ namespace circ::eqsat {
     return nullptr;
   }
 
-  CircuitPtr postprocess(CircuitPtr &&circuit) {
+  circuit_owning_ptr extract_postprocess(circuit_owning_ptr &&circuit) {
     Verifier::advice_users_t collected;
     // // FIXME:
     // Verifier::CollectAdviceUsers(circuit.get(), collected);
@@ -800,25 +853,32 @@ namespace circ::eqsat {
     return std::move(circuit);
   }
 
-  CircuitPtr lower(auto &runner, const auto &circ) {
-    lower_advices(runner.egraph(), runner.builder());
+  struct circuit_extractor : optimal_circuit_graph_view {
 
-    auto eval = [](const auto &node) -> cost_t {
-      // TODO(Heno) implement cost function
-      if (name(node) == "Mul") {
-        return 1000;  // * bitwidth(node).value();
+      explicit circuit_extractor(optimal_circuit_graph_view &&egraph) :
+        optimal_circuit_graph_view(std::move(egraph))
+      {}
+
+      circuit_owning_ptr extract(std::uint32_t ptr_size)
+      {
+        auto circuit = std::make_unique<Circuit>(ptr_size);
+
+        // auto node = graph.node(root);
+        // check(name(node) == "circuit");
+
+        // for (const auto &child : graph.children(node))
+        //   circuit->add_use( extract(child, circuit.get()) );
+
+        // TODO(Heno) extract optimal graph
+
+        return circuit;
       }
-      if (name(node) == "Add") {
-        return 100;  // * bitwidth(node).value();
-      }
-      return 1;
-    };
+  };
 
-    auto costgraph = eqsat::CostGraph(runner.egraph(), eval);
-    auto optimal = costgraph.optimal();
+  circuit_owning_ptr lower(auto &runner, circuit_owning_ptr &&circ) {
+    // lower_advices(runner.egraph(), runner.builder());
 
-    eqsat::CircuitExtractor ext(optimal);
-    return {}; // FIXME: postprocess(ext.run(runner.node(circ.get()), circ->ptr_size));
+    return circ;
   }
 
   using RuleSets = std::span<RuleSet>;
@@ -827,7 +887,7 @@ namespace circ::eqsat {
     return eqsat::DefaultRunner::make_runner(circuit);
   }
 
-  CircuitPtr apply_rules(auto &&runner, RuleSets rules, auto &&circuit) {
+  circuit_owning_ptr apply_rules(auto &&runner, RuleSets rules, auto &&circuit) {
     if (rules.empty())
       return lower(runner, std::move(circuit));
 
