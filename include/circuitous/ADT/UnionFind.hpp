@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <vector>
+#include <cassert>
 
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/Util/StrongType.hpp>
@@ -28,13 +29,13 @@ namespace circ
 
         [[nodiscard]] inline Id& parent(Id id) noexcept
         {
-            check( _parents.size() > id.ref() );
+            assert( _parents.size() > id.ref() );
             return _parents[id.ref()];
         }
 
         [[nodiscard]] inline Id parent(Id id) const noexcept
         {
-            check( _parents.size() > id.ref() );
+            assert( _parents.size() > id.ref() );
             return _parents[id.ref()];
         }
 
