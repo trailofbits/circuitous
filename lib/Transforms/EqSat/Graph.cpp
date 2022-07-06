@@ -63,9 +63,12 @@ namespace circ::eqsat
     return name(node) == "VerifyInstruction";
   }
 
-  std::optional<std::int64_t> extract_constant(const CircuitENode *node)
+  std::optional<llvm::APInt>extract_constant(const CircuitENode *node)
   {
-    throw std::runtime_error("not implemented");
+    if (auto con = std::get_if< ConstOp >(&node->data())) {
+      return llvm::APInt(con->size, con->bits, 10);
+    }
+    return std::nullopt;
   }
 
 } // namespace cird::eqsat

@@ -7,6 +7,8 @@
 #include <circuitous/ADT/EGraph.hpp>
 #include <circuitous/ADT/UnionFind.hpp>
 
+#include <llvm/ADT/APInt.h>
+
 #include <string>
 #include <optional>
 #include <variant>
@@ -93,6 +95,6 @@ namespace circ::eqsat {
 
   bool is_context_node(const CircuitENode *node);
 
-  std::optional<std::int64_t> extract_constant(const CircuitENode *node);
+  std::optional<llvm::APInt> extract_constant(const CircuitENode *node);
 
 } // namespace circ::eqsat
