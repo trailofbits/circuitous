@@ -10,7 +10,7 @@
 
 #include <circuitous/ADT/EGraph.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
-#include <circuitous/Transforms/Pattern.hpp>
+#include <circuitous/Transforms/eqsat/pattern.hpp>
 #include <cstddef>
 #include <fstream>
 #include <numeric>

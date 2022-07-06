@@ -8,7 +8,7 @@
 
 #include <doctest/doctest.h>
 #include <circuitous/ADT/EGraph.hpp>
-#include <circuitous/Transforms/Pattern.hpp>
+#include <circuitous/Transforms/eqsat/pattern.hpp>
 #include <circuitous/Util/Overloads.hpp>
 #include <circuitous/Support/Check.hpp>
 
@@ -72,9 +72,9 @@ namespace circ::eqsat {
     using Base  = EGraph< StringNode >;
     using ENode = Base::Node;
 
-    auto make_leaf(std::string_view atom)
+    auto make_leaf(std::string atom)
     {
-      auto candidate = ENode(std::string(atom));
+      auto candidate = ENode(std::move(atom));
       auto con = extract_constant(&candidate);
 
       if (con)
@@ -89,9 +89,9 @@ namespace circ::eqsat {
       return id;
     }
 
-    auto make_node(std::string_view atom, std::vector<Id> children)
+    auto make_node(std::string atom, std::vector<Id> children)
     {
-      ENode node((std::string(atom)));
+      ENode node((std::move(atom)));
       node.children() = std::move(children);
       auto [id, _] = add(std::move(node));
       return id;
