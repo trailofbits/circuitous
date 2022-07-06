@@ -416,6 +416,9 @@ namespace circ::eqsat {
   using Scheduler = BasicRulesScheduler< Graph, PatternCircuitBuilder< Graph > >;
   using DefaultRunner = EqSatRunner< CircuitEGraph, Scheduler >;
 
+  using cost_t = std::uint64_t;
+  using maybe_cost_t = std::optional< cost_t >;
+
   // CostGraph precomputes cost for all equality nodes
   // in the underlying egraph according to a given cost function
   // CostFunction :: EnodePtr -> std::uintptr_t
@@ -428,13 +431,17 @@ namespace circ::eqsat {
   {
     using ENode = typename Graph::Node;
     using EClass = typename Graph::EClass;
-    using CostMap = std::map<const ENode *, std::int64_t>;
+
+    using CostMap = std::map< const ENode *, cost_t >;
 
     CostGraph(const Graph &graph, CostFunction eval)
       : graph(graph), eval(eval)
     {
-      for (const auto &[node, id] : graph.nodes())
-        costs.try_emplace(node, eval_cost(node));
+      for (const auto &[node, id] : graph.nodes()) {
+        if (auto cost = eval_cost(node)) {
+          costs.try_emplace(node, cost.value());
+        }
+      }
     }
 
     // OptimalGraphView serves as a view on equality graph where for each equality
@@ -450,7 +457,7 @@ namespace circ::eqsat {
         : graph(costgraph.graph)
       {
         for (const auto &[id, eclass] : graph.classes()) {
-          optimal.emplace( id, costgraph.minimal(eclass) );
+          optimal.emplace( id, costgraph.minimal(eclass)  );
         }
       }
 
@@ -496,28 +503,54 @@ namespace circ::eqsat {
 
     const ENode* minimal(const EClass &eclass) const
     {
-      const auto &nodes = eclass.nodes;
-      auto cmp = [&] (const auto &a, const auto &b) {
-        return costs.at(a) < costs.at(b);
-      };
-      return *std::min_element(nodes.begin(), nodes.end(), cmp);
+      maybe_cost_t minimal = std::nullopt;
+      const ENode *result = nullptr;
+      for (auto n : eclass.nodes) {
+        if (costs.count(n)) {
+          auto cost = costs.at(n);
+          if (!minimal || (cost < minimal)) {
+            minimal = cost;
+            result = n;
+          }
+        }
+      }
+      return result;
     }
 
   private:
-   std::int64_t eval_cost(const ENode *node) {
-     if (auto cost = costs.find(node); cost != costs.end())
-       return cost->second;
+    maybe_cost_t eval_cost(const ENode *node) {
+      if (auto cost = costs.find(node); cost != costs.end()) {
+        return cost->second;
+      }
 
-     auto fold = [&](unsigned cost, auto id) -> std::int64_t {
-       const auto &eclass = graph.eclass(id);
-       for (const auto *node : eclass.nodes)
-         costs.try_emplace(node, eval_cost(node));
+      std::set< const ENode * > seen;
+      seen.insert(node);
 
-       return cost + costs[minimal(eclass)];
-     };
+      auto fold = [&](cost_t cost, auto id) -> maybe_cost_t {
+        const auto &eclass = graph.eclass(id);
+        for (const auto *node : eclass.nodes) {
+          if (seen.count(node)) {
+            return std::nullopt;
+          }
+          seen.insert(node);
+          if (auto res = eval_cost(node)) {
+            costs.try_emplace(node, res.value());
+          }
+        }
 
-     const auto &ch = node->children();
-     return std::accumulate(ch.begin(), ch.end(), eval(node), fold);
+        return cost + costs[minimal(eclass)];
+      };
+
+      cost_t result = eval(node);
+      for (auto ch : node->children()) {
+        if (auto res = fold(result, ch)) {
+          result += res.value();
+        } else {
+          return std::nullopt;
+        }
+      }
+
+      return result;
    }
 
     const Graph &graph;
@@ -770,7 +803,7 @@ namespace circ::eqsat {
   CircuitPtr lower(auto &runner, const auto &circ) {
     lower_advices(runner.egraph(), runner.builder());
 
-    auto eval = [](const auto &node) -> std::int64_t {
+    auto eval = [](const auto &node) -> cost_t {
       // TODO(Heno) implement cost function
       if (name(node) == "Mul") {
         return 1000;  // * bitwidth(node).value();
