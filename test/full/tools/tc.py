@@ -429,6 +429,30 @@ def populate_state(gen):
     return out
 
 
+class Trace:
+    __slots__ = ('_states')
+
+    def __init__(self, states = []):
+        self._states = []
+        self._states += states
+
+    def __getitem__(self, idx):        return self._states[idx]
+    def __setitem__(self, idx, value): self._states[idx] = value
+    def __len__(self):                 return len(self._states)
+
+# `State -> State`
+class SingleStepTrace(Trace):
+    def __init__(self):
+        return super().__init__()
+
+    def initial_state(self):
+        assert len(self._states) == 2
+        return self[0]
+
+    def end_state(self):
+        assert len(self._states) == 2
+        return self[1]
+
 class TestCase:
     __slots__ = ('name', 'bytes', 'input', 'expected', '_result_generator',
                  'run_mode', 'seed')
