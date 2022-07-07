@@ -184,7 +184,7 @@ class MemInput:
 
 class StateBase:
     __slots__ = ('registers', '_ebit', 'timestamp', 'undefined', 'mem_hints',
-                 'memory', '_seed')
+                 'memory', '_seed', 'instruction_bits')
 
     def __init__(self):
         self.registers = {}
@@ -192,6 +192,8 @@ class StateBase:
         self.timestamp = None
         self.undefined = set()
         self.mem_hints = []
+
+        self.instruction_bits = None
 
         self.memory = None
         self._seed = 42
