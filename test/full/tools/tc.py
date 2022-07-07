@@ -476,7 +476,7 @@ class Test:
     __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
                  '_tags', '_names', '_lift_opts', '_inst_arr',
                  'default_istate', 'e_mutators', '_mode', 'rand_gen',
-                 '_arch', '_circuit')
+                 '_arch')
 
     def __init__(self, name_=""):
         # TODO(lukas): Split this into
@@ -506,18 +506,9 @@ class Test:
         self._arch = "amd64"
         self.rand_gen = None
 
-        self._circuit = None
-
     def arch(self, trg):
         self._arch = trg
         return self
-
-    def set_circut(self, what):
-        self._circuit = what
-        return self
-
-    def get_circuit(self, what):
-        return self._circuit
 
     def mode(self, what) :
         self._mode = what
