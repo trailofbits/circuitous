@@ -29,5 +29,4 @@ class VerifyTest(Test):
             case.expected = case.expected.mutate(self.e_mutators[idx])
             case.expected.result = result
             case.run_mode = '--verify'
-            case.simulated.disarm()
         return self
