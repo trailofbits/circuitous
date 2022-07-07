@@ -439,7 +439,7 @@ class TestCase:
         self.input = input_
         self.expected = expected_
         self._result_generator = None
-        self.run_mode = '--derive'
+        self.run_mode = '--verify'
         self.seed = 42
 
 # Base class to define tests with -- unfortunately it already does a lot of custom options
