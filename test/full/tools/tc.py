@@ -430,7 +430,7 @@ def populate_state(gen):
 
 
 class TestCase:
-    __slots__ = ('name', 'bytes', 'input', 'expected', 'simulated', '_result_generator',
+    __slots__ = ('name', 'bytes', 'input', 'expected', '_result_generator',
                  'run_mode', 'seed')
 
     def __init__(self, name_=None, bytes_=None, input_=None, expected_=None):
@@ -438,7 +438,6 @@ class TestCase:
         self.bytes = bytes_
         self.input = input_
         self.expected = expected_
-        self.simulated = State()
         self._result_generator = None
         self.run_mode = '--derive'
         self.seed = 42
