@@ -20,7 +20,7 @@ class VerifyTest(Test):
             result = True if case.expected.result is None else case.expected.result
             if not self.manual_gen:
                 try:
-                    case.expected = MicroxGen().get(case.input)
+                    case.expected = MicroxGen().get(case.input.bytes, case.input, case.input.memory)
                 except Exception as e:
                     print("Microx fail in: " + self.name + " case " + case.name)
                     print("Bytes: " + case.input.bytes)
