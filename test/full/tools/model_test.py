@@ -20,7 +20,7 @@ class ModelTest(Test):
         for idx, case in enumerate(self.cases):
             result = True if case.expected.result is None else case.expected.result
             try:
-                case.expected = MicroxGen().get(case.input).mutate(self.e_mutators[idx])
+                case.expected = MicroxGen().get(case.input.bytes, case.input, case.input.memory).mutate(self.e_mutators[idx])
             except Exception as e:
                 print("Microx fail in: " + self.name + " case " + case.name)
                 print("Bytes: " + case.input.bytes)
@@ -110,28 +110,31 @@ class MicroxGen:
         if len(postfix) != 0:
             mem_input_to_map((rip + len(prefix) , postfix, (True, True, True)), o, m)
 
+    def error_transition(self, state):
+        out = copy.deepcopy(state)
+        out._ebit = True
+        out.timestamp += 1
+        return out
 
-    def get(self, input):
+    def get(self, insts, state, memory):
         # TODO(lukas): We need to handle RSP once we support memory ops.
         # assert "RSP" not in input.registers
 
-        if input._ebit:
-            out = copy.deepcopy(input)
-            out.timestamp += 1
-            return out
+        if state._ebit:
+            return self.error_transition(state)
 
-        rip = input.registers.get("RIP", 0x87000)
-        rsp = input.registers.get("RSP")
+        rip = state.registers.get("RIP", 0x87000)
+        rsp = state.registers.get("RSP")
 
         o = microx.Operations()
         m = PermissiveMemory(o, 64, 42)
 
         size = 0x1000
-        self.store_code(o, m, input, size)
+        self.store_code(o, m, state, size)
 
         #TODO(lukas): Stack & other memory
-        if input.memory is not None:
-            for region in input.memory.entries:
+        if memory is not None:
+            for region in memory.entries:
                 addr, bytes, (r, w, e) = region
                 assert len(bytes) <= size
                 aligned_addr = (addr >> 12) << 12
@@ -141,7 +144,7 @@ class MicroxGen:
                 amm.store_bytes(addr, bytes)
 
         t = microx.EmptyThread(o)
-        for reg, val in input.registers.items():
+        for reg, val in state.registers.items():
             if reg in ["DF"]:
                 continue
             if val is not None:
@@ -155,11 +158,9 @@ class MicroxGen:
         try:
             e.execute(t, 1)
         except FloatingPointError as e:
-            out = copy.deepcopy(input)
-            out.ebit(True)
-            out.timestamp += 1
-            return out
-        out.timestamp = input.timestamp + 1
+            return self.error_transition(state)
+
+        out.timestamp = state.timestamp + 1
 
         for mem_hint in e._mem_hints:
             out.mem_hint(mem_hint)
@@ -168,8 +169,8 @@ class MicroxGen:
             if reg not in ["DF"]:
                 out.set_reg(reg, t.read_register(reg, t.REG_HINT_NONE))
             else:
-                out.set_reg(reg, input.registers[reg])
+                out.set_reg(reg, state.registers[reg])
 
         out.ebit(False)
-        input.mig(m.additional_inputs)
+        state.mig(m.additional_inputs)
         return out
