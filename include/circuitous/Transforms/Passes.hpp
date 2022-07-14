@@ -62,6 +62,41 @@ namespace circ
     static Pass get() { return std::make_shared< MergeAdvicesPass >(); }
   };
 
+  /*
+   * Semantics from remill calculate the overflow flag directly from the values instead of
+   * re-using existing flags. This leads to unnecessary computation as we have access
+   * to both input/output carry flags
+   *
+   * This pass tries to match the generated remill semantics tree completely and patches it out
+   * It does make implicit assumptions on the order of operands
+   */
+  bool has_remill_overflow_flag_semantics(RegConstraint* op);
+
+  struct RemillOFPatch : PassBase
+  {
+    CircuitPtr run(CircuitPtr &&circuit) override
+    {
+      auto output_of = circuit->fetch_reg<OutputRegister, false>("OF");
+      auto input_cf = circuit->fetch_reg<InputRegister, false>("CF");
+      auto output_cf = circuit->fetch_reg<OutputRegister, false>("CF");
+      for(RegConstraint* regC : circuit->attr<RegConstraint>()){
+        if(regC->operands.size() == 2 && regC->operands[1] == output_of){
+          if(has_remill_overflow_flag_semantics(regC)){
+            auto xor_node = circuit.operator->()->create<Xor>(1u);
+            xor_node->add_use(input_cf);
+            xor_node->add_use(output_cf);
+            regC->replace_use(xor_node,0);
+          }
+        }
+      }
+
+      return std::move(circuit);
+    }
+    
+    static Pass get() { return std::make_shared< RemillOFPatch >(); }
+  };
+
+
 
   struct DummyPass : PassBase
   {
@@ -93,6 +128,7 @@ namespace circ
       { "merge-advices",   MergeAdvicesPass::get() },
       { "dummy-pass",      DummyPass::get() },
       { "trivial-concat-removal", TrivialConcatRemovalPass::get() },
+      { "overflow-flag-fix", RemillOFPatch::get() }
     };
 
     NamedPass &add_pass(const std::string &name) {

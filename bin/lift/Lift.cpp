@@ -79,6 +79,7 @@ namespace
           }
         }
 
+        opt.add_pass("overflow-flag-fix");
         auto result = opt.run(std::move(circuit));
         circ::log_info() << "Optimizations done.";
         circ::log_info() << opt.report();
