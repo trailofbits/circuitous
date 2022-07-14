@@ -13,6 +13,7 @@ add_circuitous_library( transforms
   SOURCES
     EqualitySaturation.cpp
     MergeAdvices.cpp
+    OverflowFlagFix.cpp
   LINK_LIBS
     circuitous::eqsat
   HEADERS
