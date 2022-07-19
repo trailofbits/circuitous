@@ -45,7 +45,7 @@ namespace circ {
       if constexpr (!rewrite) {
         check(!has_meta(key));
       }
-      meta.emplace(std::move(key), std::move(val));
+      meta[std::move(key)] = std::move(val);
     }
 
     std::string dump_meta() const {
