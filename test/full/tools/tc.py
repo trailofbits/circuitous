@@ -459,7 +459,7 @@ class SingleStepTrace(Trace):
 
 class TestCase:
     __slots__ = ('name', 'bytes', 'input', 'expected', '_result_generator',
-                 'run_mode', 'seed')
+                 'seed')
 
     def __init__(self, name_=None, bytes_=None, input_=None, expected_=None):
         self.name = name_
@@ -583,7 +583,6 @@ class Test:
     #              Test if `lift_bytes` actually work.
     def case(self, name_=None, **kwargs):
         case = TestCase()
-        case.run_mode = self._mode if self._mode is not None else case.run_mode
         self._names += 1
         assert name_ not in [x.name for x in self.cases]
         case.name = name_
