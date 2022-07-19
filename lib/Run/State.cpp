@@ -41,8 +41,9 @@ namespace circ::run
         check( val.getBitWidth() % 8 == 0 )
             << "Cannot store val that has unalinged bw such as " << val.getBitWidth();
 
-        for (auto i = 0u; i < val.getBitWidth(); i += 8)
-            memory[addr + i] = val.extractBits(8, i);
+
+        for (auto i = 0u; i < val.getBitWidth() / 8; ++i)
+            memory[addr + i] = val.extractBits(8, i * 8);
     }
 
     auto Memory::deconstruct(const llvm::APInt &value) const -> Parsed
