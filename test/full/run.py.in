@@ -181,7 +181,7 @@ class Interpreter(SimulateCWDMixin):
 
     def run_case(self, case, ir, parent):
         args = [self.binary,
-                case.run_mode,
+                "--verify",
                 "--log-dir", self.test_dir,
                 "--traces", self.create_trace_json(case, case.name, self.test_dir),
                 "--export-derived", self.locate(case.name + ".result.json"),
