@@ -532,7 +532,10 @@ def main():
     if not tests:
         log_error("No tests selected")
         return
-    log_info("Filtered " + str(len(tests)) + " tests.")
+    total = 0
+    for x in tests:
+        total += len(x.cases)
+    log_info("Filtered " + str(len(tests)) + " tests with " + str(total) + " cases")
     not_passed = None
     if args.persist:
         log_info("Creating persistent directory")
