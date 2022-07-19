@@ -20,8 +20,9 @@ namespace circ
         {
             auto notify_operands = [](auto &&x)
             {
-                for (auto op : x->operands)
-                    op->remove_user(x.get());
+                // assumes remove_use removes the operand from x
+                while (!x->operands.empty())
+                    x->operands[ 0 ]->remove_use( x.get());
             };
             return data.remove_unused(notify_operands);
         }

@@ -112,10 +112,11 @@ namespace circ
     {
         UseList< T > users;
 
-        void remove_user(T *user)
+        std::size_t remove_user(T *user)
         {
             auto num = std::erase(users, user);
-            check(num == 1) << "Trying to remove user that is not part of the list.";
+            check(num > 0) << "Trying to remove user that is not part of the list.";
+            return num;
         }
     };
 
@@ -125,10 +126,11 @@ namespace circ
     {
         UseList< T > operands;
 
-        void remove_operand(T *op)
+        std::size_t remove_operand(T *op)
         {
             auto num = std::erase(operands, op);
-            check(num == 1) << "Trying to remove operand that is not part of the list.";
+            check(num > 0) << "Trying to remove operand that is not part of the list.";
+            return num;
         }
     };
 
@@ -148,30 +150,48 @@ namespace circ
 
         void remove_use(T *parent)
         {
-            parent->remove_operand(Raw());
-            this->remove_user(parent);
+            std::size_t operands_removed = parent->remove_operand(Raw());
+            std::size_t users_removed = this->remove_user(parent);
+            check(operands_removed == users_removed);
         }
 
+        /*
+         * we have node x(A,B) and want to change it into x(C,B)
+         * To do so we let A know x is not their parent any more
+         * we can remove x as a parent if it uses A only once
+         * but if x(A,A) then we need to keep x as parent for the second A
+         *
+         * As AFAICT A does not know which User List entry corresponds to which entry in Operand list
+         * We can't know which to keep or which to replace.
+         */
         void replace_use(T *other, std::size_t at)
         {
             check(this->operands.size() > at);
-            this->operands[at]->remove_user(Raw());
+
+            auto removed = this->operands[at]->remove_user(Raw());
+            check(removed == 1) << "Parent has multiple references to children, not supported";
 
             this->operands[at] = other;
             other->users.push_back(Raw());
         }
 
-
         void replace_all_uses_with(T *other)
         {
             check(other != this) << "Trying to replace all uses of X with X, probably error.";
 
-            auto fetch = [&](const auto &where)
+            // this is used to retrieve which indexes in the user of the current node
+            // points to this node, if we have N(A,A) then N points to A twice
+            // And hence should return all indices
+            auto fetch = [&](const auto &where) -> std::vector<std::size_t>
             {
+                std::vector<std::size_t> retval;
                 for (std::size_t i = 0; i < where.size(); ++i)
                     if (where[i] == this)
-                        return i;
-                unreachable() << "User and uses are out of sync.";
+                        retval.emplace_back(i);
+
+                check(!retval.empty()) << "User and uses are out of sync.";
+
+                return retval;
             };
 
             for (auto user : this->users)
@@ -179,10 +199,10 @@ namespace circ
                 // NOTE(lukas): I actually do not expect these vectors to grow much.
                 //              And given the cache friendliness of vector this should
                 //              not be a bottle-neck.
-                auto idx = fetch(user->operands);
-                user->operands[idx] = other;
-
-                other->users.push_back(user);
+                for(auto idx : fetch(user->operands)){
+                    user->operands[idx] = other;
+                    other->users.push_back(user);
+                }
             }
             this->users.clear();
         }
