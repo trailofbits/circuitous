@@ -7,6 +7,8 @@ import random
 
 from itertools import permutations
 
+from tools.circuit import RawCircuit, CookedCircuit
+
 # Add methods same as register names to the State to make configuration easier
 _regs = [ "RIP", "RSP", "RBP",
           "RAX", "RBX", "RCX", "RDX", "RSI", "RDI",
@@ -670,3 +672,133 @@ class Test:
             for reg in case.expected.undefined:
                 assert reg in case.input.registers
                 case.expected.registers[reg] = case.input.registers[reg]
+
+
+class TraceTest():
+    class TestCase:
+        __slots__ = ('_trace', '_result',
+                     '_steps', '_maker', '_mutators',
+                     '_tags',
+                     '_initial_state', 'bytes',
+                     'name')
+
+        # traces, R
+        def __init__(self, name_, **kwargs):
+            self.name = name_
+            self._result = kwargs.get('R', True)
+
+            self._initial_state = kwargs.get('state', kwargs.get('inherited_state', None))
+
+            self._trace = None
+            self._maker = None
+            self._steps = []
+            self._mutators = {}
+
+            self.bytes = ''
+
+        def generate(self, **kwargs):
+            self._initial_state.set_reg('RIP', 0x80045)
+            mem, state = self._initial_state.memory, self._initial_state
+            insts = self.fmt_insts()
+            states = self._maker.execute(insts, state, mem)
+
+            print(insts)
+            for x in states:
+                print(x.registers['RIP'])
+                x.bytes = insts.get(x.registers['RIP'], '00')
+
+            for idx, mutator in self._mutators.items():
+                states[idx].mutate(mutator)
+
+            self._trace = Trace(states)
+
+        def as_json(self):
+            return self._trace.as_json()
+
+        def fmt_insts(self):
+            out = {}
+            init = self._initial_state.registers["RIP"]
+
+            for inst, addr in self._steps:
+                if addr is not None:
+                    init = addr
+                compiled = inst.compile()[0]
+                out[init] = compiled
+
+                assert (len(compiled) % 2 == 0)
+                init += len(compiled) // 2
+            return out
+
+        def add_maker(self, maker_):
+            self._maker = maker_
+            return self
+
+        def add_mutators(self, mutators):
+            for idx, mutator in mutators:
+                self._mutators[idx] = mutator
+            return self
+
+        def add_steps(self, insts):
+            for x in insts:
+                if isinstance(x, tuple):
+                    self._steps.append(x)
+                else:
+                    self._steps.append((x, None))
+            return self
+
+
+    __slots__ = ('cases', 'name', '_name_counter',
+                 '_initial_state', '_name_counter', '_tags',
+                 # Remove
+                 'metafiles', 'lift_opts', 'arch', 'circuit'
+                 )
+
+    def __init__(self, name_, **kwargs):
+        self.cases = []
+        self.name = name_
+        self._name_counter = 0
+
+        self._tags = set()
+
+        self._initial_state = kwargs.get('state', None)
+        self.metafiles = {}
+        self.lift_opts = []
+        self.arch = 'amd64'
+
+        self.circuit = None
+
+    def __getitem__(self, idx): return self.cases[idx]
+    def append(self, state):
+        self.cases.append(state)
+        return self
+
+    def __len__(self): return len(self.cases)
+
+    def make_case(self, *args, **kwargs):
+        self._name_counter += 1
+        kwargs['inherited_state'] = self._initial_state
+        self.append(self.TestCase(str(self._name_counter), **kwargs))
+        return self.cases[-1]
+
+    def extra_lift_opts(self):
+        return self.lift_opts + ['--arch', self.arch]
+
+
+    def resolve_undefs(self):
+        pass
+
+    def cooked_circuit(self, path):
+        raise Exception("Not implemented")
+
+    def raw_circuit(self, input_bytes):
+        self.circuit = RawCircuit(input_bytes)
+        return self
+
+
+    def generate(self, **kwargs):
+        for test_case in self.cases:
+            test_case.generate(**kwargs)
+
+    def tags(self, tags_):
+        self._tags.update(tags_)
+        return self
