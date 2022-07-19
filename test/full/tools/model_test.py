@@ -94,24 +94,28 @@ class MicroxGen:
     def __init__(self):
         pass
 
-    def convert_input_bytes(self, input):
-        bytes = []
-        for i in range(0, len(input.bytes), 2):
-            bytes.append(int(input.bytes[i] + input.bytes[i + 1], 16))
-        return bytes
+    def convert_input_bytes(self, inst):
+        out = []
+        for i in range(0, len(inst), 2):
+            out.append(int(inst[i] + inst[i + 1], 16))
+        return out
 
-    def store_code(self, o, m, input, size):
-        rip = input.registers.get("RIP", 0x1000)
+    def store_code(self, o, m, insts, size):
+        for addr, inst in insts.items():
+            self.store_inst(o, m, addr, inst, size)
 
-        bytes = self.convert_input_bytes(input)
 
-        breakpoint = size - (rip % size)
+    def store_inst(self, o, m, addr, inst, size):
+        bytes = self.convert_input_bytes(inst)
+
+        breakpoint = size - (addr % size)
         prefix = bytes[0 : breakpoint]
         postfix = bytes[breakpoint:]
 
-        mem_input_to_map((rip, prefix, (True, True, True)), o, m)
+        mem_input_to_map((addr, prefix, (True, True, True)), o, m)
         if len(postfix) != 0:
-            mem_input_to_map((rip + len(prefix) , postfix, (True, True, True)), o, m)
+            mem_input_to_map((addr + len(prefix) , postfix, (True, True, True)), o, m)
+
 
     def error_transition(self, state):
         out = copy.deepcopy(state)
@@ -120,20 +124,38 @@ class MicroxGen:
         return out
 
     def get(self, insts, state, memory):
+        rip = state.registers.get('RIP', None)
+        assert(rip is not None)
+        return self.execute({ rip : insts }, state, memory)
+
+    def process_step(self, old, thread, process):
+        new = State()
+
+        new.timestamp = old.timestamp + 1
+
+        for mem_hint in process._mem_hints:
+            mem_hint.ts = old.timestamp
+            old.mem_hint(mem_hint)
+
+        for reg in _regs + _aflags:
+            if reg not in ["DF"]:
+                new.set_reg(reg, thread.read_register(reg, thread.REG_HINT_NONE))
+            else:
+                new.set_reg(reg, old.registers[reg])
+
+        new.ebit(False)
+        return new
+
+
+    def execute(self, insts, state, memory):
         # TODO(lukas): We need to handle RSP once we support memory ops.
-        # assert "RSP" not in input.registers
-
-        if state._ebit:
-            return self.error_transition(state)
-
-        rip = state.registers.get("RIP", 0x87000)
-        rsp = state.registers.get("RSP")
+        # assert "RSP" not in state.registers
 
         o = microx.Operations()
         m = PermissiveMemory(o, 64, 42)
 
         size = 0x1000
-        self.store_code(o, m, state, size)
+        self.store_code(o, m, insts, size)
 
         #TODO(lukas): Stack & other memory
         if memory is not None:
@@ -147,33 +169,31 @@ class MicroxGen:
                 amm.store_bytes(addr, bytes)
 
         t = microx.EmptyThread(o)
-        for reg, val in state.registers.items():
-            if reg in ["DF"]:
-                continue
-            if val is not None:
-                t.write_register(reg, val)
-        t.write_register("RIP", rip)
+
 
         e = Process_(o, m)
 
-        out = State()
+        states = [state]
 
-        try:
-            e.execute(t, 1)
-        except FloatingPointError as e:
-            return self.error_transition(state)
+        for _ in range(len(insts)):
+            e._mem_hints = []
+            for reg, val in states[-1].registers.items():
+                # Bugs in microx
+                if reg in ["DF"]:
+                    continue
+                if val is not None:
+                    t.write_register(reg, val)
+            if states[-1]._ebit:
+                states.append(self.error_transition(states[-1]))
+                continue
+            try:
+                e.execute(t, 1)
+                states.append(self.process_step(states[-1], t, e))
+                state.mig(m.additional_inputs)
+            except FloatingPointError as e:
+                states.append(self.error_transition(states[-1]))
 
-        out.timestamp = state.timestamp + 1
+        return states
 
-        for mem_hint in e._mem_hints:
-            out.mem_hint(mem_hint)
-
-        for reg in _regs + _aflags:
-            if reg not in ["DF"]:
-                out.set_reg(reg, t.read_register(reg, t.REG_HINT_NONE))
-            else:
-                out.set_reg(reg, state.registers[reg])
-
-        out.ebit(False)
-        state.mig(m.additional_inputs)
-        return out
+def microx_gen():
+    return MicroxGen()
