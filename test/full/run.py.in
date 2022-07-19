@@ -401,10 +401,14 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
             except queue.Empty:
                 return
 
+
             test_dir = tempfile.mkdtemp(dir=os.getcwd(),
                                         prefix=x.name.replace(' ', '.').replace('/', '.') + '_')
             test_dir = os.path.abspath(test_dir)
-            #os.chdir(test_dir)
+            if isinstance(x, TraceTest):
+                results.put(run_multitrace(x, test_dir, die=interpreter_death))
+                continue
+
             try:
                 Lifter(test_dir).lift_test(x, extra_args)
                 r = Comparator(test_dir).compare(x, Interpreter(test_dir).run(x))
