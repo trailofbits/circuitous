@@ -477,15 +477,24 @@ class TestCase:
         self.input = input_
         self.expected = expected_
         self._result_generator = None
-        self.run_mode = '--verify'
         self.seed = 42
+
+    def as_json(self):
+        obj = {}
+        obj["id"] = 1
+        obj["entries"] = [ self.input.get(), self.expected.get() ]
+
+        if self.input.memory is not None:
+            obj["initial_memory"] = self.input.memory.get()
+        return obj
+
 
 # Base class to define tests with -- unfortunately it already does a lot of custom options
 # feel free to come with better decomposition
 # Core method is the `case` method which adds the tests to be run. It has a lot of options,
 # some of which can be "inherited" from the `Test` itself (to avoid code repetition).
 class Test:
-    __slots__ = ('name', 'cases', 'dir', 'metafiles', '_bytes',
+    __slots__ = ('name', 'cases', 'metafiles', '_bytes',
                  '_tags', '_names', '_lift_opts', '_inst_arr',
                  'default_istate', 'e_mutators', '_mode', 'rand_gen',
                  '_arch')
@@ -496,7 +505,6 @@ class Test:
         #                * helpers
         self.name = name_
         self.cases = []
-        self.dir = None
         self.metafiles = {}
 
         self._tags = set()
@@ -517,6 +525,8 @@ class Test:
         self._mode = None
         self._arch = "amd64"
         self.rand_gen = None
+
+
 
     def arch(self, trg):
         self._arch = trg
