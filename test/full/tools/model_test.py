@@ -32,9 +32,12 @@ def mem_input_to_map(region, o, m):
     addr, bytes, (r, w, e) = region
     assert len(bytes) <= 0x1000
     aligned_addr = (addr >> 12) << 12
-    amm = microx.ArrayMemoryMap(o, aligned_addr, aligned_addr + 0x1000,
-                                can_read=r, can_write=w, can_execute=e)
-    m.add_map(amm)
+    if addr >> 12 not in m._memory_maps:
+        amm = microx.ArrayMemoryMap(o, aligned_addr, aligned_addr + 0x1000,
+                                    can_read=r, can_write=w, can_execute=e)
+        m.add_map(amm)
+    else:
+        amm = m._memory_maps[addr >> 12]
     amm.store_bytes(addr, bytes)
 
 class PermissiveMemory(microx.Memory):
