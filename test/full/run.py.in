@@ -10,12 +10,15 @@ import queue
 import sys
 import re
 
-from tools.tc import State, Test
+from tools.tc import State, Test, TraceTest
 import tools.tc as TC
 
 import defs.fetch_defs
 
 import tools.model_test as mp
+
+from tools.execute import run_multitrace
+from tools.result import ResultValue, ResultAccumulator
 
 circuitous_prefix = "@PROJECT_BINARY_DIR@/bin"
 
@@ -169,11 +172,7 @@ class Interpreter(SimulateCWDMixin):
         fname = prefix + ".trace.json"
         path = self.locate(fname)
 
-        obj = {}
-        obj["id"] = 1
-        obj["entries"] = [ case.input.get(), case.expected.get() ]
-        if case.input.memory is not None:
-            obj["initial_memory"] = case.input.memory.get()
+        obj = case.as_json()
         with open(path, 'w') as out:
             json.dump(obj, out, indent=4)
         return path
@@ -206,7 +205,6 @@ class Interpreter(SimulateCWDMixin):
 
         parent.metafiles[case.name + ".result.json"] = self.locate(case.name + ".result.json")
 
-        #self.update_state(case, self.locate(case.name + ".result.json"))
         return self.parse_result(self.locate(case.name + ".result.json"))
 
     def get_mem_hints(self, mem_hints):
@@ -258,8 +256,10 @@ class Comparator(SimulateCWDMixin):
     def compare_case(self, case, result, mem_hints):
         assert(result in ["accept", "reject"])
 
-        message = "Expected: " + str(case.expected.result) + "\n"
-        message += "Got: " + result + "\n"
+        if case.expected.result:
+            message = "Expected: " + "accept" + " instead got: " + result + '\n'
+        else:
+            message = "Expected: " + "reject" + " instead got: " + result + '\n'
 
         if not case.expected.result:
             return result == "reject", message
@@ -294,12 +294,16 @@ class Comparator(SimulateCWDMixin):
         for case in tc.cases:
             r, m = real[case]
             if r == "error":
-                out[case.name] = TestResult(TestResult.error, "")
+                out[case] = ResultValue.make_error('Result: Error', None)
                 continue
             accept, msg = self.compare_case(case, r, m)
-            out[case.name] = TestResult(TestResult.ok if accept else TestResult.fail, msg)
-            if not out[case.name]:
-                msg = out[case.name].msg
+            if accept:
+                out[case] = ResultValue.make_pass()
+            else:
+                out[case] = ResultValue.make_fail(msg, None)
+
+            if not out[case]:
+                msg = out[case].msg
                 msg += "\n\tLift bytes: " + tc._bytes
                 msg += "\n\tRun bytes: " + case.input.bytes
                 # TODO(lukas): Not sure how to fix cleanly (threads broke it)
@@ -309,7 +313,7 @@ class Comparator(SimulateCWDMixin):
                     msg += "\n\t" + tc.metafiles[case.name + ".circuit"]
                     msg += "\n\t" + tc.metafiles[case.name + ".result.json"]
                     msg += "\n\t" + tc.metafiles[case.name + ".result.dot"]
-                out[case.name].msg = msg
+                out[case].msg = msg
         return out
 
 class Results:
@@ -404,9 +408,9 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
             try:
                 Lifter(test_dir).lift_test(x, extra_args)
                 r = Comparator(test_dir).compare(x, Interpreter(test_dir).run(x))
-                results.put((x.name, r))
+                results.put((x, None, r))
             except PipelineFail as e:
-                results.put((x.name, {"pipeline" : TestResult(TestResult.error, "", e)}))
+                results.put((x, ResultValue.make_error('Component runtime err', str(e), None)))
                 if fragile and jobs == 1:
                     raise e
 
@@ -418,16 +422,16 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
     for t in threads:
         t.join()
 
-
-    rs = Results(fragile)
+    rs = ResultAccumulator()
     while not results.empty():
         try:
-            name, result = results.get()
+            r = results.get()
         except queue.Empty:
             break
-        rs.process(result, name)
-    out = rs.report()
-    return out["fail"] + out["error"]
+        rs.add(r)
+    print(rs.results(1))
+    return rs.succeeded()
+
 
 
 # TODO(lukas): Mocking this one for now
