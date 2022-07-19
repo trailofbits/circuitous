@@ -57,6 +57,8 @@ import defs.pushf
 import defs.stringops
 #import defs.x86
 
+import defs.multistep.simple
+
 def fetch(tests):
     out = set()
     out.update(_fetch_defs(defs.mov))
@@ -121,6 +123,8 @@ def fetch(tests):
 
     out.update(_fetch_defs(defs.stringops))
     #out.update(_fetch_defs(defs.x86))
+
+    out.update(_fetch_defs(defs.multistep.simple))
 
     return out
 
