@@ -62,40 +62,66 @@ namespace circ
     static Pass get() { return std::make_shared< MergeAdvicesPass >(); }
   };
 
-  /*
-   * Semantics from remill calculate the overflow flag directly from the values instead of
-   * re-using existing flags. This leads to unnecessary computation as we have access
-   * to both input/output carry flags
-   *
-   * This pass tries to match the generated remill semantics tree completely and patches it out
-   * It does make implicit assumptions on the order of operands
-   */
-  bool has_remill_overflow_flag_semantics(RegConstraint* op);
+    /*
+     * Semantics from remill calculate the overflow flag directly from the values instead of
+     * re-using existing flags. This leads to unnecessary computation as we have access
+     * to both input/output carry flags
+     *
+     * This pass tries to match the generated remill semantics tree completely and patches it out
+     * It does make implicit assumptions on the order of operands
+     */
+    bool has_remill_overflow_flag_semantics(RegConstraint* op);
 
-  struct RemillOFPatch : PassBase
-  {
-    CircuitPtr run(CircuitPtr &&circuit) override
+    struct RemillOFPatch : PassBase
     {
-      auto output_of = circuit->fetch_reg<OutputRegister, false>("OF");
-      auto input_cf = circuit->fetch_reg<InputRegister, false>("CF");
-      auto output_cf = circuit->fetch_reg<OutputRegister, false>("CF");
-      for(RegConstraint* regC : circuit->attr<RegConstraint>()){
-        if(regC->operands.size() == 2 && regC->operands[1] == output_of){
-          if(has_remill_overflow_flag_semantics(regC)){
-            auto xor_node = circuit.operator->()->create<Xor>(1u);
-            xor_node->add_use(input_cf);
-            xor_node->add_use(output_cf);
-            regC->replace_use(xor_node,0);
-          }
+        CircuitPtr run(CircuitPtr &&circuit) override
+        {
+            auto output_of = circuit->fetch_reg<OutputRegister>("OF");
+            auto input_cf = circuit->fetch_reg<InputRegister>("CF");
+            auto output_cf = circuit->fetch_reg<OutputRegister>("CF");
+            if(output_of == nullptr || input_cf == nullptr || output_cf == nullptr)
+                return std::move(circuit);
+
+            for(RegConstraint* regC : circuit->attr<RegConstraint>()){
+                if(regC->operands.size() == 2 && regC->operands[1] == output_of){
+                    if(has_remill_overflow_flag_semantics(regC)){
+                        auto xor_node = circuit.operator->()->create<Xor>(1u);
+                        xor_node->add_use(input_cf);
+                        xor_node->add_use(output_cf);
+                        regC->replace_use(xor_node,0);
+                    }
+                }
+            }
+
+            return std::move(circuit);
         }
-      }
 
-      return std::move(circuit);
-    }
-    
-    static Pass get() { return std::make_shared< RemillOFPatch >(); }
-  };
+        static Pass get() { return std::make_shared< RemillOFPatch >(); }
+    };
 
+
+    struct MergeAdviceConstraints : PassBase
+    {
+        CircuitPtr run(CircuitPtr &&circuit) override {
+            for(auto* ac : circuit->attr<AdviceConstraint>()){
+                if(ac->operands.size() == 2 && isa<Advice>(ac->operands[0]) && isa<Advice>(ac->operands[1]) ){
+                    auto advice1 = ac->operands[0];
+                    auto advice2 = ac->operands[1];
+
+                    advice2->remove_use(ac);
+                    advice1->remove_use(ac);
+                    advice2->replace_all_uses_with(advice1);
+
+                    while(!ac->users.empty()) {
+                        ac->remove_use( ac->users[ 0 ] );
+                    }
+                }
+            }
+            return std::move(circuit);
+        }
+
+        static Pass get() { return std::make_shared< MergeAdviceConstraints >(); }
+    };
 
 
   struct DummyPass : PassBase
@@ -119,17 +145,19 @@ namespace circ
       static Pass get() { return std::make_shared< TrivialConcatRemovalPass >(); }
   };
 
-  struct PassesBase
-  {
-    // list of recognized passes
-    static inline std::map< std::string, Pass > known_passes
-    {
-      { "eqsat",           EqualitySaturationPass::get() },
-      { "merge-advices",   MergeAdvicesPass::get() },
-      { "dummy-pass",      DummyPass::get() },
-      { "trivial-concat-removal", TrivialConcatRemovalPass::get() },
-      { "overflow-flag-fix", RemillOFPatch::get() }
-    };
+    struct PassesBase {
+      // list of recognized passes
+      static inline std::map<std::string, Pass> known_passes
+      {
+          {"eqsat", EqualitySaturationPass::get()},
+          {"merge-advices", MergeAdvicesPass::get()},
+          {"dummy-pass", DummyPass::get()},
+          {"trivial-concat-removal", TrivialConcatRemovalPass::get()},
+          {"overflow-flag-fix", RemillOFPatch::get()},
+          {"merge-transitive-advices", MergeAdviceConstraints::get()}
+      };
+    }
+
 
     NamedPass &add_pass(const std::string &name) {
       auto pass = known_passes.at(name);

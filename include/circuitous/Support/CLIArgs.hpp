@@ -242,6 +242,11 @@ namespace circ::cli
         static inline const auto opt = circ::CmdOpt("--eqsat", false);
     };
 
+    struct Simplify : circ::DefaultCmdOpt, Arity< 0 >
+    {
+        static inline const auto opt = circ::CmdOpt("--simplify", false);
+    };
+
     struct Patterns : circ::DefaultCmdOpt, PathArg {
       static inline const auto opt = circ::CmdOpt("--patterns", false);
 
