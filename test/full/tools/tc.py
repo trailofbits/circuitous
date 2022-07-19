@@ -443,6 +443,16 @@ class Trace:
     def __getitem__(self, idx):        return self._states[idx]
     def __setitem__(self, idx, value): self._states[idx] = value
     def __len__(self):                 return len(self._states)
+    def append(self, state):           return self._state.append(state)
+
+    def as_json(self):
+        obj = {}
+        obj["id"] = 1
+        obj["entries"] = [ x.get() for x in self._states ]
+
+        if self._states[0].memory is not None:
+            obj["initial_memory"] = self._states[0].memory.get()
+        return obj
 
 # `State -> State`
 class SingleStepTrace(Trace):
