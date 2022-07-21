@@ -414,7 +414,7 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
                 r = Comparator(test_dir).compare(x, Interpreter(test_dir).run(x))
                 results.put((x, None, r))
             except PipelineFail as e:
-                results.put((x, ResultValue.make_error('Component runtime err', str(e), None)))
+                results.put((x, ResultValue.make_error('Component runtime err', str(e)), None))
                 if fragile and jobs == 1:
                     raise e
 
