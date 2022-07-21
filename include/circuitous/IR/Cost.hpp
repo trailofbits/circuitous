@@ -39,7 +39,7 @@ struct RawNodesCounter_ : UniqueVisitor<RawNodesCounter_> {
 
   arg_details_t get_arg_detail(Operation *op) {
     arg_details_t out{ op->size };
-    for (auto o : op->operands)
+    for (auto o : op->operands())
       out.push_back(o->size);
     return out;
   }

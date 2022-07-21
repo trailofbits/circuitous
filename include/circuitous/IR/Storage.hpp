@@ -20,8 +20,7 @@ namespace circ
         {
             auto notify_operands = [](auto &&x)
             {
-                for (auto op : x->operands)
-                    op->remove_user(x.get());
+                x->destroy();
             };
             return data.remove_unused(notify_operands);
         }
@@ -73,7 +72,7 @@ namespace circ
             auto clear = [](auto &field)
             {
                 for (auto op : field) {
-                    op->operands.clear_without_erasure();
+                    op->operands().clear_without_erasure();
                 }
             };
             (this->Ops::apply(clear), ...);

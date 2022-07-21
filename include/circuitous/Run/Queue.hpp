@@ -94,7 +94,7 @@ namespace circ::run
         template< typename Predicate >
         void notify_from(Operation *op, Predicate &&p)
         {
-            for (auto user : op->users)
+            for (auto user : op->users())
                 if (p(user))
                     notify(op, user);
         }

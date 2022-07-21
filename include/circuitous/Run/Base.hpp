@@ -46,7 +46,7 @@ namespace circ::run
 
         bool valid_children_values(Operation *op)
         {
-            for (auto child : op->operands)
+            for (auto child : op->operands())
                 if (!state->has_value(child) || !state->get_node_val(child))
                     return false;
             return true;
@@ -77,7 +77,7 @@ namespace circ::run
         auto get_node_val(Operation *op) const { return state->get_node_val(op); }
         auto get_node_val(Operation *op, std::size_t idx) const
         {
-            return this->get_node_val(op->operands[idx]);
+            return this->get_node_val(op->operands()[idx]);
         }
 
         template< typename Op, typename F >

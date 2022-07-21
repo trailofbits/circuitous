@@ -96,8 +96,7 @@ namespace {
             Write(util::to_underlying(kind));
         }
 
-        template< typename T >
-        void Write(const UseList< T > &elems)
+        void Write(const std::vector< Operation * > &elems)
         {
             Write< uint32_t >(static_cast< uint32_t >(elems.size()));
             for (const auto &elem : elems)
@@ -138,17 +137,17 @@ namespace {
         }
 
         // TODO(lukas): This should be called, but is not.
-        void visit(Circuit *op) { write(op->ptr_size, op->operands);  }
+        void visit(Circuit *op) { write(op->ptr_size, op->operands());  }
 
         void visit(InputRegister *op) { write(op->reg_name, op->size); }
         void visit(OutputRegister *op) { write(op->reg_name, op->size); }
 
-        void visit(Operation *op) { write(op->size, op->operands); }
+        void visit(Operation *op) { write(op->size, op->operands()); }
         void visit(Constant *op) { write(op->size, op->bits); }
-        void visit(InputImmediate *op) { write(op->size, op->operands); }
+        void visit(InputImmediate *op) { write(op->size, op->operands()); }
 
-        void visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc, op->operands[0]); }
-        void visit(Select *op) { write(op->size, op->bits, op->operands); }
+        void visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc, op->operands()[0]); }
+        void visit(Select *op) { write(op->size, op->bits, op->operands()); }
         void visit(Memory *op) { write(op->size, op->mem_idx); }
         void visit(Advice *op) { write(op->size, op->advice_idx); }
         void visit(InputErrorFlag *op)  { write(op->size); }
@@ -276,7 +275,7 @@ namespace {
         {
             auto [size] = read< uint32_t >();
             for (auto i = 0u; i < size; ++i)
-                elems->add_use(Read());
+                elems->add_operand(Read());
         }
 
         Operation *Read()
@@ -399,7 +398,7 @@ namespace {
         Operation *visit(Extract *, uint64_t id) {
             auto [high, low] = read< unsigned, unsigned >();
             auto op = circuit->adopt< Extract >(id, low, high);
-            op->add_use(Read());
+            op->add_operand(Read());
             return op;
         }
 
@@ -481,7 +480,7 @@ void Circuit::serialize(std::ostream &os)
 {
     SerializeVisitor vis(os);
     // TODO(lukas): `Write` should be called on Circuit.
-    check(this->operands.size() == 1);
+    check(this->operands().size() == 1);
     vis.serialize(this);
 
     auto write_metadata = [&](auto op) { vis.write_metadata(op); };

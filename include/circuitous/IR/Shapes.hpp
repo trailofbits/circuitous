@@ -67,7 +67,7 @@ struct SubtreeCollector {
     if (o->op_code == T::kind) {
       collected.insert(dynamic_cast<T *>(o));
     }
-    for (auto op : o->operands) {
+    for (auto op : o->operands()) {
       Run(op);
     }
     return *this;
@@ -110,7 +110,7 @@ namespace print {
 
     std::string Children(Operation *op, uint8_t depth) {
       std::string out;
-      for (auto o : op->operands) {
+      for (auto o : op->operands()) {
         out += Self().Print(o, depth + 1);
         out += Self().separator;
       }
@@ -224,7 +224,7 @@ namespace collect {
       if (is_one_of<Ts...>(op)) {
         collected.insert(op);
       }
-      for (auto o : op->users) {
+      for (auto o : op->users()) {
         Run(o);
       }
     }
@@ -269,7 +269,7 @@ struct Collector : Collectors ... {
 
   void Update(Operation *node, Operation *user) {
     (Collectors::Update(node, user), ...);
-    for (auto op : node->operands) {
+    for (auto op : node->operands()) {
       todo.emplace_back(op, node);
     }
   }
@@ -285,14 +285,14 @@ static inline bool allows_undef_(Operation *op, std::unordered_set< Operation * 
   if (op->op_code == Undefined::kind)
     return true;
 
-  for (auto x : op->operands)
+  for (auto x : op->operands())
     if (allows_undef_(x, seen))
       return true;
   return false;
 }
 static inline bool allows_undef(Operation *op) {
   if (op->op_code != RegConstraint::kind ||
-      op->operands[1]->op_code != OutputRegister::kind)
+      op->operands()[1]->op_code != OutputRegister::kind)
   {
     return false;
   }

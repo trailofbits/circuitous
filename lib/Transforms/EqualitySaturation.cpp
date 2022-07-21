@@ -134,7 +134,7 @@ namespace circ::eqsat {
       if (nodes.count(op))
         return egraph.find(nodes[op]);
       ENode node(make_template(op));
-      for (const auto &child : op->operands)
+      for (const auto &child : op->operands())
         node.children().push_back( add_node_recurse(child, egraph) );
       auto [id, enode] = egraph.add(std::move(node));
       nodes[op] = enode;
@@ -692,7 +692,7 @@ namespace circ::eqsat {
       check(name(node) == "circuit");
 
       for (const auto &child : graph.children(node))
-        circuit->add_use( extract(child, circuit.get()) );
+        circuit->add_operand( extract(child, circuit.get()) );
       return circuit;
     }
 
@@ -723,7 +723,7 @@ namespace circ::eqsat {
       cached.emplace(enode, op);
 
       for (const auto &child : graph.children(enode))
-        op->add_use( extract(child, circuit) );
+        op->add_operand( extract(child, circuit) );
 
       return op;
     }
@@ -756,7 +756,7 @@ namespace circ::eqsat {
     }
 
     for (auto [aconstraint, ctx] : remove) {
-      aconstraint->remove_use(ctx);
+      aconstraint->remove_all_operands(ctx);
     }
 
     circuit->remove_unused();

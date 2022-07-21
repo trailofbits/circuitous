@@ -69,7 +69,7 @@ namespace circ::run
     {
         std::stringstream ss;
         if (blocked.count(op))
-            ss << "[ " << blocked[op] << " / " << op->operands.size() << "]";
+            ss << "[ " << blocked[op] << " / " << op->operands().size() << "]";
         else
             ss << " [ NOT SET ]";
         return ss.str();
@@ -116,7 +116,7 @@ namespace circ::run
     // Implementation
     void TodoQueue::_notify(Operation *op)
     {
-        auto [it, inserted] = blocked.emplace(op, op->operands.size());
+        auto [it, inserted] = blocked.emplace(op, op->unique_operands_count());
         if (it->second <= 1) {
             push(it->first);
             it->second = 0;

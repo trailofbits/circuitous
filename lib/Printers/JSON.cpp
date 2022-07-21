@@ -39,7 +39,7 @@ void print_json(std::ostream &os, Circuit *circuit) {
 
     os << "\"operands\":[";
     sep = "";
-    for (auto sub_op : op->operands) {
+    for (auto sub_op : op->operands()) {
       os << sep;
       os << "\"" << id(sub_op) << "\"";
       sep = ",";
