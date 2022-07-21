@@ -93,13 +93,6 @@ namespace circ
     };
 
     template< typename T >
-    struct Use
-    {
-        T *user;
-        T *use;
-    };
-
-    template< typename T >
     struct UseList : std::vector< T * >
     {
         using impl = std::vector< T * >;
