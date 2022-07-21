@@ -98,98 +98,124 @@ namespace circ
         using impl = std::vector< T * >;
     };
 
-    // Value can be used by others, `users` are used to travel up the data flow.
-    // `add(x, y)` -- `add` is in `users` of both `x` and `y`
     template< typename T >
-    struct Value
+    struct Node
     {
-        UseList< T > users;
+      protected:
+        std::vector< T * > _operands;
+        // For each user we also need to keep track of how many times value
+        // is used by it.
+        std::vector< std::tuple< T *, std::size_t > > _users;
 
-        void remove_user(T *user)
+      private:
+        auto user_comparator(T *other)
         {
-            auto num = std::erase(users, user);
-            check(num == 1) << "Trying to remove user that is not part of the list.";
-        }
-    };
-
-    // add(x, y) -> `add` node uses `x` and `y`.
-    template< typename T >
-    struct User
-    {
-        UseList< T > operands;
-
-        void remove_operand(T *op)
-        {
-            auto num = std::erase(operands, op);
-            check(num == 1) << "Trying to remove operand that is not part of the list.";
-        }
-    };
-
-    // The node can be both user and value.
-    // The values should always be in consistent state e.g. if `x in y.operands`, then
-    // `y in yx.users`.
-    template< typename T >
-    struct Node : Value< T >, User< T >
-    {
-        T *Raw() { return static_cast< T * >(this); }
-
-        void add_use(T *other)
-        {
-            this->operands.push_back(other);
-            other->users.push_back(Raw());
+            return [=](const auto &x) { return std::get< 0 >(x) == other; };
         }
 
-        void remove_use(T *parent)
+        auto fetch_user(T *other)
         {
-            parent->remove_operand(Raw());
-            this->remove_user(parent);
+            return std::find_if(_users.begin(), _users.end(), user_comparator(other));
         }
 
-        void replace_use(T *other, std::size_t at)
+        void remove_user(T *other)
         {
-            check(this->operands.size() > at);
-            this->operands[at]->remove_user(Raw());
+            auto it = fetch_user(other);
 
-            this->operands[at] = other;
-            other->users.push_back(Raw());
+            --it->second;
+            if (it->second == 0)
+                _users.erase(it);
         }
 
+        void purge_user(T *other)
+        {
+            std::erase_if(_users, user_comparator(other));
+        }
+
+        void add_user(T *other, std::size_t times = 1)
+        {
+            if (auto it = fetch_user(other); it != _users.end())
+                std::get< 1 >(*it) += times;
+            else
+                _users.emplace_back(other, times);
+
+        }
+
+        T *self() { return static_cast< T * >(this); }
+
+      public:
+        // TODO(lukas): Replace with generator.
+        std::vector< T * > users() const
+        {
+            std::vector< T * > out;
+            for (const auto &[x, _] : _users)
+                out.push_back(x);
+            return out;
+        }
+
+        // TODO(lukas): Also replace with generator to have the same return type as `users()`?
+        const std::vector< T * > &operands() const
+        {
+            return _operands;
+        }
+
+        std::size_t unique_operands_count() const
+        {
+            return std::unordered_set< T * >(_operands.begin(), _operands.end()).size();
+        }
+
+        void remove_operand(std::size_t idx)
+        {
+            auto op = _operands[idx];
+            _operands.erase(idx);
+            op->remove_user(self());
+        }
+
+        void add_operand(T *value)
+        {
+            _operands.emplace_back(value);
+            value->add_user(self());
+        }
+
+        void replace_operand(std::size_t idx, T *value)
+        {
+            _operands[idx]->remove_user(self());
+            _operands[idx] = value;
+            _operands[idx]->add_user(self());
+        }
+
+        void remove_all_operands(T *value)
+        {
+            value->purge_user(self());
+            std::erase(_operands, value);
+        }
+
+        void replace_all_operands_with(T *old, T *value)
+        {
+            old->purge_user(self());
+            std::size_t total = 0;
+            for (std::size_t idx = 0; idx < _operands.size(); ++idx)
+            {
+                if (_operands[idx] == old)
+                {
+                    _operands[idx] = value;
+                    ++total;
+                }
+            }
+            value->add_user(self(), total);
+
+        }
 
         void replace_all_uses_with(T *other)
         {
-            check(other != this) << "Trying to replace all uses of X with X, probably error.";
-
-            auto fetch = [&](const auto &where)
-            {
-                for (std::size_t i = 0; i < where.size(); ++i)
-                    if (where[i] == this)
-                        return i;
-                unreachable() << "User and uses are out of sync.";
-            };
-
-            for (auto user : this->users)
-            {
-                // NOTE(lukas): I actually do not expect these vectors to grow much.
-                //              And given the cache friendliness of vector this should
-                //              not be a bottle-neck.
-                auto idx = fetch(user->operands);
-                user->operands[idx] = other;
-
-                other->users.push_back(user);
-            }
-            this->users.clear();
+            for (auto &[op, _] : _users)
+                op->replace_all_operands_with(self(), other);
         }
 
-        template< typename U, typename CB >
-        void for_each_use(CB cb)
+        void destroy()
         {
-            std::vector< U * > frozen;
-            for (auto user : this->users)
-                if (auto casted = dynamic_cast< U * >(user))
-                    frozen.push_back(casted);
-
-            for (auto op : frozen)
-                cb(op);
+            for (auto &op : _operands)
+                op->purge_user(self());
         }
     };
 } // namespace circ
