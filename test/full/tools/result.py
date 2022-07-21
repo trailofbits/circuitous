@@ -68,7 +68,7 @@ class ResultAccumulator:
         if total_result is not None:
             assert (total_result.value != ResultValue.PASS)
             self.total[test_def] = (total_result, {})
-            self.counts[total_result.value] += self.case_count
+            self.counts[total_result.value] += len(test_def.cases)
             return
 
         self.total[test_def] = (None, {})
