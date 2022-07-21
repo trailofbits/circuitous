@@ -66,9 +66,9 @@ namespace circ::decoder {
     }
 
     void DecoderPrinter::extract_ctx() {
-        for (auto &vi: GetContexts( circuit.get()->operands[ 0 ] )) {
+        for (auto &vi: GetContexts( circuit.get()->operands()[ 0 ] )) {
             SubtreeCollector< DecodeCondition > dc_collector;
-            dc_collector.Run( vi->operands );
+            dc_collector.Run( vi->operands() );
 
             std::unordered_multiset< DecodeCondition * > decNodes = dc_collector.collected;
 
@@ -76,8 +76,8 @@ namespace circ::decoder {
 
             std::vector<ExtractedDecodeCondition> dec;
             for(auto decCond : decNodes){
-                auto lhs = dynamic_cast<circ::Constant *>((*decCond).operands[ 0 ]);
-                auto rhs = dynamic_cast<circ::Extract *>((*decCond).operands[ 1 ]);
+                auto lhs = dynamic_cast<circ::Constant *>((*decCond).operands()[ 0 ]);
+                auto rhs = dynamic_cast<circ::Extract *>((*decCond).operands()[ 1 ]);
                 check(lhs && rhs) <<  "decoder condition malformed";
 
                 dec.emplace_back(rhs->low_bit_inc, rhs->high_bit_exc, lhs->bits);
@@ -93,7 +93,7 @@ namespace circ::decoder {
     uint8_t DecoderPrinter::get_encoding_length(
             const std::unordered_multiset< DecodeCondition * > &decNodes) const {
         auto is_ending_check = [&](DecodeCondition *dc) {
-            auto rhs = dynamic_cast<circ::Extract *>(dc->operands[ 1 ]);
+            auto rhs = dynamic_cast<circ::Extract *>(dc->operands()[ 1 ]);
             check(rhs) << "invalid cast to Extract";
             return rhs->high_bit_exc == MAX_ENCODING_LENGTH;
         };
@@ -101,7 +101,7 @@ namespace circ::decoder {
         check(endingEncoding != decNodes.end()) << "No decode condition that specifies end" ;
 
 
-        auto rhs = dynamic_cast<circ::Extract *>((*endingEncoding)->operands[ 1 ]);
+        auto rhs = dynamic_cast<circ::Extract *>((*endingEncoding)->operands()[ 1 ]);
         check(rhs) << "invalid cast to Extract";
 
         auto encoding_length= std::floor( rhs->low_bit_inc / 8 );

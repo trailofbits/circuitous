@@ -113,13 +113,12 @@ namespace circ
         virtual std::string name() const;
         static std::string op_code_str() { not_implemented(); }
 
-        auto &operator[](std::size_t idx) { return operands[idx]; }
-        const auto &operator[](std::size_t idx) const { return operands[idx]; }
+        const auto &operator[](std::size_t idx) const { return _operands[idx]; }
 
         template< typename Vis >
         void traverse(Vis &vis)
         {
-            for (auto op : operands)
+            for (auto op : _operands)
                 vis.dispatch(op);
         }
 
@@ -399,15 +398,15 @@ namespace circ
         using Operation::Operation;
         enum : uint8_t { kDynamic = 0u, kFixed = 1u };
 
-        Operation *dynamic() { return operands[kDynamic]; }
-        Operation *fixed() { return operands[kFixed]; }
+        Operation *dynamic() { return _operands[kDynamic]; }
+        Operation *fixed() { return _operands[kFixed]; }
 
-        const Operation *dynamic() const { return operands[kDynamic]; }
-        const Operation *fixed() const { return operands[kFixed]; }
+        const Operation *dynamic() const { return _operands[kDynamic]; }
+        const Operation *fixed() const { return _operands[kFixed]; }
 
         std::string suffix_() const
         {
-            if (operands.size() != 2)
+            if (_operands.size() != 2)
                 return "invalid.0";
             return fixed()->name() + "." + std::to_string(fixed()->size);
         }
@@ -419,11 +418,11 @@ namespace circ
 
         enum : uint8_t { kFixed = 0u, kSize = 1u, kAddr = 2u, kTS = 3u, kValue = 4u };
 
-        auto hint_arg() const  { return operands[kFixed]; }
-        auto size_arg() const { return operands[kSize]; }
-        auto addr_arg() const { return operands[kAddr]; }
-        auto ts_arg() const { return operands[kTS]; }
-        auto val_arg() const { return operands[kValue]; }
+        auto hint_arg() const  { return _operands[kFixed]; }
+        auto size_arg() const { return _operands[kSize]; }
+        auto addr_arg() const { return _operands[kAddr]; }
+        auto ts_arg() const { return _operands[kTS]; }
+        auto val_arg() const { return _operands[kValue]; }
         auto mem_idx() const
         {
             return dynamic_cast< Memory * >( hint_arg() )->mem_idx;
@@ -695,7 +694,7 @@ namespace circ
             return ss.str();
         }
 
-        Operation *selector() { return operands[0]; }
+        Operation *selector() { return _operands[0]; }
 
         // Return one of the `2 ^ bits` values. It is also expected that this node
         // has `2 ^ bits + 1` operands.

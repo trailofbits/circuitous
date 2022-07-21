@@ -198,9 +198,9 @@ namespace circ::print::verilog
                 ss << "( " << selector << " == "
                    << op->selector()->size << "'d" << idx - 1
                    << ") ? "
-                   << get(op->operands[idx]) << " : ";
-                if (idx == op->operands.size() - 2)
-                    ss << get(op->operands.back());
+                   << get(op->operands()[idx]) << " : ";
+                if (idx == op->operands().size() - 2)
+                    ss << get(op->operands().back());
                 else {
                     ss << std::endl << "\t";
                     next(idx + 1, next);
@@ -251,7 +251,7 @@ namespace circ::print::verilog
         std::string rmake(auto F, Operation *op)
         {
             std::vector< Operation * > ops;
-            std::reverse_copy(op->operands.begin(), op->operands.end(),
+            std::reverse_copy(op->operands().begin(), op->operands().end(),
                               std::back_inserter(ops));
 
             return make_wire(op, F(get_symbol(op), ops));
@@ -259,12 +259,12 @@ namespace circ::print::verilog
 
         std::string make(auto F, Operation *op)
         {
-            return make_wire(op, F(get_symbol(op), op->operands));
+            return make_wire(op, F(get_symbol(op), op->operands()));
         }
 
         std::string make(auto F, Operation *op, std::string f)
         {
-            return make_wire(op, F(f, op->operands));
+            return make_wire(op, F(f, op->operands()));
         }
 
         /* Operation mapping to symbols */
@@ -341,12 +341,12 @@ namespace circ::print::verilog
             using step_t = std::tuple< std::string, std::string >;
             std::vector< step_t > steps = { { impl::false_val(), impl::false_val() } };
 
-            for (std::size_t i = 0; i < op->operands.size(); ++i)
+            for (std::size_t i = 0; i < op->operands().size(); ++i)
             {
                 const auto &[prev_rn, prev_on] = steps.back();
-                auto rn_next = prev_rn + " || " + get(op->operands[i]);
+                auto rn_next = prev_rn + " || " + get(op->operands()[i]);
                 auto on_next = prev_on + " || ( " + prev_rn + " && "
-                                       + get(op->operands[i]) + ")";
+                                       + get(op->operands()[i]) + ")";
                 steps.emplace_back(make_wire(rn(i), rn_next, 1), make_wire(on(i), on_next, 1));
             }
 
@@ -425,13 +425,13 @@ namespace circ::print::verilog
 
         std::string visit(Extract *op)
         {
-            auto from = get(op->operands[0]);
+            auto from = get(op->operands()[0]);
             return make_wire(op, make_extract(from, op->high_bit_exc - 1, op->low_bit_inc));
         }
 
         /* Helpers */
         // TOOD(lukas): Double check.
-        std::string visit(InputImmediate *op) { return get(op->operands[0]); }
+        std::string visit(InputImmediate *op) { return get(op->operands()[0]); }
 
         /* Nary helpers */
         std::string visit(And *op) { return make(zip(), op); }
@@ -459,30 +459,30 @@ namespace circ::print::verilog
         {
             auto trg_size = op->size - 1;
             std::stringstream ss;
-            ss << get(op->operands[0]) << "[" << trg_size << ":0]";
+            ss << get(op->operands()[0]) << "[" << trg_size << ":0]";
             return make_wire(op, ss.str());
         }
 
         std::string visit(ZExt *op)
         {
-            auto prefix = impl::bin_zero(op->size - op->operands[0]->size);
-            return make_wire(op, concat({prefix, get(op->operands[0])}));
+            auto prefix = impl::bin_zero(op->size - op->operands()[0]->size);
+            return make_wire(op, concat({prefix, get(op->operands()[0])}));
         }
 
         std::string visit(SExt *op)
         {
-            auto pos_prefix = impl::bin_zero(op->size - op->operands[0]->size);
-            auto neg_prefix = impl::bin_one(op->size - op->operands[0]->size);
+            auto pos_prefix = impl::bin_zero(op->size - op->operands()[0]->size);
+            auto neg_prefix = impl::bin_one(op->size - op->operands()[0]->size);
 
             std::stringstream selector_ss;
-            auto operand = op->operands[0];
+            auto operand = op->operands()[0];
             auto last = operand->size - 1;
             selector_ss << "(" << get(operand) << "[" << last << ":" << last << "] == "
                         << impl::bin_one(1u)
                         << ") ?" << neg_prefix << " : " << pos_prefix;
             auto padding =
                 make_wire("pad_" + std::to_string(op->id()), selector_ss.str(), last + 1);
-            return make_wire(op, concat({padding, get(op->operands[0])}));
+            return make_wire(op, concat({padding, get(op->operands()[0])}));
         }
 
         std::string visit(Icmp_ult *op) { return make(zip(), op); }
@@ -512,12 +512,12 @@ namespace circ::print::verilog
         /* High level */
         std::string visit(PopulationCount *op)
         {
-            uint32_t operand_size = op->operands[0]->size;
+            uint32_t operand_size = op->operands()[0]->size;
             uint32_t rsize = static_cast< uint32_t >(std::ceil(std::log2(operand_size)));
             uint32_t pad_size = operand_size - rsize;
 
             std::stringstream ss;
-            auto from = get(op->operands[0]);
+            auto from = get(op->operands()[0]);
             for (std::size_t i = 0; i < operand_size; ++i) {
                 ss << from << "[" << i << "]";
                 if (i != operand_size - 1)
@@ -551,8 +551,8 @@ namespace circ::print::verilog
             auto fn = [&](auto i) { return base("f") + "x" + std::to_string(i); };
             auto tn = [&](auto i) { return base("t") + "x" + std::to_string(i); };
 
-            uint32_t operand_size = op->operands[0]->size;
-            auto operand = op->operands[0];
+            uint32_t operand_size = op->operands()[0]->size;
+            auto operand = op->operands()[0];
             uint32_t rsize = static_cast< uint32_t >(std::ceil(std::log2(operand_size)));
             auto padding = impl::bin_zero(operand_size - rsize);
 
@@ -574,7 +574,7 @@ namespace circ::print::verilog
             return make_wire(op, concat({padding, last_tn}));
         }
 
-        std::string visit(Circuit *op) { return get(op->operands[0]); }
+        std::string visit(Circuit *op) { return get(op->operands()[0]); }
 
         std::string write(Operation *op) { return get(op); }
     };
@@ -708,7 +708,7 @@ namespace circ::print::verilog
                                   InputInstructionBits,
                                   Advice >( iarg_fmt );
             } else {
-                for (auto operand : op->operands)
+                for (auto operand : op->operands())
                     declare_in_arg(operand, iarg_fmt );
             }
         }

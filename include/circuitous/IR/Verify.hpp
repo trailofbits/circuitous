@@ -137,7 +137,7 @@ namespace circ
         // TODO(lukas): Move out.
         static void CollectAdviceUsers(Operation *op, advice_users_t &collected )
         {
-            for (auto child : op->operands) {
+            for (auto child : op->operands()) {
                 if (child->op_code == Advice::kind)
                     collected[child].insert(op);
                 else

@@ -78,7 +78,7 @@ namespace circ::run {
       std::string prefix(current * 2, '.');
       auto val = lenses->node_values[op];
       ss << prefix << "  " << op << " -> " << val << "\n";
-      for (auto o : op->operands) {
+      for (auto o : op->operands()) {
         ctx_(ss, o, depth - 1, current + 1);
       }
     }

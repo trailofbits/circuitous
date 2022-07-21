@@ -83,7 +83,7 @@ namespace circ
 
         self_t &visit(const DecoderResult *op)
         {
-            for (auto c : op->operands)
+            for (auto c : op->operands())
                 this->dispatch(c);
             return *this;
         }
@@ -100,8 +100,8 @@ namespace circ
                 return out;
             };
 
-            auto expected = op->operands[0];
-            auto extracted = op->operands[1];
+            auto expected = op->operands()[0];
+            auto extracted = op->operands()[1];
 
             check(isa< Constant >(expected) && isa< Extract >(extracted));
             const auto &constant = static_cast< const Constant & >(*expected);
@@ -218,7 +218,7 @@ namespace circ
     Operation *get_decoder_result(Operation *root)
     {
         Operation *out = nullptr;
-        for (auto op : root->operands)
+        for (auto op : root->operands())
         {
             if (isa< DecoderResult >(op))
             {
@@ -256,7 +256,7 @@ namespace circ
 
         print_op(op, gprefix);
 
-        for (auto c : op->operands)
+        for (auto c : op->operands())
             print_op(c, gprefix + " |- ");
 
         return ss.str();
@@ -281,7 +281,7 @@ namespace circ
         {
             res.add_error() << op_code_str(op->op_code)
                             << " has "
-                            << op->operands.size() << " operands which is invalid.\n"
+                            << op->operands().size() << " operands which is invalid.\n"
                             << log_src_dump(op, "\t")
                             << "Error entry end.\n";
         }
@@ -289,7 +289,7 @@ namespace circ
         template< typename Fn >
         void verify_op_count(uint64_t count, Operation *op, Fn fn)
         {
-            if (!fn(count, op->operands.size()))
+            if (!fn(count, op->operands().size()))
                 log_operand_mismatch(op);
         }
 
@@ -341,7 +341,7 @@ namespace circ
                 case WriteConstraint::kind:
                     return exactly(5, op);
                 case Select::kind:
-                    return exactly((1 << op->operands[0]->size) + 1, op);
+                    return exactly((1 << op->operands()[0]->size) + 1, op);
                 case Concat::kind:
                     return more_than(1, op);
                 case VerifyInstruction::kind:
@@ -378,7 +378,7 @@ namespace circ
             if (!recursive)
                 return *this;
 
-            for (auto o : op->operands)
+            for (auto o : op->operands())
                 verify_arity(o, recursive);
 
             return *this;
@@ -407,16 +407,16 @@ namespace circ
             std::unordered_map< Operation *, VerifyInstruction * > ctx;
 
             for (auto verif : circuit->attr<VerifyInstruction>()) {
-                for (auto op : verif->operands) {
+                for (auto op : verif->operands()) {
                     if (op->op_code == AdviceConstraint::kind)
                     {
                         ctx[op] = verif;
 
-                        if (op->operands[AdviceConstraint::kFixed]->op_code != Advice::kind)
+                        if (op->operands()[AdviceConstraint::kFixed]->op_code != Advice::kind)
                             res.add_error() << "ADVICE_CONSTRAINT hint operand is not ADVICE.";
 
                         bool found_hint = false;
-                        for (auto hint : op->operands)
+                        for (auto hint : op->operands())
                         {
                             if (hint->op_code == Advice::kind)
                             {
@@ -487,7 +487,7 @@ namespace circ
             for (auto ctx : circuit->attr< VerifyInstruction >())
             {
                 std::vector< Operation * > decoder_results;
-                for (auto op : ctx->operands)
+                for (auto op : ctx->operands())
                     if (isa< DecoderResult >(op))
                         decoder_results.push_back(op);
                 if (decoder_results.size() == 0)
@@ -513,7 +513,7 @@ namespace circ
                                 << "is not allowed:\n\t" << pretty_print< true >(current);
             }
 
-            for (auto op : current->operands)
+            for (auto op : current->operands())
                 verify_constrained_subtree(root, op, allowed);
         }
 
@@ -565,7 +565,7 @@ namespace circ
             else
                 ids[op->id()] = 1;
 
-            for (auto o : op->operands)
+            for (auto o : op->operands())
                 collect_ids(o, seen, ids);
         }
     };

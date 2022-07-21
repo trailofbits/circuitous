@@ -78,7 +78,7 @@ namespace circ
             std::size_t num = 0;
             for (auto it = defs.begin(); it != defs.end();)
             {
-                if ((*it)->users.size() == 0) {
+                if ((*it)->users().size() == 0) {
                     cb(std::move(*it));
                     it = defs.erase(it);
                     ++num;

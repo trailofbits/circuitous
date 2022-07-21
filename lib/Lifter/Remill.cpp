@@ -221,7 +221,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             while (true) {
                 uint32_t y = std::min(from + (step - from % step), to);
                 auto op = impl->create< Extract >(from, y);
-                op->add_use(arg);
+                op->add_operand(arg);
                 partials.push_front(op);
                 if (y == to) {
                     return partials;
@@ -244,7 +244,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         // expect `00000012` therefore we must reorder them and then concat.
         auto full = Emplace< Concat >(call, size);
         for (auto x : partials) {
-            full->add_use(x);
+            full->add_operand(x);
         }
         return full;
     }
@@ -261,9 +261,9 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
         auto args = call_args(call);
         if (!args.empty()) {
-            op->add_use(Fetch(call->getParent()->getParent(), args[0]));
+            op->add_operand(Fetch(call->getParent()->getParent(), args[0]));
         } else {
-            op->add_use(arg);
+            op->add_operand(arg);
         }
         return op;
     }
@@ -274,7 +274,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
     {
         auto out = Emplace< O >(call, std::forward<Args>(args)...);
         for (auto arg : call_args(call))
-            out->add_use(Fetch(call->getParent()->getParent(), arg));
+            out->add_operand(Fetch(call->getParent()->getParent(), arg));
         return out;
     }
 
@@ -312,13 +312,13 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             case llvm::Intrinsic::ctlz :
             {
                 auto out = Emplace< CountLeadingZeroes >(call, value_size(call));
-                out->add_use(call_arg(call, 0u));
+                out->add_operand(call_arg(call, 0u));
                 return out;
             }
             case llvm::Intrinsic::cttz :
             {
                 auto out = Emplace< CountTrailingZeroes >(call, value_size(call));
-                out->add_use(call_arg(call, 0u));
+                out->add_operand(call_arg(call, 0u));
                 return out;
             }
             default:
@@ -444,7 +444,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
     T *llvm_inst_operands(T *self, llvm::Instruction *inst, llvm::Function *func)
     {
         for (const auto &op : inst->operand_values())
-            self->add_use(Fetch(func, op));
+            self->add_operand(Fetch(func, op));
         return self;
     }
 
@@ -456,9 +456,9 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
         check(converted.size() == 3);
         // We know there are 3 operands, however true result is first
-        select->add_use(converted[0]);
-        select->add_use(converted[2]);
-        select->add_use(converted[1]);
+        select->add_operand(converted[0]);
+        select->add_operand(converted[2]);
+        select->add_operand(converted[1]);
         return select;
     }
 
@@ -738,12 +738,12 @@ Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func, Ctx &ctx)
     check(num_input_regs == num_output_regs);
 
     auto all_verifications = impl->create<OnlyOneCondition>();
-    impl->add_use(all_verifications);
+    impl->add_operand(all_verifications);
 
     auto visit_context = [&](llvm::CallInst *verify_inst) {
         importer.Visit(circuit_func, verify_inst);
         check(importer.get(verify_inst)->op_code == VerifyInstruction::kind);
-        all_verifications->add_use(importer.get(verify_inst));
+        all_verifications->add_operand(importer.get(verify_inst));
     };
     irops::VerifyInst::for_all_in(circuit_func, visit_context);
     log_info() << "IRImpoter done.";

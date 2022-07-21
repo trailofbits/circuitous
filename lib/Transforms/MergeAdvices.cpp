@@ -29,7 +29,7 @@ bool MergeAdvices(Circuit *circuit) {
       if (auto hint = dynamic_cast<Advice *>(op); hint) {
         inst_hints.push_back(hint);
       } else {
-        for (auto sub_op : op->operands) {
+        for (auto sub_op : op->operands()) {
           visit(sub_op);
         }
       }
@@ -108,7 +108,7 @@ bool MergeAdvices(Circuit *circuit) {
         // We've found an allocation.
         if (!failed) {
           extract = circuit->create<Extract>(i, i + hint->size);
-          extract->add_use(wide_hint);
+          extract->add_operand(wide_hint);
           hint->replace_all_uses_with(extract);
 
           for (auto j = 0u; j < hint->size; ++j, ++i) {
