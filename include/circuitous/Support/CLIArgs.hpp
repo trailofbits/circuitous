@@ -67,6 +67,30 @@ namespace circ::cli
         static inline const auto opt = circ::CmdOpt("--dot-out", false);
     };
 
+    struct DotColoring : circ::DefaultCmdOpt, PathArg, circ::HasAllowed< DotColoring >
+    {
+        using circ::HasAllowed< DotColoring >::validate;
+
+        static inline const auto opt = circ::CmdOpt("--dot-coloring", false);
+        static inline const std::unordered_set< std::string > allowed =
+        {
+                "semantics", "ctt", "highlight"
+        };
+
+        static std::string help()
+        {
+            std::stringstream ss;
+            ss << "Colors the graph in one of " << allowed.size() << " different ways.\n";
+            ss << "Highlight: colors the nodes matching a prefix of the names provided by --dot-highlight.\n";
+            ss << "Semantics: colors the nodes based on whether they are semantics/decode/state/config related.\n";
+            ss << "Config To Target (ctt): Similar to semantics, but only colors paths from a config node to a constraint node.\n";
+
+            return ss.str();
+        }
+
+        static std::string short_help() { return help(); }
+    };
+
     struct DotHighlight : circ::DefaultCmdOpt, Arity< -1 > {
         static inline const auto opt = circ::CmdOpt( "--dot-highlight", false );
 
