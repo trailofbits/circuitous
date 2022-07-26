@@ -11,6 +11,7 @@
 #include <unordered_map>
 
 #include <circuitous/Support/Check.hpp>
+#include <circuitous/Printers/Dot.hpp>
 
 namespace circ {
 
@@ -18,7 +19,7 @@ namespace circ {
     struct Operation;
 
     void print_dot(std::ostream &os, Circuit *circuit,
-                    const std::unordered_map< Operation *, std::string > & = {}, const std::vector< std::string > &highlights = std::vector< std::string >());
+                    const std::unordered_map< Operation *, std::string > & = {}, std::function<Color(Operation*)> oc = [](Operation* op){return Color::None;});
 
     void print_json(std::ostream &os, Circuit *circuit);
     void print_smt(std::ostream &os, Circuit *circuit);

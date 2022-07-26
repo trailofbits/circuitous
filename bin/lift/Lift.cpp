@@ -41,6 +41,7 @@ DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(dot_highlight, "", "Names of node-type to highlight in DOT file");
+DEFINE_string(dot_coloring, "", "Coloring type of the graph");
 
 DEFINE_string(json_out, "", "Path to the output JSON file.");
 DEFINE_string(verilog_out, "", "Path to the output verilog file.");
@@ -110,6 +111,7 @@ using output_options = circ::tl::TL<
     circ::cli::IROut,
     circ::cli::DotOut,
     circ::cli::DotHighlight,
+    circ::cli::DotColoring,
     circ::cli::DecoderOut
 >;
 using remill_config_options = circ::tl::TL<
@@ -123,6 +125,7 @@ using other_options = circ::tl::TL<
     circ::cli::BitBlastStats,
     circ::cli::EqSat,
     circ::cli::Patterns,
+    circ::cli::Simplify,
     circ::cli::Help,
     circ::cli::Version
 >;
@@ -163,12 +166,26 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
         circ::print_circuit(*json_out, circ::print_json, circuit.get());
 
     if (auto dot_out = cli.template get< cli::DotOut >()) {
-        std::vector< std::string > highlights;
-        if (auto input_colors = cli.template get< cli::DotHighlight >()) {
-            highlights = std::move(*input_colors);
+
+        if(auto coloring = cli.template get< cli::DotColoring >()) {
+            if(coloring == "semantics")
+                circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
+                                    std::unordered_map< circ::Operation *, std::string >{}, circ::SemanticsTainterColoring);
+            else if(coloring == "ctt")
+                circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
+                                    std::unordered_map< circ::Operation *, std::string >{}, circ::ConfigToTargetColoring);
+            else{
+                if (auto input_colors = cli.template get< cli::DotHighlight >()) {
+                    auto highlights = std::move(*input_colors);
+                    circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
+                                        std::unordered_map< circ::Operation *, std::string >{}, circ::HighlightColorer(highlights));
+                }
+
+            }
         }
-        circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
-                             std::unordered_map< circ::Operation *, std::string >{}, highlights);
+        else
+            circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
+                         std::unordered_map< circ::Operation *, std::string >{}, circ::ColorNone);
     }
 
     if (auto verilog_out = cli.template get< cli::VerilogOut >())
@@ -208,7 +225,10 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
         return {};
     }
 
-    if (v.check(implies< cli::DotHighlight, cli::DotOut >()).process_errors(yield_err))
+    // TODO check that dothighlight is only viable with dotcoloring == highlight
+    if (v.check(implies< cli::DotHighlight, cli::DotOut >()).process_errors(yield_err)
+    || v.check(implies< cli::DotColoring, cli::DotOut >()).process_errors(yield_err)
+    || v.check(implies< cli::DotHighlight, cli::DotColoring >()).process_errors(yield_err))
     {
         return {};
     }
