@@ -23,7 +23,6 @@ CIRCUITOUS_RELAX_WARNINGS
 
 CIRCUITOUS_UNRELAX_WARNINGS
 
-
 namespace circ
 {
     std::string color_to_dot(Color c){
@@ -35,7 +34,7 @@ namespace circ
             case Color::BlueYellow: return "fillcolor=blue;fontcolor=yellow;style=filled;";
             case Color::VioletWhite: return "fillcolor=violet;fontcolor=white;style=filled;";
             case Color::GrayWhite: return "fillcolor=gray;fontcolor=white;style=filled;";
-            case Color::OrangeBlack: return "fillcolor=orange;fontcolor=black;style=filled";
+            case Color::OrangeBlack: return "fillcolor=orange;fontcolor=black;style=filled;";
         }
     }
 
@@ -69,8 +68,8 @@ namespace circ
     Color HighlightColorer::operator()(Operation *op) {
         if(auto opt_highlight_name = highlight_name_for_op( op ))
             return color_defaults[node_to_color_map[opt_highlight_name.value()]];
-        else
-            return Color::None;
+
+        return Color::None;
     }
 
     namespace
