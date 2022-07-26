@@ -5,7 +5,10 @@
 #pragma once
 
 #include <circuitous/IR/Trace.hpp>
+
 #include <circuitous/Run/Base.hpp>
+#include <circuitous/Run/Queue.hpp>
+#include <circuitous/Run/State.hpp>
 
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
@@ -15,88 +18,6 @@
 
 namespace circ::run
 {
-
-    struct MemoryOrdering
-    {
-        using mem_ops_t = std::unordered_set< Operation * >;
-        using level_t = std::tuple< uint32_t, mem_ops_t >;
-        using constraints_t = std::vector< level_t >;
-
-        Circuit *circuit;
-        CtxCollector *collector;
-        VerifyInstruction *current;
-
-        constraints_t constraints;
-        uint32_t allowed = 0;
-
-        void extend(uint32_t desired)
-        {
-            if (desired < constraints.size())
-                return;
-            constraints.resize(desired + 1);
-        }
-
-        template< typename MO >
-        void init()
-        {
-            for (auto op : circuit->attr< MO >()) {
-                if (collector->op_to_ctxs[op].count(current)) {
-                    auto idx = op->mem_idx();
-                    extend(idx);
-                    auto &[count, ops] = constraints[idx];
-                    ++count;
-                    ops.insert(op);
-                }
-            }
-        }
-
-        bool raise_level()
-        {
-            ++allowed;
-            return true;
-        }
-
-        bool do_enable(Operation *op, uint64_t mem_idx)
-        {
-            check(mem_idx == allowed);
-            auto &[count, ops] = constraints[mem_idx];
-            if (!ops.count(op))
-                return false;
-
-            --count;
-            ops.erase(op);
-            if (count == 0)
-                return raise_level();
-
-            return false;
-        }
-
-        std::optional< uint64_t > mem_idx(Operation *op)
-        {
-            if (!is_one_of<ReadConstraint, WriteConstraint>(op))
-                return {};
-
-            if (auto x = dynamic_cast<WriteConstraint *>(op)) return x->mem_idx();
-            if (auto x = dynamic_cast<ReadConstraint *>(op)) return x->mem_idx();
-            unreachable() << "Unreachable";
-        }
-
-        bool enable(Operation *op)
-        {
-            if (auto mi = mem_idx(op))
-                return do_enable(op, *mi);
-            return false;
-        }
-
-        MemoryOrdering(Circuit *circuit_, CtxCollector *collector_, VerifyInstruction *c_)
-            : circuit(circuit_), collector(collector_), current(c_)
-        {
-            init<WriteConstraint>();
-            init<ReadConstraint>();
-        }
-
-    };
-
     struct State
     {
         std::deque< Operation * > todo;
