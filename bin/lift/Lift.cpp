@@ -30,6 +30,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
+#include <circuitous/Diff/SemanticsTainter.hpp>
 
 // TODO(lukas): Clean this up once remill gets rid of gflags.
 DEFINE_string(arch, "", "");
@@ -48,6 +49,7 @@ DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 DEFINE_string(ciff_in, "", "Load input from circuitous-seed --dbg produced file");
 
 
+DEFINE_bool(simplify, false, "Enables simplification passes of circuit.");
 DEFINE_string(patterns, "", "Equality saturation patterns.");
 DEFINE_bool(eqsat, false, "Enable equality saturation based optimizations.");
 DEFINE_bool(dbg, false, "Enable various debug dumps");
@@ -77,6 +79,11 @@ namespace
                 std::dynamic_pointer_cast<circ::EqualitySaturationPass>(pass);
             eqpass->add_rules(circ::eqsat::parse_rules(patterns.value()));
           }
+        }
+
+        if(cli.template present<cli::Simplify>()){
+            opt.add_pass("taint-semantics");
+            opt.add_pass("ctt");
         }
 
         auto result = opt.run(std::move(circuit));
