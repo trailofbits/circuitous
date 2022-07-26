@@ -30,6 +30,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
+#include <circuitous/Diff/SemanticsTainter.hpp>
 
 // TODO(lukas): Clean this up once remill gets rid of gflags.
 DEFINE_string(arch, "", "");
