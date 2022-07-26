@@ -12,6 +12,7 @@
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include "IR.hpp"
 
 namespace circ {
 
@@ -28,6 +29,18 @@ bool IsOneOf(Operation *op) {
   }
 }
 
+template < typename T, typename ...Ts >
+bool IsOneOfType(Operation *op) {
+    if ( isa<T>(op) ) {
+        return true;
+    }
+
+    if constexpr ( sizeof...( Ts ) == 0 ) {
+        return false;
+    } else {
+        return IsOneOf< Ts... >( op );
+    }
+}
 static inline bool IsLeafNode(Operation *op) {
   switch(op->op_code) {
     case InputRegister::kind:
@@ -171,6 +184,7 @@ namespace print {
 } // namespace print
 
 
+
 namespace collect {
   struct Ctxs {
     using ctxs_t = std::unordered_set<Operation *>;
@@ -225,6 +239,21 @@ namespace collect {
         Run(o);
       }
     }
+  };
+
+
+  template< typename ...Ts >
+  struct DownTree {
+      std::unordered_set<Operation *> collected;
+
+      void Run(Operation *op) {
+          if (IsOneOfType<Ts...>(op)) {
+              collected.insert(op);
+          }
+          for (auto o : op->operands) {
+              Run(o);
+          }
+      }
   };
 } // namespace collect
 
@@ -301,5 +330,104 @@ static inline std::unordered_set<Operation *> GetContexts(Operation *op) {
   return std::move(up_collector.collected);
 }
 
+static inline std::unordered_set<Operation *> GetLeafNodes(Operation *op) {
+    collect::DownTree<leaf_values_ts> down_collector;
+    down_collector.Run( op);
+
+    return std::move(down_collector.collected);
+}
+
+
+
+struct RunTreeUp{
+    virtual ~RunTreeUp() {};
+    virtual void Execute(Operation* op) = 0;
+    bool should_continue = true;
+    void Run(Operation* op) {
+        Execute( op );
+        if(should_continue){
+            for (auto o: op->users) {
+                Run( o );
+            }
+        }
+        should_continue = true;
+    }
+};
+
+struct RunTreeDown{
+    virtual ~RunTreeDown() {};
+
+    void Run(Operation* op) {
+        Execute( op );
+        for (auto o: op->operands) {
+            Run( o );
+        }
+    }
+private:
+    virtual void Execute(Operation* op) = 0;
+};
+
+template<typename TL>
+struct TypedTreeRunner{
+    virtual ~TypedTreeRunner() {};
+    virtual void Execute(Operation* op) = 0;
+    virtual void Run_(Operation* op) = 0;
+    void Run(Operation* op) {
+        collect::DownTree<TL> down_collector;
+        down_collector.Run(op);
+        std::cout << "collected: " << down_collector.collected.size() << std::endl;
+        for(auto& o : down_collector.collected) {
+            Run_( o );
+        }
+    }
+};
+
+
+struct DownTreeCollecterMetaData : RunTreeDown{
+    DownTreeCollecterMetaData(const std::string &key, const std::string &value)
+            : key( key ), value( value ) {}
+
+    void Execute(Operation* op){
+        if(op->has_meta(key) && op->get_meta(key) == value){
+            collected.insert(op);
+        }
+    }
+
+    std::unordered_set<Operation*> collected;
+    // metadata _can_ be any type, but on Operations they are string
+    // Ideally we would make these types linked explicitly
+    std::string key;
+    std::string value;
+};
+
+
+template<typename TL>
+struct RunTreeDownTyped : TypedTreeRunner<TL>{
+    virtual ~RunTreeDown() {};
+    virtual void Execute(Operation* op) = 0;
+    void Run_(Operation* op) {
+        Execute( op );
+        for (auto o: op->operands) {
+            Run_( o );
+        }
+    }
+};
+
+template<typename TL>
+struct RunTreeUpTyped : TypedTreeRunner<TL>{
+    virtual ~RunTreeUpTyped() {};
+    virtual void Execute(Operation* op) = 0;
+    void Run_(Operation* op) {
+        Execute( op );
+        for (auto o: op->users) {
+            Run_( o );
+        }
+    }
+};
+
+
+
+
 } // namespace circ
+
 
