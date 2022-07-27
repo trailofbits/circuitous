@@ -12,6 +12,7 @@
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/Transforms/PassBase.hpp>
 #include <stack>
+#include <circuitous/IR/Visitors.hpp>
 #include "circuitous/IR/Shapes.hpp"
 
 /*
@@ -51,15 +52,11 @@ namespace circ::inspect::config_differ {
      * It does a DFS and each time it hits a config node it does a walk from the root to the config
      * while adding a path for each target it finds in between as this will end in the found config
      */
-    struct CollectPathsUpwardTillConstraint {
+    struct ConfigToTargetPathsCollector : DFSVisitor<ConfigToTargetPathsCollector> {
         using path = std::deque< circ::Operation * >; // we will do lots of push/popping during dfs hence deque
         std::vector< std::vector< circ::Operation *>> paths_collect;
-        path current_path;
 
-        void Run(circ::Operation *op);
-
-    private:
-        void Execute(circ::Operation *op);
+        void visit(circ::Operation *op);
     };
 
     struct ConfigToTargetDifferPass : circ::PassBase {
