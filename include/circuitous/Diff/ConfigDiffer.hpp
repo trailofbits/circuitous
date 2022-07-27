@@ -1,6 +1,6 @@
-//
-// Created by sabastiaan on 25-07-22.
-//
+/*
+ * Copyright (c) 2022 Trail of Bits, Inc.
+ */
 
 #pragma once
 
@@ -58,6 +58,8 @@ namespace circ::inspect::config_differ {
 
         void visit(circ::Operation *op);
     };
+
+    std::pair<std::vector<Operation*>, std::vector<Operation*>> diff_results;
 
     struct ConfigToTargetDifferPass : circ::PassBase {
         using path = std::vector< circ::Operation * >;
