@@ -167,25 +167,23 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 
     if (auto dot_out = cli.template get< cli::DotOut >()) {
 
-        if(auto coloring = cli.template get< cli::DotColoring >()) {
-            if(coloring == "semantics")
-                circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
-                                    std::unordered_map< circ::Operation *, std::string >{}, circ::SemanticsTainterColoring);
-            else if(coloring == "ctt")
-                circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
-                                    std::unordered_map< circ::Operation *, std::string >{}, circ::ConfigToTargetColoring);
-            else{
-                if (auto input_colors = cli.template get< cli::DotHighlight >()) {
-                    auto highlights = std::move(*input_colors);
-                    circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
-                                        std::unordered_map< circ::Operation *, std::string >{}, circ::HighlightColorer(highlights));
+        auto colorer = [&](){
+            if(auto coloring = cli.template get< cli::DotColoring >()){
+                if(coloring == "semantics")
+                    return static_cast<std::function<circ::Color(circ::Operation*)>>(circ::SemanticsTainterColoring);
+                else if(coloring == "ctt")
+                    return static_cast<std::function<circ::Color(circ::Operation*)>>(circ::ConfigToTargetColoring);
+                else{
+                    if (auto input_colors = cli.template get< cli::DotHighlight >()) {
+                        auto hl_colorer = circ::HighlightColorer(std::move(*input_colors));
+                        return static_cast<std::function<circ::Color(circ::Operation*)>>(hl_colorer);
+                    }
                 }
-
             }
-        }
-        else
-            circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
-                         std::unordered_map< circ::Operation *, std::string >{}, circ::ColorNone);
+            return static_cast<std::function<circ::Color(circ::Operation*)>>(circ::ColorNone);
+        }();
+        circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
+                         std::unordered_map< circ::Operation *, std::string >{}, colorer);
     }
 
     if (auto verilog_out = cli.template get< cli::VerilogOut >())
@@ -225,7 +223,7 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
         return {};
     }
 
-    // TODO check that dothighlight is only viable with dotcoloring == highlight
+    // TODO(sebas) check that dothighlight is only viable with dotcoloring == highlight
     if (v.check(implies< cli::DotHighlight, cli::DotOut >()).process_errors(yield_err)
     || v.check(implies< cli::DotColoring, cli::DotOut >()).process_errors(yield_err)
     || v.check(implies< cli::DotHighlight, cli::DotColoring >()).process_errors(yield_err))
