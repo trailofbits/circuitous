@@ -17,10 +17,10 @@ namespace circ::inspect::config_differ{
     }
 
     void ConfigToTargetDifferPass::DiffTree(Operation* tree, const DiffMarker& key_this, const DiffMarker& key_other){
-        CollectPathsUpwardTillConstraint constraint_collector;
-        constraint_collector.Run( tree );
+        ConfigToTargetPathsCollector ctt_collector;
+        ctt_collector.visit( tree );
 
-        for(auto& p : constraint_collector.paths_collect){
+        for(auto& p : ctt_collector.paths_collect){
             for(auto o : p) {
                 if(o->has_meta(key) && diffmarker_read(o) == key_other)
                     diffmarker_write(o, DiffMarker::Overlapping);
@@ -30,7 +30,7 @@ namespace circ::inspect::config_differ{
         }
     }
 
-    void CollectPathsUpwardTillConstraint::Execute(Operation *op) {
+    void ConfigToTargetPathsCollector::visit(Operation *op) {
         if( semantics_tainter::read_semantics(op) == semantics_tainter::SemColoring::Config){
             std::cout << "reading configs, size current path: " << current_path.size() << std::endl;
             std::vector<Operation*> path_to_save;
@@ -43,16 +43,7 @@ namespace circ::inspect::config_differ{
                 }
             }
         }
-    }
-
-    void CollectPathsUpwardTillConstraint::Run(Operation *op) {
-        Execute( op );
-
-        for (auto o: op->operands) {
-            current_path.push_back(o);
-            Run( o );
-            current_path.pop_back();
-        }
+        op->traverse(*this);
     }
 
     void diffmarker_write(Operation *op, DiffMarker dm) {

@@ -123,6 +123,13 @@ namespace circ
                 vis.dispatch(op);
         }
 
+        template< typename Vis >
+        void traverse_upwards(Vis &vis)
+        {
+            for (auto op : users)
+                vis.dispatch(op);
+        }
+
       protected:
         // Please note, that id is not set.
         explicit Operation(unsigned size_, Operation::kind_t op_code_)

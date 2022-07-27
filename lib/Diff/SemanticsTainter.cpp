@@ -5,7 +5,7 @@
 
 namespace circ::inspect::semantics_tainter {
 
-    void SemanticsTainterPass::Execute(circ::Operation *op) {
+    void SemanticsTainterPass::taint(circ::Operation *op){
         /*
          * instruction bits are by definition related to decoding
          * Advice are meant to represent dependancy inversion which are chosen by decoding

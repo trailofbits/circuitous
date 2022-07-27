@@ -13,6 +13,7 @@
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/Transforms/PassBase.hpp>
 #include <stack>
+#include <circuitous/IR/Visitors.hpp>
 #include "circuitous/IR/Shapes.hpp"
 
 namespace circ::inspect::semantics_tainter {
@@ -77,13 +78,14 @@ namespace circ::inspect::semantics_tainter {
      *
      */
     static const inline std::string key = "diff";
-    struct SemanticsTainterPass : RunTreeUpTyped<leaf_values_ts>, PassBase{
+    struct SemanticsTainterPass : VisitorStartingFromTL<SemanticsTainterPass>, PassBase{
         void write(Operation* op, SemColoring value);
         bool all_children_are_same(Operation* op);
         bool should_promote_to_semantics(Operation* op);
-        void Execute(Operation* op) override;
+        void visit(Operation* op);
+        void taint(Operation* op);
 
-        CircuitPtr run(CircuitPtr &&circuit) override { Run(circuit.get()); return std::move(circuit); }
+        CircuitPtr run(CircuitPtr &&circuit) override {start_from<leaf_values_ts>(circuit.get()); return std::move(circuit); }
         static Pass get() { return std::make_shared< SemanticsTainterPass >(); }
     };
 
