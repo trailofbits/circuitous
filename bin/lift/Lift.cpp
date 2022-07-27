@@ -166,21 +166,18 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
         circ::print_circuit(*json_out, circ::print_json, circuit.get());
 
     if (auto dot_out = cli.template get< cli::DotOut >()) {
-
-        auto colorer = [&](){
+        auto colorer = [&]() -> std::function<circ::Color(circ::Operation*)>{
             if(auto coloring = cli.template get< cli::DotColoring >()){
                 if(coloring == "semantics")
-                    return static_cast<std::function<circ::Color(circ::Operation*)>>(circ::SemanticsTainterColoring);
+                    return circ::SemanticsTainterColoring;
                 else if(coloring == "ctt")
-                    return static_cast<std::function<circ::Color(circ::Operation*)>>(circ::ConfigToTargetColoring);
+                    return circ::ConfigToTargetColoring;
                 else{
-                    if (auto input_colors = cli.template get< cli::DotHighlight >()) {
-                        auto hl_colorer = circ::HighlightColorer(std::move(*input_colors));
-                        return static_cast<std::function<circ::Color(circ::Operation*)>>(hl_colorer);
-                    }
+                    if (auto input_colors = cli.template get< cli::DotHighlight >())
+                        return circ::HighlightColorer(std::move(*input_colors));
                 }
             }
-            return static_cast<std::function<circ::Color(circ::Operation*)>>(circ::ColorNone);
+            return circ::ColorNone;
         }();
         circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
                          std::unordered_map< circ::Operation *, std::string >{}, colorer);
