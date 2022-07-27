@@ -7,23 +7,24 @@ namespace circ::inspect::semantics_tainter {
 
     void SemanticsTainterPass::taint(circ::Operation *op){
         /*
-         * instruction bits are by definition related to decoding
-         * Advice are meant to represent dependancy inversion which are chosen by decoding
-         *      Honestly not 100% whether it should always be a decode value
-         *
-         * Constants are decodes until they are hit by a different value
-         */
-        if ( isa< Constant >( op ) || isa< InputInstructionBits >( op ) ||
-             isa< Advice >( op )) {
-            write( op, SemColoring::Decode );
-        } else if ( isa< RegConstraint >( op ) || isa< WriteConstraint >( op ) ||
-                    isa< ReadConstraint >( op )) {
+            * instruction bits are by definition related to decoding
+            * Advice are meant to represent dependancy inversion which are chosen by decoding
+            *      Honestly not 100% whether it should always be a decode value
+            *
+            * Constants are decodes until they are hit by a different value
+            */
+
+        if ( is_one_of<Constant, InputInstructionBits, Advice>(op)) {
+            return write( op, SemColoring::Decode );
+        }
+        if ( is_one_of<RegConstraint, WriteConstraint, ReadConstraint>(op)) {
             /*
              * Constraints are always semantics as they never represent state directly
-             * Nor are config nor are decode
+             * Nor are config nor are decode. Note that this doesn't hold for advice constraints
              */
-            write( op, SemColoring::Semantics );
-        } else if ( isa< DecodeCondition >( op )) {
+            return write( op, SemColoring::Semantics );
+        }
+        if ( isa< DecodeCondition >( op )) {
             /*
              * Decode by definition
              */
@@ -38,27 +39,37 @@ namespace circ::inspect::semantics_tainter {
                     write( o, SemColoring::Decode );
                 }
             }
-        } else if ( isa< Memory >( op )) {
+            return;
+        }
+        if ( isa< Memory >( op )) {
             /*
              * Memory is always an operand to an instruction
              */
-            write( op, SemColoring::Config );
-        } else if ((isa< leaf_values_ts >( op ) && !isa< InputInstructionBits >( op ))) {
+            return write( op, SemColoring::Config );
+        }
+        if ((isa< leaf_values_ts >( op ) && !isa< InputInstructionBits >( op ))) {
             /*
              * This should get all registers and other machine state related nodes
              */
-            write( op, SemColoring::State );
-        } else { // non terminals
-            if ( op->operands.size() == 1 ) { // single child, should just pass on
-                write( op, read_semantics( op->operands[ 0 ] ));
-            } else if ( should_promote_to_semantics( op )) {
-                write( op, SemColoring::Semantics );
-            } else if ( !all_children_are_same( op )) {
-                write( op, SemColoring::Config );
-            } else { // we know we are not a leaf node and all nodes are the same
-                write( op, read_semantics( op->operands[ 0 ] ));
-            }
+            return write( op, SemColoring::State );
         }
+        // non terminals
+        if ( op->operands.size() == 1 ) { // single child, should just pass on
+            return write( op, read_semantics( op->operands[ 0 ] ));
+        }
+        if ( should_promote_to_semantics( op )) {
+            return write( op, SemColoring::Semantics );
+        }
+        if ( !all_children_are_same( op )) {
+            return write( op, SemColoring::Config );
+        }
+        // we know we are not a leaf node and all nodes are the same
+        return write( op, read_semantics( op->operands[ 0 ] ));
+    }
+
+    void SemanticsTainterPass::visit(circ::Operation *op) {
+        taint(op);
+        op->traverse_upwards(*this);
     }
 
     bool SemanticsTainterPass::should_promote_to_semantics(Operation *op) {
