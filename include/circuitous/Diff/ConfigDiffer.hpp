@@ -51,8 +51,30 @@ namespace circ::inspect::config_differ {
     struct CTTFinder : SubPathCollector<CTTFinder>{
         bool top(Operation* op);
         bool bottom(Operation* op);
-        void visit(circ::Operation *op);
     };
+
+    struct InstrBitsToDR : SubPathCollector<InstrBitsToDR>{
+        bool top(Operation* op);
+        bool bottom(Operation* op);
+    };
+
+
+    void mark_operation(Operation* o, const DiffMarker& key_this, const DiffMarker& key_other);
+
+    template<typename T>
+    void diff_subtrees(Operation* tree1, Operation* tree2, T&& path_collector){
+        path_collector.visit(tree1);
+        auto collected = path_collector.paths_collect;
+        for(auto& p : path_collector(tree1)){
+            for(auto& o : p)
+                mark_operation(o, DiffMarker::Left, DiffMarker::Right);
+        }
+
+        for(auto& p : path_collector(tree2)){
+            for(auto& o : p)
+                mark_operation(o, DiffMarker::Right, DiffMarker::Left);
+        }
+    }
 
     struct ConfigToTargetDifferPass : circ::PassBase {
         using path = std::vector< circ::Operation * >;
@@ -63,7 +85,8 @@ namespace circ::inspect::config_differ {
                 std::cout << "Running  CTT" << std::endl;
                 auto tree1 = circuit->attr< VerifyInstruction >()[ 0 ];
                 auto tree2 = circuit->attr< VerifyInstruction >()[ 1 ];
-                Execute( tree1, tree2 );
+                auto ctt = InstrBitsToDR();
+                diff_subtrees(tree1, tree2, ctt);
             }
 
             return std::move( circuit );
