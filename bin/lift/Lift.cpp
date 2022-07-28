@@ -84,7 +84,6 @@ namespace
 
         if(cli.template present<cli::Simplify>()){
             opt.add_pass("taint-semantics");
-            opt.add_pass("ctt");
         }
 
         auto result = opt.run(std::move(circuit));
