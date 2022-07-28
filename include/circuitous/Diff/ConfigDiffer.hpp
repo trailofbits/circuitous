@@ -53,7 +53,7 @@ namespace circ::inspect::config_differ {
         bool bottom(Operation* op);
     };
 
-    struct InstrBitsToDR : SubPathCollector<InstrBitsToDR>{
+    struct InstrBitsToDRFinder : SubPathCollector<InstrBitsToDRFinder>{
         bool top(Operation* op);
         bool bottom(Operation* op);
     };
@@ -75,24 +75,4 @@ namespace circ::inspect::config_differ {
                 mark_operation(o, DiffMarker::Right, DiffMarker::Left);
         }
     }
-
-    struct ConfigToTargetDifferPass : circ::PassBase {
-        using path = std::vector< circ::Operation * >;
-        void Execute(Operation *tree1, Operation* tree2 );
-
-        circ::CircuitPtr run(circ::CircuitPtr &&circuit) override {
-            if ( circuit->attr< VerifyInstruction >().size() == 2 ) {
-                std::cout << "Running  CTT" << std::endl;
-                auto tree1 = circuit->attr< VerifyInstruction >()[ 0 ];
-                auto tree2 = circuit->attr< VerifyInstruction >()[ 1 ];
-                auto ctt = InstrBitsToDR();
-                diff_subtrees(tree1, tree2, ctt);
-            }
-
-            return std::move( circuit );
-        }
-
-        static circ::Pass get() {return std::make_shared< ConfigToTargetDifferPass >();}
-    };
-
 };
