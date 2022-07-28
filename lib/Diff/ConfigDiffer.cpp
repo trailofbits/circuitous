@@ -16,9 +16,22 @@ namespace circ::inspect::config_differ{
         DiffTree( tree2, DiffMarker::Right, DiffMarker::Left );
     }
 
+    bool is_constraint_tmp(Operation* op ){
+        return isa<constraint_opts_ts>(op);
+    }
+
     void ConfigToTargetDifferPass::DiffTree(Operation* tree, const DiffMarker& key_this, const DiffMarker& key_other){
-        ConfigToTargetPathsCollector ctt_collector;
+        CTTFinder ctt_collector;
         ctt_collector.visit( tree );
+
+        std::cout << "found tree ----------"<< std::endl;
+        for(auto& p : ctt_collector.paths_collect){
+            for(auto o : p) {
+                std::cout << o->name() << " " <<  o->id() << " | ";
+            }
+            std::cout << std::endl;
+        }
+        std::cout << "----------" << std::endl;
 
         for(auto& p : ctt_collector.paths_collect){
             for(auto o : p) {
@@ -29,22 +42,6 @@ namespace circ::inspect::config_differ{
                     diffmarker_write(o, key_this);
             }
         }
-    }
-
-    void ConfigToTargetPathsCollector::visit(Operation *op) {
-        if( semantics_tainter::read_semantics(op) == semantics_tainter::SemColoring::Config){
-            std::cout << "reading configs, size current path: " << current_path.size() << std::endl;
-            std::vector<Operation*> path_to_save;
-            for(auto it = current_path.rbegin(); it != current_path.rend(); ++it){
-                path_to_save.emplace(path_to_save.end(), *it); // TODO expensive call, change to deque?
-                std::cout << "traversed " <<  (*it)->name() << std::endl;
-                if(isa<constraint_opts_ts>(*it)){
-                    paths_collect.push_back(path_to_save); //copy
-                    std::cout << "pushed with size " <<  path_to_save.size() << std::endl;
-                }
-            }
-        }
-        op->traverse(*this);
     }
 
     void diffmarker_write(Operation *op, DiffMarker dm) {
@@ -71,5 +68,17 @@ namespace circ::inspect::config_differ{
             return DiffMarker::Overlapping;
         else
             circ::unreachable() << "could not decode DiffMarker";
+    }
+
+    bool CTTFinder::top(Operation *op) {
+        return isa<constraint_opts_ts>(op);
+    }
+
+    bool CTTFinder::bottom(Operation *op) {
+        return semantics_tainter::read_semantics(op) == semantics_tainter::SemColoring::Config;
+    }
+
+    void CTTFinder::visit(circ::Operation *op) {
+        op->traverse(*this);
     }
 }
