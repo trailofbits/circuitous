@@ -16,9 +16,14 @@ from tools.result import ResultValue
 class BaseRunner(RunsPopen):
     __slots__ = ('test_dir', 'test_case', 'should_die', 'verbose')
 
-    def __init__(self, test_dir_, test_case_, **kwargs):
+    def __init__(self, test_dir_, test_case_, runner_, **kwargs):
         self.test_dir = test_dir_
         self.test_case = test_case_
+
+        self.runner = runner_
+
+        assert self.runner is not None
+        assert os.path.exists(self.runner)
 
         self.should_die = kwargs.get('die', False)
         self.verbose = kwargs.get('verbose', False)
@@ -35,7 +40,7 @@ class BaseRunner(RunsPopen):
     def run(self, circuit_path):
         result = os.path.join(self.test_dir, self.prefix() + '.result.json')
 
-        args = ['../../../build/circuitous-run',
+        args = [self.runner,
                 '--verify',
                 '--log-dir', self.test_dir,
                 '--traces', self.store_trace(self.test_case.as_json()),
@@ -152,9 +157,9 @@ class TestExecutor():
 
         return "circ_test." + normalize(test_def.name) + ".circuit"
 
-    def get_runner(self, test_case, **kwargs):
+    def get_runner(self, test_case, runner, **kwargs):
         # TODO(lukas): Parametrize by test case?
-        return self.runner(self.test_dir, test_case, **kwargs)
+        return self.runner(self.test_dir, test_case, runner, **kwargs)
 
     def get_evaluator(self, test_case):
         return self.evaluator(test_case)
@@ -167,7 +172,7 @@ class TestExecutor():
 
 
     # -> (dict of results, Optional message to be printed)
-    def run(self, test_def, **kwargs):
+    def run(self, test_def, runner_binary, **kwargs):
         def extract_circuit():
             return test_def.circuit
 
@@ -180,7 +185,7 @@ class TestExecutor():
         results = {}
         for test_case in test_def.cases:
             try:
-                result = self.get_runner(test_case, **kwargs).run(circuit)
+                result = self.get_runner(test_case, runner_binary, **kwargs).run(circuit)
             except CircuitousError as e:
                 results[test_case] = ResultValue.make_error('circuitous-run error', str(e))
                 continue
@@ -188,5 +193,5 @@ class TestExecutor():
 
         return (test_def, None, results)
 
-def run_multitrace(test_def, test_dir, **kwargs):
-    return TestExecutor(test_dir).run(test_def, **kwargs)
+def run_multitrace(test_def, test_dir, runner_binary, **kwargs):
+    return TestExecutor(test_dir).run(test_def, runner_binary, **kwargs)
