@@ -6,31 +6,6 @@
 
 namespace circ::inspect::config_differ{
 
-//    void ConfigToTargetDifferPass::Execute(Operation *tree1, Operation* tree2) {
-//        /*
-//         * We first mark all paths that exist inside tree1 as left.
-//         * Then we mark all paths in tree2 as right
-//         * If during the walk for tree2 we see left we mark them as overlap
-//         */
-//        DiffTree( tree1, DiffMarker::Left, DiffMarker::Right );
-//        DiffTree( tree2, DiffMarker::Right, DiffMarker::Left );
-//    }
-//
-//    void ConfigToTargetDifferPass::DiffTree(Operation* tree, const DiffMarker& key_this, const DiffMarker& key_other){
-//        CTTFinder ctt_collector;
-//        ctt_collector.visit( tree );
-//
-//        for(auto& p : ctt_collector.paths_collect){
-//            for(auto o : p) {
-//                if(o->has_meta(key) && diffmarker_read(o) == key_other)
-//                    diffmarker_write(o, DiffMarker::Overlapping);
-//                // if something is already marked overlap don't remove it
-//                else if(diffmarker_read(o) != DiffMarker::Overlapping)
-//                    diffmarker_write(o, key_this);
-//            }
-//        }
-//    }
-
     void diffmarker_write(Operation *op, DiffMarker dm) {
         auto value = [&](){
             switch(dm){
