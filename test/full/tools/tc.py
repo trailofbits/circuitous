@@ -721,9 +721,7 @@ class TraceTest():
             insts = self.fmt_insts()
             states = self._maker.execute(insts, state, mem)
 
-            print(insts)
             for x in states:
-                print(x.registers['RIP'])
                 x.bytes = insts.get(x.registers['RIP'], '00')
 
             for idx, mutator in self._mutators.items():
