@@ -6,8 +6,9 @@
 
 #include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Storage.hpp>
-#include <circuitous/IR/Shapes.hpp>
+
 #include <type_traits>
+#include <deque>
 
 namespace circ
 {
@@ -159,26 +160,6 @@ namespace circ
         void reset() { seen_ops.clear(); }
 
         std::unordered_set< Operation * > seen_ops;
-    };
-
-    template < typename Derived, bool IsConst = false >
-    struct VisitorStartingFromTL : Visitor< Derived, IsConst >
-    {
-        using parent_t = Visitor< Derived, IsConst >;
-        using operation_t = typename parent_t::operation_t;
-
-        auto dispatch(operation_t op) {
-            return this->parent_t::dispatch( op );
-        }
-
-        template < typename TL >
-        void start_from(Operation *op) {
-            collect::DownTree <TL> down_collector; // Works on more than just circuit unlike attr
-            down_collector.Run( op );
-            for (auto &o: down_collector.collected) {
-                dispatch( o );
-            }
-        }
     };
 
     template < typename Derived, bool IsConst = false >
