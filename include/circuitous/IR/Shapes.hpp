@@ -342,8 +342,10 @@ struct SubPathCollector : DFSVisitor<Derived, IsConst>
     using operation_t = typename parent_t::operation_t;
     std::vector< std::vector< circ::Operation *>> paths_collect;
 
-    bool top(Operation* op) { return static_cast<Derived&>(*this).bottom(op);}
-    bool bottom(Operation* op){ return static_cast<Derived&>(*this).top(op);}
+    bool top(Operation *op) { return static_cast<Derived &>(*this).top( op );}
+    bool bottom(Operation *op) { return static_cast<Derived &>(*this).bottom( op );}
+    // users can override this, so they can reverse the direction of traversal
+    void visit(circ::Operation *op) { op->traverse(*this); }
 
     // By keeping this logic located inside dispatch we allow the user which direction to traverse
     auto dispatch(operation_t op)
@@ -364,6 +366,12 @@ struct SubPathCollector : DFSVisitor<Derived, IsConst>
             }
         }
         return this->parent_t::dispatch(op);
+    }
+
+    std::vector<std::vector<Operation*>> operator()(Operation* op) {
+        this->paths_collect.clear();
+        visit(op);
+        return this->paths_collect;
     }
 };
 
