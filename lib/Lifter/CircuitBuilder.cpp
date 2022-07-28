@@ -14,8 +14,6 @@
 #include <circuitous/Lifter/SelectFold.hpp>
 #include <circuitous/Lifter/Components/Decoder.hpp>
 
-#include <circuitous/IR/Lifter.hpp>
-
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Check.hpp>

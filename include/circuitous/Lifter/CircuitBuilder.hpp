@@ -10,7 +10,7 @@
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/Component.hpp>
 #include <circuitous/Lifter/BaseLifter.hpp>
-#include <circuitous/IR/Lifter.hpp>
+#include <circuitous/Lifter/Lifter.hpp>
 #include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>

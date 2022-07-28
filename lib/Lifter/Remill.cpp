@@ -6,7 +6,6 @@
 
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Memory.hpp>
-#include <circuitous/IR/Lifter.hpp>
 #include <circuitous/IR/Verify.hpp>
 
 #include <circuitous/Lifter/CircuitBuilder.hpp>

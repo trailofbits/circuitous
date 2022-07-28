@@ -10,11 +10,11 @@ CIRCUITOUS_RELAX_WARNINGS
 CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <circuitous/IR/Circuit.hpp>
-#include <circuitous/IR/Lifter.hpp>
 
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/CircuitBuilder.hpp>
 #include <circuitous/Lifter/CircuitSmithy.hpp>
+#include <circuitous/Lifter/Lifter.hpp>
 #include <circuitous/Lifter/LLVMToCircIR.hpp>
 
 namespace circ

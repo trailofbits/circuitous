@@ -14,6 +14,7 @@ add_headers( Lifter CIRCUITOUS_LIFTER_HEADERS
   Error.hpp
   Flatten.hpp
   Instruction.hpp
+  Lifter.hpp
   LLVMToCircIR.hpp
   Memory.hpp
   SelectFold.hpp
