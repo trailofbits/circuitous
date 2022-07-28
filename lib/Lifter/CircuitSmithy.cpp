@@ -53,7 +53,7 @@ namespace circ
     auto CircuitSmithy::forge() -> circuit_ptr_t
     {
         batch.fuzz();
-        batch.lift< ILifter< InstructionLifter > >();
+        batch.lift< ILifter< OpaqueILifter > >();
         return lower_fn(CircuitMaker(ctx).make_from(std::move(batch)), ctx);
     }
 } // namespace circ
