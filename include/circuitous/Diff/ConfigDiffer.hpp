@@ -93,8 +93,6 @@ namespace circ::inspect::config_differ {
         }
 
         static circ::Pass get() {return std::make_shared< ConfigToTargetDifferPass >();}
-
-        void DiffTree(Operation* tree, const DiffMarker& key_this, const DiffMarker& key_other);
     };
 
 };
