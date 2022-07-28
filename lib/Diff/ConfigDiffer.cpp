@@ -48,11 +48,11 @@ namespace circ::inspect::config_differ{
         return semantics_tainter::read_semantics(op) == semantics_tainter::SemColoring::Config;
     }
 
-    bool InstrBitsToDR::top(Operation *op) {
+    bool InstrBitsToDRFinder::top(Operation *op) {
         return isa<DecoderResult>(op);
     }
 
-    bool InstrBitsToDR::bottom(Operation *op) {
+    bool InstrBitsToDRFinder::bottom(Operation *op) {
         return isa<leaf_values_ts>(op);
     }
 }
