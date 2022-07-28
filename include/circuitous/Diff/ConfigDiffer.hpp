@@ -46,20 +46,13 @@ namespace circ::inspect::config_differ {
     DiffMarker diffmarker_read(Operation* op);
 
     /*
-     * This pass goes from top down and records every pass that starts with a target (constraint)
-     * and ends in a config node.
-     *
-     * It does a DFS and each time it hits a config node it does a walk from the root to the config
-     * while adding a path for each target it finds in between as this will end in the found config
+     * Finds all paths starting from a constraint down to a config node
      */
-    struct ConfigToTargetPathsCollector : DFSVisitor<ConfigToTargetPathsCollector> {
-        using path = std::deque< circ::Operation * >; // we will do lots of push/popping during dfs hence deque
-        std::vector< std::vector< circ::Operation *>> paths_collect;
-
+    struct CTTFinder : SubPathCollector<CTTFinder>{
+        bool top(Operation* op);
+        bool bottom(Operation* op);
         void visit(circ::Operation *op);
     };
-
-    std::pair<std::vector<Operation*>, std::vector<Operation*>> diff_results;
 
     struct ConfigToTargetDifferPass : circ::PassBase {
         using path = std::vector< circ::Operation * >;
