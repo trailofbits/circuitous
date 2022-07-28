@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include <circuitous/Util/Logging.hpp>
 #include <circuitous/IR/Memory.hpp>
 #include <circuitous/IR/Circuit.hpp>
 
