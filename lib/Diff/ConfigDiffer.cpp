@@ -24,7 +24,8 @@ namespace circ::inspect::config_differ{
             for(auto o : p) {
                 if(o->has_meta(key) && diffmarker_read(o) == key_other)
                     diffmarker_write(o, DiffMarker::Overlapping);
-                else
+                // if something is already marked overlap don't remove it
+                else if(diffmarker_read(o) != DiffMarker::Overlapping)
                     diffmarker_write(o, key_this);
             }
         }
