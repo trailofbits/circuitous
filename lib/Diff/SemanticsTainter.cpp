@@ -14,7 +14,7 @@ namespace circ::inspect::semantics_tainter {
             * Constants are decodes until they are hit by a different value
             */
 
-        if ( is_one_of<Constant, InputInstructionBits, Advice>(op)) {
+        if ( is_one_of<Constant, InputInstructionBits>(op)) {
             return write( op, SemColoring::Decode );
         }
         if ( is_one_of<RegConstraint, WriteConstraint, ReadConstraint>(op)) {
@@ -41,7 +41,7 @@ namespace circ::inspect::semantics_tainter {
             }
             return;
         }
-        if ( isa< Memory >( op )) {
+        if ( is_one_of< Memory, Advice >( op )) {
             /*
              * Memory is always an operand to an instruction
              */
@@ -92,7 +92,7 @@ namespace circ::inspect::semantics_tainter {
              *
              *
              */
-            if(o_sem == SemColoring::Decode && !all_children_are_same(op)){
+            if(isa<Constant>(o) && !all_children_are_same(op)){
                 promote_to_config.push_back(o);
                 continue;
             }
@@ -109,7 +109,7 @@ namespace circ::inspect::semantics_tainter {
         if(op->operands.size() < 2)
             return true;
 
-        auto first = read_semantics(op);
+        auto first = read_semantics(op->operands[0]);
         for (auto& o: op->operands){
             if(first != read_semantics(o)){
                 return false;
