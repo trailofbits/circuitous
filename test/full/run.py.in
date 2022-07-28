@@ -377,10 +377,15 @@ class Results:
             print(message)
         return out
 
+def set_compiler():
+    log_info("Setting circuit compiler to: " + circuitous_lift)
+    assert os.path.exists(circuitous_lift)
+    RawCircuit.runner = circuitous_lift
 
 # Return number of tests that *did not* pass.
 def execute_tests(tests, top_dir, extra_args, fragile, jobs):
     log_info("Test dir is: " + top_dir)
+    set_compiler()
     os.chdir(top_dir)
     global top_level_dir
     top_level_dir = os.path.abspath(top_dir)
@@ -406,7 +411,7 @@ def execute_tests(tests, top_dir, extra_args, fragile, jobs):
                                         prefix=x.name.replace(' ', '.').replace('/', '.') + '_')
             test_dir = os.path.abspath(test_dir)
             if isinstance(x, TraceTest):
-                results.put(run_multitrace(x, test_dir, die=interpreter_death))
+                results.put(run_multitrace(x, test_dir, circuitous_run, die=interpreter_death))
                 continue
 
             try:

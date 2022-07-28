@@ -40,6 +40,11 @@ class CookedCircuit:
 class RawCircuit(RunsPopen):
     __slots__ = ('insts')
 
+    # TODO(lukas): I do not expect there are multiple ways to compile a circuit.
+    #              If they arise, this can be moved to an attribute - currently there
+    #              is no nice way to do it.
+    runner = None
+
     def __init__(self, instructions):
         self.insts = instructions
 
@@ -49,8 +54,10 @@ class RawCircuit(RunsPopen):
     def compile(self, name, where):
         circuit_path = os.path.abspath(os.path.join(where, name))
 
+        assert RawCircuit.runner is not None
+        assert os.path.exists(RawCircuit.runner)
         # TODO(lukas): Normalize
-        args = ['../../../build/circuitous-lift',
+        args = [RawCircuit.runner,
                 '--log-dir', where,
                 '--bytes-in', self.flattened(),
                 '--ir-out', circuit_path,
