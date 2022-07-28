@@ -6,6 +6,7 @@
 
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/Support/Check.hpp>
+#include <circuitous/IR/Visitors.hpp>
 
 #include <deque>
 #include <sstream>
@@ -330,13 +331,61 @@ static inline std::unordered_set<Operation *> GetContexts(Operation *op) {
   return std::move(up_collector.collected);
 }
 
-static inline std::unordered_set<Operation *> GetLeafNodes(Operation *op) {
-    collect::DownTree<leaf_values_ts> down_collector;
-    down_collector.Run( op);
+/*
+ *  Finds sub-trees in a DFS starting at some node
+ *  it returns a collection of all paths that start with top and end at bottom
+ */
+template < typename Derived, bool IsConst = false >
+struct SubPathCollector : DFSVisitor<Derived, IsConst>
+{
+    using parent_t = DFSVisitor< Derived, IsConst >;
+    using operation_t = typename parent_t::operation_t;
+    std::vector< std::vector< circ::Operation *>> paths_collect;
 
-    return std::move(down_collector.collected);
-}
+    bool top(Operation* op) { return static_cast<Derived&>(*this).bottom(op);}
+    bool bottom(Operation* op){ return static_cast<Derived&>(*this).top(op);}
 
+    // By keeping this logic located inside dispatch we allow the user which direction to traverse
+    auto dispatch(operation_t op)
+    {
+        /*
+         * once we have reached the bottom, we recurse back to the original starting node
+         * and saving a path for from bottom to any node satisfying top
+         */
+        if( bottom(op) ){
+            std::vector<Operation*> path_to_save;
+            for(auto it = parent_t::current_path.rbegin(); it != parent_t::current_path.rend(); ++it){
+                // TODO(sebas) emplace on vector is less than ideal
+                path_to_save.emplace(path_to_save.end(), *it);
+                if(top(*it)){
+                    path_to_save.push_back(op); // op hasn't been added to the path just yet
+                    paths_collect.push_back(path_to_save); // we want this explicit copy
+                }
+            }
+        }
+        return this->parent_t::dispatch(op);
+    }
+};
+
+template < typename Derived, bool IsConst = false >
+struct VisitorStartingFromTL : Visitor< Derived, IsConst >
+{
+    using parent_t = Visitor< Derived, IsConst >;
+    using operation_t = typename parent_t::operation_t;
+
+    auto dispatch(operation_t op) {
+        return this->parent_t::dispatch( op );
+    }
+
+    template < typename TL >
+    void start_from(Operation *op) {
+        collect::DownTree <TL> down_collector; // Works on more than just circuit unlike attr
+        down_collector.Run( op );
+        for (auto &o: down_collector.collected) {
+            dispatch( o );
+        }
+    }
+};
 } // namespace circ
 
 
