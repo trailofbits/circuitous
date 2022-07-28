@@ -158,6 +158,20 @@ circ::CircuitPtr get_input_circuit(auto &cli)
     return {};
 }
 
+void diff_subtrees(const auto &cli, const circ::CircuitPtr &circuit){
+    if(auto coloring = cli.template get< cli::DotColoring >()){
+        if ( circuit->attr< circ::VerifyInstruction >().size() == 2 ) {
+            auto tree1 = circuit->attr< circ::VerifyInstruction >()[ 0 ];
+            auto tree2 = circuit->attr< circ::VerifyInstruction >()[ 1 ];
+            if ( coloring == "ctt" ) {
+                diff_subtrees( tree1, tree2, circ::inspect::config_differ::CTTFinder());
+            } else if ( coloring == "ibtodr" ) {
+                diff_subtrees( tree1, tree2, circ::inspect::config_differ::InstrBitsToDRFinder());
+            }
+        }
+    }
+}
+
 void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 {
     if (auto ir_out = cli.template get< cli::IROut >())
@@ -167,12 +181,15 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
         circ::print_circuit(*json_out, circ::print_json, circuit.get());
 
     if (auto dot_out = cli.template get< cli::DotOut >()) {
+
         auto colorer = [&]() -> std::function<circ::Color(circ::Operation*)>{
             if(auto coloring = cli.template get< cli::DotColoring >()){
                 if(coloring == "semantics")
                     return circ::SemanticsTainterColoring;
-                else if(coloring == "ctt")
+                else if(coloring == "ctt" || coloring == "ibtodr") {
+                    diff_subtrees(cli, circuit);
                     return circ::ConfigToTargetColoring;
+                }
                 else{
                     if (auto input_colors = cli.template get< cli::DotHighlight >())
                         return circ::HighlightColorer(std::move(*input_colors));
@@ -180,6 +197,7 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
             }
             return circ::ColorNone;
         }();
+
         circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
                          std::unordered_map< circ::Operation *, std::string >{}, colorer);
     }
