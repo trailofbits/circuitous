@@ -6,7 +6,6 @@ add_headers( IR CIRCUITOUS_IR_HEADERS
   Intrinsics.hpp
   IntrinsicsHelpers.hpp
   IR.hpp
-  Lifter.hpp
   Memory.hpp
   Metadata.hpp
   Shapes.hpp
