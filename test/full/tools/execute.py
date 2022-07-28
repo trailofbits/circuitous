@@ -77,8 +77,6 @@ class BaseEvaluator():
 
     def do_memory_compare(self, state, trace):
         used = set()
-        print(trace["memory_hints"])
-
         def as_tuple(what):
             out = []
             for x in ['used', 'addr', 'value', 'mode', 'size', 'ts']:
@@ -173,12 +171,10 @@ class TestExecutor():
 
     # -> (dict of results, Optional message to be printed)
     def run(self, test_def, runner_binary, **kwargs):
-        def extract_circuit():
-            return test_def.circuit
 
         lift_dir = os.path.abspath(tempfile.mkdtemp(dir=self.test_dir, prefix='circuit'))
         try:
-            circuit = extract_circuit().compile(self.mk_name(test_def), lift_dir)
+            circuit = test_def.circuit.compile(self.mk_name(test_def), lift_dir)
         except CircuitousError as e:
             return self.mk_pipeline_fail(test_def, e)
 
