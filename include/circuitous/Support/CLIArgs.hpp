@@ -74,7 +74,7 @@ namespace circ::cli
         static inline const auto opt = circ::CmdOpt("--dot-coloring", false);
         static inline const std::unordered_set< std::string > allowed =
         {
-                "semantics", "ctt", "highlight"
+                "semantics", "ctt", "highlight", "ibtodr"
         };
 
         static std::string help()
