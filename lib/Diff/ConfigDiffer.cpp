@@ -4,8 +4,8 @@
 #include <circuitous/Diff/SemanticsTainter.hpp>
 #include <string>
 
-namespace circ::inspect::config_differ{
-
+namespace circ::inspect
+{
     void diffmarker_write(Operation *op, DiffMarker dm) {
         auto value = [&](){
             switch(dm){
@@ -45,7 +45,7 @@ namespace circ::inspect::config_differ{
     }
 
     bool CTTFinder::bottom(Operation *op) {
-        return semantics_tainter::read_semantics(op) == semantics_tainter::SemColoring::Config;
+        return read_semantics(op) == SemColoring::Config;
     }
 
     bool InstrBitsToDRFinder::top(Operation *op) {

@@ -171,7 +171,7 @@ void diff_subtree(const auto &cli, const circ::CircuitPtr &circuit){
         auto tree1 = circuit->attr< circ::VerifyInstruction >()[ 0 ];
         auto tree2 = circuit->attr< circ::VerifyInstruction >()[ 1 ];
 
-        using namespace circ::inspect::config_differ;
+        using namespace circ::inspect;
         // no lambda pattern here since the types of return classes are too different
         if ( coloring == "ibtdr" )
             diff_subtrees( tree1, tree2, InstrBitsToDRFinder());
@@ -179,7 +179,7 @@ void diff_subtree(const auto &cli, const circ::CircuitPtr &circuit){
         if ( coloring == "full")
             diff_subtrees( tree1, tree2, LeafToVISubPathCollector());
 
-        circ::inspect::semantics_tainter::SemanticsTainter tainter;
+        circ::inspect::SemanticsTainter tainter;
         tainter.run(circuit); // the rest depend on this coloring
         if ( coloring == "ctt" )
             diff_subtrees( tree1, tree2, CTTFinder());
@@ -211,7 +211,7 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 
             if ( auto coloring = cli.template get< cli::DotSemantics >())
             {
-                circ::inspect::semantics_tainter::SemanticsTainter tainter;
+                circ::inspect::SemanticsTainter tainter;
                 tainter.run( circuit );
                 return circ::print::sem_taint_coloring;
             }
