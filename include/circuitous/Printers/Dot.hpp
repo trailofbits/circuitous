@@ -37,7 +37,7 @@ static constexpr const color_styles_t colors = {
 };
 
 Color SemanticsTainterColoring(Operation* op);
-Color ConfigToTargetColoring(Operation* op);
+Color DiffColoring(Operation* op);
 Color ColorNone(Operation* op);
 
 struct HighlightColorer{
