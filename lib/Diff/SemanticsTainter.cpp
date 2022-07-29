@@ -3,7 +3,7 @@
 #include <circuitous/Diff/SemanticsTainter.hpp>
 
 
-namespace circ::inspect::semantics_tainter {
+namespace circ::inspect {
 
     void SemanticsTainter::taint(circ::Operation *op){
         /*
