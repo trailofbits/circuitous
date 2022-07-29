@@ -14,7 +14,7 @@
 #include <circuitous/Transforms/PassBase.hpp>
 #include <stack>
 #include <circuitous/IR/Visitors.hpp>
-#include "circuitous/IR/Shapes.hpp"
+#include <circuitous/IR/Shapes.hpp>
 
 namespace circ::inspect::semantics_tainter {
 
