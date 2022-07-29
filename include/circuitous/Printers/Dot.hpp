@@ -41,9 +41,9 @@ namespace circ::print
         "fillcolor=orange;fontcolor=black;style=filled;"
     };
 
-    Color SemanticsTainterColoring(Operation *op);
-    Color DiffColoring(Operation *op);
-    Color ColorNone(Operation *op);
+    Color sem_taint_coloring(Operation *op);
+    Color diff_coloring(Operation *op);
+    Color no_coloring(Operation *op);
 
     struct HighlightColorer
     {

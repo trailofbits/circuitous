@@ -200,16 +200,16 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
             if ( auto coloring = cli.template get< cli::DotDiff >())
             {
                 diff_subtree( cli, circuit );
-                return circ::print::DiffColoring;
+                return circ::print::diff_coloring;
             }
 
             if ( auto coloring = cli.template get< cli::DotSemantics >())
             {
                 circ::inspect::semantics_tainter::SemanticsTainterPass tainter;
                 tainter.run( circuit );
-                return circ::print::SemanticsTainterColoring;
+                return circ::print::sem_taint_coloring;
             }
-            return circ::print::ColorNone;
+            return circ::print::no_coloring;
         }();
 
         circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
