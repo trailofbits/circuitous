@@ -180,10 +180,11 @@ namespace circ
 
 namespace circ::dot
 {
-    struct Printer : UniqueVisitor<Printer> {
+    template<typename ColorFunc>
+    struct Printer : UniqueVisitor<Printer<ColorFunc>> {
         using value_map_t = std::unordered_map<Operation *, std::string>;
 
-        explicit Printer(std::ostream &os_, const value_map_t &vals, std::function<Color(Operation*)> color_op)
+        explicit Printer(std::ostream &os_, const value_map_t &vals, ColorFunc color_op)
             : os(os_), node_values(vals), color_op(color_op) { }
 
         std::string Operand(Operation *of, std::size_t i) {
@@ -482,7 +483,7 @@ namespace circ::dot
 
         std::ostream &os;
         const value_map_t &node_values;
-        std::function<Color(Operation*)> color_op;
+        ColorFunc color_op;
     };
 } // namespace circ::dot
 
@@ -491,7 +492,7 @@ namespace circ
     void print_dot(std::ostream &os, Circuit *circuit,
                   const std::unordered_map<Operation *, std::string> &node_values, std::function<Color(Operation*)> oc)
     {
-      circ::dot::Printer dot_os(os, node_values, oc);
+      circ::dot::Printer<std::function<Color(Operation*)>> dot_os(os, node_values, oc);
       dot_os.visit(circuit);
     }
 } // namespace circ
