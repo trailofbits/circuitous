@@ -198,24 +198,24 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
         circ::print_circuit(*json_out, circ::print_json, circuit.get());
 
     if (auto dot_out = cli.template get< cli::DotOut >()) {
-        auto colorer = [ & ]() -> std::function< circ::Color(circ::Operation *) >
+        auto colorer = [ & ]() -> std::function< circ::print::Color(circ::Operation *) >
         {
             if ( auto input_colors = cli.template get< cli::DotHighlight >())
-                return circ::HighlightColorer( std::move( *input_colors ));
+                return circ::print::HighlightColorer( std::move( *input_colors ));
 
             if ( auto coloring = cli.template get< cli::DotDiff >())
             {
                 diff_subtree( cli, circuit );
-                return circ::DiffColoring;
+                return circ::print::DiffColoring;
             }
 
             if ( auto coloring = cli.template get< cli::DotSemantics >())
             {
                 circ::inspect::semantics_tainter::SemanticsTainterPass tainter;
                 tainter.run( circuit );
-                return circ::SemanticsTainterColoring;
+                return circ::print::SemanticsTainterColoring;
             }
-            return circ::ColorNone;
+            return circ::print::ColorNone;
         }();
 
         circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
