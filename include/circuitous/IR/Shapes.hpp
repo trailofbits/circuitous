@@ -354,11 +354,11 @@ struct SubPathCollector : DFSVisitor<Derived, IsConst>
          * once we have reached the bottom, we recurse back to the original starting node
          * and saving a path for from bottom to any node satisfying top
          */
-        if( bottom(op) ){
+        if( bottom(op) )
+        {
             std::vector<Operation*> path_to_save;
             for(auto it = parent_t::current_path.rbegin(); it != parent_t::current_path.rend(); ++it){
-                // TODO(sebas) emplace on vector is less than ideal
-                path_to_save.emplace(path_to_save.end(), *it);
+                path_to_save.emplace_back(*it);
                 if(top(*it)){
                     path_to_save.push_back(op); // op hasn't been added to the path just yet
                     paths_collect.push_back(path_to_save); // we want this explicit copy
