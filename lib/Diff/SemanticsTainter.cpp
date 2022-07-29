@@ -5,14 +5,14 @@
 
 namespace circ::inspect::semantics_tainter {
 
-    void SemanticsTainterPass::taint(circ::Operation *op){
+    void SemanticsTainter::taint(circ::Operation *op){
         /*
-            * instruction bits are by definition related to decoding
-            * Advice are meant to represent dependancy inversion which are chosen by decoding
-            *      Honestly not 100% whether it should always be a decode value
-            *
-            * Constants are decodes until they are hit by a different value
-            */
+        * instruction bits are by definition related to decoding
+        * Advice are meant to represent dependancy inversion which are chosen by decoding
+        *      Honestly not 100% whether it should always be a decode value
+        *
+        * Constants are decodes until they are hit by a different value
+        */
 
         if ( is_one_of<Constant, InputInstructionBits>(op)) {
             return write( op, SemColoring::Decode );
@@ -67,16 +67,17 @@ namespace circ::inspect::semantics_tainter {
         return write( op, read_semantics( op->operands[ 0 ] ));
     }
 
-    void SemanticsTainterPass::visit(circ::Operation *op) {
+    void SemanticsTainter::visit(circ::Operation *op) {
         taint(op);
         op->traverse_upwards(*this);
     }
 
-    bool SemanticsTainterPass::should_promote_to_semantics(Operation *op) {
+    bool SemanticsTainter::should_promote_to_semantics(Operation *op) {
         std::vector<Operation*> promote_to_config;
 
-        for (auto& o: op->operands){
-            auto o_sem = read_semantics( o);
+        for ( auto &o: op->operands )
+        {
+            auto o_sem = read_semantics( o );
             if( o_sem == SemColoring::Config || o_sem == SemColoring::Semantics)
                 continue;
             /*
@@ -92,8 +93,9 @@ namespace circ::inspect::semantics_tainter {
              *
              *
              */
-            if(isa<Constant>(o) && !all_children_are_same(op)){
-                promote_to_config.push_back(o);
+            if ( isa< Constant >( o ) && !all_children_are_same( op ))
+            {
+                promote_to_config.push_back( o );
                 continue;
             }
             return false;
@@ -105,7 +107,7 @@ namespace circ::inspect::semantics_tainter {
         return true;
     }
 
-    bool SemanticsTainterPass::all_children_are_same(Operation *op) {
+    bool SemanticsTainter::all_children_are_same(Operation *op) {
         if(op->operands.size() < 2)
             return true;
 
@@ -118,7 +120,7 @@ namespace circ::inspect::semantics_tainter {
         return true;
     }
 
-    void SemanticsTainterPass::write(Operation *op, SemColoring value) {
+    void SemanticsTainter::write(Operation *op, SemColoring value) {
         op->set_meta<true>(key, semantic_to_string(value));
     };
 
@@ -148,9 +150,6 @@ namespace circ::inspect::semantics_tainter {
             return SemColoring::Semantics;
         else if (op->get_meta(key) == "Delete")
             return SemColoring::Delete;
-        else
-            circ::unreachable() << "could not decode semantics";
+        circ::unreachable() << "could not decode semantics";
     }
-
-
 }
