@@ -1,6 +1,6 @@
 // Copyright (c) 2022 Trail of Bits, Inc.
 
-#include <circuitous/Diff/ConfigDiffer.hpp>
+#include <circuitous/Diff/Diff.hpp>
 #include <circuitous/Diff/SemanticsTainter.hpp>
 #include <string>
 
@@ -40,35 +40,31 @@ namespace circ::inspect
             diffmarker_write(o, key_this);
     }
 
-    bool CTTFinder::top(Operation *op) {
-        return isa<constraint_opts_ts>(op);
-    }
 
-    bool CTTFinder::bottom(Operation *op) {
-        return read_semantics(op) == sem_taint::Config;
-    }
 
-    bool InstrBitsToDRFinder::top(Operation *op) {
-        return isa<DecoderResult>(op);
-    }
-
-    bool InstrBitsToDRFinder::bottom(Operation *op) {
-        return isa<leaf_values_ts>(op);
-    }
-
-    bool LTTFinder::top(Operation *op) {
-        return isa<constraint_opts_ts>(op);
-    }
-
-    bool LTTFinder::bottom(Operation *op) {
-        return isa<leaf_values_ts>(op);
-    }
-
-    bool LeafToVISubPathCollector::top(Operation *op) {
-        return isa<VerifyInstruction>(op);
-    }
-
-    bool LeafToVISubPathCollector::bottom(Operation *op) {
-        return isa<leaf_values_ts>(op);
-    }
+//    bool CTTFinder::bottom(Operation *op)
+//
+//    bool InstrBitsToDRFinder::top(Operation *op) {
+//        return isa<DecoderResult>(op);
+//    }
+//
+//    bool InstrBitsToDRFinder::bottom(Operation *op) {
+//        return isa<leaf_values_ts>(op);
+//    }
+//
+//    bool LTTFinder::top(Operation *op) {
+//        return isa<constraint_opts_ts>(op);
+//    }
+//
+//    bool LTTFinder::bottom(Operation *op) {
+//        return isa<leaf_values_ts>(op);
+//    }
+//
+//    bool LeafToVISubPathCollector::top(Operation *op) {
+//        return isa<VerifyInstruction>(op);
+//    }
+//
+//    bool LeafToVISubPathCollector::bottom(Operation *op) {
+//        return isa<leaf_values_ts>(op);
+//    }
 }

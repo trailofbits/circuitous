@@ -5,7 +5,7 @@
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Visitors.hpp>
 #include <circuitous/Printers/Dot.hpp>
-#include <circuitous/Diff/ConfigDiffer.hpp>
+#include <circuitous/Diff/Diff.hpp>
 #include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Check.hpp>
 
