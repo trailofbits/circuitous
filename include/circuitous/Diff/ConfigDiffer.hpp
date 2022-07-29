@@ -9,11 +9,12 @@
 #include <ostream>
 #include <string>
 #include <unordered_map>
+#include <stack>
+
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/Transforms/PassBase.hpp>
-#include <stack>
 #include <circuitous/IR/Visitors.hpp>
-#include "circuitous/IR/Shapes.hpp"
+#include <circuitous/IR/Shapes.hpp>
 
 /*
  * We want to get all paths that go from a constraint (target) to a config node within a VI
