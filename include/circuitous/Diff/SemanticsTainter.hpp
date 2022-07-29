@@ -77,13 +77,13 @@ namespace circ::inspect::semantics_tainter {
      *
      *
      */
-    static const inline std::string key = "diff";
     struct SemanticsTainter : VisitorStartingFromTL<SemanticsTainter>{
         void write(Operation* op, SemColoring value);
         bool all_children_are_same(Operation* op);
         bool should_promote_to_semantics(Operation* op);
         void visit(Operation* op);
         void taint(Operation* op);
+        static const inline std::string meta_key = "diff";
 
         void run(const CircuitPtr &circuit) {start_from<leaf_values_ts>(circuit.get()); }
     };

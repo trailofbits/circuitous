@@ -121,7 +121,7 @@ namespace circ::inspect::semantics_tainter {
     }
 
     void SemanticsTainter::write(Operation *op, SemColoring value) {
-        op->set_meta<true>(key, semantic_to_string(value));
+        op->set_meta<true>(meta_key, semantic_to_string(value));
     };
 
     std::string semantic_to_string(SemColoring sc) {
@@ -136,6 +136,7 @@ namespace circ::inspect::semantics_tainter {
     }
 
     SemColoring read_semantics(Operation *op) {
+        auto key = SemanticsTainter::meta_key;
         if (!op->has_meta(key))
             return SemColoring::None;
         else if (op->get_meta(key) == "None")
