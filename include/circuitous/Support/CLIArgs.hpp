@@ -74,7 +74,7 @@ namespace circ::cli
         static inline const auto opt = circ::CmdOpt("--dot-coloring", false);
         static inline const std::unordered_set< std::string > allowed =
         {
-                "semantics", "ctt", "highlight", "ibtodr"
+                "semantics", "ctt", "highlight", "ibtodr", "ltt"
         };
 
         static std::string help()
@@ -84,6 +84,7 @@ namespace circ::cli
             ss << "Highlight: colors the nodes matching a prefix of the names provided by --dot-highlight.\n";
             ss << "Semantics: colors the nodes based on whether they are semantics/decode/state/config related.\n";
             ss << "Config To Target (ctt): Similar to semantics, but only colors paths from a config node to a constraint node.\n";
+            ss << "Instruction bits to Decoder Result (ibtodr): Similar to semantics, but only colors paths from a config node to a constraint node.\n";
 
             return ss.str();
         }

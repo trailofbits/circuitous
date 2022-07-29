@@ -55,4 +55,12 @@ namespace circ::inspect::config_differ{
     bool InstrBitsToDRFinder::bottom(Operation *op) {
         return isa<leaf_values_ts>(op);
     }
+
+    bool LTTFinder::top(Operation *op) {
+        return isa<constraint_opts_ts>(op);
+    }
+
+    bool LTTFinder::bottom(Operation *op) {
+        return isa<leaf_values_ts>(op);
+    }
 }
