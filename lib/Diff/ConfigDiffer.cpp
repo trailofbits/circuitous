@@ -45,7 +45,7 @@ namespace circ::inspect
     }
 
     bool CTTFinder::bottom(Operation *op) {
-        return read_semantics(op) == SemColoring::Config;
+        return read_semantics(op) == sem_taint::Config;
     }
 
     bool InstrBitsToDRFinder::top(Operation *op) {
