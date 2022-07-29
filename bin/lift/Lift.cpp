@@ -159,26 +159,27 @@ circ::CircuitPtr get_input_circuit(auto &cli)
 
 void diff_subtree(const auto &cli, const circ::CircuitPtr &circuit){
     if(auto coloring = cli.template get< cli::DotDiff >()){
-        if(circuit->attr< circ::VerifyInstruction >().size() == 2){
-            auto tree1 = circuit->attr< circ::VerifyInstruction >()[ 0 ];
-            auto tree2 = circuit->attr< circ::VerifyInstruction >()[ 1 ];
+        if(circuit->attr< circ::VerifyInstruction >().size() != 2)
+            return;
 
-            using namespace circ::inspect::config_differ;
-            // no lambda pattern here since the types of return classes are too different
-            if ( coloring == "ibtdr" )
-                diff_subtrees( tree1, tree2, InstrBitsToDRFinder());
+        auto tree1 = circuit->attr< circ::VerifyInstruction >()[ 0 ];
+        auto tree2 = circuit->attr< circ::VerifyInstruction >()[ 1 ];
 
-            if ( coloring == "full")
-                diff_subtrees( tree1, tree2, LeafToVISubPathCollector());
+        using namespace circ::inspect::config_differ;
+        // no lambda pattern here since the types of return classes are too different
+        if ( coloring == "ibtdr" )
+            diff_subtrees( tree1, tree2, InstrBitsToDRFinder());
 
-            circ::inspect::semantics_tainter::SemanticsTainterPass tainter;
-            tainter.run(circuit); // the rest depend on this coloring
-            if ( coloring == "ctt" )
-                diff_subtrees( tree1, tree2, CTTFinder());
+        if ( coloring == "full")
+            diff_subtrees( tree1, tree2, LeafToVISubPathCollector());
 
-            if ( coloring == "ltt" )
-                diff_subtrees( tree1, tree2, LeafToVISubPathCollector());
-        }
+        circ::inspect::semantics_tainter::SemanticsTainterPass tainter;
+        tainter.run(circuit); // the rest depend on this coloring
+        if ( coloring == "ctt" )
+            diff_subtrees( tree1, tree2, CTTFinder());
+
+        if ( coloring == "ltt" )
+            diff_subtrees( tree1, tree2, LeafToVISubPathCollector());
     }
 }
 
@@ -191,18 +192,21 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
         circ::print_circuit(*json_out, circ::print_json, circuit.get());
 
     if (auto dot_out = cli.template get< cli::DotOut >()) {
-        auto colorer = [&]() -> std::function< circ::Color(circ::Operation *) > {
+        auto colorer = [ & ]() -> std::function< circ::Color(circ::Operation *) >
+        {
             if ( auto input_colors = cli.template get< cli::DotHighlight >())
                 return circ::HighlightColorer( std::move( *input_colors ));
 
-            if ( auto coloring = cli.template get< cli::DotDiff >()) {
-                diff_subtree(cli, circuit);
+            if ( auto coloring = cli.template get< cli::DotDiff >())
+            {
+                diff_subtree( cli, circuit );
                 return circ::DiffColoring;
             }
 
-            if ( auto coloring = cli.template get< cli::DotSemantics>()) {
+            if ( auto coloring = cli.template get< cli::DotSemantics >())
+            {
                 circ::inspect::semantics_tainter::SemanticsTainterPass tainter;
-                tainter.run(circuit);
+                tainter.run( circuit );
                 return circ::SemanticsTainterColoring;
             }
             return circ::ColorNone;
