@@ -151,7 +151,7 @@ namespace circ
         return Color::None;
     }
 
-    Color ConfigToTargetColoring(Operation *op) {
+    Color DiffColoring(Operation *op) {
         if(op->has_meta(inspect::semantics_tainter::key)){
             using namespace inspect::config_differ;
             auto value = diffmarker_read(op);
