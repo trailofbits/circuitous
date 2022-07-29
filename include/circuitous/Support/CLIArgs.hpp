@@ -67,29 +67,48 @@ namespace circ::cli
         static inline const auto opt = circ::CmdOpt("--dot-out", false);
     };
 
-    struct DotColoring : circ::DefaultCmdOpt, PathArg, circ::HasAllowed< DotColoring >
+    struct DotSemantics : circ::DefaultCmdOpt, PathArg
     {
-        using circ::HasAllowed< DotColoring >::validate;
+        static inline const auto opt = circ::CmdOpt("--dot-semantics", false);
 
-        static inline const auto opt = circ::CmdOpt("--dot-coloring", false);
+        static std::string help()
+        {
+            std::stringstream ss;
+            //TODO(sebas) give a short explanation of how this coloring works
+            ss << "Colors the graph based on what semantic role a node plays.\n";
+            return ss.str();
+        }
+
+        static std::string short_help() { return help(); }
+    };
+
+    struct DotDiff : circ::DefaultCmdOpt, PathArg, circ::HasAllowed< DotDiff >
+    {
+        using circ::HasAllowed< DotDiff >::validate;
+
+        static inline const auto opt = circ::CmdOpt("--dot-diff", false);
         static inline const std::unordered_set< std::string > allowed =
         {
-                "semantics", "ctt", "highlight", "ibtodr", "ltt"
+                "full", "ctt", "ibtdr", "ltt"
         };
 
         static std::string help()
         {
             std::stringstream ss;
-            ss << "Colors the graph in one of " << allowed.size() << " different ways.\n";
-            ss << "Highlight: colors the nodes matching a prefix of the names provided by --dot-highlight.\n";
-            ss << "Semantics: colors the nodes based on whether they are semantics/decode/state/config related.\n";
-            ss << "Config To Target (ctt): Similar to semantics, but only colors paths from a config node to a constraint node.\n";
-            ss << "Instruction bits to Decoder Result (ibtodr): Similar to semantics, but only colors paths from a config node to a constraint node.\n";
+            ss << "Diffs the graph, only works if two VerifyInstruction nodes are present, otherwise silently ignored.\n";
+            ss << "Red: node is used exclusively by the left tree.\n";
+            ss << "Blue: node is used exclusively by the right tree.\n";
+            ss << "Green: node is used by both trees.\n\n";
+            ss << "Options to restrict to subgraph:\n";
+            ss << "\tFull: diffs entire sub-tree.\n";
+            ss << "\tConfig To Target (ctt): Diffs paths starting from a config node (see semantics coloring) to a target/constraint node\n";
+            ss << "\tInstruction bits to Decoder Result (ibtdr): Diffs paths starting from instruction bits to a Decoder Result\n";
+            ss << "\tLeaf to target (ltt): Diffs paths starting from any leaf node to a target/constraint\n";
 
             return ss.str();
         }
 
-        static std::string short_help() { return help(); }
+        static std::string short_help() { return "Diffs two sub-trees, see --help --dot-diff for more info."; }
     };
 
     struct DotHighlight : circ::DefaultCmdOpt, Arity< -1 > {
