@@ -141,12 +141,12 @@ namespace circ::print
         if ( op->has_meta( SemanticsTainter::meta_key ))
         {
             switch (read_semantics(op)) {
-                case SemColoring::None: return Color::None;
-                case SemColoring::State: return Color::GreenBlack;
-                case SemColoring::Decode: return  Color::BlueYellow;
-                case SemColoring::Semantics: return Color::OrangeBlack;
-                case SemColoring::Config: return Color::RedWhite;
-                case SemColoring::Delete: return Color::GrayWhite;
+                case sem_taint::None: return Color::None;
+                case sem_taint::State: return Color::GreenBlack;
+                case sem_taint::Decode: return  Color::BlueYellow;
+                case sem_taint::Semantics: return Color::OrangeBlack;
+                case sem_taint::Config: return Color::RedWhite;
+                case sem_taint::Delete: return Color::GrayWhite;
             }
         }
         return Color::None;
