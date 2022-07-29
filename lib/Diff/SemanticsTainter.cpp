@@ -15,20 +15,20 @@ namespace circ::inspect {
         */
 
         if ( is_one_of<Constant, InputInstructionBits>(op)) {
-            return write( op, SemColoring::Decode );
+            return write( op, sem_taint::Decode );
         }
         if ( is_one_of<RegConstraint, WriteConstraint, ReadConstraint>(op)) {
             /*
              * Constraints are always semantics as they never represent state directly
              * Nor are config nor are decode. Note that this doesn't hold for advice constraints
              */
-            return write( op, SemColoring::Semantics );
+            return write( op, sem_taint::Semantics );
         }
         if ( isa< DecodeCondition >( op )) {
             /*
              * Decode by definition
              */
-            write( op, SemColoring::Decode );
+            write( op, sem_taint::Decode );
             for (auto &o: op->operands) {
                 /*
                  * No matter what constants are in the rest of the system,
@@ -36,7 +36,7 @@ namespace circ::inspect {
                  * we are decoding should always be decode
                  */
                 if ( isa< Constant >( o )) {
-                    write( o, SemColoring::Decode );
+                    write( o, sem_taint::Decode );
                 }
             }
             return;
@@ -45,23 +45,23 @@ namespace circ::inspect {
             /*
              * Memory is always an operand to an instruction
              */
-            return write( op, SemColoring::Config );
+            return write( op, sem_taint::Config );
         }
         if ((isa< leaf_values_ts >( op ) && !isa< InputInstructionBits >( op ))) {
             /*
              * This should get all registers and other machine state related nodes
              */
-            return write( op, SemColoring::State );
+            return write( op, sem_taint::State );
         }
         // non terminals
         if ( op->operands.size() == 1 ) { // single child, should just pass on
             return write( op, read_semantics( op->operands[ 0 ] ));
         }
         if ( should_promote_to_semantics( op )) {
-            return write( op, SemColoring::Semantics );
+            return write( op, sem_taint::Semantics );
         }
         if ( !all_children_are_same( op )) {
-            return write( op, SemColoring::Config );
+            return write( op, sem_taint::Config );
         }
         // we know we are not a leaf node and all nodes are the same
         return write( op, read_semantics( op->operands[ 0 ] ));
@@ -78,7 +78,7 @@ namespace circ::inspect {
         for ( auto &o: op->operands )
         {
             auto o_sem = read_semantics( o );
-            if( o_sem == SemColoring::Config || o_sem == SemColoring::Semantics)
+            if( o_sem == sem_taint::Config || o_sem == sem_taint::Semantics)
                 continue;
             /*
              * any child should at least be config or higher, or an decode
@@ -102,7 +102,7 @@ namespace circ::inspect {
         }
 
         for(auto o : promote_to_config){
-            write(o, SemColoring::Config);
+            write( o, sem_taint::Config);
         }
         return true;
     }
@@ -120,37 +120,37 @@ namespace circ::inspect {
         return true;
     }
 
-    void SemanticsTainter::write(Operation *op, SemColoring value) {
+    void SemanticsTainter::write(Operation *op, sem_taint value) {
         op->set_meta<true>(meta_key, semantic_to_string(value));
     };
 
-    std::string semantic_to_string(SemColoring sc) {
+    std::string semantic_to_string(sem_taint sc) {
         switch (sc){
-            case SemColoring::None: return "None";
-            case SemColoring::Decode: return "Decode";
-            case SemColoring::State: return "State";
-            case SemColoring::Config: return "Config";
-            case SemColoring::Semantics: return "Semantics";
-            case SemColoring::Delete: return "Delete";
+            case sem_taint::None: return "None";
+            case sem_taint::Decode: return "Decode";
+            case sem_taint::State: return "State";
+            case sem_taint::Config: return "Config";
+            case sem_taint::Semantics: return "Semantics";
+            case sem_taint::Delete: return "Delete";
         }
     }
 
-    SemColoring read_semantics(Operation *op) {
+    sem_taint read_semantics(Operation *op) {
         auto key = SemanticsTainter::meta_key;
         if (!op->has_meta(key))
-            return SemColoring::None;
+            return sem_taint::None;
         else if (op->get_meta(key) == "None")
-            return SemColoring::None;
+            return sem_taint::None;
         else if (op->get_meta(key) == "Decode")
-            return SemColoring::Decode;
+            return sem_taint::Decode;
         else if (op->get_meta(key) == "State")
-            return SemColoring::State;
+            return sem_taint::State;
         else if (op->get_meta(key) == "Config")
-            return SemColoring::Config;
+            return sem_taint::Config;
         else if (op->get_meta(key) == "Semantics")
-            return SemColoring::Semantics;
+            return sem_taint::Semantics;
         else if (op->get_meta(key) == "Delete")
-            return SemColoring::Delete;
+            return sem_taint::Delete;
         circ::unreachable() << "could not decode semantics";
     }
 }

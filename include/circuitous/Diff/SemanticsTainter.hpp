@@ -18,7 +18,7 @@
 
 namespace circ::inspect {
 
-    enum class SemColoring {
+    enum class sem_taint {
         None,
         Decode,
         State,
@@ -27,8 +27,8 @@ namespace circ::inspect {
         Delete
     };
 
-    std::string semantic_to_string(SemColoring sc);
-    SemColoring read_semantics(Operation* op);
+    std::string semantic_to_string(sem_taint sc);
+    sem_taint read_semantics(Operation* op);
 
 
     /*
@@ -70,7 +70,7 @@ namespace circ::inspect {
      */
     struct SemanticsTainter : VisitorStartingFromTL< SemanticsTainter >
     {
-        void write(Operation* op, SemColoring value);
+        void write(Operation* op, sem_taint value);
         bool all_children_are_same(Operation* op);
         bool should_promote_to_semantics(Operation* op);
         void visit(Operation* op);
