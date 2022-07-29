@@ -58,6 +58,11 @@ namespace circ::inspect::config_differ {
         bool bottom(Operation* op);
     };
 
+    struct LeafToVISubPathCollector : SubPathCollector<LeafToVISubPathCollector>{
+        bool top(Operation* op);
+        bool bottom(Operation* op);
+    };
+
     struct InstrBitsToDRFinder : SubPathCollector<InstrBitsToDRFinder>{
         bool top(Operation* op);
         bool bottom(Operation* op);

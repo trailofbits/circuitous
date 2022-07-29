@@ -63,4 +63,12 @@ namespace circ::inspect::config_differ{
     bool LTTFinder::bottom(Operation *op) {
         return isa<leaf_values_ts>(op);
     }
+
+    bool LeafToVISubPathCollector::top(Operation *op) {
+        return isa<VerifyInstruction>(op);
+    }
+
+    bool LeafToVISubPathCollector::bottom(Operation *op) {
+        return isa<leaf_values_ts>(op);
+    }
 }
