@@ -136,7 +136,7 @@ namespace circ::print
     }  // namespace
 
 
-    Color SemanticsTainterColoring(Operation *op) {
+    Color sem_taint_coloring(Operation *op) {
         if(op->has_meta(inspect::semantics_tainter::key)){
             using namespace inspect::semantics_tainter;
             switch (read_semantics(op)) {
@@ -151,7 +151,7 @@ namespace circ::print
         return Color::None;
     }
 
-    Color DiffColoring(Operation *op) {
+    Color diff_coloring(Operation *op) {
         if(op->has_meta(inspect::semantics_tainter::key)){
             using namespace inspect::config_differ;
             auto value = diffmarker_read(op);
@@ -173,7 +173,7 @@ namespace circ::print
         return Color::None;
     }
 
-    Color ColorNone(Operation *op) {
+    Color no_coloring(Operation *op) {
         return Color::None;
     }
 } // namespace circ
@@ -296,181 +296,181 @@ namespace circ::dot
             }
         };
 
-
-
-        struct CompleteOrMarker :DownTreeRunner {
-            void Execute(Operation* op) {
-                using cmp_target = std::pair<std::size_t, Or*>;
-                std::vector<cmp_target> cmp_targets;
-                size_t target_size = 0;
-                for(auto& o : op->operands){
-                    if(isa<Or>(o) && o->operands.size() == 1){
-
-                        std::cout << "or && 1 " << std::endl;
-                        auto op_or = dynamic_cast<Or*>(o);
-                        if(isa<Icmp_eq>(op_or->operands[0])){
-                            auto icmp = op_or->operands[0];
-                            if(isa<Advice>(icmp->operands[0]) && isa<Constant>(icmp->operands[1])){
-                                auto const_val= dynamic_cast<Constant*>(icmp->operands[1]);
-                                if(target_size == 0){
-                                    target_size = const_val->bits.size();
-                                }
-                                // shouldn't crash the program
-                                // check(target_size == const_val->size) << "Multiple different sizes";
-
-                                std::cout << "trying to add something" << std::endl;
-                                if(target_size != const_val->bits.size())
-                                    return;
-                                cmp_targets.push_back({stoi(const_val->bits, 0,2 ), op_or});
-                            }
-                        }
-                    }
-                }
-
-                auto is_power_of_2 = [](std::size_t v){ return v >0 && (v & (v - 1)) == 0;};
-                if(is_power_of_2(cmp_targets.size())){
-                    std::cout << "found power of two shit" << std::endl;
-                    for(std::size_t i = 0; i < cmp_targets.size(); i++){
-                        if(std::find_if(cmp_targets.begin(), cmp_targets.end(), [&](cmp_target ct){
-                            return ct.first == i;
-                        }) == cmp_targets.end()){
-                            //there is a whole, don't mark them as deletable
-                        };
-                    }
-                    for(auto& ct : cmp_targets){
-                        ct.second->set_meta<true>("inspect_delete", "true");
-                    }
-                }
-            }
-        };
-
-        struct DownTreeIdentityMarker :DownTreeRunner {
-            void Execute(Operation* op){
-                if(isa<RegConstraint>(op)){
-                    if (isa<InputRegister>(op->operands[0]) && isa<OutputRegister>(op->operands[1])){
-                        auto inReg = dynamic_cast<InputRegister*>(op->operands[0]);
-                        auto outReg = dynamic_cast<OutputRegister *>(op->operands[1]);
-                        if(inReg->reg_name == outReg->reg_name){
-                            op->set_meta<true>("inspect_delete", "true");
-                        }
-                    }
-                    else{
-                        for(auto o : op->operands){
-                            std::cout << "unlisted child " << o->name() << std::endl;
-                        }
-                    }
-                }
-            }
-        };
-
-        struct DownTreeIdentityRemover {
-            bool Run(Operation *op) {
-                if(op->has_meta("inspect_delete")){
-                    for(auto& p : op->users){
-                        std::cout << "Deleting: " << op->name() << std::endl;
-                        op->remove_use(p);
-                        return true;
-                    }
-                }
-                for (auto o : op->operands) {
-                    if(Run(o))
-                        return Run(op); // restart after something has been deleted
-                }
-                return false;
-            }
-        };
-
-        template<typename TL>
-        struct RemoveCurrentSubtreeFromContext : UpTreeRunnerTyped<TL>{
-            using UpTreeRunnerTyped<TL>::UpTreeRunnerTyped;
-
-            void Execute(Operation* op){
-                std::cout << "for " << op->name() << std::endl;
-                for(auto& user : op->users){
-                    std::cout << "users " << user->name() << std::endl;
-                    std::cout << "users " << user->name() << std::endl;
-                    if(isa<VerifyInstruction>(user)){
-                        op->remove_use(user);
-                        return Execute(op); // start new loop since we might invalidate iterator
-                    }
-                }
-            }
-        };
-
-        struct TrivialAndRemover : UpTreeRunnerTyped<leaf_values_ts>{
-            using UpTreeRunnerTyped::UpTreeRunnerTyped;
-            void Execute(Operation* op){
-                // as we recurse into our parents we check children
-                // as removing parents from the parents break our ability to recurse upwards
-                for (auto o: op->operands) {
-                    if(isa<And>(o) && o->operands.size() == 1){
-                        o->replace_all_uses_with(o->operands[0]);
-                    }
-                }
-            }
-        };
-
-        struct BitNegationFixer : UpTreeRunnerTyped<leaf_values_ts>{
-            using UpTreeRunnerTyped::UpTreeRunnerTyped;
-            void Execute(Operation* op){
-
-                if(isa<InputRegister>(op)){
-                    auto reg = dynamic_cast<InputRegister*>(op);
-                    if(reg->size == 1){
-                        std::cout << "sized one: " << reg->reg_name << std::endl;
-                        for(auto& user: reg->users){
-                            if(isa<ZExt>(user)){
-                                std::cout << "zero extended" << std::endl;
-
-                                for(auto& u: user->users) {
-                                    if(isa<Icmp_eq>(u)){
-                                        auto cmp = dynamic_cast<Icmp_eq*>(u);
-                                        auto target = cmp->operands[1];
-                                        if(isa<Constant>(target)){
-                                            auto c = dynamic_cast<Constant*>(target);
-                                            if(c->bits == std::string(8, '0')){
-                                                std::cout << "cmp with 0000000000" << std::endl;
-                                                auto replace = circuit->create<Not>(1u);
-                                                replace->add_use(reg);
-                                                std::cout << "replace value" << std::endl;;
-                                                cmp->replace_all_uses_with(replace);
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                // as we recurse into our parents we check children
-                // as removing parents from the parents break our ability to recurse upwards
+//
+//
+//        struct CompleteOrMarker :DownTreeRunner {
+//            void Execute(Operation* op) {
+//                using cmp_target = std::pair<std::size_t, Or*>;
+//                std::vector<cmp_target> cmp_targets;
+//                size_t target_size = 0;
+//                for(auto& o : op->operands){
+//                    if(isa<Or>(o) && o->operands.size() == 1){
+//
+//                        std::cout << "or && 1 " << std::endl;
+//                        auto op_or = dynamic_cast<Or*>(o);
+//                        if(isa<Icmp_eq>(op_or->operands[0])){
+//                            auto icmp = op_or->operands[0];
+//                            if(isa<Advice>(icmp->operands[0]) && isa<Constant>(icmp->operands[1])){
+//                                auto const_val= dynamic_cast<Constant*>(icmp->operands[1]);
+//                                if(target_size == 0){
+//                                    target_size = const_val->bits.size();
+//                                }
+//                                // shouldn't crash the program
+//                                // check(target_size == const_val->size) << "Multiple different sizes";
+//
+//                                std::cout << "trying to add something" << std::endl;
+//                                if(target_size != const_val->bits.size())
+//                                    return;
+//                                cmp_targets.push_back({stoi(const_val->bits, 0,2 ), op_or});
+//                            }
+//                        }
+//                    }
+//                }
+//
+//                auto is_power_of_2 = [](std::size_t v){ return v >0 && (v & (v - 1)) == 0;};
+//                if(is_power_of_2(cmp_targets.size())){
+//                    std::cout << "found power of two shit" << std::endl;
+//                    for(std::size_t i = 0; i < cmp_targets.size(); i++){
+//                        if(std::find_if(cmp_targets.begin(), cmp_targets.end(), [&](cmp_target ct){
+//                            return ct.first == i;
+//                        }) == cmp_targets.end()){
+//                            //there is a whole, don't mark them as deletable
+//                        };
+//                    }
+//                    for(auto& ct : cmp_targets){
+//                        ct.second->set_meta<true>("inspect_delete", "true");
+//                    }
+//                }
+//            }
+//        };
+//
+//        struct DownTreeIdentityMarker :DownTreeRunner {
+//            void Execute(Operation* op){
+//                if(isa<RegConstraint>(op)){
+//                    if (isa<InputRegister>(op->operands[0]) && isa<OutputRegister>(op->operands[1])){
+//                        auto inReg = dynamic_cast<InputRegister*>(op->operands[0]);
+//                        auto outReg = dynamic_cast<OutputRegister *>(op->operands[1]);
+//                        if(inReg->reg_name == outReg->reg_name){
+//                            op->set_meta<true>("inspect_delete", "true");
+//                        }
+//                    }
+//                    else{
+//                        for(auto o : op->operands){
+//                            std::cout << "unlisted child " << o->name() << std::endl;
+//                        }
+//                    }
+//                }
+//            }
+//        };
+//
+//        struct DownTreeIdentityRemover {
+//            bool Run(Operation *op) {
+//                if(op->has_meta("inspect_delete")){
+//                    for(auto& p : op->users){
+//                        std::cout << "Deleting: " << op->name() << std::endl;
+//                        op->remove_use(p);
+//                        return true;
+//                    }
+//                }
+//                for (auto o : op->operands) {
+//                    if(Run(o))
+//                        return Run(op); // restart after something has been deleted
+//                }
+//                return false;
+//            }
+//        };
+//
+//        template<typename TL>
+//        struct RemoveCurrentSubtreeFromContext : UpTreeRunnerTyped<TL>{
+//            using UpTreeRunnerTyped<TL>::UpTreeRunnerTyped;
+//
+//            void Execute(Operation* op){
+//                std::cout << "for " << op->name() << std::endl;
+//                for(auto& user : op->users){
+//                    std::cout << "users " << user->name() << std::endl;
+//                    std::cout << "users " << user->name() << std::endl;
+//                    if(isa<VerifyInstruction>(user)){
+//                        op->remove_use(user);
+//                        return Execute(op); // start new loop since we might invalidate iterator
+//                    }
+//                }
+//            }
+//        };
+//
+//        struct TrivialAndRemover : UpTreeRunnerTyped<leaf_values_ts>{
+//            using UpTreeRunnerTyped::UpTreeRunnerTyped;
+//            void Execute(Operation* op){
+//                // as we recurse into our parents we check children
+//                // as removing parents from the parents break our ability to recurse upwards
 //                for (auto o: op->operands) {
 //                    if(isa<And>(o) && o->operands.size() == 1){
 //                        o->replace_all_uses_with(o->operands[0]);
 //                    }
 //                }
-            }
-        };
+//            }
+//        };
+//
+//        struct BitNegationFixer : UpTreeRunnerTyped<leaf_values_ts>{
+//            using UpTreeRunnerTyped::UpTreeRunnerTyped;
+//            void Execute(Operation* op){
+//
+//                if(isa<InputRegister>(op)){
+//                    auto reg = dynamic_cast<InputRegister*>(op);
+//                    if(reg->size == 1){
+//                        std::cout << "sized one: " << reg->reg_name << std::endl;
+//                        for(auto& user: reg->users){
+//                            if(isa<ZExt>(user)){
+//                                std::cout << "zero extended" << std::endl;
+//
+//                                for(auto& u: user->users) {
+//                                    if(isa<Icmp_eq>(u)){
+//                                        auto cmp = dynamic_cast<Icmp_eq*>(u);
+//                                        auto target = cmp->operands[1];
+//                                        if(isa<Constant>(target)){
+//                                            auto c = dynamic_cast<Constant*>(target);
+//                                            if(c->bits == std::string(8, '0')){
+//                                                std::cout << "cmp with 0000000000" << std::endl;
+//                                                auto replace = circuit->create<Not>(1u);
+//                                                replace->add_use(reg);
+//                                                std::cout << "replace value" << std::endl;;
+//                                                cmp->replace_all_uses_with(replace);
+//                                            }
+//                                        }
+//                                    }
+//                                }
+//                            }
+//                        }
+//                    }
+//                }
+//                // as we recurse into our parents we check children
+//                // as removing parents from the parents break our ability to recurse upwards
+////                for (auto o: op->operands) {
+////                    if(isa<And>(o) && o->operands.size() == 1){
+////                        o->replace_all_uses_with(o->operands[0]);
+////                    }
+////                }
+//            }
+//        };
 
         void visit(Circuit *op) {
             Init();
-            DownTreeIdentityMarker im;
-            DownTreeIdentityRemover ir;
-            im.Run(op);
-            ir.Run(op);
-
-            CompleteOrMarker om;
-            om.Run(op);
-            ir.Run(op); // depends on having idenities removed
-            TrivialAndRemover tar(op);
-            tar.Run(op);
-            ir.Run(op); // depends on having idenities removed
-
-//            RemoveCurrentSubtreeFromContext<trace_ts> trace_remover(op);
-//            trace_remover.Run(op);
-
-            BitNegationFixer bnf(op);
-            bnf.Run(op);
+//            DownTreeIdentityMarker im;
+//            DownTreeIdentityRemover ir;
+//            im.Run(op);
+//            ir.Run(op);
+//
+//            CompleteOrMarker om;
+//            om.Run(op);
+//            ir.Run(op); // depends on having idenities removed
+//            TrivialAndRemover tar(op);
+//            tar.Run(op);
+//            ir.Run(op); // depends on having idenities removed
+//
+////            RemoveCurrentSubtreeFromContext<trace_ts> trace_remover(op);
+////            trace_remover.Run(op);
+//
+//            BitNegationFixer bnf(op);
+//            bnf.Run(op);
 
 
             op->traverse(*this);
