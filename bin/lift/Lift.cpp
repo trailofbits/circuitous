@@ -39,9 +39,11 @@ DEFINE_string(os, REMILL_OS, "");
 DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 
 DEFINE_string(ir_out, "", "Path to the output IR file.");
+
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(dot_highlight, "", "Names of node-type to highlight in DOT file");
-DEFINE_string(dot_coloring, "", "Coloring type of the graph");
+DEFINE_string(dot_semantics, "", "Colors the graph based on semantics");
+DEFINE_string(dot_diff, "", "Diffs two graphs, works only for graphs with 2 VI nodes");
 
 DEFINE_string(json_out, "", "Path to the output JSON file.");
 DEFINE_string(verilog_out, "", "Path to the output verilog file.");
@@ -82,10 +84,6 @@ namespace
           }
         }
 
-        if(cli.template present<cli::Simplify>()){
-            opt.add_pass("taint-semantics");
-        }
-
         auto result = opt.run(std::move(circuit));
         circ::log_info() << "Optimizations done.";
         circ::log_info() << opt.report();
@@ -108,11 +106,15 @@ using output_options = circ::tl::TL<
     circ::cli::JsonOut,
     circ::cli::VerilogOut,
     circ::cli::IROut,
-    circ::cli::DotOut,
-    circ::cli::DotHighlight,
-    circ::cli::DotColoring,
-    circ::cli::DecoderOut
+    circ::cli::DotOut
 >;
+
+using dot_options = circ::tl::TL<
+    circ::cli::DotHighlight,
+    circ::cli::DotSemantics,
+    circ::cli::DotDiff
+>;
+
 using remill_config_options = circ::tl::TL<
     circ::cli::Arch,
     circ::cli::OS
@@ -134,7 +136,8 @@ using cmd_opts_list = circ::tl::merge<
     deprecated_options,
     output_options,
     remill_config_options,
-    other_options
+    other_options,
+    dot_options
 >;
 
 circ::CircuitPtr get_input_circuit(auto &cli)
@@ -156,16 +159,27 @@ circ::CircuitPtr get_input_circuit(auto &cli)
     return {};
 }
 
-void diff_subtrees(const auto &cli, const circ::CircuitPtr &circuit){
-    if(auto coloring = cli.template get< cli::DotColoring >()){
-        if ( circuit->attr< circ::VerifyInstruction >().size() == 2 ) {
+void diff_subtree(const auto &cli, const circ::CircuitPtr &circuit){
+    if(auto coloring = cli.template get< cli::DotDiff >()){
+        if(circuit->attr< circ::VerifyInstruction >().size() == 2){
             auto tree1 = circuit->attr< circ::VerifyInstruction >()[ 0 ];
             auto tree2 = circuit->attr< circ::VerifyInstruction >()[ 1 ];
-            if ( coloring == "ctt" ) {
-                diff_subtrees( tree1, tree2, circ::inspect::config_differ::CTTFinder());
-            } else if ( coloring == "ibtodr" ) {
-                diff_subtrees( tree1, tree2, circ::inspect::config_differ::InstrBitsToDRFinder());
-            }
+
+            using namespace circ::inspect::config_differ;
+            // no lambda pattern here since the types of return classes are too different
+            if ( coloring == "ibtdr" )
+                diff_subtrees( tree1, tree2, InstrBitsToDRFinder());
+
+            if ( coloring == "full")
+                diff_subtrees( tree1, tree2, LeafToVISubPathCollector());
+
+            circ::inspect::semantics_tainter::SemanticsTainterPass tainter;
+            tainter.run(circuit); // the rest depend on this coloring
+            if ( coloring == "ctt" )
+                diff_subtrees( tree1, tree2, CTTFinder());
+
+            if ( coloring == "ltt" )
+                diff_subtrees( tree1, tree2, LeafToVISubPathCollector());
         }
     }
 }
@@ -179,19 +193,19 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
         circ::print_circuit(*json_out, circ::print_json, circuit.get());
 
     if (auto dot_out = cli.template get< cli::DotOut >()) {
+        auto colorer = [&]() -> std::function< circ::Color(circ::Operation *) > {
+            if ( auto input_colors = cli.template get< cli::DotHighlight >())
+                return circ::HighlightColorer( std::move( *input_colors ));
 
-        auto colorer = [&]() -> std::function<circ::Color(circ::Operation*)>{
-            if(auto coloring = cli.template get< cli::DotColoring >()){
-                if(coloring == "semantics")
-                    return circ::SemanticsTainterColoring;
-                else if(coloring == "ctt" || coloring == "ibtodr") {
-                    diff_subtrees(cli, circuit);
-                    return circ::ConfigToTargetColoring;
-                }
-                else{
-                    if (auto input_colors = cli.template get< cli::DotHighlight >())
-                        return circ::HighlightColorer(std::move(*input_colors));
-                }
+            if ( auto coloring = cli.template get< cli::DotDiff >()) {
+                diff_subtree(cli, circuit);
+                return circ::DiffColoring;
+            }
+
+            if ( auto coloring = cli.template get< cli::DotSemantics>()) {
+                circ::inspect::semantics_tainter::SemanticsTainterPass tainter;
+                tainter.run(circuit);
+                return circ::SemanticsTainterColoring;
             }
             return circ::ColorNone;
         }();
@@ -237,10 +251,10 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
         return {};
     }
 
-    // TODO(sebas) check that dothighlight is only viable with dotcoloring == highlight
     if (v.check(implies< cli::DotHighlight, cli::DotOut >()).process_errors(yield_err)
-    || v.check(implies< cli::DotColoring, cli::DotOut >()).process_errors(yield_err)
-    || v.check(implies< cli::DotHighlight, cli::DotColoring >()).process_errors(yield_err))
+    || v.check(implies< cli::DotSemantics, cli::DotOut >()).process_errors(yield_err)
+    || v.check(implies< cli::DotDiff, cli::DotOut >()).process_errors(yield_err)
+    || v.check(are_exclusive< dot_options >()).process_errors(yield_err))
     {
         return {};
     }
