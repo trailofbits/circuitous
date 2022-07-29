@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 #include <circuitous/Diff/SemanticsTainter.hpp>
-#include <circuitous/Diff/ConfigDiffer.hpp>
+#include <circuitous/Diff/Diff.hpp>
 
 namespace circ
 {
