@@ -15,6 +15,7 @@
 #include <circuitous/Transforms/PassBase.hpp>
 #include <circuitous/IR/Visitors.hpp>
 #include <circuitous/IR/Shapes.hpp>
+#include "SemanticsTainter.hpp"
 
 /*
  * We want to get all paths that go from a constraint (target) to a config node within a VI
@@ -51,23 +52,23 @@ namespace circ::inspect {
      * Finds all paths starting from a constraint down to a config node
      */
     struct CTTFinder : SubPathCollector<CTTFinder>{
-        bool top(Operation* op);
-        bool bottom(Operation* op);
+        bool top(Operation* op) { return isa<constraint_opts_ts>(op); }
+        bool bottom(Operation* op) { return read_semantics(op) == sem_taint::Config; }
     };
 
     struct LTTFinder : SubPathCollector<LTTFinder>{
-        bool top(Operation* op);
-        bool bottom(Operation* op);
+        bool top(Operation* op) { return isa<constraint_opts_ts>(op); }
+        bool bottom(Operation* op) { return isa<leaf_values_ts>(op); }
     };
 
     struct LeafToVISubPathCollector : SubPathCollector<LeafToVISubPathCollector>{
-        bool top(Operation* op);
-        bool bottom(Operation* op);
+        bool top(Operation* op) { return isa<VerifyInstruction>(op); }
+        bool bottom(Operation* op) { return isa<leaf_values_ts>(op);}
     };
 
     struct InstrBitsToDRFinder : SubPathCollector<InstrBitsToDRFinder>{
-        bool top(Operation* op);
-        bool bottom(Operation* op);
+        bool top(Operation* op) { return isa<DecoderResult>(op); }
+        bool bottom(Operation* op) { return isa<leaf_values_ts>(op); }
     };
 
 
