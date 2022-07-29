@@ -19,7 +19,9 @@ namespace circ {
     struct Operation;
 
     void print_dot(std::ostream &os, Circuit *circuit,
-                    const std::unordered_map< Operation *, std::string > & = {}, std::function<Color(Operation*)> oc = [](Operation* op){return Color::None;});
+                   const std::unordered_map< Operation *, std::string > & = {},
+                   std::function< print::Color(Operation *) > oc =
+                        [](Operation *op) { return print::Color::None; });
 
     void print_json(std::ostream &os, Circuit *circuit);
     void print_smt(std::ostream &os, Circuit *circuit);
