@@ -172,10 +172,6 @@ namespace circ::print
 
         circ::unreachable() << "could not read diff_marker properly";
     }
-
-    Color no_coloring(Operation *op) {
-        return Color::None;
-    }
 } // namespace circ
 
 namespace circ::dot
