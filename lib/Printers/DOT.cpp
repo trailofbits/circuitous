@@ -23,7 +23,7 @@ CIRCUITOUS_RELAX_WARNINGS
 
 CIRCUITOUS_UNRELAX_WARNINGS
 
-namespace circ
+namespace circ::print
 {
     std::string color_to_dot(Color c){
         switch(c){
@@ -490,9 +490,10 @@ namespace circ::dot
 namespace circ
 {
     void print_dot(std::ostream &os, Circuit *circuit,
-                  const std::unordered_map<Operation *, std::string> &node_values, std::function<Color(Operation*)> oc)
+                  const std::unordered_map<Operation *, std::string> &node_values,
+                  std::function<print::Color(Operation*)> oc)
     {
-      circ::dot::Printer<std::function<Color(Operation*)>> dot_os(os, node_values, oc);
+      circ::dot::Printer<std::function<print::Color(Operation*)>> dot_os(os, node_values, oc);
       dot_os.visit(circuit);
     }
 } // namespace circ
