@@ -75,7 +75,7 @@ namespace circ::inspect::config_differ {
     template<typename T>
     void diff_subtrees(Operation* tree1, Operation* tree2, T&& path_collector){
         path_collector.visit(tree1);
-        auto collected = path_collector.paths_collect;
+        auto collected = path_collector.collected;
         for(auto& p : path_collector(tree1)){
             for(auto& o : p)
                 mark_operation(o, DiffMarker::Left, DiffMarker::Right);

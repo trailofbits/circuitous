@@ -340,7 +340,7 @@ struct SubPathCollector : DFSVisitor<Derived, IsConst>
 {
     using parent_t = DFSVisitor< Derived, IsConst >;
     using operation_t = typename parent_t::operation_t;
-    std::vector< std::vector< circ::Operation *>> paths_collect;
+    std::vector< std::vector< circ::Operation *>> collected;
 
     bool top(Operation *op) { return static_cast<Derived &>(*this).top( op );}
     bool bottom(Operation *op) { return static_cast<Derived &>(*this).bottom( op );}
@@ -361,7 +361,7 @@ struct SubPathCollector : DFSVisitor<Derived, IsConst>
                 path_to_save.emplace_back(*it);
                 if(top(*it)){
                     path_to_save.push_back(op); // op hasn't been added to the path just yet
-                    paths_collect.push_back(path_to_save); // we want this explicit copy
+                    collected.push_back( path_to_save); // we want this explicit copy
                 }
             }
         }
@@ -369,9 +369,9 @@ struct SubPathCollector : DFSVisitor<Derived, IsConst>
     }
 
     std::vector<std::vector<Operation*>> operator()(Operation* op) {
-        this->paths_collect.clear();
+        this->collected.clear();
         visit(op);
-        return this->paths_collect;
+        return this->collected;
     }
 };
 
