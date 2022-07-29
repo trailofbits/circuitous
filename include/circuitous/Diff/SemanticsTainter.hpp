@@ -78,7 +78,7 @@ namespace circ::inspect::semantics_tainter {
      *
      */
     static const inline std::string key = "diff";
-    struct SemanticsTainterPass : VisitorStartingFromTL<SemanticsTainterPass>{
+    struct SemanticsTainter : VisitorStartingFromTL<SemanticsTainter>{
         void write(Operation* op, SemColoring value);
         bool all_children_are_same(Operation* op);
         bool should_promote_to_semantics(Operation* op);
