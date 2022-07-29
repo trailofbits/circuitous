@@ -38,8 +38,8 @@ namespace circ::print
         }
     }
 
-    HighlightColorer::opt_highlight_name_t
-    HighlightColorer::highlight_name_for_op(Operation *op) {
+    HighlightColorer::opt_name
+    HighlightColorer::name_for_op(Operation *op) {
         auto is_prefix_to_op_name = [&](const std::string &lhs) {
             if(lhs.size() > op->name().size()) {
                 return false;
@@ -52,7 +52,7 @@ namespace circ::print
         auto highlight = std::find_if( highlight_nodes.begin(), highlight_nodes.end(),
                                        is_prefix_to_op_name );
         if ( highlight != highlight_nodes.end()) {
-            return opt_highlight_name_t{*highlight};
+            return opt_name{ *highlight};
         }
         return std::nullopt;
     }
@@ -66,7 +66,7 @@ namespace circ::print
     }
 
     Color HighlightColorer::operator()(Operation *op) {
-        if(auto opt_highlight_name = highlight_name_for_op( op ))
+        if(auto opt_highlight_name = name_for_op( op ))
             return color_defaults[node_to_color_map[opt_highlight_name.value()]];
 
         return Color::None;
