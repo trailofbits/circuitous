@@ -137,7 +137,8 @@ namespace circ::print
 
 
     Color sem_taint_coloring(Operation *op) {
-        if(op->has_meta(inspect::semantics_tainter::key)){
+        if ( op->has_meta( inspect::semantics_tainter::SemanticsTainter::meta_key ))
+        {
             using namespace inspect::semantics_tainter;
             switch (read_semantics(op)) {
                 case SemColoring::None: return Color::None;
@@ -152,7 +153,8 @@ namespace circ::print
     }
 
     Color diff_coloring(Operation *op) {
-        if(op->has_meta(inspect::semantics_tainter::key)){
+        if ( op->has_meta( inspect::semantics_tainter::SemanticsTainter::meta_key ))
+        {
             using namespace inspect::config_differ;
             auto value = diffmarker_read(op);
             if(value == DiffMarker::Overlapping){
@@ -166,9 +168,8 @@ namespace circ::print
             else if(value == DiffMarker::None){
                 return Color::None;
             }
-            else{
-                circ::unreachable() << "could not read diff_marker properly";
-            }
+
+            circ::unreachable() << "could not read diff_marker properly";
         }
         return Color::None;
     }
