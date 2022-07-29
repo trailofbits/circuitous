@@ -138,41 +138,39 @@ namespace circ::print
 
     Color sem_taint_coloring(Operation *op) {
         using namespace inspect;
-        if ( op->has_meta( SemanticsTainter::meta_key ))
-        {
-            switch (read_semantics(op)) {
-                case sem_taint::None: return Color::None;
-                case sem_taint::State: return Color::GreenBlack;
-                case sem_taint::Decode: return  Color::BlueYellow;
-                case sem_taint::Semantics: return Color::OrangeBlack;
-                case sem_taint::Config: return Color::RedWhite;
-                case sem_taint::Delete: return Color::GrayWhite;
-            }
+        if ( !op->has_meta( SemanticsTainter::meta_key ))
+            return Color::None;
+
+        switch (read_semantics(op)) {
+            case sem_taint::None: return Color::None;
+            case sem_taint::State: return Color::GreenBlack;
+            case sem_taint::Decode: return  Color::BlueYellow;
+            case sem_taint::Semantics: return Color::OrangeBlack;
+            case sem_taint::Config: return Color::RedWhite;
+            case sem_taint::Delete: return Color::GrayWhite;
         }
-        return Color::None;
     }
 
     Color diff_coloring(Operation *op) {
         using namespace inspect;
 
-        if ( op->has_meta( SemanticsTainter::meta_key ))
-        {
-            auto value = diffmarker_read(op);
-            if(value == DiffMarker::Overlapping){
-                return Color::GreenBlack;
-            } else if(value == DiffMarker::Left){
-                return Color::BlueYellow;
-            }
-            else if(value == DiffMarker::Right){
-                return Color::RedWhite;
-            }
-            else if(value == DiffMarker::None){
-                return Color::None;
-            }
+        if ( !op->has_meta( SemanticsTainter::meta_key ))
+            return Color::None;
 
-            circ::unreachable() << "could not read diff_marker properly";
+        auto value = diffmarker_read(op);
+        if(value == DiffMarker::Overlapping){
+            return Color::GreenBlack;
+        } else if(value == DiffMarker::Left){
+            return Color::BlueYellow;
         }
-        return Color::None;
+        else if(value == DiffMarker::Right){
+            return Color::RedWhite;
+        }
+        else if(value == DiffMarker::None){
+            return Color::None;
+        }
+
+        circ::unreachable() << "could not read diff_marker properly";
     }
 
     Color no_coloring(Operation *op) {
