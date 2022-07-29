@@ -291,31 +291,6 @@ namespace circ
         }
 
         llvm::Function *make_from(const InstructionBatch &batch);
-
-
-        llvm::Function *make(llvm::StringRef buff)
-        {
-            if (auto used = ctx.module()->getGlobalVariable("llvm.used"))
-                used->eraseFromParent();
-
-            //auto isels = BaseLifter< OpaqueILifter >(ctx).Run(buff);
-            auto isels = std::vector< InstructionSelection >{};
-            EraseFns(ctx.module(), { "__remill_intrinsics", "__remill_mark_as_used" });
-
-            // These improve optimizability.
-            mute_state_escape("__remill_function_return");
-            mute_state_escape("__remill_error");
-            mute_state_escape("__remill_missing_block");
-
-
-            circuit_builder builder(ctx, "circuit.1.0");
-            builder.inject_isels(isels);
-            return PostLiftOpt::run(builder.finish());
-        }
     };
 
-    static inline auto make_circuit(CtxRef ctx, llvm::StringRef buff)
-    {
-        return CircuitMaker(ctx).make(buff);
-    }
 }  // namespace circ
