@@ -35,7 +35,7 @@
  */
 
 namespace circ::inspect::config_differ {
-    static const inline std::string key = "diff_ctt";
+    static const inline std::string meta_key = "diff_ctt";
     enum class DiffMarker{
         None,
         Left,
