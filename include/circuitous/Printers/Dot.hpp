@@ -47,18 +47,18 @@ namespace circ::print
 
     struct HighlightColorer
     {
-        using highlight_names_t = std::vector< std::string >;
-        using opt_highlight_name_t = std::optional< std::string_view >;
+        using names_t = std::vector< std::string >;
+        using opt_name = std::optional< std::string_view >;
 
-        HighlightColorer(const highlight_names_t &highlight_nodes);
+        HighlightColorer(const names_t &highlight_nodes);
 
         Color operator()(Operation *op);
 
     private:
-        highlight_names_t highlight_nodes;
+        names_t highlight_nodes;
         uint32_t color_counter = 0;
         std::unordered_map< std::string_view, uint32_t > node_to_color_map;
 
-        opt_highlight_name_t highlight_name_for_op(Operation *op);
+        opt_name name_for_op(Operation *op);
     };
 }
