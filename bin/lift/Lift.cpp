@@ -52,7 +52,6 @@ DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 DEFINE_string(ciff_in, "", "Load input from circuitous-seed --dbg produced file");
 
 
-DEFINE_bool(simplify, false, "Enables simplification passes of circuit.");
 DEFINE_string(patterns, "", "Equality saturation patterns.");
 DEFINE_bool(eqsat, false, "Enable equality saturation based optimizations.");
 DEFINE_bool(dbg, false, "Enable various debug dumps");
@@ -126,7 +125,6 @@ using other_options = circ::tl::TL<
     circ::cli::BitBlastStats,
     circ::cli::EqSat,
     circ::cli::Patterns,
-    circ::cli::Simplify,
     circ::cli::Help,
     circ::cli::Version
 >;
