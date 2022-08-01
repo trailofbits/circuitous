@@ -67,7 +67,7 @@ namespace circ::cli
         static inline const auto opt = circ::CmdOpt("--dot-out", false);
     };
 
-    struct DotSemantics : circ::DefaultCmdOpt, PathArg
+    struct DotSemantics : circ::DefaultCmdOpt, Arity< 0 >
     {
         static inline const auto opt = circ::CmdOpt("--dot-semantics", false);
 
