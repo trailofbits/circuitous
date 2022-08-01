@@ -51,12 +51,12 @@ namespace circ::inspect {
     /*
      * Finds all paths starting from a constraint down to a config node
      */
-    struct CTTFinder : SubPathCollector<CTTFinder>{
+    struct ConfigToTargetSubPathCollector : SubPathCollector<ConfigToTargetSubPathCollector>{
         bool top(Operation* op) { return isa<constraint_opts_ts>(op); }
         bool bottom(Operation* op) { return read_semantics(op) == sem_taint::Config; }
     };
 
-    struct LTTFinder : SubPathCollector<LTTFinder>{
+    struct LeafToTargetSubPathCollector : SubPathCollector<LeafToTargetSubPathCollector>{
         bool top(Operation* op) { return isa<constraint_opts_ts>(op); }
         bool bottom(Operation* op) { return isa<leaf_values_ts>(op); }
     };
@@ -66,7 +66,7 @@ namespace circ::inspect {
         bool bottom(Operation* op) { return isa<leaf_values_ts>(op);}
     };
 
-    struct InstrBitsToDRFinder : SubPathCollector<InstrBitsToDRFinder>{
+    struct InstrBitsToDRSubPathCollector : SubPathCollector<InstrBitsToDRSubPathCollector>{
         bool top(Operation* op) { return isa<DecoderResult>(op); }
         bool bottom(Operation* op) { return isa<leaf_values_ts>(op); }
     };
