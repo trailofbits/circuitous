@@ -154,42 +154,42 @@ namespace circ
       static Pass get() { return std::make_shared< TrivialConcatRemovalPass >(); }
   };
 
-    struct PassesBase {
+  struct PassesBase
+  {
       // list of recognized passes
-      static inline std::map<std::string, Pass> known_passes
+      static inline std::map< std::string, Pass > known_passes
       {
-          {"eqsat", EqualitySaturationPass::get()},
-          {"merge-advices", MergeAdvicesPass::get()},
-          {"dummy-pass", DummyPass::get()},
-          {"trivial-concat-removal", TrivialConcatRemovalPass::get()},
-          {"overflow-flag-fix", RemillOFPatch::get()},
-          {"merge-transitive-advices", MergeAdviceConstraints::get()}
+          { "eqsat", EqualitySaturationPass::get() },
+          { "merge-advices", MergeAdvicesPass::get() },
+          { "dummy-pass", DummyPass::get() },
+          { "trivial-concat-removal", TrivialConcatRemovalPass::get() },
+          { "overflow-flag-fix", RemillOFPatch::get() },
+          { "merge-transitive-advices", MergeAdviceConstraints::get() }
       };
-    }
 
+      NamedPass &add_pass( const std::string &name )
+      {
+          auto pass = known_passes.at( name );
+          log_info() << "Adding pass: " << name;
+          return passes.emplace_back( name, pass );
+      }
 
-    NamedPass &add_pass(const std::string &name) {
-      auto pass = known_passes.at(name);
-      log_info() << "Adding pass: " << name;
-      return passes.emplace_back(name, pass);
-    }
+      CircuitPtr run_pass( const Pass &pass, CircuitPtr &&circuit )
+      {
+          auto result = pass->run( std::move( circuit ) );
+          result->remove_unused();
+          return result;
+      }
 
-    CircuitPtr run_pass(const Pass &pass, CircuitPtr &&circuit)
-    {
-      auto result = pass->run(std::move(circuit));
-      result->remove_unused();
-      return result;
-    }
+      CircuitPtr run_pass( const NamedPass &npass, CircuitPtr &&circuit )
+      {
+          const auto &[ _, pass ] = npass;
+          return run_pass( pass, std::move( circuit ) );
+      }
 
-    CircuitPtr run_pass(const NamedPass &npass, CircuitPtr &&circuit)
-    {
-      const auto &[_, pass] = npass;
-      return run_pass(pass, std::move(circuit));
-    }
+      std::string report() const { return "no report recorded"; }
 
-    std::string report() const { return "no report recorded"; }
-
-    std::vector< NamedPass > passes;
+      std::vector< NamedPass > passes;
   };
 
   template<typename Next>
