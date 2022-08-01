@@ -203,7 +203,7 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
                 return circ::print::diff_coloring;
             }
 
-            if ( auto coloring = cli.template get< cli::DotSemantics >())
+            if ( cli.template present< cli::DotSemantics >())
             {
                 circ::inspect::SemanticsTainter tainter;
                 tainter.run( circuit );
