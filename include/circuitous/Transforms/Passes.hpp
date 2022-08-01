@@ -82,15 +82,16 @@ namespace circ
             if(output_of == nullptr || input_cf == nullptr || output_cf == nullptr)
                 return std::move(circuit);
 
-            for(RegConstraint* regC : circuit->attr<RegConstraint>()){
-                if(regC->operands.size() == 2 && regC->operands[1] == output_of){
-                    if(has_remill_overflow_flag_semantics(regC)){
-                        auto xor_node = circuit.operator->()->create<Xor>(1u);
-                        xor_node->add_use(input_cf);
-                        xor_node->add_use(output_cf);
-                        regC->replace_use(xor_node,0);
-                    }
-                }
+            for ( auto *regC: circuit->attr< RegConstraint >())
+            {
+                if ( regC->operands.size() != 2 ||
+                     regC->operands[ 1 ] != output_of || !has_remill_overflow_flag_semantics( regC ))
+                continue;
+
+                auto xor_node = circuit.operator->()->create<Xor>(1u);
+                xor_node->add_use(input_cf);
+                xor_node->add_use(output_cf);
+                regC->replace_use(xor_node,0);
             }
 
             return std::move(circuit);
