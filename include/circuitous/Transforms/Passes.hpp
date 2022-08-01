@@ -82,7 +82,7 @@ namespace circ
             if(output_of == nullptr || input_cf == nullptr || output_cf == nullptr)
                 return std::move(circuit);
 
-            for ( auto *regC: circuit->attr< RegConstraint >())
+            for ( auto regC : circuit->attr< RegConstraint >() )
             {
                 if ( regC->operands.size() != 2 ||
                      regC->operands[ 1 ] != output_of || !has_remill_overflow_flag_semantics( regC ))
@@ -103,22 +103,30 @@ namespace circ
 
     struct MergeAdviceConstraints : PassBase
     {
-        CircuitPtr run(CircuitPtr &&circuit) override {
-            for(auto* ac : circuit->attr<AdviceConstraint>()){
-                if(ac->operands.size() == 2 && isa<Advice>(ac->operands[0]) && isa<Advice>(ac->operands[1]) ){
-                    auto advice1 = ac->operands[0];
-                    auto advice2 = ac->operands[1];
+        CircuitPtr run(CircuitPtr &&circuit) override
+        {
+            for ( auto ac : circuit->attr< AdviceConstraint >() )
+            {
+                if ( ac->operands.size() != 2 || !isa< Advice >( ac->operands[ 0 ] ) ||
+                     !isa< Advice >( ac->operands[ 1 ] ))
+                    continue;
 
-                    advice2->remove_use(ac);
-                    advice1->remove_use(ac);
-                    advice2->replace_all_uses_with(advice1);
+                auto lhs = ac->operands[ 0 ];
+                auto rhs = ac->operands[ 1 ];
 
-                    while(!ac->users.empty()) {
-                        ac->remove_use( ac->users[ 0 ] );
-                    }
-                }
+                /*
+                 * It is important to clear usages of the AC before we replace the uses
+                 * since otherwise advice_1 will gain two uses of the AC.
+                 * Which at the time of writing can cause trouble when deleting.
+                 */
+                lhs->remove_use( ac );
+                rhs->remove_use( ac );
+                rhs->replace_all_uses_with( lhs );
+
+                while ( !ac->users.empty())
+                    ac->remove_use( ac->users[ 0 ] );
             }
-            return std::move(circuit);
+            return std::move( circuit );
         }
 
         static Pass get() { return std::make_shared< MergeAdviceConstraints >(); }
