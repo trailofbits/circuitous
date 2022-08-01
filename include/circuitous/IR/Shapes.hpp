@@ -30,18 +30,6 @@ bool IsOneOf(Operation *op) {
   }
 }
 
-template < typename T, typename ...Ts >
-bool IsOneOfType(Operation *op) {
-    if ( isa<T>(op) ) {
-        return true;
-    }
-
-    if constexpr ( sizeof...( Ts ) == 0 ) {
-        return false;
-    } else {
-        return IsOneOf< Ts... >( op );
-    }
-}
 static inline bool IsLeafNode(Operation *op) {
   switch(op->op_code) {
     case InputRegister::kind:
@@ -233,7 +221,7 @@ namespace collect {
     std::unordered_set<Operation *> collected;
 
     void Run(Operation *op) {
-      if (IsOneOf<Ts...>(op)) {
+      if (is_one_of<Ts...>(op)) {
         collected.insert(op);
       }
       for (auto o : op->users) {
@@ -248,7 +236,7 @@ namespace collect {
       std::unordered_set<Operation *> collected;
 
       void Run(Operation *op) {
-          if (IsOneOfType<Ts...>(op)) {
+          if (is_one_of<Ts...>(op)) {
               collected.insert(op);
           }
           for (auto o : op->operands) {
@@ -354,18 +342,18 @@ struct SubPathCollector : DFSVisitor<Derived, IsConst>
          * once we have reached the bottom, we recurse back to the original starting node
          * and saving a path for from bottom to any node satisfying top
          */
-        if( bottom(op) )
+        if( bottom( op ) )
         {
             std::vector<Operation*> path_to_save;
             for(auto it = parent_t::current_path.rbegin(); it != parent_t::current_path.rend(); ++it){
-                path_to_save.emplace_back(*it);
+                path_to_save.emplace_back( *it );
                 if(top(*it)){
-                    path_to_save.push_back(op); // op hasn't been added to the path just yet
-                    collected.push_back( path_to_save); // we want this explicit copy
+                    path_to_save.push_back( op ); // op hasn't been added to the path just yet
+                    collected.push_back( path_to_save ); // we want this explicit copy
                 }
             }
         }
-        return this->parent_t::dispatch(op);
+        return this->parent_t::dispatch( op );
     }
 
     std::vector<std::vector<Operation*>> operator()(Operation* op) {
@@ -395,5 +383,3 @@ struct VisitorStartingFromTL : Visitor< Derived, IsConst >
     }
 };
 } // namespace circ
-
-
