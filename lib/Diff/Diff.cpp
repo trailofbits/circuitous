@@ -39,32 +39,4 @@ namespace circ::inspect
         else if(diffmarker_read(o) != DiffMarker::Overlapping)
             diffmarker_write(o, key_this);
     }
-
-
-
-//    bool CTTFinder::bottom(Operation *op)
-//
-//    bool InstrBitsToDRFinder::top(Operation *op) {
-//        return isa<DecoderResult>(op);
-//    }
-//
-//    bool InstrBitsToDRFinder::bottom(Operation *op) {
-//        return isa<leaf_values_ts>(op);
-//    }
-//
-//    bool LTTFinder::top(Operation *op) {
-//        return isa<constraint_opts_ts>(op);
-//    }
-//
-//    bool LTTFinder::bottom(Operation *op) {
-//        return isa<leaf_values_ts>(op);
-//    }
-//
-//    bool LeafToVISubPathCollector::top(Operation *op) {
-//        return isa<VerifyInstruction>(op);
-//    }
-//
-//    bool LeafToVISubPathCollector::bottom(Operation *op) {
-//        return isa<leaf_values_ts>(op);
-//    }
 }
