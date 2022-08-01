@@ -33,14 +33,14 @@ namespace circ::inspect {
 
     /*
      * This taint is meant to identify what kind of semantics certain nodes represent.
-     * The goal is to identify what are "core" semantics and what are operands to semantics
+     * The goal is to identify what are "core" semantics and what are operands to semantics.
      *
      * Take an `and rax, 1` we want to identify all nodes relating to the semantics of `and`
      * and which nodes represent the operands `rax` and `1`. Once we do so, we can replace
      * the operands with advice nodes.
      *
      * If we take the view of how we "assemble" an instruction, and we already have semantics
-     * Then we need to have bits from the encoding specify which state needs to be altered.
+     * then we need to have bits from the encoding specify which state needs to be altered.
      * The point at which this happens is called "config", because this configures which state
      * the semantics should be altered.
      *
@@ -58,12 +58,12 @@ namespace circ::inspect {
      * But also the value `1` which eax will be incremented by for the instruction INC.
      *
      * The graph taints node in 1 of 4 different options: Semantics, Config, Decode and State
-     * If a node has children only of the same type, then that type gets propagated
+     * If a node has children only of the same type, then that type gets propagated.
      *
-     * State represents machine state like registers
-     * Decode represents nodes relating to the decoding process
-     * Config represent those nodes that have a Decode and State child
-     * Semantics represent semantics or config nodes
+     * State represents machine state like registers.
+     * Decode represents nodes relating to the decoding process.
+     * Config represent those nodes that have a Decode and State child.
+     * Semantics represent semantics or config nodes.
      *
      * The advantage of doing this on the graph compared to llvm is that any semantics which
      * might be implicit to an instruction are captured as well through this approach.
