@@ -1,6 +1,7 @@
 # Copyright (c) 2022 Trail of Bits, Inc.
 
 add_headers( Transforms CIRCUITOUS_TRANSFORMS_HEADERS
+  EGraph.hpp
   EqualitySaturation.hpp
   PassBase.hpp
   Passes.hpp
@@ -8,7 +9,7 @@ add_headers( Transforms CIRCUITOUS_TRANSFORMS_HEADERS
 
 add_circuitous_library( transforms
   SOURCES
-    EqualityNode.cpp
+    EGraph.cpp
     EqualitySaturation.cpp
     OverflowFlagFix.cpp
     ConjureALU.cpp

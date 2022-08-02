@@ -11,12 +11,11 @@
 #include <circuitous/Transforms/ConjureALU.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
 
-
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
 #include <vector>
-#include <span>
 
 namespace circ
 {
@@ -30,20 +29,12 @@ namespace circ
     } // namesapce detail
 
 
-    struct EqualitySaturationPass : PassBase
+  struct EqualitySaturationPass : PassBase
+  {
+    CircuitPtr run(CircuitPtr &&circuit) override
     {
-        using rules_t = std::vector< eqsat::RuleSet >;
-
-        EqualitySaturationPass() = default;
-        EqualitySaturationPass( rules_t &&rules )
-        {
-            add_rules( std::move( rules ) );
-        }
-
-        CircuitPtr run(CircuitPtr &&circuit) override
-        {
-            return eqsat::EqualitySaturation(std::move(circuit), rulesets);
-        }
+      return run_equality_saturation(std::move(circuit), rulesets);
+    }
 
         void add_rules( rules_t &&ruleset )
         {
