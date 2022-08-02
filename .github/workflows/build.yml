@@ -149,6 +149,12 @@ jobs:
         mkdir -p ${{ steps.paths.outputs.src }}/cxx-common-ports/vcpkg/installed/x64-linux-rel
         cmake --preset ninja-cxx-common-system-llvm-x64-linux-rel -B ${{ steps.paths.outputs.build }}/circuitous
 
+    - name: Configure debug
+      working-directory: ${{ steps.paths.outputs.src }}/circuitous
+      if: always()
+      run: |
+        cat  /__w/circuitous/circuitous/src/cxx-common-ports/vcpkg/buildtrees/gap/config-x64-linux-rel-out.log
+
     - name: Build circuitous
       working-directory: ${{ steps.paths.outputs.build }}/circuitous
       env:
