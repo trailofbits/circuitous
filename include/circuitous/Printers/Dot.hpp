@@ -4,6 +4,11 @@
 
 namespace circ::print
 {
+    static inline std::string make_style( std::string fill_color, std::string font_color )
+    {
+        return "fillcolor=" + fill_color + ";fontcolor=" + font_color + ";style=filled;";
+    }
+
     enum class Color
     {
         None,
@@ -15,6 +20,8 @@ namespace circ::print
         GrayWhite,
         OrangeBlack
     };
+
+    std::string color_to_dot(Color c);
 
     using color_default_styles_t = std::array< Color, 7 >;
     using color_styles_t = std::array< std::string_view, 7 >;
@@ -28,17 +35,6 @@ namespace circ::print
         Color::VioletWhite,
         Color::GrayWhite,
         Color::OrangeBlack
-    };
-
-    static constexpr const color_styles_t colors
-    {
-        "fillcolor=red;fontcolor=white;style=filled;",
-        "fillcolor=yellow;fontcolor=black;style=filled;",
-        "fillcolor=green;fontcolor=black;style=filled;",
-        "fillcolor=blue;fontcolor=yellow;style=filled;",
-        "fillcolor=violet;fontcolor=white;style=filled;",
-        "fillcolor=gray;fontcolor=white;style=filled;",
-        "fillcolor=orange;fontcolor=black;style=filled;"
     };
 
     Color sem_taint_coloring(Operation *op);
