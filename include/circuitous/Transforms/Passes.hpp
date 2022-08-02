@@ -11,10 +11,12 @@
 #include <circuitous/Transforms/ConjureALU.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
 
+
 #include <optional>
 #include <span>
 #include <string>
 #include <vector>
+#include <span>
 
 namespace circ
 {
@@ -52,7 +54,7 @@ namespace circ
             );
         }
 
-        std::vector<eqsat::RuleSet> rulesets;
+        rules_t rulesets;
     };
 
     /*

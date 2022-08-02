@@ -9,9 +9,6 @@ add_subdirectory(lib)
 add_executable( test-circuitous
   main.cpp
 
-  ADT/UnionFind.cpp
-  ADT/EGraph.cpp
-
   Transforms/Pattern.cpp
   Transforms/EqualitySaturation.cpp
 )

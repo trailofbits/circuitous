@@ -1,6 +1,5 @@
 # Copyright (c) 2022 Trail of Bits, Inc.
 
-add_subdirectory( ADT )
 add_subdirectory( Dbg )
 add_subdirectory( Fuzz )
 add_subdirectory( Gap )
@@ -13,3 +12,4 @@ add_subdirectory( Util )
 add_subdirectory( Decoder )
 add_subdirectory( Diff )
 add_subdirectory( Run )
+add_subdirectory( eqsat )
