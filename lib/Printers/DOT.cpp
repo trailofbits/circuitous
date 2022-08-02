@@ -25,16 +25,18 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ::print
 {
-    std::string color_to_dot(Color c){
-        switch(c){
+    std::string color_to_dot( Color c )
+    {
+        switch ( c )
+        {
             case Color::None: return "";
-            case Color::RedWhite: return "fillcolor=red;fontcolor=white;style=filled;";
-            case Color::YellowBlack: return "fillcolor=yellow;fontcolor=black;style=filled;";
-            case Color::GreenBlack: return "fillcolor=green;fontcolor=black;style=filled;";
-            case Color::BlueYellow: return "fillcolor=blue;fontcolor=yellow;style=filled;";
-            case Color::VioletWhite: return "fillcolor=violet;fontcolor=white;style=filled;";
-            case Color::GrayWhite: return "fillcolor=gray;fontcolor=white;style=filled;";
-            case Color::OrangeBlack: return "fillcolor=orange;fontcolor=black;style=filled;";
+            case Color::RedWhite: return make_style( "red", "white" );
+            case Color::YellowBlack: return make_style( "yellow", "black" );
+            case Color::GreenBlack: return make_style( "green", "black" );
+            case Color::BlueYellow: return make_style( "blue", "yellow" );
+            case Color::VioletWhite: return make_style( "violet", "white" );
+            case Color::GrayWhite: return make_style( "gray", "white" );
+            case Color::OrangeBlack: return make_style( "orange", "black" );
         }
     }
 
@@ -57,7 +59,7 @@ namespace circ::print
     HighlightColorer::HighlightColorer(const std::vector< std::string > &highlight_nodes)
             : highlight_nodes( highlight_nodes) {
         for(auto& hl: highlight_nodes){
-            node_to_color_map[hl] = color_counter % colors.size();
+            node_to_color_map[hl] = color_counter % color_defaults.size();
             color_counter++;
         }
     }
