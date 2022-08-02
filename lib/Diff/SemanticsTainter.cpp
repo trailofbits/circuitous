@@ -67,9 +67,10 @@ namespace circ::inspect {
         return write( op, read_semantics( op->operands[ 0 ] ));
     }
 
-    void SemanticsTainter::visit(circ::Operation *op) {
-        taint(op);
-        op->traverse_upwards(*this);
+    void SemanticsTainter::visit( circ::Operation *op )
+    {
+        taint( op );
+        op->traverse_upwards( *this );
     }
 
     bool SemanticsTainter::should_promote_to_semantics(Operation *op) {
@@ -101,31 +102,37 @@ namespace circ::inspect {
             return false;
         }
 
-        for(auto o : promote_to_config){
+        for(auto o : promote_to_config)
             write( o, sem_taint::Config);
-        }
+
         return true;
     }
 
-    bool SemanticsTainter::all_children_are_same(Operation *op) {
-        if(op->operands.size() < 2)
+    bool SemanticsTainter::all_children_are_same( Operation *op )
+    {
+        if ( op->operands.size() < 2 )
             return true;
 
-        auto first = read_semantics(op->operands[0]);
-        for (auto& o: op->operands){
-            if(first != read_semantics(o)){
+        auto first = read_semantics( op->operands[ 0 ] );
+        for ( auto &o : op->operands )
+        {
+            if ( first != read_semantics( o ) )
+            {
                 return false;
             }
         }
         return true;
     }
 
-    void SemanticsTainter::write(Operation *op, sem_taint value) {
-        op->set_meta<true>(meta_key, semantic_to_string(value));
+    void SemanticsTainter::write( Operation *op, sem_taint value )
+    {
+        op->set_meta< true >( meta_key, semantic_to_string( value ) );
     };
 
-    std::string semantic_to_string(sem_taint sc) {
-        switch (sc){
+    std::string semantic_to_string( sem_taint sc )
+    {
+        switch ( sc )
+        {
             case sem_taint::None: return "None";
             case sem_taint::Decode: return "Decode";
             case sem_taint::State: return "State";
@@ -135,22 +142,24 @@ namespace circ::inspect {
         }
     }
 
-    sem_taint read_semantics(Operation *op) {
+    sem_taint read_semantics( Operation *op )
+    {
         auto key = SemanticsTainter::meta_key;
-        if (!op->has_meta(key))
+        if ( !op->has_meta( key ) )
             return sem_taint::None;
-        else if (op->get_meta(key) == "None")
+        if ( op->get_meta( key ) == "None" )
             return sem_taint::None;
-        else if (op->get_meta(key) == "Decode")
+        if ( op->get_meta( key ) == "Decode" )
             return sem_taint::Decode;
-        else if (op->get_meta(key) == "State")
+        if ( op->get_meta( key ) == "State" )
             return sem_taint::State;
-        else if (op->get_meta(key) == "Config")
+        if ( op->get_meta( key ) == "Config" )
             return sem_taint::Config;
-        else if (op->get_meta(key) == "Semantics")
+        if ( op->get_meta( key ) == "Semantics" )
             return sem_taint::Semantics;
-        else if (op->get_meta(key) == "Delete")
+        if ( op->get_meta( key ) == "Delete" )
             return sem_taint::Delete;
+
         circ::unreachable() << "could not decode semantics";
     }
 }
