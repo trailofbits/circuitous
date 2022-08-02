@@ -6,9 +6,11 @@
 
 #include <cstdint>
 
+#include <gap/core/union_find.hpp>
+
 namespace eqsat
 {
-    using node_id_t = std::uint64_t;
+    using node_id_t = gap::union_type;
 
     using bitwidth_t = std::uint32_t;
 

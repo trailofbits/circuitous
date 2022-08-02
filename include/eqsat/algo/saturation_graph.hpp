@@ -4,13 +4,16 @@
 
 #pragma once
 
-#include <circuitous/ADT/EGraph.hpp>
-#include <circuitous/Transforms/eqsat/rule.hpp>
+#include <eqsat/pattern/rule.hpp>
 
 namespace eqsat {
 
     template< gap::graph::graph_like egraph >
     struct saturable_egraph : egraph {
+
+        explicit saturable_egraph(egraph &&graph)
+            : egraph(std::forward< egraph >(graph))
+        {}
 
         // return value of equality saturation
         enum class stop_reason

@@ -1,15 +1,17 @@
 # Copyright (c) 2022 Trail of Bits, Inc.
 
 add_headers( ../eqsat CIRCUITOUS_EQSAT_HEADERS
-  common.hpp
-  cost_graph.hpp
-  egraph.hpp
-  ematch.hpp
-  parser.hpp
-  rule.hpp
-  rule_set.hpp
-  saturation_graph.hpp
-  substitution.hpp
+  core/common.hpp
+  core/cost_graph.hpp
+  core/egraph.hpp
+
+  algo/ematch.hpp
+  algo/saturation_graph.hpp
+  algo/substitution.hpp
+
+  pattern/parser.hpp
+  pattern/rule.hpp
+  pattern/rule_set.hpp
 )
 
 add_circuitous_library( eqsat
