@@ -43,7 +43,7 @@ namespace circ::print
 
     Color sem_taint_coloring(Operation *op);
     Color diff_coloring(Operation *op);
-    Color inline no_coloring(Operation *op) { return Color::None; }
+    Color static inline no_coloring(Operation *op) { return Color::None; }
 
     struct HighlightColorer
     {
