@@ -367,11 +367,7 @@ template < typename Derived, bool IsConst = false >
 struct VisitorStartingFromTL : Visitor< Derived, IsConst >
 {
     using parent_t = Visitor< Derived, IsConst >;
-    using operation_t = typename parent_t::operation_t;
-
-    auto dispatch(operation_t op) {
-        return this->parent_t::dispatch( op );
-    }
+    using parent_t::dispatch;
 
     template < typename TL >
     void start_from(Operation *op) {
