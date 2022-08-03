@@ -328,7 +328,9 @@ struct SubPathCollector : BacktrackingPathVisitor<Derived, IsConst>
 {
     using parent_t = BacktrackingPathVisitor< Derived, IsConst >;
     using operation_t = typename parent_t::operation_t;
-    std::vector< std::vector< circ::Operation *>> collected;
+    using path_t = typename parent_t::path_t;
+
+    std::vector<path_t> collected;
 
     bool top(Operation *op) { return static_cast<Derived &>(*this).top( op );}
     bool bottom(Operation *op) { return static_cast<Derived &>(*this).bottom( op );}
@@ -343,22 +345,29 @@ struct SubPathCollector : BacktrackingPathVisitor<Derived, IsConst>
          * and saving a path for from bottom to any node satisfying top
          */
         if( bottom( op ) )
-        {
-            std::vector<Operation*> path_to_save;
-            for(auto it = parent_t::current_path.rbegin(); it != parent_t::current_path.rend(); ++it){
-                path_to_save.emplace_back( *it );
-                if(top(*it)){
-                    path_to_save.push_back( op ); // op hasn't been added to the path just yet
-                    collected.push_back( path_to_save ); // we want this explicit copy
-                }
-            }
-        }
+            collect_until_top( op );
+
         return this->parent_t::dispatch( op );
     }
 
-    std::vector<std::vector<Operation*>> operator()(Operation* op) {
+    void collect_until_top( const operation_t &op )
+    {
+        path_t path_to_save;
+        for ( auto it = this->current_path.rbegin(); it != this->current_path.rend(); ++it )
+        {
+            path_to_save.emplace_back( *it );
+            if ( top( *it ) )
+            {
+                path_to_save.push_back( op ); // op hasn't been added to the path just yet
+                collected.push_back( path_to_save ); // we want this explicit copy
+            }
+        }
+    }
+
+    std::vector<std::vector< Operation * > > operator()( Operation *op )
+    {
         this->collected.clear();
-        visit(op);
+        visit( op );
         return this->collected;
     }
 };

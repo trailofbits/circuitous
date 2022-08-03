@@ -167,7 +167,7 @@ namespace circ
     {
         using parent_t = Visitor< Derived, IsConst >;
         using operation_t = typename parent_t::operation_t;
-        using path = std::deque< operation_t >;
+        using path_t = std::vector< operation_t >;
 
         auto dispatch(operation_t op) {
             current_path.push_back( op );
@@ -175,6 +175,6 @@ namespace circ
             current_path.pop_back();
         }
 
-        path current_path;
+        path_t current_path;
     };
 } // namespace circ
