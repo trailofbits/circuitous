@@ -363,19 +363,13 @@ struct SubPathCollector : DFSVisitor<Derived, IsConst>
     }
 };
 
-template < typename Derived, bool IsConst = false >
-struct VisitorStartingFromTL : Visitor< Derived, IsConst >
+template< typename TL, typename Visitor >
+void run_visitor_on(Operation *op, Visitor &&vis)
 {
-    using parent_t = Visitor< Derived, IsConst >;
-    using parent_t::dispatch;
-
-    template < typename TL >
-    void start_from(Operation *op) {
-        collect::DownTree <TL> down_collector; // Works on more than just circuit unlike attr
-        down_collector.Run( op );
-        for (auto &o: down_collector.collected) {
-            dispatch( o );
-        }
+    collect::DownTree <TL> down_collector; // Works on more than just circuit unlike attr
+    down_collector.Run( op );
+    for (auto &o: down_collector.collected) {
+        vis.visit( o );
     }
-};
+}
 } // namespace circ
