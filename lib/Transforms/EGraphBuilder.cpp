@@ -9,153 +9,153 @@ namespace circ::eqsat
     //
     // Visits
     //
-    NodeTemplate NodeTemplateBulder::visit(InputRegister *op) {
+    NodeTemplate NodeTemplateBuilder::visit(InputRegister *op) {
         return regop(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(OutputRegister *op) {
+    NodeTemplate NodeTemplateBuilder::visit(OutputRegister *op) {
         return regop(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(InputTimestamp *op) {
+    NodeTemplate NodeTemplateBuilder::visit(InputTimestamp *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(OutputTimestamp *op) {
+    NodeTemplate NodeTemplateBuilder::visit(OutputTimestamp *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(InputErrorFlag *op) {
+    NodeTemplate NodeTemplateBuilder::visit(InputErrorFlag *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(OutputErrorFlag *op) {
+    NodeTemplate NodeTemplateBuilder::visit(OutputErrorFlag *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(Undefined *op) {
+    NodeTemplate NodeTemplateBuilder::visit(Undefined *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(Memory *op) {
+    NodeTemplate NodeTemplateBuilder::visit(Memory *op) {
         return memop(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(Constant *op) {
+    NodeTemplate NodeTemplateBuilder::visit(Constant *op) {
         return constop(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(Advice *op) {
+    NodeTemplate NodeTemplateBuilder::visit(Advice *op) {
         return advice(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(InputInstructionBits *op) {
+    NodeTemplate NodeTemplateBuilder::visit(InputInstructionBits *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(RegConstraint *op) {
+    NodeTemplate NodeTemplateBuilder::visit(RegConstraint *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(AdviceConstraint *op) {
+    NodeTemplate NodeTemplateBuilder::visit(AdviceConstraint *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(WriteConstraint *op) {
+    NodeTemplate NodeTemplateBuilder::visit(WriteConstraint *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(ReadConstraint *op) {
+    NodeTemplate NodeTemplateBuilder::visit(ReadConstraint *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(UnusedConstraint *op) {
+    NodeTemplate NodeTemplateBuilder::visit(UnusedConstraint *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(Add *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Sub *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Mul *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(UDiv *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(SDiv *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(SRem *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(URem *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Add *op)  { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Sub *op)  { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Mul *op)  { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(UDiv *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(SDiv *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(SRem *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(URem *op) { return sized(op); }
 
-    NodeTemplate NodeTemplateBulder::visit(Shl *op)   { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(LShr *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(AShr *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Trunc *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(ZExt *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(SExt *op)  { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Shl *op)   { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(LShr *op)  { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(AShr *op)  { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Trunc *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(ZExt *op)  { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(SExt *op)  { return sized(op); }
 
-    NodeTemplate NodeTemplateBulder::visit(Icmp_ult *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Icmp_slt *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Icmp_ugt *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Icmp_eq *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Icmp_ne *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Icmp_uge *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Icmp_ule *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Icmp_sgt *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Icmp_sge *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Icmp_sle *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Icmp_ult *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Icmp_slt *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Icmp_ugt *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Icmp_eq *op)  { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Icmp_ne *op)  { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Icmp_uge *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Icmp_ule *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Icmp_sgt *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Icmp_sge *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Icmp_sle *op) { return sized(op); }
 
-    NodeTemplate NodeTemplateBulder::visit(InputImmediate *op) {
+    NodeTemplate NodeTemplateBuilder::visit(InputImmediate *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(Extract *op) {
+    NodeTemplate NodeTemplateBuilder::visit(Extract *op) {
         return extract(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(Concat *op) {
+    NodeTemplate NodeTemplateBuilder::visit(Concat *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(PopulationCount *op) {
+    NodeTemplate NodeTemplateBuilder::visit(PopulationCount *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(CountLeadingZeroes *op) {
+    NodeTemplate NodeTemplateBuilder::visit(CountLeadingZeroes *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(CountTrailingZeroes *op) {
+    NodeTemplate NodeTemplateBuilder::visit(CountTrailingZeroes *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(Not *op) {
+    NodeTemplate NodeTemplateBuilder::visit(Not *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(Parity *op) {
+    NodeTemplate NodeTemplateBuilder::visit(Parity *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(Select *op) {
+    NodeTemplate NodeTemplateBuilder::visit(Select *op) {
         return select(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(DecodeCondition *op) {
+    NodeTemplate NodeTemplateBuilder::visit(DecodeCondition *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(DecoderResult *op) {
+    NodeTemplate NodeTemplateBuilder::visit(DecoderResult *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(VerifyInstruction *op) {
+    NodeTemplate NodeTemplateBuilder::visit(VerifyInstruction *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(OnlyOneCondition *op) {
+    NodeTemplate NodeTemplateBuilder::visit(OnlyOneCondition *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBulder::visit(Or *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(And *op) { return sized(op); }
-    NodeTemplate NodeTemplateBulder::visit(Xor *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Or *op)  { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(And *op) { return sized(op); }
+    NodeTemplate NodeTemplateBuilder::visit(Xor *op) { return sized(op); }
 
-    NodeTemplate NodeTemplateBulder::visit(Circuit *) {
+    NodeTemplate NodeTemplateBuilder::visit(Circuit *) {
         unreachable() << "Unexpected case encountered in visit.";
     }
 
