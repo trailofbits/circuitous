@@ -10,6 +10,7 @@ add_headers( Transforms CIRCUITOUS_TRANSFORMS_HEADERS
 add_circuitous_library( transforms
   SOURCES
     EGraph.cpp
+    EGraphBuilder.cpp
     EqualitySaturation.cpp
     OverflowFlagFix.cpp
     ConjureALU.cpp
