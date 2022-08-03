@@ -324,9 +324,9 @@ static inline std::unordered_set<Operation *> GetContexts(Operation *op) {
  *  it returns a collection of all paths that start with top and end at bottom
  */
 template < typename Derived, bool IsConst = false >
-struct SubPathCollector : DFSVisitor<Derived, IsConst>
+struct SubPathCollector : BacktrackingPathVisitor<Derived, IsConst>
 {
-    using parent_t = DFSVisitor< Derived, IsConst >;
+    using parent_t = BacktrackingPathVisitor< Derived, IsConst >;
     using operation_t = typename parent_t::operation_t;
     std::vector< std::vector< circ::Operation *>> collected;
 
