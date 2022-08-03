@@ -81,6 +81,8 @@ namespace circ::eqsat
     using CircuitENode = ::eqsat::graph::node< NodeTemplate >;
     static_assert(gap::graph::node_like< CircuitENode >);
 
+    using ENodeHandle = ::eqsat::graph::node_handle;
+
     using CircuitEdge = ::eqsat::graph::edge< CircuitENode >;
     static_assert(gap::graph::edge_like< CircuitEdge >);
 

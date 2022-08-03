@@ -7,26 +7,38 @@
 #include <eqsat/core/common.hpp>
 #include <gap/core/generator.hpp>
 #include <gap/core/graph.hpp>
+#include <gap/core/hash.hpp>
 #include <gap/core/union_find.hpp>
 #include <unordered_map>
 #include <vector>
 
 namespace eqsat::graph
 {
-
     struct node_handle {
         node_id_t id;
     };
 
+    constexpr gap::hash_code hash_value(gap::hash_code code, const node_handle& val) {
+        return gap::hash_combine( code,
+            gap::hash_code( std::hash< node_id_t >{}(val.id) )
+        );
+    }
+
     using children_t = std::vector< node_handle >;
 
+    //
+    // enode
+    //
     struct base {
-        using node_pointer = std::shared_ptr< base >;
         using child_type   = node_handle;
 
         gap::generator< node_handle > children() {
             for (auto ch : _children)
                 co_yield ch;
+        }
+
+        void add_child(node_handle handle) {
+            _children.push_back(handle);
         }
 
         void update_children(gap::invocable auto &&fn) { std::for_each(_children, fn); }
@@ -36,9 +48,9 @@ namespace eqsat::graph
 
     static_assert(gap::graph::node_like< base >);
 
-    template< typename storage_type >
-    struct storage_node : storage_type {
-        using storage_type::storage_type;
+    template< typename storage >
+    struct storage_node : storage {
+        explicit storage_node(storage && data) : storage(std::move(data)) {}
     };
 
     struct bond_node {
@@ -50,6 +62,24 @@ namespace eqsat::graph
 
     template< typename storage >
     struct node : base {
+        using node_pointer = node *;
+        using storage_type = storage;
+
+        explicit node(node_variants< storage > &&n) : data(std::move(n)) {}
+
+        explicit node(storage_node< storage > &&n)
+            : node(node_variants< storage >(std::move(n)))
+        {}
+
+        explicit node(bond_node &&n)
+            : node(node_variants< storage >(std::move(n)))
+        {}
+
+        explicit node(storage &&data)
+            : node(storage_node< storage >{std::move(data)})
+        {}
+
+
         decltype(auto) visit(gap::invocable auto &&fn) {
             return std::visit(std::forward< decltype(fn) >(fn), data);
         }
@@ -61,18 +91,26 @@ namespace eqsat::graph
         node_variants< storage > data;
     };
 
-    template< typename enode >
+    //
+    // eclass
+    //
+    template< typename enode_pointer >
     struct eclass {
-        std::vector< enode * > nodes;
+        std::vector< enode_pointer > nodes;
     };
 
+    //
+    // egraph edge
+    //
     template< typename enode >
     struct edge {
-        using node_type   = enode;
-        using source_type = const node_type *;
+        using node_type    = enode;
+        using node_pointer = typename node_type::node_pointer;
+        using source_type  = const node_pointer;
 
-        using eclass_type = eclass< node_type >;
-        using target_type = const eclass_type *;
+        using eclass_type    = eclass< node_pointer >;
+        using eclass_pointer = eclass_type *;
+        using target_type    = const eclass_pointer;
 
         source_type source() const { return src; }
         target_type target() const { return tgt; }
@@ -81,11 +119,17 @@ namespace eqsat::graph
         target_type tgt;
     };
 
+    //
+    // egraph
+    //
     template< typename enode >
     struct egraph {
         using node_type    = enode;
-        using node_pointer = node_type *;
+        using storage_type = typename node_type::storage_type;
+        using node_pointer = typename node_type::node_pointer;
+
         using edge_type    = edge< node_type >;
+        using eclass_type  = eclass< node_pointer >;
 
         egraph()           = default;
 
@@ -109,21 +153,34 @@ namespace eqsat::graph
 
         gap::generator< const edge_type > edges() const {}
 
+        node_handle find(node_pointer ptr) { return _ids[ptr]; }
+
+        node_pointer add_node(storage_type &&data) {
+            _nodes.emplace_back(
+                std::make_unique< node_type >(std::move(data))
+            );
+
+            // TODO make singular eclass & canonicalize egraph
+
+            return _nodes.back().get();
+        }
+
       private:
         // stores heap allocated nodes of egraph
         std::vector< std::unique_ptr< node_type > > _nodes;
 
-        //     // stores equivalence relation between equaltity classes
-        //     UnionFind _unions;
+        // stores equivalence relation between equaltity classes
+        gap::resizable_union_find _unions = gap::resizable_union_find(0);
 
-        //     // all equavalent ids  map to the same class
-        //     std::unordered_map< Id, EClass > _classes;
+        // all equavalent ids  map to the same class
+        using handle_hash = gap::hash< node_handle >;
+        std::unordered_map< node_handle, eclass_type, handle_hash > _classes;
 
-        //     // stores equality ids of enodes
-        //     std::unordered_map< const ENode *, Id > _ids;
+        // stores equality ids of enodes
+        std::unordered_map< node_pointer, node_handle > _ids;
 
-        //     // modified eclasses that needs to be rebuild
-        //     std::vector< Id > _pending;
+        // modified eclasses that needs to be rebuild
+        std::vector< node_id_t > _pending;
     };
 
 } // namespace eqsat::graph

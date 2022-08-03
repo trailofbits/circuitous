@@ -7,9 +7,11 @@
 #include <circuitous/IR/Visitors.hpp>
 #include <circuitous/Transforms/EGraph.hpp>
 
+#include <unordered_map>
+
 namespace circ::eqsat
 {
-    struct NodeTemplateBulder : NonDefaultingVisitor< NodeTemplateBulder > {
+    struct NodeTemplateBuilder : NonDefaultingVisitor< NodeTemplateBuilder > {
         //
         // NodeTemplate constructors
         //
@@ -124,6 +126,46 @@ namespace circ::eqsat
         NodeTemplate visit(Xor *op);
 
         NodeTemplate visit(Circuit *);
+    };
+
+    using ENodePtr = CircuitENode::node_pointer;
+    using NodesMap = std::unordered_map< Operation*, ENodePtr >;
+
+    struct EGraphBuilderState {
+        CircuitEGraph egraph;
+        NodesMap nodes_map;
+    };
+
+    struct EGraphBuilder : NodeTemplateBuilder
+    {
+        using NodeTemplateBuilder::opcode;
+        using NodeTemplateBuilder::dispatch;
+
+        ENodeHandle add_nodes_recurse(Operation *op, EGraphBuilderState &state) {
+            if (!state.nodes_map.count(op)) {
+                auto node = make_node(op, state);
+                state.nodes_map[op] = node;
+                for (const auto &child : op->operands) {
+                    node->add_child( add_nodes_recurse(child, state) );
+                }
+            }
+
+            return state.egraph.find(state.nodes_map[op]);
+        }
+
+        NodeTemplate make_template(Circuit *ci) { return opcode(ci); }
+
+        NodeTemplate make_template(Operation *op) { return dispatch(op); }
+
+        ENodePtr make_node(auto *op, EGraphBuilderState &state) {
+            return state.egraph.add_node(make_template(op));
+        }
+
+        EGraphBuilderState build(Circuit *circuit) {
+            EGraphBuilderState state;
+            add_nodes_recurse(circuit, state);
+            return state;
+        }
     };
 
 } // namespace circ::eqsat
