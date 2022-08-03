@@ -163,7 +163,7 @@ namespace circ
     };
 
     template < typename Derived, bool IsConst = false >
-    struct DFSVisitor : Visitor< Derived, IsConst >
+    struct BacktrackingPathVisitor : Visitor< Derived, IsConst >
     {
         using parent_t = Visitor< Derived, IsConst >;
         using operation_t = typename parent_t::operation_t;
