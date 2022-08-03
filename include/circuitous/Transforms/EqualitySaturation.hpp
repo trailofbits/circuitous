@@ -10,10 +10,10 @@
 
 #include <span>
 
-namespace circ
+namespace circ::eqsat
 {
-    using RuleSet = eqsat::rule_set;
+    using RuleSet = ::eqsat::rule_set;
 
     CircuitPtr run_equality_saturation(CircuitPtr &&, std::span< RuleSet > rules);
 
-} // namespace circ
+} // namespace circ::eqsat

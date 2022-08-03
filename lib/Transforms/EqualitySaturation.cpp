@@ -9,7 +9,7 @@
 #include <eqsat/core/egraph.hpp>
 #include <eqsat/algo/saturation.hpp>
 
-namespace circ
+namespace circ::eqsat
 {
     CircuitEGraph make_circuit_egraph(CircuitPtr &&circuit) {
         return CircuitEGraph{}; // TODO synthesize EGraph
@@ -24,4 +24,4 @@ namespace circ
         return nullptr; // TODO circuit from optimal
     }
 
-} // namespace circ
+} // namespace circ::eqsat

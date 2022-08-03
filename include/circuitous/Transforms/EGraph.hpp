@@ -12,7 +12,7 @@
 #include <string>
 #include <variant>
 
-namespace circ
+namespace circ::eqsat
 {
     using ::eqsat::bitwidth_t;
 
@@ -95,4 +95,4 @@ namespace circ
 
     // std::string name(const circuit_enode *enode);
 
-} // namespace circ
+} // namespace circ::eqsat
