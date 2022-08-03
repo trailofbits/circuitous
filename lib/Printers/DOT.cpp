@@ -137,7 +137,7 @@ namespace circ::print
 
     Color sem_taint_coloring(Operation *op) {
         using namespace inspect;
-        if ( !op->has_meta( SemanticsTainter::meta_key ))
+        if ( !op->has_meta( SemanticsTainterVisitor::meta_key ))
             return Color::None;
 
         switch (read_semantics(op)) {
@@ -153,7 +153,7 @@ namespace circ::print
     Color diff_coloring(Operation *op) {
         using namespace inspect;
 
-        if ( !op->has_meta( SemanticsTainter::meta_key ))
+        if ( !op->has_meta( SemanticsTainterVisitor::meta_key ))
             return Color::None;
 
         auto value = diffmarker_read(op);

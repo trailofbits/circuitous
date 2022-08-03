@@ -5,7 +5,7 @@
 
 namespace circ::inspect {
 
-    void SemanticsTainter::taint(circ::Operation *op){
+    void SemanticsTainterVisitor::taint(circ::Operation *op){
         /*
         * instruction bits are by definition related to decoding
         * Advice are meant to represent dependancy inversion which are chosen by decoding
@@ -67,13 +67,13 @@ namespace circ::inspect {
         return write( op, read_semantics( op->operands[ 0 ] ));
     }
 
-    void SemanticsTainter::visit( circ::Operation *op )
+    void SemanticsTainterVisitor::visit( circ::Operation *op )
     {
         taint( op );
         op->traverse_upwards( *this );
     }
 
-    bool SemanticsTainter::should_promote_to_semantics(Operation *op) {
+    bool SemanticsTainterVisitor::should_promote_to_semantics(Operation *op) {
         std::vector<Operation*> promote_to_config;
 
         for ( auto &o: op->operands )
@@ -108,7 +108,7 @@ namespace circ::inspect {
         return true;
     }
 
-    bool SemanticsTainter::all_children_are_same( Operation *op )
+    bool SemanticsTainterVisitor::all_children_are_same( Operation *op )
     {
         if ( op->operands.size() < 2 )
             return true;
@@ -124,7 +124,7 @@ namespace circ::inspect {
         return true;
     }
 
-    void SemanticsTainter::write( Operation *op, sem_taint value )
+    void SemanticsTainterVisitor::write( Operation *op, sem_taint value )
     {
         op->set_meta< true >( meta_key, semantic_to_string( value ) );
     };
@@ -144,7 +144,7 @@ namespace circ::inspect {
 
     sem_taint read_semantics( Operation *op )
     {
-        auto key = SemanticsTainter::meta_key;
+        auto key = SemanticsTainterVisitor::meta_key;
         if ( !op->has_meta( key ) )
             return sem_taint::None;
         if ( op->get_meta( key ) == "None" )
