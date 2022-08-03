@@ -179,8 +179,7 @@ void diff_subtree(const auto &cli, const circ::CircuitPtr &circuit){
         if ( coloring == "full")
             diff_subtrees( tree1, tree2, LeafToVISubPathCollector());
 
-        circ::inspect::SemanticsTainter tainter;
-        tainter.run(circuit); // the rest depend on this coloring
+        taint_semantics_circuit( circuit.get() ); // the rest depend on this coloring
         if ( coloring == "ctt" )
             diff_subtrees( tree1, tree2, ConfigToTargetSubPathCollector());
 
@@ -211,8 +210,7 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 
             if ( cli.template present< cli::DotSemantics >())
             {
-                circ::inspect::SemanticsTainter tainter;
-                tainter.run( circuit );
+                circ::inspect::taint_semantics_circuit( circuit.get() );
                 return circ::print::sem_taint_coloring;
             }
             return circ::print::no_coloring;
