@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include <eqsat/pattern/rule.hpp>
+#include <eqsat/pattern/rewrite_rule.hpp>
 
 namespace eqsat {
 
