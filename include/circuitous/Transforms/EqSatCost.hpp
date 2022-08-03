@@ -8,7 +8,7 @@
 
 #include <eqsat/core/cost_graph.hpp>
 
-namespace circ
+namespace circ::eqsat
 {
     struct CircuitCostFunction {
         using Cost    = ::eqsat::cost_t;
@@ -40,4 +40,4 @@ namespace circ
         return OptimalCircuitGraphView(std::move(graph), CircuitCostFunction{});
     }
 
-} // namespace circ
+} // namespace circ::eqsat
