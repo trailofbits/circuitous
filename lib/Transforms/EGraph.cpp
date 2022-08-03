@@ -4,7 +4,7 @@
 #include <llvm/ADT/APSInt.h>
 #include <llvm/ADT/Twine.h>
 
-namespace circ
+namespace circ::eqsat
 {
   // std::string node_name(const NodeTemplate &op)
   // {

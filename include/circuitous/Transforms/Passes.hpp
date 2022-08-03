@@ -31,9 +31,11 @@ namespace circ
 
   struct EqualitySaturationPass : PassBase
   {
+    using RuleSet = eqsat::RuleSet;
+
     CircuitPtr run(CircuitPtr &&circuit) override
     {
-      return run_equality_saturation(std::move(circuit), rulesets);
+      return eqsat::run_equality_saturation(std::move(circuit), rulesets);
     }
 
         void add_rules( rules_t &&ruleset )
