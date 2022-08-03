@@ -358,7 +358,7 @@ struct SubPathCollector : BacktrackingPathVisitor<Derived, IsConst>
             path_to_save.emplace_back( *it );
             if ( top( *it ) )
             {
-                path_to_save.push_back( op ); // op hasn't been added to the path just yet
+                path_to_save.emplace(path_to_save.begin(), op ); // op hasn't been added to the path just yet
                 collected.push_back( path_to_save ); // we want this explicit copy
             }
         }
