@@ -68,7 +68,7 @@ namespace circ::inspect {
      * The advantage of doing this on the graph compared to llvm is that any semantics which
      * might be implicit to an instruction are captured as well through this approach.
      */
-    struct SemanticsTainter : VisitorStartingFromTL< SemanticsTainter >
+    struct SemanticsTainterVisitor : Visitor< SemanticsTainterVisitor >
     {
         void write(Operation* op, sem_taint value);
         bool all_children_are_same(Operation* op);
@@ -76,8 +76,11 @@ namespace circ::inspect {
         void visit(Operation* op);
         void taint(Operation* op);
         static const inline std::string meta_key = "diff";
-
-        void run(const CircuitPtr &circuit) { start_from<leaf_values_ts>(circuit.get()); }
     };
+
+    static inline void taint_semantics_circuit( Circuit *circ )
+    {
+        run_visitor_on< leaf_values_ts >( circ, SemanticsTainterVisitor() );
+    }
 
 }  // namespace circ
