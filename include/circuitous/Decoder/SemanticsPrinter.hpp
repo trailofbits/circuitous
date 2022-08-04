@@ -14,9 +14,9 @@ namespace circ::semantics
     // Templated for constraints?
     std::string get_target( Operation *op );
 
-    std::string get_semantics( Operation *op );
+    std::string get_semantics( Operation *op, VerifyInstruction *vi );
 
-    void get_adviced_value( Operation *advice );
+    Operation* get_adviced_value( Advice *advice , Operation *VI );
 
     struct ToSemanticsIRVisitor : NonDefaultingVisitor<ToSemanticsIRVisitor>
     {

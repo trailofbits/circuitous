@@ -8,11 +8,8 @@
 #include <circuitous/IR/Verify.hpp>
 
 #include <circuitous/Transforms/PassBase.hpp>
-#include <circuitous/Transforms/ConjureALU.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
-
 #include <optional>
-#include <span>
 #include <string>
 #include <vector>
 
@@ -55,17 +52,32 @@ namespace circ
         std::vector<eqsat::RuleSet> rulesets;
     };
 
+
+  // Merge all of the hint inputs into a single "wide" input hint that is of
+  // sufficient size to support all verifiers. In place of the individual hints,
+  // the verifiers pull out slices of wide hint value with an EXTRACT.
+  bool MergeAdvices(Circuit *circuit);
+
+  struct MergeAdvicesPass : PassBase
+  {
+    CircuitPtr run(CircuitPtr &&circuit) override
+    {
+      MergeAdvices(circuit.get());
+      return std::move(circuit);
+    }
+
+    static Pass get() { return std::make_shared< MergeAdvicesPass >(); }
+  };
+
     /*
      * Semantics from remill calculate the overflow flag directly from the values instead of
      * re-using existing flags. This leads to unnecessary computation as we have access
-     * to both input/output carry flags.
+     * to both input/output carry flags
      *
-     * This pass tries to match the generated remill semantics tree completely
-     * and patches it out.
-     * It does make implicit assumptions on the order of operands.
+     * This pass tries to match the generated remill semantics tree completely and patches it out
+     * It does make implicit assumptions on the order of operands
      */
-
-    bool has_remill_overflow_flag_semantics( RegConstraint *op );
+    bool has_remill_overflow_flag_semantics(RegConstraint* op);
 
     struct RemillOFPatch : PassBase
     {
@@ -161,22 +173,82 @@ namespace circ
 
     using CollapseOpsPass = CollapseUnary< collapsable >;
 
-    struct PassesBase
-    {
-        NamedPass &add_pass( const std::string &name, Pass pass )
-        {
-            log_info() << "Adding pass: " << name;
-            return passes.emplace_back( name, std::move( pass ) );
-        }
+  struct RemoveIdentityPass : PassBase, Visitor<RemoveIdentityPass>
+  {
+      CircuitPtr circ;
+      CircuitPtr run(CircuitPtr &&circuit) override
+      {
+          circ = std::move(circuit);
+          run();
+          return std::move(circ);
+      }
 
-        template< typename P, typename ... Args >
-        std::shared_ptr< P > emplace_pass( const std::string &name, Args && ... args )
-        {
-            log_info() << "Creating pass" << name;
-            auto pass = std::make_shared< P >( std::forward< Args >( args ) ... );
-            add_pass( name, pass );
-            return pass;
-        }
+      void run()
+      {
+        visit(circ.get());
+      }
+
+      void visit( Operation *op )
+      {
+          print::PrettyPrinter pp;
+          if ( isa< RegConstraint >( op ) )
+          {
+              if ( isa< InputRegister >( op->operands[ 0 ] )
+                   && isa< OutputRegister >( op->operands[ 1 ] ) )
+              {
+                  auto inReg = dynamic_cast< InputRegister * >( op->operands[ 0 ] );
+                  auto outReg = dynamic_cast< OutputRegister * >( op->operands[ 1 ] );
+                  if ( inReg->reg_name == outReg->reg_name )
+                  {
+                      inReg->remove_use( op );
+                      outReg->remove_use( op );
+                      while ( op->users.size() )
+                          op->remove_use( op->users[ 0 ] );
+                      return run();
+                  }
+              }
+          }
+          op->traverse( *this );
+
+      }
+      static Pass get() { return std::make_shared< RemoveIdentityPass >(); }
+  };
+
+  struct TrivialOrRemoval : PassBase, Visitor<TrivialOrRemoval>
+  {
+      CircuitPtr run(CircuitPtr &&circuit) override { visit(circuit.get()); return std::move(circuit); }
+
+      void visit(Operation* op){
+          op->traverse(*this);
+          if(isa<Or>(op) && op->operands.size() == 1){
+              op->replace_all_uses_with(op->operands[0]);
+          }
+      }
+
+      static Pass get() { return std::make_shared< TrivialOrRemoval >(); }
+  };
+
+  struct PassesBase
+  {
+      // list of recognized passes
+      static inline std::map< std::string, Pass > known_passes
+      {
+          { "eqsat", EqualitySaturationPass::get() },
+          { "merge-advices", MergeAdvicesPass::get() },
+          { "dummy-pass", DummyPass::get() },
+          { "trivial-concat-removal", TrivialConcatRemovalPass::get() },
+          { "remove-trivial-or", TrivialOrRemoval::get() },
+          { "overflow-flag-fix", RemillOFPatch::get() },
+          { "remove-identity", RemoveIdentityPass::get() },
+          { "merge-transitive-advices", MergeAdviceConstraints::get() }
+      };
+
+      NamedPass &add_pass( const std::string &name )
+      {
+          auto pass = known_passes.at( name );
+          log_info() << "Adding pass: " << name;
+          return passes.emplace_back( name, pass );
+      }
 
         circuit_owner_t run_pass( const Pass &pass, circuit_owner_t &&circuit )
         {

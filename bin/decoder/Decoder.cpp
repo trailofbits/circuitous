@@ -17,6 +17,7 @@
 
 #include <circuitous/Lifter/CircuitSmithy.hpp>
 
+#include <circuitous/Decoder/SemanticsPrinter.hpp>
 #include <circuitous/Decoder/DecoderPrinter.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
@@ -24,9 +25,9 @@ CIRCUITOUS_RELAX_WARNINGS
 #include <glog/logging.h>
 CIRCUITOUS_UNRELAX_WARNINGS
 
-#include <remill/OS/OS.h>
-
+#include <circuitous/Printers.hpp>
 #include <iostream>
+#include <remill/OS/OS.h>
 #include <unordered_map>
 
 // TODO(lukas): Clean this up once remill gets rid of gflags.
@@ -37,6 +38,9 @@ DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
 DEFINE_string(smt_in, "", "Path to the input smt2 file.");
 
 DEFINE_string(dec_out, "", "Path to the output decoder file.");
+DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
+DEFINE_string(dot_highlight, "", "Names of node-type to highlight in DOT file");
+
 
 DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 DEFINE_string(ciff_in, "", "Load input from circuitous-seed --dbg produced file");
@@ -58,8 +62,11 @@ using input_options = circ::tl::TL<
 >;
 
 using output_options = circ::tl::TL<
-    circ::cli::DecoderOut
+    circ::cli::DecoderOut,
+    circ::cli::DotOut,
+    circ::cli::DotHighlight
 >;
+
 using remill_config_options = circ::tl::TL<
     circ::cli::Arch,
     circ::cli::OS
@@ -174,6 +181,30 @@ int main(int argc, char *argv[]) {
 
     VerifyCircuit("Verifying loaded circuit.", circuit.get(), "Circuit is valid.");
 
+
+
+    circ::DefaultOptimizer opt;
+    opt.add_pass("remove-transitive-advice");
+    opt.add_pass("remove-identity");
+    opt.add_pass("remove-trivial-or");
+    circuit = opt.run(std::move(circuit));
+
+
+    if (auto dot_out = parsed_cli.template get< cli::DotOut >()) {
+        std::vector< std::string > highlights;
+        if (auto input_colors = parsed_cli.template get< cli::DotHighlight >()) {
+            highlights = std::move(*input_colors);
+        }
+        circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
+                             std::unordered_map< circ::Operation *, std::string >{}, highlights);
+    }
+
+
+    if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >()){
+        if ( *dec_out != "cout" ) {
+            auto o = std::ofstream ( *dec_out );
+            auto decGen = circ::decoder::DecoderPrinter( circuit, o );
+            decGen.print_file();
     auto seg = circ::circ_to_segg(std::move(circuit));
     std::cout << "Number of starting nodes: "  << seg->_nodes.size() << std::endl;
     circ::dedup(*seg.get());
@@ -228,7 +259,7 @@ int main(int argc, char *argv[]) {
 //    else{
 //        circ::unreachable() << "Decoder out was not specified";
 //    }
-
+    circ::semantics::print_semantics(circuit.get());
 
 
     return 0;
