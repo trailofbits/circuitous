@@ -83,6 +83,10 @@ namespace circ::decoder {
                         expr( e );
                     }
                 },
+                [&](const If &arg) {
+                    raw("if").expr( arg.cond(), GuardStyle::Parens )
+                        .expr( arg.ifBody(), GuardStyle::Curly).endl();
+                },
                 [&](const IfElse &arg) {
                     raw("if").expr( arg.cond(), GuardStyle::Parens )
                     .expr( arg.ifBody(), GuardStyle::Curly)

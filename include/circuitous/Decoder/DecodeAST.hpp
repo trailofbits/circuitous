@@ -114,6 +114,14 @@ namespace circ::decoder {
         StatementBlock _body;
     };
 
+    struct If : BinaryOp< Expr >
+    {
+        using BinaryOp::BinaryOp;
+
+        const Expr &cond() const { return this->ops[ 0 ]; };
+        const Expr &ifBody() const { return this->ops[ 1 ]; };
+    };
+
     struct IfElse : NAryOperation< Expr > {
         using NAryOperation< Expr >::NAryOperation;
 
@@ -136,7 +144,7 @@ namespace circ::decoder {
             Expr, Int, Uint64, Id, //primitive types Expr, int, std::string
             Var, VarDecl, Statement, Return, CastToUint64, IndexVar, Dereference, // unary
             Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, BitwiseAnd, Assign, Shfl, Equal, And, // binary
-            IfElse,
+            If, IfElse,
             FunctionDeclaration, FunctionCall, // function
             StatementBlock, Empty
     >;
