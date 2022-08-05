@@ -27,11 +27,15 @@ namespace circ::irops
 {
 
     #define sccc_prefix(what) static constexpr const char *fn_prefix = what
-    #define dot_sep() static constexpr const char *separator = "."
+    #define dot_sep() static constexpr const char *delim = "."
 
     #define simple_intrinsic(what, code, attr) \
     namespace data { struct what { sccc_prefix(attr); dot_sep(); }; } \
     struct what : code< what, data::what > {}
+
+    #define leaf_intrinsic(what, size, code, attr) \
+    namespace data { struct what { sccc_prefix(attr); dot_sep(); }; } \
+    struct what : code< data::what, size > {}
 
     // N-ary operation, returns true iff exactly one operand is true
     simple_intrinsic(Xor, impl::predicate_base_t, "__circuitous.xor");
@@ -48,13 +52,13 @@ namespace circ::irops
     simple_intrinsic(DecoderResult, impl::predicate_base_t, "__circuitous.decoder_result");
 
     // Binary operation, that returns true iff its operands are equal
-    simple_intrinsic(Eq, impl::binary_check_t, "__circuitous.eq");
+    simple_intrinsic(Eq, impl::bin_predicate_t, "__circuitous.eq");
     // Same as `Eq`, serves to denote output comparison.
-    simple_intrinsic(OutputCheck, impl::binary_check_t, "__circuitous.register_constraint");
+    simple_intrinsic(OutputCheck, impl::bin_predicate_t, "__circuitous.register_constraint");
     // Same as `Eq`, serves to denote constraint on value of Advice.
-    simple_intrinsic(AdviceConstraint, impl::binary_check_t, "__circuitous.advice_constraint");
+    simple_intrinsic(AdviceConstraint, impl::bin_predicate_t, "__circuitous.advice_constraint");
     // Same as `Eq`, serves to denote comparison with instruction bits.
-    simple_intrinsic(DecodeCondition, impl::binary_check_t, "__circuitous.decode_condition");
+    simple_intrinsic(DecodeCondition, impl::bin_predicate_t, "__circuitous.decode_condition");
 
     // Value of Error.
     simple_intrinsic(Error, impl::identity_t, "__circuitous.error");
@@ -89,10 +93,10 @@ namespace circ::irops
     // Creates Memory hint of fixed value. See `Parsed` for its layout.
     simple_intrinsic(Memory, impl::mem_allocator_t, "__circuitous.memory");
     // Create Advice of dynamic value.
-    simple_intrinsic(Advice, impl::allocator_t, "__circuitous.advice");
+    simple_intrinsic(Advice, impl::raw_allocator_t, "__circuitous.advice");
     // Creates opaque pointer.
     // Used by instruction lifters to handle destination operands.
-    simple_intrinsic(AllocateDst, impl::allocator_t, "__circuitous.allocate_dst");
+    simple_intrinsic(AllocateDst, impl::raw_allocator_t, "__circuitous.allocate_dst");
     // Used by instrution lifters to create opaque values that serve as operands
     // to intrinsics. This is useful, so that the data flow in llvm can be disconnected
     // ```
@@ -100,17 +104,17 @@ namespace circ::irops
     // %constraint = __circuitous.advice_constraint(%real_value, %x)
     // ```
     // this should allow llvm optimizations to eliminate more instructions.
-    simple_intrinsic(Operand, impl::advice_allocator_t, "__circuitous.operand_advice");
+    simple_intrinsic(Operand, impl::type_idx_t, "__circuitous.operand_advice");
 
     // Helps to unify later all decoder related selections and operations
-    simple_intrinsic(RegSelector, impl::reg_selector_t, "__circuitous.reg_selector");
+    simple_intrinsic(RegSelector, impl::type_idx_t, "__circuitous.reg_selector");
 
-    simple_intrinsic(WasDecoded, impl::was_decoded_t, "__circuitous.op.was_decoded");
+    simple_intrinsic(WasDecoded, impl::type_idx_t, "__circuitous.op.was_decoded");
     // Denotes that given hint/advice is not used and should be zeroed.
     simple_intrinsic(UnusedConstraint, impl::unary_check_t, "__circuitous.unused_constraint");
     // Anchor some part of code - usefull to keep track of code regions (e.g. all instructions
     // that were inserted by inlining a function call).
-    simple_intrinsic(Breakpoint, impl::unary_check_t, "__circuitous.breakpoint");
+    simple_intrinsic(Breakpoint, impl::identity_t, "__circuitous.breakpoint");
 
     // Memory operation constraints.
     simple_intrinsic(ReadConstraint, impl::frozen_predicate_t, "__circuitous.memread");
@@ -118,15 +122,16 @@ namespace circ::irops
 
     // I/O values. Not included in argument list to make their usage more comfortable.
     // TODO(lukas): Maybe it is worth to represent all registers this way as well.
-    simple_intrinsic(ErrorBit, impl::ebit_t, "__circuitous.error_bit");
-    simple_intrinsic(Timestamp, impl::timestamp_t, "__circuitous.timestamp");
-    simple_intrinsic(InstBits, impl::instbit_t, "__circuitous.instbits");
+    leaf_intrinsic(ErrorBit, 1, impl::fixed_leaf_t, "__circuitous.error_bit");
+    leaf_intrinsic(Timestamp, 64,  impl::fixed_leaf_t, "__circuitous.timestamp");
+    leaf_intrinsic(InstBits, 15 * 8, impl::fixed_leaf_t, "__circuitous.instbits");
 
     using io_type = impl::io_type;
 
     #undef sccc_prefix
     #undef dot_sep
     #undef simple_intrinsic
+    #undef leaf_intrinsic
 
     // Create call to given intrinsic.
     // `args` are forwarded to the intrinsic creator
@@ -134,28 +139,39 @@ namespace circ::irops
     template< typename I, typename ...Args >
     auto make(llvm::IRBuilder<> &ir, const std::vector< llvm::Value * > &c_args, Args &&...args)
     {
-        return I::make(ir, c_args, std::forward<Args>(args)...);
+        return I::emit(ir, c_args, std::forward<Args>(args)...);
     }
 
     template< typename I, typename ...Args >
     auto make(llvm::IRBuilder<> &ir, llvm::Value *c_arg, Args &&...args)
     {
         check(c_arg);
-        return I::make(ir, {c_arg}, std::forward<Args>(args)...);
+        return I::emit(ir, std::vector< llvm::Value * >{c_arg}, std::forward<Args>(args)...);
     }
 
     // See `make`, but without any `c_args`.
     template< typename I, typename ...Args >
     auto make_leaf(llvm::IRBuilder<> &ir, Args &&...args)
     {
-        return I::make(ir, std::vector< llvm::Value * >{}, std::forward< Args >(args)...);
+        return I::emit(ir, std::vector< llvm::Value * >{}, std::forward< Args >(args)...);
     }
 
     // Creates calls to all intrinsics that create `I` and returns them as tuple.
     template< typename I, typename ...Args >
     auto make_all_leaves(llvm::IRBuilder<> &ir, Args &&...args)
     {
-        return I::make_all(ir, std::vector< llvm::Value * >{}, std::forward< Args >(args)...);
+        std::vector< llvm::Value * > empty;
+        return std::make_tuple(I::emit(ir, empty, io_type::in, args ...),
+                               I::emit(ir, empty, io_type::out, args ... ));
+    }
+
+    template< typename I > requires (std::is_same_v< I, Select >)
+    auto make(llvm::IRBuilder<> &irb, const std::vector< llvm::Value * > &c_args)
+    {
+        auto selector_size = impl::uniform_size(c_args.begin(), std::next(c_args.begin()));
+        auto ret_size = impl::uniform_size(std::next(c_args.begin()), c_args.end());
+        check(selector_size && ret_size);
+        return I::emit(irb, c_args, *ret_size, *selector_size);
     }
 
     // Queries.
@@ -237,10 +253,10 @@ namespace circ::irops
     {
         using Instance_< Memory >::Instance_;
 
-        uint32_t id()
+        std::size_t id()
         {
             check(*this);
-            return std::get< 0 >(Memory::parse_args< uint32_t >(fn));
+            return std::get< 1 >(Memory::parse_args(fn));
         }
     };
 
