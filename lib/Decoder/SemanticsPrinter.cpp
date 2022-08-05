@@ -1,7 +1,7 @@
 #include <circuitous/Decoder/SemanticsPrinter.hpp>
 #include <circuitous/IR/Shapes.hpp>
 
-namespace circ::semantics
+namespace circ::decoder::semantics
 {
     void print_semantics( Circuit *circ )
     {
@@ -12,13 +12,57 @@ namespace circ::semantics
         }
     }
 
-    struct test_vis : Visitor<test_vis> {
+    /*
+     * What kind of visitors do we need?
+     * Select and Advice will remain across all target languages
+     * so we can
+     *
+     * we can convert to semIR -> print textual version of semIR?
+     *
+     * conclusie:
+     *  we gaan 1 grote sem visitor hebben
+     *  select resolve struct maken
+     *  die runt convert_vistior op target / sem plek
+     *      convert_vistor neemt select resovle struct:
+     *          converts alle nodes naar SemIR equivelant
+     *      Converted struct word per IR in een functie gedouwede
+     *      emission word gedaan niet naar strings maar naar vectors
+     *          voor target = sem
+     *          hooks for registereren van variables + ander ezooi
+     *      we exposen iterators naar vectors
+     */
 
+    Operation* select_index(Select* op) { return op->operands[0]; }
+    std::vector<Operation*> select_values(Select* op) { return std::vector<Operation*>(op->operands.begin() + 1, op->operands.end()); }
+
+
+    std::size_t hash_select(Select* op){
+        print::PrettyPrinter pp;
+        return std::hash<std::string>{}( pp.Hash(select_values(op)) );
+    }
+
+    struct select_vis : UniqueVisitor<select_vis>
+    {
+        SelectStorage* st;
+        select_vis( SelectStorage *st ) : st( st ) { }
+        void visit(Operation* op){ op->traverse(*this); }
+        void visit(Select* op)
+        {
+            st->register_select(op);
+        }
+    };
+
+    struct test_vis : Visitor<test_vis> {
         bool first = false;
         VerifyInstruction* vi;
         test_vis(  VerifyInstruction *context ) : vi( context ) { }
+
+
         std::string visit(Select *op){
-            return "found select with: " + Visitor<test_vis>::dispatch(op->operands[0]);
+            auto x = std::vector<Operation*>(op->operands.begin() + 1, op->operands.end());
+            print::PrettyPrinter pp;
+
+            return "select:: " + pp.Print( select_index(op), 0 ) + " -> " + pp.Hash( select_values(op));
         }
 
         std::string visit(Advice *op){
@@ -69,6 +113,9 @@ namespace circ::semantics
 ////        return pp.Print(op, 0);
 //    }
 
+
+
+
     std::string get_target( Operation *op , VerifyInstruction* vi)
     {
         print::PrettyPrinter pp;
@@ -96,8 +143,29 @@ namespace circ::semantics
         collect::DownTree <tl::TL<RegConstraint, WriteConstraint>> down_collector;
         down_collector.Run( op );
 
+
+        SelectStorage st;
+        select_vis sel(&st);
+        sel.visit(op);
+        ExpressionPrinter ep(std::cout);
+
+        for(auto& func : st.get_functions_for_select())
+            ep.print(func);
+
+        circIR_to_semIR_visitor to_semIR( &st, op );
         for(auto& constraint : down_collector.collected)
-            std::cout << "[" << get_target(constraint, op) << "]" << " = " << get_semantics(constraint, op) << std::endl;
+        {
+            if ( isa< RegConstraint >( constraint ) )
+            {
+                ep.print( Statement( Assign( to_semIR.visit( constraint->operands[ 1 ] ),
+                                             to_semIR.visit( constraint->operands[ 0 ] ) ) ) );
+            }
+            if ( isa< WriteConstraint >( constraint ) )
+                circ::unreachable() << "memory not yet supported";
+            //
+
+
+        }
     }
 
 
@@ -122,5 +190,83 @@ namespace circ::semantics
             circ::unreachable() << "advice without constraint";
 
         return ac->operands[0] == advice ? ac->operands[1] : ac->operands[0]; // return other value
+    }
+
+    std::size_t SelectStorage::hash_select_targets( Select *sel )
+    {
+        print::PrettyPrinter pp;
+        return std::hash< std::string > {}( pp.Hash( select_values( sel ) ) );
+    }
+
+    void SelectStorage::register_select( Select *sel )
+    {
+        FunctionDeclarationBuilder fdb;
+        print::PrettyPrinter pp;
+        auto values_hash = hash_select(sel);
+
+        fdb.name("select_" + std::to_string(values_hash));
+        //TODO get type of
+        fdb.retType(Id("Register"));
+        Var select_index = Var("index", "int:" + std::to_string(sel->bits));
+        fdb.arg_insert(VarDecl(select_index));
+        for(std::size_t i = 0; i < select_values( sel ).size(); i++ )
+        {
+            // TODO replace with to string visitor
+            auto res = pp.Print( sel->operands[ i ], 0 );
+            //TODO turn ifelse into if
+            auto if_expr =  If( Equal( select_index, Uint64(i) ), Return( Id( res ) ));
+            fdb.body_insert( if_expr );
+//                ss << "selector == " << std::to_string(i) <<  << "\n";
+        }
+
+        selects.insert( std::make_pair( values_hash, fdb.make() ) );
+    }
+
+    std::vector< decoder::FunctionDeclaration > SelectStorage::get_functions_for_select()
+    {
+        std::vector< decoder::FunctionDeclaration > funcs;
+        print::PrettyPrinter pp;
+        std::stringstream sl;
+
+
+        // This needs to be only done once per key
+        // Still need to verify that all keys have same size, maybe during registration
+        // Need to safe the functions somewhere, maybe during registration?
+        for(auto & k : selects)
+        {
+//            FunctionDeclarationBuilder fdb;
+//            fdb.name("select_" + std::to_string(k.first));
+//            //TODO get type of
+//            fdb.retType(Id("Register"));
+//            Var select_index = Var("index", "int:" + std::to_string(k.second->bits));
+//            fdb.arg_insert(VarDecl(select_index));
+//            for(std::size_t i = 0; i < select_values(k.second ).size(); i++ )
+//            {
+//                // TODO replace with to string visitor
+//                auto res = pp.Print( k.second->operands[ i ], 0 );
+//                //TODO turn ifelse into if
+//                auto if_expr =  IfElse( Equal( select_index, Uint64(i) ), Return( Id( res ) ), Id("<Else>") );
+//                fdb.body_insert( Statement( ) );
+////                ss << "selector == " << std::to_string(i) <<  << "\n";
+//            }
+            funcs.push_back(k.second);
+
+//            std::stringstream ss;
+//            ss << "Register select_" << std::to_string(k.first) << "(selector:" << std::to_string(select_values(k.second).size()) << ") {\n";
+//            for(std::size_t i = 0; i < select_values(k.second).size(); i++){
+//                ss << "selector == " << std::to_string(i) << pp.Print(k.second->operands[i],0) << "\n";
+//            }
+//            ss << "}\n";
+//            sl << ss.str();
+        }
+//        return sl.str();
+
+
+        return funcs;
+    }
+    decoder::FunctionCall SelectStorage::get_specialization( circ::Select *sel, Expr index )
+    {
+        auto func = selects.at( hash_select(sel));
+        return decoder::FunctionCall( func.function_name, { index } );
     }
 };
