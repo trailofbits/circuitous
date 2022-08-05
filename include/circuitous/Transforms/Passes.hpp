@@ -70,6 +70,20 @@ namespace circ
     static Pass get() { return std::make_shared< DummyPass >(); }
   };
 
+  struct TrivialConcatRemovalPass : PassBase
+  {
+      CircuitPtr run( CircuitPtr &&circuit ) override
+      {
+          for ( auto c : circuit->attr< Concat >() )
+              if ( c->operands.size() == 1 )
+                  c->replace_all_uses_with( c->operands[ 0 ] );
+
+          return std::move( circuit );
+      }
+
+      static Pass get() { return std::make_shared< TrivialConcatRemovalPass >(); }
+  };
+
   struct PassesBase
   {
     // list of recognized passes
@@ -77,7 +91,8 @@ namespace circ
     {
       { "eqsat",           EqualitySaturationPass::get() },
       { "merge-advices",   MergeAdvicesPass::get() },
-      { "dummy-pass",      DummyPass::get() }
+      { "dummy-pass",      DummyPass::get() },
+      { "trivial-concat-removal", TrivialConcatRemovalPass::get() },
     };
 
     NamedPass &add_pass(const std::string &name) {
