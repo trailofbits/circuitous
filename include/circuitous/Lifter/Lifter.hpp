@@ -49,16 +49,6 @@ namespace circ
 
         auto &CurrentShade() { return shadow->operands[current_op]; }
 
-        auto ImmediateOperand(llvm::Module *module, const shadowinst::Immediate &s_imm)
-        {
-            auto &current = s_imm;
-            check(current.regions.marked_size() >= 1);
-
-            std::vector<llvm::Function *> out;
-            for (auto [from, to] : current.regions.areas)
-                out.push_back(irops::ExtractRaw::create_fn(module, from, to));
-            return out;
-        }
 
         auto RegisterOperand(llvm::Module *module)
         {
@@ -257,29 +247,32 @@ namespace circ
             return lift_status;
         }
 
-        llvm::Function *ChooseImm(uint64_t arch_op_size, const functions_t &funcs)
+        auto ChooseImm(uint64_t arch_op_size, const shadowinst::Immediate &s_imm)
+            -> std::optional< std::tuple< std::size_t, std::size_t > >
         {
-            check(funcs.size());
-            if (funcs.size() == 1)
-                return funcs[0];
+            check(s_imm.regions.marked_size() >= 1);
 
-            llvm::Function *canditate = nullptr;
+            std::vector< std::tuple< std::size_t, std::size_t > > out;
+            for (auto [from, to] : s_imm.regions.areas)
+                out.emplace_back(from, to);
+
+            if (out.size() == 1)
+                return { out[0] };
+
             // TODO(lukas): From all candidates we need to choose one - currently
             //              there is no mechanism how to compare the candidates themselves
             //              if more than one passes the criteria we cannot choose.
             //              Ideally we would want to have some ranking, but currently I have
             //              no idea how such thing could look like.
-            auto set_candidate = [&](auto fn) {
+            std::optional< std::tuple< std::size_t, std::size_t > > canditate;
+            auto set_candidate = [&](auto x, auto y) {
                 check(!canditate);
-                canditate = fn;
+                canditate = {x, y};
             };
 
-            for (auto fn : funcs)
-            {
-                const auto &[from, size] = irops::Extract::parse_args(fn);
+            for (auto &[from, size] : out)
                 if (size == arch_op_size || (arch_op_size % size == 0 && size % 8 == 0 ) )
-                  set_candidate(fn);
-            }
+                    set_candidate(from, size);
             return canditate;
         }
 
@@ -329,8 +322,6 @@ namespace circ
         {
             // We run this to run some extra checks, but we do not care about result.
             llvm::IRBuilder<> ir(bb);
-            auto mod = bb->getModule();
-
             auto constant_imm = this->parent::LiftImmediateOperand(inst, bb, arg, arch_op);
 
             auto size =
@@ -345,12 +336,13 @@ namespace circ
             }
 
 
-            auto inst_fn = ChooseImm(arch_op.size, ImmediateOperand(mod, *CurrentShade().immediate()));
+            auto extract_args = ChooseImm(arch_op.size, *CurrentShade().immediate());
             // Similar situation as with empty map
-            if (!inst_fn)
+            if (!extract_args)
                 return HideValue(constant_imm, bb, size);
 
-            llvm::Value * hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
+            auto [from, to] = *extract_args;
+            llvm::Value *hidden_imm = irops::make_leaf< irops::ExtractRaw >(ir, from, to);
 
             if (hidden_imm->getType() != constant_imm->getType())
             {
@@ -580,13 +572,16 @@ namespace circ
             auto &s_imm = *maybe_s_imm;
 
             auto arch_op_size = arch->address_size;
-            auto inst_fn = ChooseImm(arch_op_size, ImmediateOperand(module, s_imm));
+
+            auto extract_args = ChooseImm(arch_op_size, s_imm);
             // Similar situation as with empty map
-            if (!inst_fn)
-              return HideValue(block, concrete_val);
+            if (!extract_args)
+                return HideValue(block, concrete_val);
 
             llvm::IRBuilder<> ir(block);
-            llvm::Value * hidden_imm = ir.CreateCall(inst_fn->getFunctionType(), inst_fn);
+
+            auto [from, to] = *extract_args;
+            llvm::Value *hidden_imm = irops::make_leaf< irops::ExtractRaw >(ir, from, to);
 
             auto expected_type =
                 llvm::IntegerType::get(*llvm_ctx, static_cast<uint32_t>(arch_op_size));
