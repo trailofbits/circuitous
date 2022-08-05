@@ -385,7 +385,7 @@ namespace {
 
         Operation *visit(Advice *, uint64_t id)
         {
-            auto [size, advice_idx] = read< unsigned, unsigned >();
+            auto [size, advice_idx] = read< unsigned, std::size_t >();
             return circuit->adopt<Advice>(id, size, advice_idx);
         }
 
