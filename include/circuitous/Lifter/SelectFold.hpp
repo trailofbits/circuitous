@@ -145,10 +145,10 @@ namespace circ {
         llvm::IRBuilder<> ir(&*fn->begin()->begin());
 
         std::vector<llvm::Value *> args{ blueprint->arg_begin(), blueprint->arg_end() };
-        auto [bitsize, type] = irops::Select::parse_args(blueprint->getCalledFunction());
+        auto [type, bitsize] = irops::Select::parse_args(blueprint->getCalledFunction());
         for (std::size_t i = 0; i < count; ++i) {
           // Replace the selector with hint
-          auto select = make_blueprint(args, bitsize, type);
+          auto select = make_blueprint(args, type, bitsize);
           generated[blueprint].emplace_back(llvm::dyn_cast<llvm::CallInst>(args[0]), select);
         }
       };
@@ -162,8 +162,8 @@ namespace circ {
     void use_blueprints() {
       auto coerce_selector = [](auto &ir, auto original, auto node) -> llvm::Value * {
         auto selector = irops::Instance< irops::Select >(original).selector();
-        auto [obits, _] = irops::Select::parse_args(original->getCalledFunction());
-        auto [nbits, _1] = irops::Select::parse_args(node->getCalledFunction());
+        auto [_, obits] = irops::Select::parse_args(original->getCalledFunction());
+        auto [_1, nbits] = irops::Select::parse_args(node->getCalledFunction());
         if (obits == nbits) {
           return selector;
         }

@@ -143,12 +143,14 @@ namespace circ::shadowinst
         for (auto &[shift_val, cond] : shifts) {
             std::vector< llvm::Value * > chunks;
             if (shift_val != 0)
-                chunks.push_back(irops::make< irops::ExtractRaw >(irb, full,  0, shift_val));
+                chunks.push_back(irops::make< irops::ExtractRaw >(irb, full, 0ul, shift_val));
             chunks.push_back(what);
             auto pos = shift_val + size * 8;
             if (ts * 8 - pos != 0)
-                chunks.push_back(irops::make< irops::ExtractRaw >(irb, full, pos,
-                                                                  ts * 8 - pos));
+                chunks.push_back(irops::make< irops::ExtractRaw >(
+                            irb, full,
+                            static_cast< std::size_t >(pos),
+                            static_cast< std::size_t >(ts * 8 - pos)));
             cond_to_glued[cond] = irops::make< irops::Concat >(irb, chunks);
         }
         // TODO(lukas): Generalize.

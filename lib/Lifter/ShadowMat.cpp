@@ -32,7 +32,7 @@ namespace circ::shadowinst
     llvm::Value *Materializer::opaque_selector() const
     {
         check(s_reg.selector);
-        return irops::make_leaf< irops::RegSelector >(irb, *s_reg.selector, selector_type());
+        return irops::make_leaf< irops::RegSelector >(irb, selector_type(), *s_reg.selector);
     }
 
     llvm::Value *Materializer::tie_opaque_selector() const
@@ -44,8 +44,9 @@ namespace circ::shadowinst
     llvm::Value *Materializer::was_decoded() const
     {
         check(s_reg.selector);
-        return irops::make_leaf< irops::WasDecoded >(irb, *s_reg.selector,
-                                                     irb.getTrue()->getType());
+        return irops::make_leaf< irops::WasDecoded >(irb,
+                                                     irb.getTrue()->getType(),
+                                                     *s_reg.selector);
     }
 
     auto Materializer::translation_entries(const mats_t &mats) const

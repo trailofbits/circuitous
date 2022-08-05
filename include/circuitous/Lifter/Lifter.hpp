@@ -671,7 +671,7 @@ namespace circ
                 return out;
 
             llvm::IRBuilder<> irb(bb);
-            auto dummy = irops::make_leaf< irops::Operand >(irb, op_idx, out->getType());
+            auto dummy = irops::make_leaf< irops::Operand >(irb, out->getType(), op_idx);
             auto wrap = irops::make< irops::AdviceConstraint >(irb, {out, dummy});
             AddMetadata(wrap, "circuitous.verify_fn_args", 0);
 
