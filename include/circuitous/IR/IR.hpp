@@ -355,14 +355,14 @@ namespace circ
     {
         static constexpr Operation::kind_t kind = Operation::kind_t::kAdvice;
 
-        inline explicit Advice(unsigned size_, uint32_t advice_idx_)
+        inline explicit Advice(unsigned size_, std::size_t advice_idx_)
             : Operation(size_, kind), advice_idx(advice_idx_)
         {}
 
         static std::string op_code_str() { return "Advice"; }
         std::string name() const override { return "Advice." + std::to_string(advice_idx) ; }
 
-        uint32_t advice_idx = 0;
+        std::size_t advice_idx = 0;
     };
 
     // Input bits that
