@@ -64,6 +64,12 @@ namespace circ::tl {
       }
     }
 
+    template< typename ... Ts > requires ( sizeof ... (Ts) == 0 )
+    auto merge() { return tl::TL{}; }
+
+    template< typename L >
+    auto merge() { return L{}; }
+
     template< typename Acc, typename H, typename ... Tail >
     bool contains(Acc &&acc)
     {
