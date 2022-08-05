@@ -38,7 +38,9 @@ namespace circ::build
         check(size == to - from) << size << " != " << to - from;
 
         auto expected_v = ir.getInt(llvm::APInt(size, expected, 2));
-        auto extracted = irops::make_leaf< irops::ExtractRaw >(ir, from, to - from);
+        auto extracted = irops::make_leaf< irops::ExtractRaw >(ir,
+                static_cast< std::size_t >(from),
+                static_cast< std::size_t >(to - from));
         return irops::make< irops::DecodeCondition >(ir, {expected_v, extracted}, size);
     }
 
@@ -54,10 +56,11 @@ namespace circ::build
         // TODO(lukas): Now we need to check the tail.
         //              Try to lift `6689d8` and `89d8` to demonstrate the issue.
         // TODO(lukas): For now we assume it is padded with 0s.
-        auto tail_size = static_cast< uint32_t >(kMaxNumInstBits - rinst_size());
-        auto tail = ir.getInt(llvm::APInt(tail_size, 0, false));
+        auto tail_size = static_cast< std::size_t >(kMaxNumInstBits - rinst_size());
+        auto tail = ir.getInt(llvm::APInt(static_cast< std::uint32_t >(tail_size), 0, false));
+        auto coerced_size = static_cast< std::size_t >(rinst_size());
 
-        auto extracted = irops::make_leaf< irops::ExtractRaw >(ir, rinst_size(), tail_size);
+        auto extracted = irops::make_leaf< irops::ExtractRaw >(ir, coerced_size, tail_size);
         auto compare = irops::make< irops::DecodeCondition >(ir, {tail, extracted}, tail_size);
         out.push_back(compare);
         return out;

@@ -116,14 +116,16 @@ namespace circ {
                 return ir.CreateLShr(a, b);
             }, [](auto &ir, auto from, auto size) {
                 // Least significant bytes
-                return irops::make< irops::ExtractRaw >(ir, from, 0, size);
+                return irops::make< irops::ExtractRaw >(ir, from, 0ul,
+                                                        static_cast< std::size_t >(size));
             });
 
             handle_FSH_(llvm_intrinsics[llvm::Intrinsic::fshl], [](auto &ir, auto a, auto b) {
                 return ir.CreateShl(a, b);
             }, [](auto &ir, auto from, auto size){
                 // Most significant bytes
-                return irops::make< irops::ExtractRaw >(ir, from, size, size);
+                auto coerced = static_cast< std::size_t >(size);
+                return irops::make< irops::ExtractRaw >(ir, from, coerced, coerced);
             });
 
             handle_remill_compare(remill_compares);

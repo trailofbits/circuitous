@@ -207,7 +207,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         //              that includes `_avx` variants.
         check(is_supported(get_triple(fn)));
 
-        auto [extract_from, size] = irops::Extract::parse_args< uint32_t >(fn);
+        auto [extract_from, size] = irops::Extract::parse_args(fn);
         auto arg = extract_argument(call, fn);
 
         // We split extract to sepratate bytes. This is so we can reorder them,
@@ -228,7 +228,9 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
                 from = y;
             }
         };
-        partials = generate_fragments(extract_from, extract_from + size);
+        partials = generate_fragments(
+                static_cast< uint32_t >(extract_from),
+                static_cast< uint32_t >(extract_from + size));
 
         if (partials.size() == 1) {
             // `Emplace` was not called, therefore manual assignement is needed.
@@ -241,7 +243,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         // ba 12 00 00 00 - mov 12, %rdx
         // If we do extract(32, 0) we end up with `12000000` as number, but we would
         // expect `00000012` therefore we must reorder them and then concat.
-        auto full = Emplace< Concat >(call, size);
+        auto full = Emplace< Concat >(call, static_cast< uint32_t >(size));
         for (auto x : partials) {
             full->add_operand(x);
         }
@@ -255,8 +257,9 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         check(is_supported(get_triple(fn)));
 
         auto arg = extract_argument(call, fn);
-        auto [from, size] = irops::ExtractRaw::parse_args< uint32_t >(fn);
-        auto op = Emplace< Extract >(call, from, from + size);
+        auto [from, size] = irops::ExtractRaw::parse_args(fn);
+        auto op = Emplace< Extract >(call, static_cast< uint32_t >(from),
+                                           static_cast< uint32_t >(from + size));
 
         auto args = call_args(call);
         if (!args.empty()) {
@@ -279,22 +282,22 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
     template< typename IT, typename OT >
     auto VisitIOLeaf(llvm::CallInst *call, llvm::Function *fn,
-                     uint32_t io_type, uint32_t size)
+                     uint32_t io_type, std::size_t size)
     {
         auto leaf = [&]() {
             if (io_type == irops::io_type::in)
-                return fetch_leave< IT >(fn, size);
+                return fetch_leave< IT >(fn, static_cast< uint32_t >(size));
             if (io_type == irops::io_type::out)
-                return fetch_leave< OT >(fn, size);
+                return fetch_leave< OT >(fn, static_cast< uint32_t >(size));
             unreachable() << "Unreachable";
         }();
         val_to_op[call] = leaf;
         return leaf;
     }
 
-    auto value_size(llvm::Value *val)
+    uint32_t value_size(llvm::Value *val)
     {
-        return static_cast<uint32_t>(dl.getTypeSizeInBits(val->getType()));
+        return static_cast< uint32_t >(dl.getTypeSizeInBits(val->getType()));
     }
 
     Operation *call_arg(llvm::CallInst *call, uint32_t idx)
@@ -344,19 +347,21 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             return VisitExtractRawIntrinsic(call, fn);
         }
         if (irops::InputImmediate::is(fn)) {
-            auto [size] = irops::InputImmediate::parse_args<uint32_t>(fn);
-            return VisitGenericIntrinsic< InputImmediate >(call, fn, size);
+            auto [size] = irops::InputImmediate::parse_args(fn);
+            return VisitGenericIntrinsic< InputImmediate >(call, fn, static_cast< uint32_t >(size));
         }
         if (irops::Xor::is(fn)) {
             return VisitGenericIntrinsic< OnlyOneCondition >(call, fn);
         }
         if (irops::Concat::is(fn)) {
-            auto [size] = irops::Concat::parse_args< uint32_t >(fn);
-            return VisitGenericIntrinsic< Concat >(call, fn, size);
+            auto [size] = irops::Concat::parse_args(fn);
+            return VisitGenericIntrinsic< Concat >(call, fn, static_cast< uint32_t >(size));
         }
         if (irops::Select::is(fn)) {
-            auto [select_bits, size] = irops::Select::parse_args< uint32_t >(fn);
-            return VisitGenericIntrinsic< Select >(call, fn, select_bits, size);
+            // TODO(lukas): Minimal tests did not catch these being swapped.
+            auto [size, select_bits] = irops::Select::parse_args(fn);
+            return VisitGenericIntrinsic< Select >(call, fn,
+                    static_cast< uint32_t >(select_bits), static_cast< uint32_t >(size));
         }
         if (irops::OutputCheck::is(fn)) {
             return VisitGenericIntrinsic< RegConstraint >(call, fn);
@@ -368,16 +373,19 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             return VisitGenericIntrinsic< VerifyInstruction >(call, fn);
         }
         if (irops::Advice::is(fn)) {
-            auto [size] = irops::Advice::parse_args< uint32_t >(fn);
+            auto [type] = irops::Advice::parse_args(fn);
+            auto size = irops::impl::suffix::llvm_type::to_bw< uint32_t >(type);
             return VisitGenericIntrinsic< Advice >(call, fn, size, ++advice_idx);
         }
         if ( irops::Operand::is(fn)) {
-            auto [_, size] = irops::Operand::parse_args< uint32_t >(fn);
-            return VisitGenericIntrinsic< Advice >(call, fn, size, ++advice_idx);
+            auto [type, _] = irops::Operand::parse_args(fn);
+            auto size = irops::impl::suffix::llvm_type::to_bw< uint32_t >(type);
+            return VisitGenericIntrinsic< Advice >(call, fn, static_cast< uint32_t >(size), ++advice_idx);
         }
 
         if ( irops::RegSelector::is(fn)) {
-            auto [_, size] = irops::RegSelector::parse_args< uint32_t >(fn);
+            auto [type, _] = irops::RegSelector::parse_args(fn);
+            auto size = irops::impl::suffix::llvm_type::to_bw< uint32_t >(type);
             return VisitGenericIntrinsic< Advice >(call, fn, size, ++advice_idx);
         }
 
@@ -392,9 +400,9 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             return VisitGenericIntrinsic< DecoderResult >(call, fn);
         }
         if (irops::Memory::is(fn)) {
-            auto [_, id] = irops::Memory::parse_args< uint32_t >(fn);
+            auto [_, id] = irops::Memory::parse_args(fn);
             return VisitGenericIntrinsic< Memory >(call, fn,
-                    irops::memory::size(impl->ptr_size), id);
+                    irops::memory::size(impl->ptr_size), static_cast< uint32_t >(id));
         }
         if (irops::And::is(fn)) {
             // TODO(lukas): Size should be specified by intrinsic.
@@ -410,12 +418,12 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             return VisitGenericIntrinsic< UnusedConstraint >(call, fn);
         }
         if (irops::ErrorBit::is(fn)) {
-            auto [size, io_type] = irops::ErrorBit::parse_args< uint32_t >(fn);
-            return VisitIOLeaf< InputErrorFlag, OutputErrorFlag >(call, fn, io_type, size);
+            auto [size, io_type] = irops::ErrorBit::parse_args(fn);
+            return VisitIOLeaf< InputErrorFlag, OutputErrorFlag >(call, fn, io_type, static_cast< uint32_t >(size));
         }
         if (irops::Timestamp::is(fn)) {
-            auto [size, io_type] = irops::Timestamp::parse_args< uint32_t >(fn);
-            return VisitIOLeaf< InputTimestamp, OutputTimestamp >(call, fn, io_type, size);
+            auto [size, io_type] = irops::Timestamp::parse_args(fn);
+            return VisitIOLeaf< InputTimestamp, OutputTimestamp >(call, fn, io_type, static_cast< uint32_t >(size));
         }
         unreachable() << "Unsupported function: " << remill::LLVMThingToString(call);
     }
@@ -681,7 +689,7 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
     Circuit *impl;
     VerifyInstruction *verifier{nullptr};
 
-    uint32_t advice_idx = 0;
+    std::size_t advice_idx = 0;
 
     std::unordered_map< llvm::Value *, Operation * > val_to_op;
     std::unordered_map< llvm::Value *, Operation * > leaves;
