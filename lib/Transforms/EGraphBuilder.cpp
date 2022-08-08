@@ -155,8 +155,6 @@ namespace circ::eqsat
     NodeTemplate NodeTemplateBuilder::visit(And *op) { return sized(op); }
     NodeTemplate NodeTemplateBuilder::visit(Xor *op) { return sized(op); }
 
-    NodeTemplate NodeTemplateBuilder::visit(Circuit *) {
-        unreachable() << "Unexpected case encountered in visit.";
-    }
+    NodeTemplate NodeTemplateBuilder::visit(Circuit *op) { return opcode(op); }
 
 } // namespace circ::eqsat
