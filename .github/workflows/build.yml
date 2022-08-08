@@ -68,18 +68,6 @@ jobs:
     - name: Get latest CMake and ninja
       uses: xlauko/get-cmake@main
 
-    # setup cxx-common
-    - name: Download cxx-common
-      id: cxxcommon
-      uses: lifting-bits/download-cxx-common@v1
-      with:
-        llvm: ${{ matrix.llvm }}
-        version: ${{ matrix.cxxcommon_version }}
-        token: ${{ secrets.GITHUB_TOKEN }}
-        image: ${{ matrix.image.name }}
-        image_tag: ${{ matrix.image.tag }}
-        destination: ${{ steps.paths.outputs.install }}
-
     # TODO(Heno) temporary download cxx-common ports
     - name: Clone the cxx-common ports
       id: cxx-common-ports
@@ -106,6 +94,18 @@ jobs:
 
         ./bootstrap-vcpkg.sh
         ./vcpkg integrate install
+
+    # setup cxx-common
+    - name: Download cxx-common
+      id: cxxcommon
+      uses: lifting-bits/download-cxx-common@v1
+      with:
+        llvm: ${{ matrix.llvm }}
+        version: ${{ matrix.cxxcommon_version }}
+        token: ${{ secrets.GITHUB_TOKEN }}
+        image: ${{ matrix.image.name }}
+        image_tag: ${{ matrix.image.tag }}
+        destination: ${{ steps.paths.outputs.install }}
 
     # setup circuitous
     - name: Clone the circuitous repository
