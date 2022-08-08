@@ -23,9 +23,6 @@ on:
 env:
   # Tells vcpkg where binary packages are stored.
   VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg/bincache
-  # Setup compiler
-  CC: clang-12
-  CXX: clang++-12
 
 jobs:
   build_linux:
@@ -36,18 +33,11 @@ jobs:
           - { name: 'ubuntu', tag: '20.04' }
 
         llvm: [ '14' ]
-        cxxcommon_version: [ 'v0.2.2' ]
+        cxxcommon_version: [ 'v0.2.9' ]
 
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     timeout-minutes: 15
-
-    container:
-      image: docker.pkg.github.com/lifting-bits/cxx-common/vcpkg-builder-${{ matrix.image.name }}:${{ matrix.image.tag }}
-
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
 
     steps:
     # setup environment
@@ -58,13 +48,9 @@ jobs:
     - name: Install dependencies
       shell: bash
       run: |
-        apt-get update
-        apt-get install --yes --no-install-recommends \
-          clang-12 build-essential ninja-build ccache libstdc++-10-dev
-
-        update-alternatives \
-            --install /usr/bin/clang clang /usr/bin/clang-12 10 \
-            --slave   /usr/bin/clang++ clang++ /usr/bin/clang++-12
+        sudo apt-get update
+        sudo apt-get install --yes --no-install-recommends \
+          build-essential ninja-build clang-tidy cppcheck ccache doctest-dev
 
         pip3 install pytest
 
