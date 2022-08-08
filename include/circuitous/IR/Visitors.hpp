@@ -45,7 +45,7 @@ namespace circ
     {
         template< typename T >
         using adjust_constness_t = std::conditional_t< IsConst, const T, T >;
-        using operation_t = adjust_constness_t< Operation * >;
+        using operation_t = adjust_constness_t< Operation > *;
 
         Derived &self() { return static_cast< Derived & >(*this); }
         const Derived &self() const { return static_cast< const Derived & >(*this); }
@@ -63,7 +63,7 @@ namespace circ
 
             if (isa< T >(op->op_code))
             {
-                auto casted = dynamic_cast< adjust_constness_t< T * > >(op);
+                auto casted = dynamic_cast< adjust_constness_t< T > * >(op);
                 return self().visit(casted, std::forward< Args >(args) ... );
             }
 
