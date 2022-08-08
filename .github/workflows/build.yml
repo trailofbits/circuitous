@@ -133,7 +133,7 @@ jobs:
       working-directory: ${{ steps.paths.outputs.src }}/circuitous
       if: always()
       run: |
-        cat  /__w/circuitous/circuitous/src/cxx-common-ports/vcpkg/buildtrees/gap/config-x64-linux-rel-out.log
+        cat  /home/runner/work/circuitous/circuitous/src/cxx-common-ports/vcpkg/buildtrees/remill/install-x64-linux-rel-rel-out.log
 
     - name: Build circuitous
       working-directory: ${{ steps.paths.outputs.build }}/circuitous
