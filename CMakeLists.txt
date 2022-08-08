@@ -1,5 +1,5 @@
 # Copyright (c) 2020-2021 Trail of Bits, Inc.
-cmake_minimum_required( VERSION 3.23 )
+cmake_minimum_required( VERSION 3.22 )
 
 list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake" )
 include( vcpkg_setup )
