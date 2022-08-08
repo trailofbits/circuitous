@@ -247,19 +247,19 @@ namespace circ
         auto print_op = [&](auto root, const auto &prefix)
         {
             ss << prefix;
-            if (auto src = op->get_meta(circir_llvm_meta::llvm_source_dump))
+            if (auto src = root->get_meta(circir_llvm_meta::llvm_source_dump))
                 ss << *src;
             else
                 ss << "( no source meta )";
             ss << "\n";
-            return ss.str();
         };
 
-        std::string out = print_op(op, gprefix);
+        print_op(op, gprefix);
 
         for (auto c : op->operands)
-            out += print_op(c, gprefix + " |- ");
-        return out;
+            print_op(c, gprefix + " |- ");
+
+        return ss.str();
     }
 
 
