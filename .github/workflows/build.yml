@@ -50,10 +50,9 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install --yes --no-install-recommends \
-          build-essential ninja-build clang-tidy cppcheck ccache doctest-dev \
-          python3
+          ninja-build clang-tidy cppcheck ccache doctest-dev \
 
-        pip3 install --user pytest microx
+        pip3 install --user pytest
 
     - name: Setup paths
       shell: bash
