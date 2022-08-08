@@ -53,7 +53,7 @@ jobs:
           build-essential ninja-build clang-tidy cppcheck ccache doctest-dev \
           python3
 
-        pip3 install --user pytest
+        pip3 install --user pytest microx
 
     - name: Setup paths
       shell: bash
@@ -114,12 +114,6 @@ jobs:
         path: ${{ steps.paths.outputs.src }}/circuitous
         submodules: true
         fetch-depth: 1
-
-    - name: Install circuitous python requirements
-      working-directory: ${{ steps.paths.outputs.src }}/circuitous
-      shell: bash
-      run: |
-          pip3 install --user --no-cache-dir -r requirements.txt
 
     - name: Configure circuitous
       working-directory: ${{ steps.paths.outputs.src }}/circuitous
