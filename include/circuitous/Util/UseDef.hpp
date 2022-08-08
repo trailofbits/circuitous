@@ -14,6 +14,8 @@
 
 #include <circuitous/Support/Check.hpp>
 
+#include <gap/core/generator.hpp>
+
 namespace circ
 {
 
@@ -78,7 +80,7 @@ namespace circ
             std::size_t num = 0;
             for (auto it = defs.begin(); it != defs.end();)
             {
-                if ((*it)->users().size() == 0) {
+                if ((*it)->users_size() == 0) {
                     cb(std::move(*it));
                     it = defs.erase(it);
                     ++num;
@@ -145,13 +147,19 @@ namespace circ
 
       public:
         // TODO(lukas): Replace with generator.
-        std::vector< T * > users() const
+        gap::generator< T * > users()
         {
-            std::vector< T * > out;
-            for (const auto &[x, _] : _users)
-                out.push_back(x);
-            return out;
+            for (auto &[x, _] : _users)
+                co_yield x;
         }
+
+        gap::generator< const T * > users() const
+        {
+            for (const auto &[x, _] : _users)
+                co_yield x;
+        }
+
+        std::size_t users_size() const { return _users.size(); }
 
         // TODO(lukas): Also replace with generator to have the same return type as `users()`?
         const std::vector< T * > &operands() const
