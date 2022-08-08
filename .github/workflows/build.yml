@@ -23,6 +23,9 @@ on:
 env:
   # Tells vcpkg where binary packages are stored.
   VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg/bincache
+  # Setup compiler
+  CC: clang-14
+  CXX: clang++-14
 
 jobs:
   build_linux:
@@ -49,8 +52,14 @@ jobs:
       shell: bash
       run: |
         sudo apt-get update
+        sudo apt-get purge llvm-* clang-*
+
         sudo apt-get install --yes --no-install-recommends \
-          ninja-build clang-tidy cppcheck ccache doctest-dev \
+          ninja-build cmake ccache doctest-dev \
+          clang-14 clang++-14 llvm-14-dev llvm-14 libclang-14-dev
+
+        # Work around broken llvm packaging
+        sudo touch /usr/lib/llvm-14/lib/libMLIRSupportIndentedOstream.a
 
         pip3 install --user pytest
 
@@ -63,9 +72,6 @@ jobs:
         echo ::set-output name=build::$(pwd)/build
         echo ::set-output name=install::$(pwd)/install
         echo ::set-output name=ccache::$(pwd)/ccache
-
-    - name: Get latest CMake and ninja
-      uses: xlauko/get-cmake@main
 
     # TODO(Heno) temporary download cxx-common ports
     - name: Clone the cxx-common ports
@@ -94,18 +100,6 @@ jobs:
         ./bootstrap-vcpkg.sh
         ./vcpkg integrate install
 
-    # setup cxx-common
-    - name: Download cxx-common
-      id: cxxcommon
-      uses: lifting-bits/download-cxx-common@v1
-      with:
-        llvm: ${{ matrix.llvm }}
-        version: ${{ matrix.cxxcommon_version }}
-        token: ${{ secrets.GITHUB_TOKEN }}
-        image: ${{ matrix.image.name }}
-        image_tag: ${{ matrix.image.tag }}
-        destination: ${{ steps.paths.outputs.install }}
-
     # setup circuitous
     - name: Clone the circuitous repository
       uses: actions/checkout@v3
@@ -120,7 +114,7 @@ jobs:
         # TODO(Heno): use ports from cxx-common
         VCPKG_ROOT: ${{ steps.paths.outputs.src }}/cxx-common-ports/vcpkg
         CXX_COMMON_ROOT: ${{ steps.paths.outputs.src }}/cxx-common-ports
-        CMAKE_PREFIX_PATH: ${{ steps.paths.outputs.install }}/vcpkg_ubuntu-20.04_llvm-14_amd64/installed/x64-linux-rel/share/:${CMAKE_PREFIX_PATH}
+        # CMAKE_PREFIX_PATH: ${{ steps.paths.outputs.install }}/vcpkg_ubuntu-20.04_llvm-14_amd64/installed/x64-linux-rel/share/:${CMAKE_PREFIX_PATH}
         BUILD_DIR: ${{ steps.paths.outputs.build }}/circuitous/
       shell: bash
       run: |
@@ -133,7 +127,10 @@ jobs:
       working-directory: ${{ steps.paths.outputs.src }}/circuitous
       if: always()
       run: |
-        cat  /home/runner/work/circuitous/circuitous/src/cxx-common-ports/vcpkg/buildtrees/remill/install-x64-linux-rel-rel-out.log
+        echo "out:"
+        cat /home/runner/work/circuitous/circuitous/src/cxx-common-ports/vcpkg/buildtrees/remill/install-x64-linux-rel-rel-out.log
+        echo "err:"
+        cat /home/runner/work/circuitous/circuitous/src/cxx-common-ports/vcpkg/buildtrees/remill/install-x64-linux-rel-rel-err.log
 
     - name: Build circuitous
       working-directory: ${{ steps.paths.outputs.build }}/circuitous
