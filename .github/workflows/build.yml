@@ -92,6 +92,14 @@ jobs:
         ./bootstrap-vcpkg.sh
         ./vcpkg integrate install
 
+    - name: Install remill
+      working-directory: ${{ steps.paths.outputs.src }}
+      run: |
+        mkdir -p remill && cd remill
+        wget https://github.com/lifting-bits/remill/releases/download/v5.0.4/remill_ubuntu-20.04_packages.zip
+        unzip remill_ubuntu-20.04_packages.zip
+        sudo apt-get install ./ubuntu-20.04_llvm14_deb_package/remill-5.0.4.43cfa8c-x86_64.deb
+
     - name: Configure circuitous
       working-directory: ${{ steps.paths.outputs.src }}/circuitous
       env:
