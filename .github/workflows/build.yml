@@ -33,138 +33,56 @@ jobs:
     timeout-minutes: 15
 
     steps:
-    - name: Setup paths
-      shell: bash
-      id: paths
-      run: |
-        mkdir -p build src install ccache $VCPKG_DEFAULT_BINARY_CACHE
-        echo ::set-output name=src::$(pwd)/src
-        echo ::set-output name=build::$(pwd)/build
-        echo ::set-output name=install::$(pwd)/install
-        echo ::set-output name=ccache::$(pwd)/ccache
-
-    # setup circuitous
-    - name: Clone the circuitous repository
-      uses: actions/checkout@v3
-      with:
-        path: ${{ steps.paths.outputs.src }}/circuitous
-        submodules: true
-        fetch-depth: 1
-
-    - name: Install dependencies
-      run: |
-        export DEBIAN_FRONTEND=noninteractive
-        sudo apt-get update
-        sudo apt-get -y install --no-install-recommends \
-          llvm-14 llvm-14-dev libclang-14-dev build-essential \
-          ccache libedit-dev libpfm4-dev libz3-dev
-
-        # Work around broken llvm packaging
-        sudo touch /usr/lib/llvm-14/lib/libMLIRSupportIndentedOstream.a
-
-    - name: Restore artifacts, or setup vcpkg
-      uses: lukka/get-cmake@latest
-
-    # TODO(Heno) temporary download cxx-common ports
-    - name: Clone the cxx-common ports
-      id: cxx-common-ports
-      uses: actions/checkout@v3
-      with:
-        repository: 'lifting-bits/cxx-common'
-        path: ${{ steps.paths.outputs.src }}/cxx-common-ports
-        ref: 'port-files'
-        fetch-depth: 1
-
-    - name: Clone the vcpkg for cxx-common
-      id: cxx-common-ports-vcpkg
-      uses: actions/checkout@v3
-      with:
-        repository: 'microsoft/vcpkg'
-        path: ${{ steps.paths.outputs.src }}/cxx-common-ports/vcpkg
-        fetch-depth: 1
-
-    - name: Setup vcpkg
-      working-directory: ${{ steps.paths.outputs.src }}/cxx-common-ports/vcpkg
-      run: |
-        export CMAKE_C_COMPILER_LAUNCHER="$(which ccache)"
-        export CMAKE_CXX_COMPILER_LAUNCHER="$(which ccache)"
-
-        ./bootstrap-vcpkg.sh
-        ./vcpkg integrate install
-
-    - name: Install remill
-      working-directory: ${{ steps.paths.outputs.src }}
-      run: |
-        mkdir -p remill && cd remill
-        wget https://github.com/lifting-bits/remill/releases/download/v5.0.4/remill_ubuntu-20.04_packages.zip
-        unzip remill_ubuntu-20.04_packages.zip
-        sudo apt-get install ./ubuntu-20.04_llvm14_deb_package/remill-5.0.4.43cfa8c-x86_64.deb
-
-    - name: Configure circuitous
-      working-directory: ${{ steps.paths.outputs.src }}/circuitous
-      env:
-        # TODO(Heno): use ports from cxx-common
-        VCPKG_ROOT: ${{ steps.paths.outputs.src }}/cxx-common-ports/vcpkg
-        CXX_COMMON_ROOT: ${{ steps.paths.outputs.src }}/cxx-common-ports
-      shell: bash
-      run: |
-        cmake --preset ninja-system-remill-x64-linux-deb -B ${{ steps.paths.outputs.build }}/circuitous
-
-    - name: Build circuitous
-      working-directory: ${{ steps.paths.outputs.build }}/circuitous
-      env:
-        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
-      run: |
-        cmake --build ${{ steps.paths.outputs.build }}/circuitous -j $(nproc)
-
-    - name: Install circuitous
-      working-directory: ${{ steps.paths.outputs.build }}/circuitous
-      env:
-        CCACHE_DIR: ${{ steps.paths.outputs.ccache }}
-      run: |
-        cmake --build ${{ steps.paths.outputs.build }}/circuitous --target install
-
-    - name: Run circuitous unittests
-      working-directory: ${{ steps.paths.outputs.build }}/circuitous
-      run: |
-        ctest --output-on-failure
-
-    - name: Package circuitous
-      working-directory: ${{ steps.paths.outputs.build }}/circuitous
-      run: |
-        cpack -G TXZ --config ./CPackConfig.cmake
-
-    - name: Upload circuitous package artifact
-      uses: actions/upload-artifact@v3
-      with:
-        name: circuitous-${{ matrix.image.name }}-${{ matrix.image.tag }}
-        path: ${{ steps.paths.outputs.build }}/circuitous/package/
-        retention-days: 30
-
-  pre-release:
-      if: success() && github.ref == 'refs/heads/master'
-      name: "Pre Release"
-      runs-on: ubuntu-20.04
-      needs: build_linux
-
-      steps:
-      - name: Clone the vast repository
+      # setup circuitous
+      - name: Clone the circuitous repository
         uses: actions/checkout@v3
         with:
-          path: ./circuitous
+          submodules: true
           fetch-depth: 1
 
-      - name: "Download build artifacts"
-        id: download
-        uses: actions/download-artifact@v3
-
-      - name: "Publish Pre-Release"
-        uses: "marvinpinto/action-automatic-releases@latest"
+      - name: Build and run dev container task
+        uses: devcontainers/ci@v0.2
         with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "latest"
-          prerelease: true
-          title: "Development Build"
-          files: |
-            ./circuitous/LICENSE
-            ${{steps.download.outputs.download-path}}/circuitous-*/*.tar.xz
+          runCmd: |
+            cmake --preset ninja-system-remill-x64-linux-rel
+            cmake --build ./builds/ninja-system-remill-x64-linux-rel -j $(nproc)
+            ctest ./builds/ninja-system-remill-x64-linux-rel --output-on-failure
+
+            cpack -G TXZ --config ./builds/ninja-system-remill-x64-linux-rel/CPackConfig.cmake
+
+      - name: Upload circuitous package artifact
+        run: |
+          ls .
+  #     uses: actions/upload-artifact@v3
+  #     with:
+  #       name: circuitous-${{ matrix.image.name }}-${{ matrix.image.tag }}
+  #       path: ${{ steps.paths.outputs.build }}/circuitous/package/
+  #       retention-days: 30
+
+  # pre-release:
+  #     if: success() && github.ref == 'refs/heads/master'
+  #     name: "Pre Release"
+  #     runs-on: ubuntu-20.04
+  #     needs: build_linux
+
+  #     steps:
+  #     - name: Clone the vast repository
+  #       uses: actions/checkout@v3
+  #       with:
+  #         path: ./circuitous
+  #         fetch-depth: 1
+
+  #     - name: "Download build artifacts"
+  #       id: download
+  #       uses: actions/download-artifact@v3
+
+  #     - name: "Publish Pre-Release"
+  #       uses: "marvinpinto/action-automatic-releases@latest"
+  #       with:
+  #         repo_token: "${{ secrets.GITHUB_TOKEN }}"
+  #         automatic_release_tag: "latest"
+  #         prerelease: true
+  #         title: "Development Build"
+  #         files: |
+  #           ./circuitous/LICENSE
+  #           ${{steps.download.outputs.download-path}}/circuitous-*/*.tar.xz
