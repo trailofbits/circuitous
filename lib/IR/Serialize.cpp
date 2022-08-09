@@ -170,21 +170,18 @@ namespace {
         // TODO(lukas): This should be called, but is not.
         void visit(Circuit *op) { write(op->ptr_size);  }
 
+        void visit(Operation *op) { write(op->size); }
+
         void visit(InputRegister *op) { write(op->reg_name, op->size); }
         void visit(OutputRegister *op) { write(op->reg_name, op->size); }
 
-        void visit(Operation *op) { write(op->size); }
         void visit(Constant *op) { write(op->size, op->bits); }
-        void visit(InputImmediate *op) { write(op->size); }
 
         void visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc); }
         void visit(Select *op) { write(op->size, op->bits); }
         void visit(Memory *op) { write(op->size, op->mem_idx); }
         void visit(Advice *op) { write(op->size, op->advice_idx); }
-        void visit(InputErrorFlag *op)  { write(op->size); }
-        void visit(OutputErrorFlag *op) { write(op->size); }
-        void visit(InputTimestamp *op)  { write(op->size); }
-        void visit(OutputTimestamp *op) { write(op->size); }
+
     };
 
 
