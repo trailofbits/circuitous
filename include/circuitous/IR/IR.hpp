@@ -500,7 +500,7 @@ namespace circ
     };
 
     using constraint_opts_ts = tl::TL< RegConstraint, AdviceConstraint,
-                                       WriteConstraint, RegConstraint, UnusedConstraint >;
+                                       WriteConstraint, ReadConstraint, UnusedConstraint >;
 
     // TODO(lukas): It would be nice to move these to struct defs
     static inline bool constrained_by(Operation *v, Operation *c)
@@ -766,12 +766,13 @@ namespace circ
         Not, Concat,
         CountLeadingZeroes, CountTrailingZeroes, Extract, PopulationCount,
         Parity, InputImmediate,
-        RegConstraint, DecodeCondition,
+        DecodeCondition,
         DecoderResult,
-        ReadConstraint, WriteConstraint, UnusedConstraint,
         VerifyInstruction, OnlyOneCondition,
-        AdviceConstraint, Select
+        Select
     >;
 
-    using subnode_list_t = tl::merge< generic_list_t, llvm_ops_t, leaf_values_ts >;
+    using subnode_list_t = tl::merge< generic_list_t, llvm_ops_t,
+                                      leaf_values_ts,
+                                      constraint_opts_ts >;
 }  // namespace circ
