@@ -436,6 +436,7 @@ namespace circ
         static constexpr Operation::kind_t kind = Operation::kind_t::kRegConstraint;
 
         explicit RegConstraint() : EnforceCtx(this->bool_size, kind) {}
+        explicit RegConstraint(unsigned size) : EnforceCtx(size, kind) {}
 
         static std::string op_code_str() { return "register_constraint"; }
         std::string name() const override
@@ -451,6 +452,7 @@ namespace circ
         static constexpr Operation::kind_t kind = Operation::kind_t::kAdviceConstraint;
 
         explicit AdviceConstraint() : EnforceCtx(this->bool_size, kind) {}
+        explicit AdviceConstraint(unsigned size) : EnforceCtx(size, kind) {}
 
         static std::string op_code_str() { return "advice_constraint"; }
         std::string name() const override
@@ -464,6 +466,7 @@ namespace circ
         static constexpr Operation::kind_t kind = Operation::kind_t::kWriteConstraint;
 
         explicit WriteConstraint() : MemoryConstraint(this->bool_size, kind) {}
+        explicit WriteConstraint(unsigned size) : MemoryConstraint(size, kind) {}
 
         static std::string op_code_str() { return "write_constraint"; }
         std::string name() const override { return "write_constraint"; }
@@ -474,6 +477,7 @@ namespace circ
         static constexpr Operation::kind_t kind = Operation::kind_t::kReadConstraint;
 
         explicit ReadConstraint() : MemoryConstraint(this->bool_size, kind) {}
+        explicit ReadConstraint(unsigned size) : MemoryConstraint(size, kind) {}
 
         static std::string op_code_str() { return "read_constraint"; }
         std::string name() const override { return "read_constraint"; }
@@ -489,6 +493,7 @@ namespace circ
         static constexpr Operation::kind_t kind = Operation::kind_t::kUnusedConstraint;
 
         explicit UnusedConstraint() : Operation(this->bool_size, kind) {}
+        explicit UnusedConstraint(unsigned size) : Operation(size, kind) {}
 
         static std::string op_code_str() { return "unused_constraint"; }
         std::string name() const override { return "unused_constraint"; }
@@ -667,7 +672,8 @@ namespace circ
     {
         static constexpr Operation::kind_t kind = Operation::kind_t::kParity;
 
-        explicit Parity() : Operation(1, kind) {}
+        explicit Parity() : Operation(this->bool_size, kind) {}
+        explicit Parity(unsigned size) : Operation(size, kind) {}
 
         static std::string op_code_str() { return "parity"; }
         std::string name() const override { return "parity"; }
@@ -740,6 +746,7 @@ namespace circ
     { \
       static constexpr Operation::kind_t kind = Operation::kind_t::k##cls; \
       explicit cls() : Operation(this->bool_size, kind) {} \
+      explicit cls(unsigned size) : Operation(size, kind) {} \
       static std::string op_code_str() { return #cls; } \
       std::string name() const override { return #cls; } \
     }
