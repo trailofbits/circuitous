@@ -175,25 +175,50 @@ namespace {
         void visit(InputRegister *op) { write(op->reg_name, op->size); }
         void visit(OutputRegister *op) { write(op->reg_name, op->size); }
 
-        void visit(Constant *op) { write(op->size, op->bits); }
+        void visit(Constant *op) { write(op->bits, op->size); }
 
-        void visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc); }
-        void visit(Select *op) { write(op->size, op->bits); }
+        void visit(Extract *op) { write(op->low_bit_inc, op->high_bit_exc); }
+        void visit(Select *op) { write(op->bits, op->size); }
         void visit(Memory *op) { write(op->size, op->mem_idx); }
         void visit(Advice *op) { write(op->size, op->advice_idx); }
 
     };
+
+    template< typename T, typename ... Args >
+    struct SDef {};
+
+    template< typename ... Args >
+    struct bind_args
+    {
+        template< typename T >
+        using type = SDef< T, Args ... >;
+    };
+
+    using bind_size = bind_args< unsigned >;
 
 
     namespace detail
     {
 
         template< typename D, typename T >
-        struct inject {
+        struct inject
+        {
             Operation *visit(T *, uint64_t id)
             {
                 auto &self = static_cast< D & >( *this );
                 return self.template make_op< T >(id, self.template read< unsigned >());
+            }
+        };
+
+        template< typename D, typename T, typename ... Args >
+        struct inject< D, SDef< T, Args ... > >
+        {
+            static_assert( sizeof ... (Args) != 0 );
+
+            Operation *visit(T *, uint64_t id)
+            {
+                auto &self = static_cast< D & >( *this );
+                return self.template make_op< T >(id, self.template read< Args ... >());
             }
         };
 
@@ -220,12 +245,51 @@ namespace {
     template< typename D >
     using DeserializeComputational = detail::inject_visitors< D, llvm_ops_t >;
 
+    using other_ops_ts = tl::TL<
+                                SDef< Select, unsigned, unsigned >,
+                                SDef< Extract, unsigned, unsigned >,
+                                SDef< Advice, unsigned, std::size_t >,
+                                SDef< Memory, unsigned, unsigned >,
+                                SDef< InputRegister, std::string, unsigned >,
+                                SDef< OutputRegister, std::string, unsigned >,
+                                SDef< Constant, std::string, unsigned >
+                               >;
+
+    using sized_ops_t = tl::TL<
+                               InputTimestamp,
+                               OutputTimestamp,
+
+                               InputErrorFlag,
+                               OutputErrorFlag,
+
+                               InputInstructionBits,
+                               InputImmediate,
+
+                               Undefined,
+                               Not,
+                               Concat,
+                               PopulationCount,
+                               CountLeadingZeroes,
+                               CountTrailingZeroes
+                              >;
+
+    using conditions_ts = tl::merge< bool_ops_ts, constraint_opts_ts, tl::TL< Parity > >;
+
+    using with_size = tl::apply< tl::merge< sized_ops_t, conditions_ts >, bind_size >;
+    using all_binded_ts = tl::merge< with_size, other_ops_ts >;
+
+
+    template< typename D >
+    using DeserializeSimple = detail::inject_visitors< D, all_binded_ts >;
+
     struct DeserializeVisitor : FileConfig, DVisitor< DeserializeVisitor >,
-                                DeserializeComputational< DeserializeVisitor >
+                                DeserializeComputational< DeserializeVisitor >,
+                                DeserializeSimple< DeserializeVisitor >
     {
         using Selector = FileConfig::Selector;
 
         using DeserializeComputational< DeserializeVisitor >::visit;
+        using DeserializeSimple< DeserializeVisitor >::visit;
 
         std::istream &is;
         std::unordered_map<uint64_t, Operation *> id_to_op;
@@ -354,18 +418,6 @@ namespace {
             return std::apply(make, std::forward< std::tuple< Args ... > >(args));
         }
 
-        template< typename T >
-        auto reg_like(uint64_t id)
-        {
-            return make_op< T >(id, read< unsigned, std::string >());
-        }
-
-        template< typename T >
-        auto reg_like_(uint64_t id)
-        {
-          return make_op< T >(id, read< std::string, unsigned >());
-        }
-
         Operation *visit(Circuit *, uint64_t id)
         {
             check(!circuit) << "Found multiple Circuit * while deserializing!";
@@ -374,111 +426,6 @@ namespace {
             circuit = std::make_unique< Circuit >(ptr_size);
             return circuit.get();
         }
-
-        Operation *visit(InputRegister *, uint64_t id)
-        {
-            return reg_like_< InputRegister >(id);
-        }
-        Operation *visit(OutputRegister *, uint64_t id)
-        {
-            return reg_like_< OutputRegister >(id);
-        }
-
-        Operation *visit(InputImmediate *, uint64_t id)
-        {
-            return make_op< InputImmediate >(id, read< unsigned >());
-        }
-
-        Operation *visit(Memory *, uint64_t id)
-        {
-            auto [size, mem_id] = read< unsigned, unsigned >();
-            check(size == Memory::expected_size(circuit->ptr_size));
-            return circuit->adopt< Memory >(id, size, mem_id);
-        }
-
-        Operation *visit(Advice *, uint64_t id)
-        {
-            auto [size, advice_idx] = read< unsigned, std::size_t >();
-            return circuit->adopt<Advice>(id, size, advice_idx);
-        }
-
-        Operation *visit(Constant *, uint64_t id)
-        {
-            auto [size, bits] = read< unsigned, std::string >();
-            return circuit->adopt< Constant >(id, std::move(bits), size);
-        }
-
-        Operation *visit(Extract *, uint64_t id) {
-            auto [high, low] = read< unsigned, unsigned >();
-            return circuit->adopt< Extract >(id, low, high);
-        }
-
-        Operation *visit(Select *, uint64_t id)
-        {
-            auto [size, bits] = read<unsigned, unsigned>();
-            return circuit->adopt< Select >(id, bits, size);
-        }
-
-        template< typename T >
-        auto make_leaf(uint64_t id)
-        {
-            auto [size] = read< unsigned >();
-            return circuit->adopt< T >(id, size);
-        }
-
-        Operation *visit(InputErrorFlag *, uint64_t id)
-        {
-            return make_leaf< InputErrorFlag >(id);
-        }
-        Operation *visit(OutputErrorFlag *, uint64_t id) {
-            return make_leaf< OutputErrorFlag >(id);
-        }
-        Operation *visit(InputTimestamp *, uint64_t id)
-        {
-            return make_leaf< InputTimestamp >(id);
-        }
-        Operation *visit(OutputTimestamp *, uint64_t id)
-        {
-            return make_leaf< OutputTimestamp >(id);
-        }
-
-        template< typename T >
-        auto make_generic(uint64_t id) { return make_op< T >(id, read< unsigned >()); }
-
-        template< typename T >
-        auto make_condition(uint64_t id)
-        {
-            auto [size] = read< unsigned >();
-            check(size == 1);
-            return circuit->adopt< T >(id);
-        }
-
-        #define DECODE_GENERIC(cls) \
-        Operation *visit(cls *, uint64_t id) { return make_generic< cls >(id); }
-
-        #define DECODE_CONDITION(cls) \
-        Operation *visit(cls *, uint64_t id) { return make_condition< cls >(id); }
-
-        DECODE_GENERIC(Undefined)
-        DECODE_GENERIC(Not)
-        DECODE_GENERIC(Concat)
-        DECODE_GENERIC(PopulationCount)
-        DECODE_CONDITION(Parity)
-        DECODE_GENERIC(CountLeadingZeroes)
-        DECODE_GENERIC(CountTrailingZeroes)
-
-        DECODE_CONDITION(AdviceConstraint)
-        DECODE_CONDITION(RegConstraint)
-        DECODE_CONDITION(ReadConstraint)
-        DECODE_CONDITION(WriteConstraint)
-        DECODE_CONDITION(UnusedConstraint)
-
-        DECODE_GENERIC(InputInstructionBits)
-        DECODE_CONDITION(DecoderResult)
-        DECODE_CONDITION(DecodeCondition)
-        DECODE_CONDITION(VerifyInstruction)
-        DECODE_CONDITION(OnlyOneCondition)
-
     };
 
 }  // namespace
