@@ -29,49 +29,41 @@ env:
 
 jobs:
   build_linux:
-    strategy:
-      fail-fast: false
-      matrix:
-        image:
-          - { name: 'ubuntu', tag: '20.04' }
-
-        llvm: [ '14' ]
-        cxxcommon_version: [ 'v0.2.9' ]
-
     runs-on: ubuntu-22.04
-
     timeout-minutes: 15
 
     steps:
-    # setup environment
-    - name: "Create directory '${{ env.VCPKG_DEFAULT_BINARY_CACHE }}'"
-      run: mkdir -p $VCPKG_DEFAULT_BINARY_CACHE
-      shell: bash
-
-    - name: Install dependencies
-      shell: bash
-      run: |
-        sudo apt-get update
-        sudo apt-get purge llvm-* clang-*
-
-        sudo apt-get install --yes --no-install-recommends \
-          ninja-build cmake ccache doctest-dev \
-          clang-14 clang++-14 llvm-14-dev llvm-14 libclang-14-dev
-
-        # Work around broken llvm packaging
-        sudo touch /usr/lib/llvm-14/lib/libMLIRSupportIndentedOstream.a
-
-        pip3 install --user pytest
-
     - name: Setup paths
       shell: bash
       id: paths
       run: |
-        mkdir -p build src install ccache
+        mkdir -p build src install ccache $VCPKG_DEFAULT_BINARY_CACHE
         echo ::set-output name=src::$(pwd)/src
         echo ::set-output name=build::$(pwd)/build
         echo ::set-output name=install::$(pwd)/install
         echo ::set-output name=ccache::$(pwd)/ccache
+
+    # setup circuitous
+    - name: Clone the circuitous repository
+      uses: actions/checkout@v3
+      with:
+        path: ${{ steps.paths.outputs.src }}/circuitous
+        submodules: true
+        fetch-depth: 1
+
+    - name: Install dependencies
+      run: |
+        export DEBIAN_FRONTEND=noninteractive
+        sudo apt-get update
+        sudo apt-get -y install --no-install-recommends \
+          llvm-14 llvm-14-dev libclang-14-dev build-essential \
+          ccache libedit-dev libpfm4-dev libz3-dev
+
+        # Work around broken llvm packaging
+        sudo touch /usr/lib/llvm-14/lib/libMLIRSupportIndentedOstream.a
+
+    - name: Restore artifacts, or setup vcpkg
+      uses: lukka/get-cmake@latest
 
     # TODO(Heno) temporary download cxx-common ports
     - name: Clone the cxx-common ports
@@ -100,37 +92,15 @@ jobs:
         ./bootstrap-vcpkg.sh
         ./vcpkg integrate install
 
-    # setup circuitous
-    - name: Clone the circuitous repository
-      uses: actions/checkout@v3
-      with:
-        path: ${{ steps.paths.outputs.src }}/circuitous
-        submodules: true
-        fetch-depth: 1
-
     - name: Configure circuitous
       working-directory: ${{ steps.paths.outputs.src }}/circuitous
       env:
         # TODO(Heno): use ports from cxx-common
         VCPKG_ROOT: ${{ steps.paths.outputs.src }}/cxx-common-ports/vcpkg
         CXX_COMMON_ROOT: ${{ steps.paths.outputs.src }}/cxx-common-ports
-        # CMAKE_PREFIX_PATH: ${{ steps.paths.outputs.install }}/vcpkg_ubuntu-20.04_llvm-14_amd64/installed/x64-linux-rel/share/:${CMAKE_PREFIX_PATH}
-        BUILD_DIR: ${{ steps.paths.outputs.build }}/circuitous/
       shell: bash
       run: |
-        # TODO(Heno): fix in port patch
-        mkdir -p ./vcpkg_installed/x64-linux-rel
-        mkdir -p ${{ steps.paths.outputs.src }}/cxx-common-ports/vcpkg/installed/x64-linux-rel
-        cmake --preset ninja-cxx-common-system-llvm-x64-linux-rel -B ${{ steps.paths.outputs.build }}/circuitous
-
-    - name: Configure debug
-      working-directory: ${{ steps.paths.outputs.src }}/circuitous
-      if: always()
-      run: |
-        echo "out:"
-        cat /home/runner/work/circuitous/circuitous/src/cxx-common-ports/vcpkg/buildtrees/remill/install-x64-linux-rel-rel-out.log
-        echo "err:"
-        cat /home/runner/work/circuitous/circuitous/src/cxx-common-ports/vcpkg/buildtrees/remill/install-x64-linux-rel-rel-err.log
+        cmake --preset ninja-system-remill-x64-linux-deb -B ${{ steps.paths.outputs.build }}/circuitous
 
     - name: Build circuitous
       working-directory: ${{ steps.paths.outputs.build }}/circuitous
