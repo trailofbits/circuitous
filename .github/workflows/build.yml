@@ -46,13 +46,11 @@ jobs:
           runCmd: |
             cmake --preset ninja-system-remill-x64-linux-rel
             cmake --build ./builds/ninja-system-remill-x64-linux-rel -j $(nproc)
-            ctest ./builds/ninja-system-remill-x64-linux-rel --output-on-failure
+            ctest --preset ninja-system-remill-x64-linux-rel-test --output-on-failure
 
             cpack -G TXZ --config ./builds/ninja-system-remill-x64-linux-rel/CPackConfig.cmake
 
-      - name: Upload circuitous package artifact
-        run: |
-          ls .
+  #    - name: Upload circuitous package artifact
   #     uses: actions/upload-artifact@v3
   #     with:
   #       name: circuitous-${{ matrix.image.name }}-${{ matrix.image.tag }}
