@@ -45,9 +45,6 @@ include( prevent_in_source_builds )
 # general project options
 include( project_settings )
 
-include( find_clang )
-FindAndSelectClangCompiler()
-
 #
 # CCACHE
 #
