@@ -15,7 +15,7 @@ RUN if [ "${REINSTALL_CMAKE_VERSION_FROM_SOURCE}" != "none" ]; then \
 
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends llvm-14 llvm-14-dev libclang-14-dev \
-        build-essential ccache cmake-curses-gui libedit-dev libpfm4-dev libz3-dev
+        build-essential ccache cmake-curses-gui libedit-dev libpfm4-dev python3-pip
 
 RUN update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-14 60
 RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-14 60
@@ -32,3 +32,4 @@ RUN wget https://github.com/lifting-bits/remill/releases/download/v5.0.4/remill_
     && unzip remill_ubuntu-20.04_packages.zip
 RUN apt-get install ./ubuntu-20.04_llvm14_deb_package/remill-5.0.4.43cfa8c-x86_64.deb
 
+RUN python3 -m pip install microx pytest
