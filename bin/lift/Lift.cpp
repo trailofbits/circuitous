@@ -4,7 +4,6 @@
 
 #include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Verify.hpp>
-#include <circuitous/IR/SMT.hpp>
 #include <circuitous/Printers.hpp>
 #include <circuitous/Transforms.hpp>
 #include <circuitous/IR/Cost.hpp>
@@ -37,18 +36,13 @@ DEFINE_string(arch, "", "");
 DEFINE_string(os, REMILL_OS, "");
 
 DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
-DEFINE_string(smt_in, "", "Path to the input smt2 file.");
 
 DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(dot_highlight, "", "Names of node-type to highlight in DOT file");
 
-DEFINE_string(smt_out, "", "Path to the output smt2 file.");
 DEFINE_string(json_out, "", "Path to the output JSON file.");
 DEFINE_string(verilog_out, "", "Path to the output verilog file.");
-
-DEFINE_string(bitblast_smt_out, "", "Path to the output smt2 file.");
-DEFINE_bool(bitblast_stats, false, "Print smt bitblast statistics.");
 
 DEFINE_string(bytes_in, "", "Hex representation of bytes to be lifted");
 DEFINE_string(ciff_in, "", "Load input from circuitous-seed --dbg produced file");
@@ -97,7 +91,6 @@ namespace
 using input_options = circ::tl::TL<
     cli::CiffIn,
     cli::IRIn,
-    cli::SMTIn,
     cli::BytesIn
 >;
 using deprecated_options = circ::tl::TL<
@@ -105,9 +98,7 @@ using deprecated_options = circ::tl::TL<
     circ::cli::LogDir
 >;
 using output_options = circ::tl::TL<
-    circ::cli::SMTOut,
     circ::cli::JsonOut,
-    circ::cli::BitBlastSmtOut,
     circ::cli::VerilogOut,
     circ::cli::IROut,
     circ::cli::DotOut,
@@ -150,8 +141,6 @@ circ::CircuitPtr get_input_circuit(auto &cli)
 
     if (auto ir_file = cli.template get< cli::IRIn >())
         return circ::Circuit::deserialize(*ir_file);
-    if (auto smt_file = cli.template get< cli::SMTIn >())
-        return circ::smt::deserialize(*smt_file);
 
     if (auto cif = cli.template get< cli::CiffIn >())
         return make_circuit(circ::CIFFReader().read(*cif).take_bytes());
@@ -177,12 +166,6 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 
     if (auto verilog_out = cli.template get< cli::VerilogOut >())
         circ::print_circuit(*verilog_out, circ::print_verilog, "circuit", circuit.get());
-
-    if (auto smt_out = cli.template get< cli::SMTOut >())
-        circ::print_circuit(*smt_out, circ::print_smt, circuit.get());
-
-    if (auto bitblast_smt = cli.template get< cli::BitBlastSmtOut >())
-        circ::print_circuit(*bitblast_smt, circ::print_bitblasted_smt, circuit.get());
 }
 
 template< typename OptsList >

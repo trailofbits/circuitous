@@ -2,7 +2,6 @@
  * Copyright (c) 2022 Trail of Bits, Inc.
  */
 #include <circuitous/IR/Verify.hpp>
-#include <circuitous/IR/SMT.hpp>
 #include <circuitous/Transforms.hpp>
 #include <circuitous/IR/Cost.hpp>
 
@@ -34,7 +33,6 @@ DEFINE_string(arch, "", "");
 DEFINE_string(os, REMILL_OS, "");
 
 DEFINE_string(ir_in, "", "Path to a file containing serialized IR.");
-DEFINE_string(smt_in, "", "Path to the input smt2 file.");
 
 DEFINE_string(dec_out, "", "Path to the output decoder file.");
 
@@ -53,7 +51,6 @@ std::string_view as_string_view(std::vector< uint8_t > &buf)
 using input_options = circ::tl::TL<
     cli::CiffIn,
     cli::IRIn,
-    cli::SMTIn,
     cli::BytesIn
 >;
 
@@ -90,8 +87,6 @@ circ::CircuitPtr get_input_circuit(auto &cli)
 
     if (auto ir_file = cli.template get< cli::IRIn >())
         return circ::Circuit::deserialize(*ir_file);
-    if (auto smt_file = cli.template get< cli::SMTIn >())
-        return circ::smt::deserialize(*smt_file);
 
     if (auto cif = cli.template get< cli::CiffIn >())
         return make_circuit(circ::CIFFReader().read(*cif).take_bytes());

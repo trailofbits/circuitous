@@ -10,7 +10,6 @@ add_headers( IR CIRCUITOUS_IR_HEADERS
   Memory.hpp
   Metadata.hpp
   Shapes.hpp
-  SMT.hpp
   Storage.hpp
   Trace.hpp
   Verify.hpp
@@ -21,7 +20,6 @@ add_circuitous_library( ir
   SOURCES
     IR.cpp
     Serialize.cpp
-    SMT.cpp
     Verify.cpp
   HEADERS
     ${CIRCUITOUS_IR_HEADERS}
