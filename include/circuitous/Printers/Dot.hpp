@@ -168,17 +168,17 @@ namespace circ::print
             if ( node_values.count( op ) )
                 os << " " << node_values.find( op )->second << " ";
 
-            if ( op->operands.size() == 0 )
+            if ( op->operands_size() == 0 )
             {
                 os << " }" << '"' << "];\n";
                 return;
             }
 
             os << "| {";
-            for ( std::size_t i = 0; i < op->operands.size(); ++i )
+            for ( std::size_t i = 0; i < op->operands_size(); ++i )
             {
                 os << as_id( node_id( op ) + std::to_string( i ) );
-                if ( i != op->operands.size() - 1 )
+                if ( i != op->operands_size() - 1 )
                     os << " | ";
             }
             os << " }}" << '"' << "];\n";
@@ -194,8 +194,8 @@ namespace circ::print
         {
             op->traverse( *this );
             node( op );
-            for ( std::size_t i = 0; i < op->operands.size(); ++i )
-                edge( op, op->operands[ i ], i );
+            for ( std::size_t i = 0; i < op->operands_size(); ++i )
+                edge( op, op->operand( i ), i );
         }
 
         void visit( Circuit *op )
@@ -204,8 +204,8 @@ namespace circ::print
 
             op->traverse( *this );
             node( op );
-            for ( std::size_t i = 0; i < op->operands.size(); ++i )
-                edge( op, op->operands[ i ], i );
+            for ( std::size_t i = 0; i < op->operands_size(); ++i )
+                edge( op, op->operand( i ), i );
 
             os << "}";
         }

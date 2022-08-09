@@ -7,9 +7,9 @@
 
 template<typename S>
 void Derive< S >::derive_cond(Operation *op) {
-    check(op->operands().size() == 2);
-    auto ireg{op->operands()[0]};
-    auto oreg{op->operands()[1]};
+    check(op->operands_size() == 2);
+    auto ireg{op->operand(0)};
+    auto oreg{op->operand(1)};
 
     check(oreg == cond_to_value[op]);
 
@@ -23,8 +23,8 @@ void Derive< S >::derive_cond(ReadConstraint *rc_op)
 {
     auto exec = [&](ReadConstraint *op) -> value_type
     {
-        for (auto i = 1u; i < op->operands().size(); ++i)
-            if (!this->get_node_val(op->operands()[i]))
+        for (auto i = 1u; i < op->operands_size(); ++i)
+            if (!this->get_node_val(op->operand(i)))
                 return {};
 
         auto addr = this->get_node_val(op->addr_arg())->getLimitedValue();
@@ -61,8 +61,8 @@ void Derive< S >::derive_cond(WriteConstraint *wc_op)
 {
     auto exec = [&](WriteConstraint *op) -> value_type
     {
-        for (auto i = 1u; i < op->operands().size(); ++i)
-            if (!this->get_node_val(op->operands()[i]))
+        for (auto i = 1u; i < op->operands_size(); ++i)
+            if (!this->get_node_val(op->operand(i)))
                 return {};
 
         llvm::APInt val { irops::memory::size(this->circuit->ptr_size), 0, false };
@@ -94,7 +94,7 @@ void Derive< S >::derive_cond(UnusedConstraint *uu_op)
     llvm::APInt unused { irops::memory::size(this->circuit->ptr_size), 0, false };
 
     this->set_node_val(uu_op, this->true_val());
-    this->set_node_val(uu_op->operands()[0], unused);
+    this->set_node_val(uu_op->operand(0), unused);
 }
 
 /* Input/Output nodes */
@@ -107,10 +107,10 @@ void IOSem<S>::visit(InputRegister *op) {
 
 template<typename S>
 void IOSem<S>::visit(InputImmediate *op) {
-    check(op->operands().size() == 1)
+    check(op->operands_size() == 1)
         << "Incorrect number of operands() of InputImmediate:"
-        << op->operands().size() << "!= 1";
-    this->set_node_val(op, this->get_node_val(op->operands()[0]));
+        << op->operands_size() << "!= 1";
+    this->set_node_val(op, this->get_node_val(op->operand(0)));
 }
 
 template<typename S>
@@ -153,8 +153,8 @@ void CSem<S>::visit(ReadConstraint *op_)
 {
     auto exec = [&](ReadConstraint *op) -> value_type
     {
-        for (auto i = 1u; i < op->operands().size(); ++i)
-            if (!this->get_node_val(op->operands()[i]))
+        for (auto i = 1u; i < op->operands_size(); ++i)
+            if (!this->get_node_val(op->operand(i)))
                 return {};
 
         check(this->has_value(op->hint_arg()));
@@ -185,8 +185,8 @@ void CSem<S>::visit(WriteConstraint *op_)
 {
     auto exec = [&](WriteConstraint *op) -> value_type
     {
-        for (auto i = 1u; i < op->operands().size(); ++i)
-            if (!this->get_node_val(op->operands()[i]))
+        for (auto i = 1u; i < op->operands_size(); ++i)
+            if (!this->get_node_val(op->operand(i)))
                 return {};
 
         check(this->has_value(op->hint_arg()));
@@ -237,7 +237,7 @@ void CSem< S >::visit(RegConstraint *op)
             return;
         }
 
-        auto name = op->operands()[1]->name();
+        auto name = op->operand(1)->name();
         auto as_ref = llvm::StringRef(name);
         auto has_prefix = as_ref.consume_front("Out.register.");
         check(has_prefix);
@@ -269,8 +269,8 @@ void CSem<S>::visit(OnlyOneCondition *op)
 {
     auto xor_ = [&](OnlyOneCondition *op) {
         auto result = 0u;
-        for (std::size_t i = 0; i < op->operands().size(); ++i) {
-            result += uint32_t(this->get_node_val(op->operands()[i]) == this->true_val());
+        for (std::size_t i = 0; i < op->operands_size(); ++i) {
+            result += uint32_t(this->get_node_val(op->operand(i)) == this->true_val());
         }
         return this->value(result == 1U);
     };

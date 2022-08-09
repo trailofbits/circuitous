@@ -69,7 +69,7 @@ namespace circ::run
     {
         std::stringstream ss;
         if (blocked.count(op))
-            ss << "[ " << blocked[op] << " / " << op->operands().size() << "]";
+            ss << "[ " << blocked[op] << " / " << op->operands_size() << "]";
         else
             ss << " [ NOT SET ]";
         return ss.str();

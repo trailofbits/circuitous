@@ -157,7 +157,7 @@ namespace circ::run
             {
                 if (is_in_current_ctx()(op))
                 {
-                    semantics.to_derive(op->operands()[1], op);
+                    semantics.to_derive(op->operand(1), op);
                     todo.notify_self(op);
                 }
             }

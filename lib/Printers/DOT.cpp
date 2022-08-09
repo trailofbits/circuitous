@@ -79,7 +79,7 @@ namespace circ::print
                 : os(os_), node_values(vals) {}
 
             void PrintOperands(Operation *op) {
-                if (!op->operands().empty()) {
+                if (!op->is_leaf()) {
                     os << "</TR><TR>";
                     for (auto sub_op : op->operands()) {
                         os << "<TD port=\"s";
@@ -96,8 +96,8 @@ namespace circ::print
 
             void PrintNodeName(Operation *op) {
                 os << "o" << op->id() << " " << kBeginDOTNode << "<TD port=\"id\"";
-                if (!op->operands().empty()) {
-                    os << " colspan=\"" << op->operands().size() << "\"";
+                if (!op->is_leaf()) {
+                    os << " colspan=\"" << op->operands_size() << "\"";
                 }
                 os << ">" << op->name();
                 if (node_values.count(op)) {

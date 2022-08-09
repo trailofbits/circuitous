@@ -29,7 +29,7 @@ namespace circ::inspect {
              * Decode by definition
              */
             write( op, sem_taint::Decode );
-            for (auto &o: op->operands) {
+            for (auto &o: op->operands()) {
                 /*
                  * No matter what constants are in the rest of the system,
                  * the value instruction bits are compared against to see which instruction
@@ -54,8 +54,8 @@ namespace circ::inspect {
             return write( op, sem_taint::State );
         }
         // non terminals
-        if ( op->operands.size() == 1 ) { // single child, should just pass on
-            return write( op, read_semantics( op->operands[ 0 ] ));
+        if ( op->operands_size() == 1 ) { // single child, should just pass on
+            return write( op, read_semantics( op->operand( 0 ) ));
         }
         if ( should_promote_to_semantics( op )) {
             return write( op, sem_taint::Semantics );
@@ -64,7 +64,7 @@ namespace circ::inspect {
             return write( op, sem_taint::Config );
         }
         // we know we are not a leaf node and all nodes are the same
-        return write( op, read_semantics( op->operands[ 0 ] ));
+        return write( op, read_semantics( op->operand( 0 ) ));
     }
 
     void SemanticsTainterVisitor::visit( circ::Operation *op )
@@ -76,7 +76,7 @@ namespace circ::inspect {
     bool SemanticsTainterVisitor::should_promote_to_semantics(Operation *op) {
         std::vector<Operation*> promote_to_config;
 
-        for ( auto &o: op->operands )
+        for ( auto &o: op->operands() )
         {
             auto o_sem = read_semantics( o );
             if( o_sem == sem_taint::Config || o_sem == sem_taint::Semantics)
@@ -108,11 +108,11 @@ namespace circ::inspect {
 
     bool SemanticsTainterVisitor::all_children_are_same( Operation *op )
     {
-        if ( op->operands.size() < 2 )
+        if ( op->operands_size() < 2 )
             return true;
 
-        auto first = read_semantics( op->operands[ 0 ] );
-        for ( auto &o : op->operands )
+        auto first = read_semantics( op->operand( 0 ) );
+        for ( auto &o : op->operands() )
         {
             if ( first != read_semantics( o ) )
             {

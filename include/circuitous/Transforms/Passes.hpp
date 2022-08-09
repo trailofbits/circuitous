@@ -84,14 +84,14 @@ namespace circ
 
             for ( auto regC : circuit->attr< RegConstraint >() )
             {
-                if ( regC->operands.size() != 2 ||
-                     regC->operands[ 1 ] != output_of || !has_remill_overflow_flag_semantics( regC ))
+                if ( regC->operands_size() != 2 ||
+                     regC->operand( 1 ) != output_of || !has_remill_overflow_flag_semantics( regC ))
                 continue;
 
                 auto xor_node = circuit.operator->()->create<Xor>(1u);
-                xor_node->add_use(input_cf);
-                xor_node->add_use(output_cf);
-                regC->replace_use(xor_node,0);
+                xor_node->add_operand(input_cf);
+                xor_node->add_operand(output_cf);
+                regC->replace_operand(0, xor_node);
             }
 
             return std::move(circuit);
@@ -107,24 +107,20 @@ namespace circ
         {
             for ( auto ac : circuit->attr< AdviceConstraint >() )
             {
-                if ( ac->operands.size() != 2 || !isa< Advice >( ac->operands[ 0 ] ) ||
-                     !isa< Advice >( ac->operands[ 1 ] ))
+                if ( ac->operands_size() != 2 || !isa< Advice >( ac->operand( 0 ) ) ||
+                     !isa< Advice >( ac->operand( 1 ) ))
                     continue;
 
-                auto lhs = ac->operands[ 0 ];
-                auto rhs = ac->operands[ 1 ];
+                auto lhs = ac->operand( 0 );
+                auto rhs = ac->operand( 1 );
 
                 /*
                  * It is important to clear usages of the AC before we replace the uses
                  * since otherwise advice_1 will gain two uses of the AC.
                  * Which at the time of writing can cause trouble when deleting.
                  */
-                lhs->remove_use( ac );
-                rhs->remove_use( ac );
+                ac->destroy();
                 rhs->replace_all_uses_with( lhs );
-
-                while ( !ac->users.empty())
-                    ac->remove_use( ac->users[ 0 ] );
             }
             return std::move( circuit );
         }
@@ -145,8 +141,8 @@ namespace circ
       CircuitPtr run( CircuitPtr &&circuit ) override
       {
           for ( auto c : circuit->attr< Concat >() )
-              if ( c->operands.size() == 1 )
-                  c->replace_all_uses_with( c->operands[ 0 ] );
+              if ( c->operands_size() == 1 )
+                  c->replace_all_uses_with( c->operand( 0 ) );
 
           return std::move( circuit );
       }
