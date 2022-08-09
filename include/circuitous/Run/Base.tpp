@@ -36,9 +36,9 @@ void OpSem<S>::visit(Concat *op)
     auto concat = [&](Concat *op) {
         llvm::APInt build{ op->size, 0, false };
         auto current = 0u;
-        for (auto i = 0u; i < op->operands().size(); ++i) {
+        for (auto i = 0u; i < op->operands_size(); ++i) {
             build.insertBits( *( this->get_node_val(op, i) ), current );
-            current += op->operands()[i]->size;
+            current += op->operand(i)->size;
         }
         return build;
     };
@@ -64,8 +64,8 @@ void OpSem<S>::visit(Select *op)
     if (!this->get_node_val(op, 0)) {
         return this->set_node_val(op, {});
     }
-    auto selector = this->get_node_val( op->operands()[ 0 ] );
-    auto chosen = this->get_node_val( op->operands()[ selector->getLimitedValue() + 1 ] );
+    auto selector = this->get_node_val( op->operand( 0 ) );
+    auto chosen = this->get_node_val( op->operand( selector->getLimitedValue() + 1 ) );
     return this->set_node_val(op, chosen);
 }
 
@@ -92,9 +92,9 @@ void OpSem<S>::visit(Or *op)
 {
     auto or_ = [&](Or *op_)
     {
-        auto out = *this->get_node_val(op_->operands()[0]);
-        for (std::size_t i = 1; i < op_->operands().size(); ++i)
-            out |= *this->get_node_val(op_->operands()[i]);
+        auto out = *this->get_node_val(op_->operand(0));
+        for (std::size_t i = 1; i < op_->operands_size(); ++i)
+            out |= *this->get_node_val(op_->operand(i));
         return out;
     };
     return safe(op, or_);
@@ -105,9 +105,9 @@ void OpSem<S>::visit(And *op)
 {
     auto and_ = [&](And *op_)
     {
-        auto out = *this->get_node_val(op_->operands()[0]);
-        for (std::size_t i = 1; i < op_->operands().size(); ++i)
-            out &= *this->get_node_val(op_->operands()[i]);
+        auto out = *this->get_node_val(op_->operand(0));
+        for (std::size_t i = 1; i < op_->operands_size(); ++i)
+            out &= *this->get_node_val(op_->operand(i));
         return out;
     };
     return safe(op, and_);
@@ -130,5 +130,5 @@ void OpSem<S>::visit(DecoderResult *op)
 
 inline void BaseSemantics::visit(Circuit *op)
 {
-    this->set_node_val(op, this->get_node_val(op->operands()[0]));
+    this->set_node_val(op, this->get_node_val(op->operand(0)));
 }

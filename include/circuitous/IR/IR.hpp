@@ -125,7 +125,7 @@ namespace circ
         template< typename Vis >
         void traverse_upwards(Vis &vis)
         {
-            for (auto op : users)
+            for (auto op : users())
                 vis.dispatch(op);
         }
 

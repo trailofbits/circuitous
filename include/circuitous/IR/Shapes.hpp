@@ -56,7 +56,7 @@ struct SubtreeCollector {
   std::unordered_multiset<T *> collected;
 
   template<typename C>
-  SubtreeCollector<T> &Run(const C &ops) {
+  SubtreeCollector<T> &Run(C &&ops) {
     for (auto op : ops) {
       Run(op);
     }
@@ -239,7 +239,7 @@ namespace collect {
           if (is_one_of<Ts...>(op)) {
               collected.insert(op);
           }
-          for (auto o : op->operands) {
+          for (auto o : op->operands()) {
               Run(o);
           }
       }
@@ -292,7 +292,7 @@ static inline bool allows_undef_(Operation *op, std::unordered_set< Operation * 
 }
 static inline bool allows_undef(Operation *op) {
   if (op->op_code != RegConstraint::kind ||
-      op->operands()[1]->op_code != OutputRegister::kind)
+      op->operand(1)->op_code != OutputRegister::kind)
   {
     return false;
   }

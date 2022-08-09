@@ -100,8 +100,8 @@ namespace circ
                 return out;
             };
 
-            auto expected = op->operands()[0];
-            auto extracted = op->operands()[1];
+            auto expected = op->operand(0);
+            auto extracted = op->operand(1);
 
             check(isa< Constant >(expected) && isa< Extract >(extracted));
             const auto &constant = static_cast< const Constant & >(*expected);
@@ -281,7 +281,7 @@ namespace circ
         {
             res.add_error() << op_code_str(op->op_code)
                             << " has "
-                            << op->operands().size() << " operands which is invalid.\n"
+                            << op->operands_size() << " operands which is invalid.\n"
                             << log_src_dump(op, "\t")
                             << "Error entry end.\n";
         }
@@ -289,7 +289,7 @@ namespace circ
         template< typename Fn >
         void verify_op_count(uint64_t count, Operation *op, Fn fn)
         {
-            if (!fn(count, op->operands().size()))
+            if (!fn(count, op->operands_size()))
                 log_operand_mismatch(op);
         }
 
@@ -341,7 +341,7 @@ namespace circ
                 case WriteConstraint::kind:
                     return exactly(5, op);
                 case Select::kind:
-                    return exactly((1 << op->operands()[0]->size) + 1, op);
+                    return exactly((1 << op->operand(0)->size) + 1, op);
                 case Concat::kind:
                     return more_than(1, op);
                 case VerifyInstruction::kind:
@@ -412,7 +412,7 @@ namespace circ
                     {
                         ctx[op] = verif;
 
-                        if (op->operands()[AdviceConstraint::kFixed]->op_code != Advice::kind)
+                        if (op->operand(AdviceConstraint::kFixed)->op_code != Advice::kind)
                             res.add_error() << "ADVICE_CONSTRAINT hint operand is not ADVICE.";
 
                         bool found_hint = false;

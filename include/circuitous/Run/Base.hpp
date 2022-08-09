@@ -77,7 +77,7 @@ namespace circ::run
         auto get_node_val(Operation *op) const { return state->get_node_val(op); }
         auto get_node_val(Operation *op, std::size_t idx) const
         {
-            return this->get_node_val(op->operands()[idx]);
+            return this->get_node_val(op->operand(idx));
         }
 
         template< typename Op, typename F >
