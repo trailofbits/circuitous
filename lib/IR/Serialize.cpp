@@ -10,6 +10,8 @@
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
 
+#include <gap/core/ranges.hpp>
+
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
@@ -24,8 +26,9 @@ namespace {
         enum class Selector : uint8_t
         {
             Operation = 0x0,
-            Invalid = 0x1,
-            Metadatum = 0x2,
+            LeafOperation = 0x1,
+            Metadatum = 0x3,
+            Invalid = 0x4,
             Reference = 0xff
         };
 
@@ -35,29 +38,35 @@ namespace {
         static std::string to_string(const Selector &sel)
         {
             switch(sel) {
-                case Selector::Operation : return "Operation";
-                case Selector::Invalid   : return "Invalid";
-                case Selector::Metadatum : return "Metadatum";
-                case Selector::Reference : return "Reference";
+                case Selector::Operation :     return "Operation";
+                case Selector::LeafOperation : return "LeafOperation";
+                case Selector::Invalid   :     return "Invalid";
+                case Selector::Metadatum :     return "Metadatum";
+                case Selector::Reference :     return "Reference";
             }
+        }
+
+        static bool is_valid_sel(const Selector &sel)
+        {
+            switch(sel)
+            {
+                case Selector::Invalid: return false;
+                default:                return true;
+            }
+        }
+
+        static bool is_op_definition(const Selector &sel)
+        {
+            return sel == Selector::Operation || sel == Selector::LeafOperation;
         }
     };
 
-    /* Format in the ir file is following
-     * 32 - `ptr_size` of Circuit.
-     * 8: selector, 64: id, 64: opcode, ... rest of the data dependeing on opcode
-     * 8: selector, 64: id it references
-     * NOTE(lukas): In attempt to make this deterministic I have chosen to replace
-     *              pointer hashes with deterministic ids. If you want, feel free to
-     *              tweak it, but please make sure `x == store(load(x))` -- with respect
-     *              to semantics (not neccessary ids or other internals).
-     */
     struct SerializeVisitor : public Visitor< SerializeVisitor >, FileConfig
     {
         using Selector = FileConfig::Selector;
 
         std::ostream &os;
-        std::unordered_set<uint64_t> written;
+        std::unordered_set< uint64_t > written;
 
         ~SerializeVisitor()
         {
@@ -68,39 +77,54 @@ namespace {
 
         void serialize(Operation *op) { return Write(op); }
 
+        Selector get_selector(Operation *op)
+        {
+            if (op->operands_size() == 0)
+                return Selector::LeafOperation;
+            return Selector::Operation;
+        }
+
         void Write(Operation *op)
         {
             if (!written.count(op->id()))
+                return write_new_entry(op);
+            return write_reference(op);
+        }
+
+        void write_new_entry(Operation *op)
+        {
+            auto sel = get_selector(op);
+            // Write generic for all.
+            Write(sel);
+            Write(op->id());
+            Write(op->op_code);
+            written.insert(op->id());
+            // Write special attributes based on runtime type.
+            this->dispatch(op);
+
+            // If the operation is not a leaf, write operands.
+            if (sel != Selector::LeafOperation)
             {
-                Write(Selector::Operation);
-                Write(op->id());
-                Write(op->op_code);
-                written.insert(op->id());
-                this->dispatch(op);
-            } else {
-                Write(Selector::Reference);
-                Write< raw_id_t >(op->id());
+                Write(static_cast< std::size_t >(op->operands_size()));
+                Write(op->operands());
             }
+        }
+
+        void write_reference(Operation *op)
+        {
+            Write(Selector::Reference);
+            Write< raw_id_t >(op->id());
         }
 
         void Write(Selector sel)
         {
+            check(is_valid_sel(sel), [&]() { return "Trying to write invalid selector!"; });
             Write(static_cast< std::underlying_type_t< Selector > >(sel));
         }
-
-        void Write(uint8_t byte) { os << byte; }
-        void Write(int8_t byte) { os << static_cast< uint8_t >(byte); }
 
         void Write(Operation::kind_t kind)
         {
             Write(util::to_underlying(kind));
-        }
-
-        void Write(const std::vector< Operation * > &elems)
-        {
-            Write< uint32_t >(static_cast< uint32_t >(elems.size()));
-            for (const auto &elem : elems)
-                Write(elem);
         }
 
         void Write(const std::string &str)
@@ -110,12 +134,19 @@ namespace {
                 Write(ch);
         }
 
-        template< typename T > requires (!std::is_pointer_v< T >)
-        void Write(const T &data)
+        template< typename I > requires (std::is_integral_v< I >)
+        void Write(I data)
         {
             auto bytes = reinterpret_cast< const uint8_t * >(&data);
             for (auto i = 0ull; i < sizeof(data); ++i)
-                Write(static_cast< uint8_t >(bytes[i]));
+                os << (static_cast< uint8_t >(bytes[i]));
+        }
+
+        template< gap::ranges::range Ops >
+        void Write(Ops &&ops)
+        {
+            for (auto op : ops)
+                Write(op);
         }
 
         template< typename ...Args >
@@ -137,17 +168,17 @@ namespace {
         }
 
         // TODO(lukas): This should be called, but is not.
-        void visit(Circuit *op) { write(op->ptr_size, op->operands());  }
+        void visit(Circuit *op) { write(op->ptr_size);  }
 
         void visit(InputRegister *op) { write(op->reg_name, op->size); }
         void visit(OutputRegister *op) { write(op->reg_name, op->size); }
 
-        void visit(Operation *op) { write(op->size, op->operands()); }
+        void visit(Operation *op) { write(op->size); }
         void visit(Constant *op) { write(op->size, op->bits); }
-        void visit(InputImmediate *op) { write(op->size, op->operands()); }
+        void visit(InputImmediate *op) { write(op->size); }
 
-        void visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc, op->operands()[0]); }
-        void visit(Select *op) { write(op->size, op->bits, op->operands()); }
+        void visit(Extract *op) { write(op->high_bit_exc, op->low_bit_inc); }
+        void visit(Select *op) { write(op->size, op->bits); }
         void visit(Memory *op) { write(op->size, op->mem_idx); }
         void visit(Advice *op) { write(op->size, op->advice_idx); }
         void visit(InputErrorFlag *op)  { write(op->size); }
@@ -165,7 +196,7 @@ namespace {
             Operation *visit(T *, uint64_t id)
             {
                 auto &self = static_cast< D & >( *this );
-                return self.template with_ops< T >(id, self.template read< unsigned >());
+                return self.template make_op< T >(id, self.template read< unsigned >());
             }
         };
 
@@ -217,15 +248,6 @@ namespace {
             sel = static_cast< Selector >(out);
         }
 
-        void Read(uint8_t &byte)
-        {
-            check(!is.eof() && is.good());
-            const auto old_offset = static_cast< long long >(is.tellg());
-            is >> byte;
-            if (!is.eof())
-                check(old_offset + 1 == static_cast< long long >(is.tellg()));
-        }
-
         void Read(std::string &str)
         {
             uint32_t size = 0u;
@@ -235,19 +257,12 @@ namespace {
                 Read(str[i]);
         }
 
-        template< typename T > requires (!std::is_base_of_v< Operation, T >)
-        void Read(T &data)
+        template< typename I > requires (std::is_integral_v< I >)
+        void Read(I &data)
         {
             auto bytes = reinterpret_cast< uint8_t * >(&data);
             for (auto i = 0ull; i < sizeof(data); ++i)
-                Read(bytes[i]);
-        }
-
-        void Read(int8_t &byte)
-        {
-            uint8_t b;
-            Read(b);
-            byte = static_cast< int8_t >(b);
+                is >> bytes[i];
         }
 
         void Read(Operation::kind_t &kind)
@@ -273,22 +288,34 @@ namespace {
 
         void ReadOps(Operation *elems)
         {
-            auto [size] = read< uint32_t >();
+            auto [size] = read< std::size_t >();
             for (auto i = 0u; i < size; ++i)
                 elems->add_operand(Read());
+        }
+
+        Operation *read_new_op(Selector sel)
+        {
+            // Same for all.
+            auto [hash, op_code] = read< raw_id_t, Operation::kind_t >();
+
+            // Op specific.
+            auto op = Decode(hash, op_code);
+            id_to_op[hash] = op;
+
+            // Operands last.
+            if (sel == Selector::Operation)
+                ReadOps(op);
+
+            return op;
         }
 
         Operation *Read()
         {
           auto [sel] = read< Selector >();
 
-          if (sel == Selector::Operation) {
-              auto [hash, op_code] = read< raw_id_t, Operation::kind_t >();
+          if (is_op_definition(sel))
+                return read_new_op(sel);
 
-              auto op = Decode(hash, op_code);
-              id_to_op[hash] = op;
-              return op;
-          }
           if (sel == Selector::Reference) {
               auto [hash] = read< raw_id_t >();
 
@@ -330,14 +357,6 @@ namespace {
             return std::apply(make, std::forward< std::tuple< Args ... > >(args));
         }
 
-        template< typename T, typename U >
-        auto with_ops(uint64_t id, U &&u)
-        {
-            auto self = make_op< T >(id, std::forward<U>(u));
-            ReadOps(self);
-            return self;
-        }
-
         template< typename T >
         auto reg_like(uint64_t id)
         {
@@ -356,7 +375,6 @@ namespace {
 
             auto [ptr_size] = read< uint32_t >();
             circuit = std::make_unique< Circuit >(ptr_size);
-            ReadOps(circuit.get());
             return circuit.get();
         }
 
@@ -371,9 +389,7 @@ namespace {
 
         Operation *visit(InputImmediate *, uint64_t id)
         {
-            auto op = make_op< InputImmediate >(id, read< unsigned >());
-            ReadOps(op);
-            return op;
+            return make_op< InputImmediate >(id, read< unsigned >());
         }
 
         Operation *visit(Memory *, uint64_t id)
@@ -397,17 +413,13 @@ namespace {
 
         Operation *visit(Extract *, uint64_t id) {
             auto [high, low] = read< unsigned, unsigned >();
-            auto op = circuit->adopt< Extract >(id, low, high);
-            op->add_operand(Read());
-            return op;
+            return circuit->adopt< Extract >(id, low, high);
         }
 
         Operation *visit(Select *, uint64_t id)
         {
             auto [size, bits] = read<unsigned, unsigned>();
-            auto op = circuit->adopt< Select >(id, bits, size);
-            ReadOps(op);
-            return op;
+            return circuit->adopt< Select >(id, bits, size);
         }
 
         template< typename T >
@@ -434,16 +446,14 @@ namespace {
         }
 
         template< typename T >
-        auto make_generic(uint64_t id) { return with_ops< T >(id, read< unsigned >()); }
+        auto make_generic(uint64_t id) { return make_op< T >(id, read< unsigned >()); }
 
         template< typename T >
         auto make_condition(uint64_t id)
         {
             auto [size] = read< unsigned >();
             check(size == 1);
-            auto self = circuit->adopt< T >(id);
-            ReadOps(self);
-            return self;
+            return circuit->adopt< T >(id);
         }
 
         #define DECODE_GENERIC(cls) \
@@ -476,11 +486,12 @@ namespace {
 
 }  // namespace
 
+
 void Circuit::serialize(std::ostream &os)
 {
     SerializeVisitor vis(os);
     // TODO(lukas): `Write` should be called on Circuit.
-    check(this->operands().size() == 1);
+    check(this->operands_size() == 1);
     vis.serialize(this);
 
     auto write_metadata = [&](auto op) { vis.write_metadata(op); };
@@ -512,7 +523,7 @@ auto Circuit::deserialize(std::istream &is) -> circuit_ptr_t
 
 auto Circuit::deserialize(std::string_view filename) -> circuit_ptr_t
 {
-    std::ifstream file(std::string(filename), std::ios::binary);
+    std::ifstream file(std::string{filename}, std::ios::binary);
     return deserialize(file);
 }
 
