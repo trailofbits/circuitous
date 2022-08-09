@@ -178,7 +178,7 @@ namespace circ
     bool isa(Operation::kind_t rkind) { return T::kind == rkind; }
 
     template< typename T >
-    bool isa(Operation *op) { return isa< T >(op->op_code); }
+    bool isa(const Operation *op) { return isa< T >(op->op_code); }
 
     template< typename TypeList >
     bool is_in(Operation::kind_t rkind)
@@ -191,7 +191,7 @@ namespace circ
     bool isa(Operation::kind_t rkind) { return is_in< T >(rkind); }
 
     template< typename ...Ts >
-    bool is_one_of(Operation *op)
+    bool is_one_of(const Operation *op)
     {
         return (isa< Ts >(op->op_code) || ...);
     }
