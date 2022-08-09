@@ -146,7 +146,8 @@ namespace circ
         T *self() { return static_cast< T * >(this); }
 
       public:
-        // TODO(lukas): Replace with generator.
+
+        /* Users */
         gap::generator< T * > users()
         {
             for (auto &[x, _] : _users)
@@ -155,22 +156,38 @@ namespace circ
 
         gap::generator< const T * > users() const
         {
-            for (const auto &[x, _] : _users)
+            for (auto &[x, _] : _users)
                 co_yield x;
         }
 
         std::size_t users_size() const { return _users.size(); }
 
-        // TODO(lukas): Also replace with generator to have the same return type as `users()`?
-        const std::vector< T * > &operands() const
+        /* Operands */
+        gap::generator< const T * > operands() const
         {
-            return _operands;
+            for (const T *x : _operands)
+                co_yield x;
         }
+
+        gap::generator< T * > operands()
+        {
+            for (auto x : _operands)
+                co_yield x;
+        }
+
+        std::size_t operands_size() const { return _operands.size(); }
 
         std::size_t unique_operands_count() const
         {
             return std::unordered_set< T * >(_operands.begin(), _operands.end()).size();
         }
+
+        T * operand(std::size_t idx) { return _operands[idx]; }
+        const T * operand(std::size_t idx) const { return _operands[idx]; }
+
+        bool is_leaf() const { return _operands.empty(); }
+
+        /* Modifiers */
 
         void remove_operand(std::size_t idx)
         {
