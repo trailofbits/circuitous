@@ -48,6 +48,9 @@ namespace circ::inspect {
     void diffmarker_write(Operation* op, DiffMarker dm);
     DiffMarker diffmarker_read(Operation* op);
 
+    template <typename T>
+    concept SubPathCol = std::derived_from<T, SubPathCollector<T>>;
+
     /*
      * Finds all paths starting from a constraint down to a config node
      */
