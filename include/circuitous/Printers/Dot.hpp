@@ -1,6 +1,9 @@
 #pragma once
 
 #include <circuitous/IR/IR.hpp>
+#include <circuitous/IR/Circuit.hpp>
+#include <circuitous/IR/Visitors.hpp>
+#include <circuitous/Diff/Diff.hpp>
 
 namespace circ::print
 {
@@ -19,6 +22,13 @@ namespace circ::print
         VioletWhite,
         GrayWhite,
         OrangeBlack
+    };
+
+    template<typename T>
+    concept GraphColorer = requires(T v, Circuit * circuit) {
+        { v.color_circuit(circuit) } -> std::same_as<void>;
+        { v.remove_coloring(circuit) } -> std::same_as<void>;
+        { v.get_to_color() } -> std::same_as<std::function<Color(Operation*)>>;
     };
 
     std::string color_to_dot(Color c);
@@ -50,6 +60,11 @@ namespace circ::print
 
         Color operator()(Operation *op);
 
+        void color_circuit(Circuit *c) {}
+        std::function<Color(Operation*)> get_to_color() { return *this; }
+        void remove_coloring(Circuit *c) {}
+
+
     private:
         names_t highlight_nodes;
         uint32_t color_counter = 0;
@@ -57,4 +72,164 @@ namespace circ::print
 
         opt_name name_for_op(Operation *op);
     };
+
+    struct SemanticsColorer
+    {
+        void color_circuit(Circuit *circ)
+        {
+            run_visitor_on< leaf_values_ts >( circ, inspect::SemanticsTainterVisitor() );
+        }
+
+        std::function<Color(Operation*)> get_to_color() { return sem_taint_coloring; }
+
+        void remove_coloring(Circuit *circ)
+        {
+            run_visitor_on< leaf_values_ts >( circ, inspect::SemanticsTainterRemovalVisitor() );
+        }
+    };
+
+    struct EmptyColorer
+    {
+        void color_circuit(Circuit *circ) { }
+        std::function<Color(Operation*)> get_to_color() { return no_coloring; }
+        void remove_coloring(Circuit *circ) { }
+    };
+
+
+
+
+    template < inspect::SubPathCol CollectorT>
+    struct DiffColorer{
+
+        DiffColorer() { collector = CollectorT(); }
+
+        void color_circuit(Circuit *circuit)
+        {
+            if(circuit->attr< circ::VerifyInstruction >().size() != 2)
+                return;
+            auto lhs = circuit->attr< circ::VerifyInstruction >()[ 0 ];
+            auto rhs = circuit->attr< circ::VerifyInstruction >()[ 1 ];
+
+            inspect::apply_on_subtree( collector( lhs ),
+                              []( Operation *op ) {
+                                  inspect::mark_operation( op, inspect::DiffMarker::Left,
+                                                  inspect::DiffMarker::Right );
+                              } );
+
+            inspect::apply_on_subtree( collector( rhs ),
+                              []( Operation *op ) {
+                                  inspect::mark_operation( op, inspect::DiffMarker::Right,
+                                                  inspect::DiffMarker::Left );
+                              } );
+            has_colored = true;
+        }
+
+        std::function<Color(Operation*)> get_to_color() { return diff_coloring; }
+        void remove_coloring(Circuit *circuit)
+        {
+            if ( !has_colored || circuit->attr< circ::VerifyInstruction >().size() != 2 )
+                return;
+            auto lhs = circuit->attr< circ::VerifyInstruction >()[ 0 ];
+            auto rhs = circuit->attr< circ::VerifyInstruction >()[ 1 ];
+
+            inspect::apply_on_subtree( collector( lhs ) , [](Operation* op){ inspect::clear_mark(op);});
+            inspect::apply_on_subtree( collector( rhs ) , [](Operation* op){ inspect::clear_mark(op);});
+        }
+
+
+        CollectorT collector;
+        bool has_colored = false;
+
+    };
+
+
+    template < typename ColorFunc >
+    struct Printer : UniqueVisitor< Printer< ColorFunc > >
+    {
+        using value_map_t = std::unordered_map< Operation *, std::string >;
+
+        template < typename CF >
+        explicit Printer( std::ostream &os_, const value_map_t &vals, CF&& color_op ) :
+            os( os_ ), node_values( vals ), color_op( std::forward<ColorFunc>(color_op) )
+        {
+        }
+
+        std::string Operand( Operation *of, std::size_t i )
+        {
+            return NodeID( of ) + ':' + NodeID( of ) + std::to_string( i );
+        }
+
+        void Edge( Operation *from, Operation *to, std::size_t i )
+        {
+            os << Operand( from, i ) << " -> " << NodeID( to ) << ";\n";
+        }
+
+        std::string NodeID( Operation *op ) { return "v" + std::to_string( op->id() ) + "v"; }
+
+        std::string AsID( const std::string &what ) { return "<" + what + ">"; }
+
+        void Node( Operation *op )
+        {
+            os << NodeID( op ) << "[";
+
+            os << color_to_dot( color_op( op ) );
+
+            os << "label = \" { " << AsID( NodeID( op ) ) << " " << op->name();
+            if ( node_values.count( op ) )
+                os << " " << node_values.find( op )->second << " ";
+
+            if ( op->operands.size() == 0 )
+            {
+                os << " }" << '"' << "];\n";
+                return;
+            }
+
+            os << "| {";
+            for ( std::size_t i = 0; i < op->operands.size(); ++i )
+            {
+                os << AsID( NodeID( op ) + std::to_string( i ) );
+                if ( i != op->operands.size() - 1 )
+                    os << " | ";
+            }
+            os << " }}" << '"' << "];\n";
+        }
+
+        void Init()
+        {
+            os << "digraph {" << std::endl;
+            os << "node [shape=record];";
+        }
+
+        void visit( Operation *op )
+        {
+            op->traverse( *this );
+            Node( op );
+            for ( std::size_t i = 0; i < op->operands.size(); ++i )
+                Edge( op, op->operands[ i ], i );
+        }
+
+        void visit( Circuit *op )
+        {
+            Init();
+
+            op->traverse( *this );
+            Node( op );
+            for ( std::size_t i = 0; i < op->operands.size(); ++i )
+                Edge( op, op->operands[ i ], i );
+
+            os << "}";
+        }
+
+        std::ostream &os;
+        const value_map_t &node_values;
+        ColorFunc color_op;
+    };
+
+    void print_dot(std::ostream &os, Circuit *circuit, GraphColorer auto&&  c)
+    {
+        c.color_circuit(circuit);
+        Printer<std::function<print::Color(Operation*)>> dot_os(os, { }, c.get_to_color());
+        dot_os.visit(circuit);
+        c.remove_coloring(circuit);
+    }
 }
