@@ -14,11 +14,6 @@
 
 
 CIRCUITOUS_RELAX_WARNINGS
-#include <llvm/IR/DataLayout.h>
-#include <llvm/IR/Instruction.h>
-#include <llvm/IR/Instructions.h>
-#include <llvm/IR/Module.h>
-#include <circuitous/IR/Shapes.hpp>
 #include <circuitous/Diff/SemanticsTainter.hpp>
 
 CIRCUITOUS_UNRELAX_WARNINGS
@@ -153,7 +148,7 @@ namespace circ::print
     Color diff_coloring(Operation *op) {
         using namespace inspect;
 
-        if ( !op->has_meta( SemanticsTainterVisitor::meta_key ))
+        if ( !op->has_meta( meta_key ))
             return Color::None;
 
         auto value = diffmarker_read(op);
@@ -170,99 +165,5 @@ namespace circ::print
         }
 
         circ::unreachable() << "could not read diff_marker properly";
-    }
-} // namespace circ
-
-namespace circ::dot
-{
-    template<typename ColorFunc>
-    struct Printer : UniqueVisitor<Printer<ColorFunc>> {
-        using value_map_t = std::unordered_map<Operation *, std::string>;
-
-        explicit Printer(std::ostream &os_, const value_map_t &vals, ColorFunc color_op)
-            : os(os_), node_values(vals), color_op(color_op) { }
-
-        std::string Operand(Operation *of, std::size_t i) {
-            return NodeID(of) + ':' + NodeID(of) + std::to_string(i);
-        }
-
-        void Edge(Operation *from, Operation *to, std::size_t i) {
-            os << Operand(from, i)
-                << " -> "
-                << NodeID(to)
-                << ";\n";
-        }
-
-        std::string NodeID(Operation *op) {
-            return "v" + std::to_string(op->id()) + "v";
-        }
-
-        std::string AsID(const std::string &what) {
-            return "<" + what + ">";
-        }
-
-        void Node(Operation *op) {
-            os << NodeID(op) << "[";
-
-            os << color_to_dot(color_op(op));
-
-            os << "label = \" { " << AsID(NodeID(op)) << " " << op->name();
-            if (node_values.count(op)) {
-                os << " " << node_values.find(op)->second << " ";
-            }
-
-            if (op->operands.size() == 0) {
-                os << " }" << '"' << "];\n";
-                return;
-            }
-
-            os << "| {";
-            for (std::size_t i = 0; i < op->operands.size(); ++i) {
-                os << AsID(NodeID(op) + std::to_string(i));
-                if (i != op->operands.size() - 1) {
-                    os << " | ";
-                }
-            }
-            os << " }}" << '"' << "];\n";
-        }
-
-        void Init() {
-            os << "digraph {" << std::endl;
-            os << "node [shape=record];";
-        }
-
-        void visit(Operation *op) {
-            op->traverse(*this);
-            Node(op);
-            for (std::size_t i = 0; i < op->operands.size(); ++i) {
-                Edge(op, op->operands[i], i);
-            }
-        }
-
-        void visit(Circuit *op) {
-            Init();
-
-            op->traverse(*this);
-            Node(op);
-            for (std::size_t i = 0; i < op->operands.size(); ++i) {
-                Edge(op, op->operands[i], i);
-            }
-            os << "}";
-        }
-
-        std::ostream &os;
-        const value_map_t &node_values;
-        ColorFunc color_op;
-    };
-} // namespace circ::dot
-
-namespace circ
-{
-    void print_dot(std::ostream &os, Circuit *circuit,
-                  const std::unordered_map<Operation *, std::string> &node_values,
-                  std::function<print::Color(Operation*)> oc)
-    {
-      circ::dot::Printer<std::function<print::Color(Operation*)>> dot_os(os, node_values, oc);
-      dot_os.visit(circuit);
     }
 } // namespace circ
