@@ -3,14 +3,16 @@
  */
 
 #include <circuitous/Printers/Verilog.hpp>
+#include <circuitous/Printers.hpp>
 
 #include <ostream>
 
-namespace circ {
+namespace circ
+{
 
-    void print_verilog(std::ostream &os, const std::string &name, Circuit *circuit)
+    void VerilogPrinter::operator()( std::ostream &os, circ::Circuit *circuit )
     {
-        return print::verilog::print(os, name, circuit);
+        return print::verilog::print( os, name, circuit );
     }
 
 }  // namespace circ
