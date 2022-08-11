@@ -77,18 +77,11 @@ namespace circ::inspect {
     void mark_operation(Operation* o, const DiffMarker& key_this, const DiffMarker& key_other);
     void clear_mark(Operation* op);
 
-    template<typename T>
-    void diff_subtrees(Operation* tree1, Operation* tree2, T&& path_collector){
-        path_collector.visit(tree1);
-        auto collected = path_collector.collected;
-        for(auto& p : path_collector(tree1)){
-            for(auto& o : p)
-                mark_operation(o, DiffMarker::Left, DiffMarker::Right);
-        }
-
-        for(auto& p : path_collector(tree2)){
-            for(auto& o : p)
-                mark_operation(o, DiffMarker::Right, DiffMarker::Left);
-        }
+    template < typename F>
+    void apply_on_subtree(const std::vector<std::vector<Operation*>> &subtrees, F&& f)
+    {
+        for ( auto &p : subtrees )
+            for ( auto &o : p )
+                f( o );
     }
 };
