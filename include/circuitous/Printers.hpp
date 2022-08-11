@@ -18,23 +18,37 @@ namespace circ {
     struct Circuit;
     struct Operation;
 
-    void print_dot(std::ostream &os, Circuit *circuit,
-                   const std::unordered_map< Operation *, std::string > & = {},
-                   std::function< print::Color(Operation *) > oc =
-                        [](Operation *op) { return print::Color::None; });
-
     void print_json(std::ostream &os, Circuit *circuit);
     void print_smt(std::ostream &os, Circuit *circuit);
     void print_bitblasted_smt(std::ostream &os, Circuit *circuit);
-    void print_verilog(std::ostream &os, const std::string &name, Circuit *circuit);
 
+    struct VerilogPrinter
+    {
+        VerilogPrinter( const std::string &name ) : name( name ) { }
+        const std::string &name;
 
-    template< typename Printer, typename ... Args >
-    void print_circuit(std::string_view filename, Printer printer, Args &&... args  )
+        void operator()(std::ostream &os, Circuit *circuit);
+    };
+
+    template < print::GraphColorer Colorer >
+    struct DotPrinter
+    {
+        Colorer colorer;
+        DotPrinter() { colorer = Colorer(); }
+        DotPrinter( print::GraphColorer auto&& c ) : colorer( c ) { }
+
+        void operator()( std::ostream &os, Circuit *circuit )
+        {
+            print::print_dot( os, circuit, colorer );
+        }
+    };
+
+    template< typename Printer>
+    void print_circuit( std::string_view filename, Printer&& printer, Circuit *circuit)
     {
         std::ofstream file(std::string{filename});
         check(file);
-        printer(file, std::forward< Args >(args) ...);
+        printer(file, circuit);
         file.flush();
     }
 
