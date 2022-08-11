@@ -2,17 +2,17 @@
  * Copyright (c) 2020 Trail of Bits, Inc.
  */
 
+#include <circuitous/IR/Serialize.hpp>
+
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Memory.hpp>
 #include <circuitous/IR/Visitors.hpp>
-#include <circuitous/Printers.hpp>
 
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
 
 #include <gap/core/ranges.hpp>
 
-#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <string>
@@ -431,26 +431,26 @@ namespace {
 }  // namespace
 
 
-void Circuit::serialize(std::ostream &os)
+void serialize(std::ostream &os, Circuit *circuit)
 {
     SerializeVisitor vis(os);
     // TODO(lukas): `Write` should be called on Circuit.
-    check(this->operands_size() == 1);
-    vis.serialize(this);
+    check(circuit->operands_size() == 1);
+    vis.serialize(circuit);
 
     auto write_metadata = [&](auto op) { vis.write_metadata(op); };
-    for_each_operation(write_metadata);
+    circuit->for_each_operation(write_metadata);
 
     os.flush();
 }
 
-void Circuit::serialize(std::string_view filename)
+void serialize(std::filesystem::path filename, Circuit *circuit)
 {
-    std::ofstream file(std::string(filename), std::ios::binary | std::ios::trunc);
-    return serialize(file);
+    std::ofstream file(filename, std::ios::binary | std::ios::trunc);
+    return serialize(file, circuit);
 }
 
-auto Circuit::deserialize(std::istream &is) -> circuit_ptr_t
+auto deserialize(std::istream &is) -> circuit_ptr_t
 {
     // TODO(lukas): Configurable.
     DeserializeVisitor vis(is);
@@ -465,7 +465,7 @@ auto Circuit::deserialize(std::istream &is) -> circuit_ptr_t
     return vis.take_circuit();
 }
 
-auto Circuit::deserialize(std::string_view filename) -> circuit_ptr_t
+auto deserialize(std::filesystem::path filename) -> circuit_ptr_t
 {
     std::ifstream file(std::string{filename}, std::ios::binary);
     return deserialize(file);

@@ -17,12 +17,6 @@ namespace circ
 
         using circuit_ptr_t = std::unique_ptr<Circuit>;
 
-        void serialize(std::ostream &os);
-        void serialize(std::string_view filename);
-
-        static circuit_ptr_t deserialize(std::istream &is);
-        static circuit_ptr_t deserialize(std::string_view filename);
-
         static std::string op_code_str() { return "circuit"; }
 
         std::string name() const override { return "circuit"; }
