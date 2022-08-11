@@ -162,4 +162,10 @@ namespace circ::inspect {
 
         circ::unreachable() << "could not decode semantics";
     }
+
+    void SemanticsTainterRemovalVisitor::visit( Operation *op )
+    {
+        op->remove_meta(SemanticsTainterVisitor::meta_key);
+        op->traverse(*this);
+    }
 }
