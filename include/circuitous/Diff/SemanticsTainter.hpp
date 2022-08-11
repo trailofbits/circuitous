@@ -78,9 +78,9 @@ namespace circ::inspect {
         static const inline std::string meta_key = "diff";
     };
 
-    static inline void taint_semantics_circuit( Circuit *circ )
+    struct SemanticsTainterRemovalVisitor : Visitor< SemanticsTainterRemovalVisitor >
     {
-        run_visitor_on< leaf_values_ts >( circ, SemanticsTainterVisitor() );
-    }
+        void visit(Operation* op);
+    };
 
 }  // namespace circ
