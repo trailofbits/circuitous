@@ -44,4 +44,9 @@ namespace circ::inspect
         else if ( diffmarker_read( o ) != DiffMarker::Overlapping )
             diffmarker_write( o, key_this );
     }
+
+    void clear_mark(Operation* op){
+        if( op->has_meta(meta_key))
+            op->remove_meta(meta_key);
+    }
 }
