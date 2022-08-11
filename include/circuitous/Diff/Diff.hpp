@@ -74,8 +74,8 @@ namespace circ::inspect {
         bool bottom(Operation* op) { return isa<leaf_values_ts>(op); }
     };
 
-
     void mark_operation(Operation* o, const DiffMarker& key_this, const DiffMarker& key_other);
+    void clear_mark(Operation* op);
 
     template<typename T>
     void diff_subtrees(Operation* tree1, Operation* tree2, T&& path_collector){
