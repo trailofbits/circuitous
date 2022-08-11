@@ -3,13 +3,39 @@
 
 namespace circ::decoder::semantics
 {
+    // init modules?
+    void register_leaf_intrinsics();
+    void register_selects(); //???
+
+    void specialize_tree(); // This is VI level? --> try to get rid of selects as much as possible
+    void emit_llvm(); // ??
+
     void print_semantics( Circuit *circ )
     {
+
+
+
+
         std::cout << "printing semantics, VIs: " << circ->attr< VerifyInstruction >().size() << std::endl;
+
+        SelectStorage st;
+        select_vis sel(&st);
+        for ( auto vi : circ->attr< VerifyInstruction >() )
+            sel.visit(vi);
+        ExpressionPrinter ep(std::cout);
+
+        for(auto& func : st.get_functions_for_select())
+            ep.print(func);
+
+        std::vector<FunctionDeclaration> lifted_funcs;
         for ( auto vi : circ->attr< VerifyInstruction >() )
         {
-            print_semantics(static_cast<VerifyInstruction*>(vi));
+            lifted_funcs.push_back(
+                get_function_for_VI( static_cast< VerifyInstruction * >( vi ), st, 0 ) );
         }
+
+        for ( auto lf : lifted_funcs)
+            ep.print(lf);
     }
 
     /*
@@ -41,16 +67,6 @@ namespace circ::decoder::semantics
         return std::hash<std::string>{}( pp.Hash(select_values(op)) );
     }
 
-    struct select_vis : UniqueVisitor<select_vis>
-    {
-        SelectStorage* st;
-        select_vis( SelectStorage *st ) : st( st ) { }
-        void visit(Operation* op){ op->traverse(*this); }
-        void visit(Select* op)
-        {
-            st->register_select(op);
-        }
-    };
 
     struct test_vis : Visitor<test_vis> {
         bool first = false;
@@ -114,8 +130,6 @@ namespace circ::decoder::semantics
 //    }
 
 
-
-
     std::string get_target( Operation *op , VerifyInstruction* vi)
     {
         print::PrettyPrinter pp;
@@ -138,34 +152,30 @@ namespace circ::decoder::semantics
         return "unsupported: " + pp.Print( op, 0 );
     }
 
-    void print_semantics( VerifyInstruction *op )
+    FunctionDeclaration get_function_for_VI( VerifyInstruction *op, SelectStorage &st,
+                                             uint32_t size_of_encoding )
     {
+        FunctionDeclarationBuilder fdb;
         collect::DownTree <tl::TL<RegConstraint, WriteConstraint>> down_collector;
         down_collector.Run( op );
 
-
-        SelectStorage st;
-        select_vis sel(&st);
-        sel.visit(op);
         ExpressionPrinter ep(std::cout);
-
-        for(auto& func : st.get_functions_for_select())
-            ep.print(func);
-
-        circIR_to_semIR_visitor to_semIR( &st, op );
+        fdb.retType(Id("void")).name("lifted_func_" + std::to_string(op->id()));
+        fdb.arg_insert()
+        circIR_to_llvmIR_visitor to_semIR( &st, op, std::string() );
         for(auto& constraint : down_collector.collected)
         {
             if ( isa< RegConstraint >( constraint ) )
             {
-                ep.print( Statement( Assign( to_semIR.visit( constraint->operands[ 1 ] ),
-                                             to_semIR.visit( constraint->operands[ 0 ] ) ) ) );
+                fdb.body_insert( Assign( to_semIR.visit( constraint->operands[ 1 ] ),
+                                             to_semIR.visit( constraint->operands[ 0 ] ) ) );
             }
             if ( isa< WriteConstraint >( constraint ) )
                 circ::unreachable() << "memory not yet supported";
-            //
 
 
         }
+        return fdb.make();
     }
 
 

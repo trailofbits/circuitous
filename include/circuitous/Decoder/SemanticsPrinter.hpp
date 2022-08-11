@@ -8,8 +8,42 @@
 #include <circuitous/Decoder/DecodeAST.hpp>
 namespace circ::decoder::semantics
 {
+    /*
+     * leaf discovery -> create intrinsics for each
+     * Select discovery -> returns intrinsics or leaves there of
+     * Specialize -> run up from instr_bits, replace instr_bits with constants
+     *                                      && replace select with select discovery funcs
+     *
+     * Transform into llvm ir
+     *
+     *  We runnen dus een circ -> llvm pass twee keer?
+     *      als we de "perfecte circIR" hebben, moeten we dan ook nog twee passes hebben? nee
+     *
+     *  Geen idee of extract nodig is, maar is de enige die lichtelijk kut is?
+     *
+     * idea for current approach
+     * set asside support extract and see how it will be handled later
+     *
+     */
+    constexpr static const std::string_view name_irb = "irb";
+    constexpr static const std::string_view name_llvm_module = "irb";
+
+
+
+    struct SelectStorage{
+        void register_select (Select* sel);
+        decoder::FunctionCall get_specialization (circ::Select* sel, Expr index);
+        std::vector<decoder::FunctionDeclaration> get_functions_for_select();
+
+       private:
+        std::unordered_map<std::size_t, decoder::FunctionDeclaration> selects;
+        std::size_t hash_select_targets(Select* sel);
+    };
+
+
     void print_semantics( Circuit *op );
-    void print_semantics( VerifyInstruction *op );
+    FunctionDeclaration get_function_for_VI( VerifyInstruction *op, SelectStorage &st,
+                                             uint32_t size_of_encoding );
 
     // Templated for constraints?
     std::string get_target( Operation *op );
@@ -30,25 +64,37 @@ namespace circ::decoder::semantics
 
     };
 
-    struct SelectStorage{
-        void register_select (Select* sel);
-        decoder::FunctionCall get_specialization (circ::Select* sel, Expr index);
-        std::vector<decoder::FunctionDeclaration> get_functions_for_select();
 
-    private:
-        std::unordered_map<std::size_t, decoder::FunctionDeclaration> selects;
-        std::size_t hash_select_targets(Select* sel);
+    struct select_vis : UniqueVisitor<select_vis>
+    {
+        SelectStorage* st;
+        select_vis( SelectStorage *st ) : st( st ) { }
+        void visit(Operation* op){ op->traverse(*this); }
+        void visit(Select* op)
+        {
+            st->register_select(op);
+        }
     };
 
 
-
-    struct circIR_to_semIR_visitor : Visitor<circIR_to_semIR_visitor>
+    struct circIR_to_llvmIR_visitor : Visitor< circIR_to_llvmIR_visitor >
     {
         SelectStorage* st;
         VerifyInstruction* vi;
+        std::string name_irb_ref;
         int dispatch_counter = 0;
 
-        circIR_to_semIR_visitor( SelectStorage *st, VerifyInstruction *vi ) :  st( st ), vi( vi )
+        FunctionCall call_irb(std::string method_name, std::vector<Expr> args){
+            return FunctionCall("irb." + method_name, args);
+        }
+        FunctionCall call_irb_binops(std::string method_name, Operation* op){
+            return FunctionCall("irb." + method_name, { dispatch( op->operands[ 0 ] ), dispatch( op->operands[ 1 ] ) } );
+        }
+
+        Id getAPInt(std::string bits, uint size){return "llvm::APInt(\"" + bits + "\", size)";}
+
+        circIR_to_llvmIR_visitor( SelectStorage *st, VerifyInstruction *vi,
+                                  std::string nameIrbRef ) :  st( st ), vi( vi ), name_irb_ref( nameIrbRef )
         { }
         Expr visit(InputRegister *op)  { return Var(op->reg_name); }
         Expr visit(OutputRegister *op) { return Var(op->reg_name); }
@@ -63,7 +109,9 @@ namespace circ::decoder::semantics
 //        Expr visit(Memory *op)   { return memop(op); }
 
         // TODO implement numbers
-        Expr visit(Constant *op) { return Var(op->bits); }
+        Expr visit(Constant *op) {
+            return call_irb("getIntN", { Int(op->size) , Id("0b" + std::string(op->bits.rbegin(), op->bits.rend()))});
+        }
 
         // TODO get adviced global func?
         Expr visit(Advice *op) { return dispatch( get_adviced_value(op, vi)); }
@@ -93,49 +141,45 @@ namespace circ::decoder::semantics
 
 
 
-        Expr visit(Add *op) { return binops<decoder::Plus>(op); }
-//        Expr visit(Sub *op) { return binops<decoder::Sub>(op); }
-        Expr visit(circ::Mul *op) { return binops<decoder::Mul>(op); }
+        Expr visit(Add *op) { return call_irb_binops("CreateAdd", op); }
+        Expr visit(Sub *op) { return call_irb_binops("CreateSub", op); }
+        Expr visit(circ::Mul *op) { return call_irb_binops("CreateMul", op); }
+        Expr visit(UDiv *op) { return call_irb_binops("CreateUDiv", op); }
+        Expr visit(SDiv *op) { return call_irb_binops("CreateSDiv", op); }
+        Expr visit(SRem *op) { return call_irb_binops("CreateSRem", op); }
+        Expr visit(URem *op) { return call_irb_binops("CreateURem", op); }
+        Expr visit(Shl *op)  { return call_irb_binops("CreateShl", op); }
+        Expr visit(LShr *op) { return call_irb_binops("CreateLsr", op); }
+        Expr visit(AShr *op) { return call_irb_binops("CreateAShr", op); }
+        Expr visit(Trunc *op) { return call_irb_binops("CreateTrunc", op); }
+        Expr visit(ZExt *op)  { return call_irb_binops("CreateZExt", op); }
+        Expr visit(SExt *op)  { return call_irb_binops("CreateSExt", op); }
+        Expr visit(Icmp_ult *op)  { return call_irb_binops("CreateIcmpULT", op); }
+        Expr visit(Icmp_slt *op)  { return call_irb_binops("CreateIcmpSLT", op); }
+        Expr visit(Icmp_ugt *op)  { return call_irb_binops("CreateIcmpUGT", op); }
+        Expr visit(Icmp_eq *op)   { return call_irb_binops("CreateIcmpEQ", op); }
+        Expr visit(Icmp_ne *op)   { return call_irb_binops("CreateIcmpNE", op); }
+        Expr visit(Icmp_uge *op)  { return call_irb_binops("CreateIcmpUGE", op); }
+        Expr visit(Icmp_ule *op)  { return call_irb_binops("CreateIcmpULE", op); }
+        Expr visit(Icmp_sgt *op)  { return call_irb_binops("CreateIcmpSGT", op); }
+        Expr visit(Icmp_sge *op)  { return call_irb_binops("CreateIcmpSGE", op); }
+        Expr visit(Icmp_sle *op)  { return call_irb_binops("CreateIcmpSLE", op); }
 
-        //TODO implement div
-//        Expr visit(UDiv *op) { return binops<>(op); }
-//        Expr visit(SDiv *op) { return binops<>(op); }
-
-        //TODO implement div
-//        Expr visit(SRem *op) { return binops<>(op); }
-//        Expr visit(URem *op) { return binops<>(op); }
-
-        Expr visit(Shl *op)  { return binops<Shfl>(op); }
-        //TODO implement Lshr
-//        Expr visit(LShr *op) { return binops<>(op); }
-//        Expr visit(AShr *op) { return binops<>(op); }
-
-//        Expr visit(Trunc *op) { return sized(op); }
-//        Expr visit(ZExt *op)  { return sized(op); }
-//        Expr visit(SExt *op)  { return sized(op); }
-
-//        Expr visit(Icmp_ult *op)  { return sized(op); }
-//        Expr visit(Icmp_slt *op)  { return sized(op); }
-//        Expr visit(Icmp_ugt *op)  { return sized(op); }
-        Expr visit(Icmp_eq *op)   { return binops<Equal>(op); }
-//        Expr visit(Icmp_ne *op)   { return binops<Unequal>(op); }
-//        Expr visit(Icmp_uge *op)  { return sized(op); }
-//        Expr visit(Icmp_ule *op)  { return sized(op); }
-//        Expr visit(Icmp_sgt *op)  { return sized(op); }
-//        Expr visit(Icmp_sge *op)  { return sized(op); }
-//        Expr visit(Icmp_sle *op)  { return sized(op); }
-//
 //        Expr visit(InputImmediate *op) { return sized(op); }
 
-        // TODO Fix
-        Expr visit(Extract *op) {
-            std::stringstream ss;
-            ExpressionPrinter ep(ss);
-            ep.print(dispatch(op->operands[0]));
-            auto val = ss.str();
-            auto low = std::to_string(op->low_bit_inc);
-            auto high = std::to_string(op->low_bit_inc);
-            return Id(val + "[" + low + ".." + high+ "]"); }
+        // TODO Fix`
+        Expr visit(Extract *op)
+        {
+            circ::unreachable() << "Currently testing if we need to implement this to begin with";
+//            std::stringstream ss;
+//            ExpressionPrinter ep(ss);
+//            ep.print(dispatch(op->operands[0]));
+//            auto val = ss.str();
+//            auto low = std::to_string(op->low_bit_inc);
+//            auto high = std::to_string(op->high_bit_exc);
+//            return Id(val + "[" + low + ".." + high+ "]");
+        }
+
         Expr visit(Operation*op)
         {
             dispatch_counter++;
@@ -144,26 +188,40 @@ namespace circ::decoder::semantics
             return dispatch(op);
         }
 
+        /*
+         * find size of lhs and cacluate lhs + (rhs << size_of_lhs)
+         */
         Expr visit(Concat *op) {
-            std::stringstream ss;
-            ExpressionPrinter ep(ss);
-            ep.print(dispatch(op->operands[0]));
-            auto lhs = ss.str();
+            if (op->operands.size() == 1)
+                return dispatch(op->operands[0]);
 
-//                  circ::unreachable() << "misformed concat";
-            ss.clear();
-            std::stringstream ss2;
-            ExpressionPrinter ep2(ss2);
+            circ::check(op->operands.size() == 2)
+                << "Concat does not have 2  children, instead has: "
+                << op->operands.size();
 
-            if(op->operands.size() == 1)
-                return Id(lhs);
-            //
-            ep2.print(dispatch(op->operands[1]));
-            auto rhs = ss2.str();
+            auto lhs = op->operands[0];
+            auto rhs = op->operands[1];
+            std::size_t size = 0;
 
-            return Id(lhs + " ++ " + rhs);
+
+            if (isa<Advice>(lhs))
+                lhs = get_adviced_value(static_cast<Advice *>(lhs), vi);
+
+            if (isa<Constant>(lhs))
+                size = static_cast<Constant *>(lhs)->size;
+            else if (isa<Extract>(lhs)) {
+                auto extract = static_cast<Extract *>(lhs);
+                size = extract->high_bit_exc - extract->low_bit_inc;
+            } else
+                circ::unreachable()
+                    << "could not deduce width of concat target" << lhs->name();
+//            auto x = std::bit_width(1ul);
+
+            auto new_rhss =
+                decoder::Shfl(dispatch(rhs), Int(static_cast<long>(size)));
+            return decoder::Plus(new_rhss, dispatch(lhs));
         }
-//
+        //
 //        Expr visit(PopulationCount *op)     { return sized(op); }
 //        Expr visit(CountLeadingZeroes *op)  { return sized(op); }
 //        Expr visit(CountTrailingZeroes *op) { return sized(op); }
