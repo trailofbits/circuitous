@@ -157,65 +157,65 @@ circ::CircuitPtr get_input_circuit(auto &cli)
     return {};
 }
 
-void diff_subtree(const auto &cli, const circ::CircuitPtr &circuit){
-    if(auto coloring = cli.template get< cli::DotDiff >()){
-        if(circuit->attr< circ::VerifyInstruction >().size() != 2)
-            return;
-
-        auto tree1 = circuit->attr< circ::VerifyInstruction >()[ 0 ];
-        auto tree2 = circuit->attr< circ::VerifyInstruction >()[ 1 ];
-
-        using namespace circ::inspect;
-        // no lambda pattern here since the types of return classes are too different
-        if ( coloring == "ibtdr" )
-            diff_subtrees( tree1, tree2, InstrBitsToDRSubPathCollector());
-
-        if ( coloring == "full")
-            diff_subtrees( tree1, tree2, LeafToVISubPathCollector());
-
-        taint_semantics_circuit( circuit.get() ); // the rest depend on this coloring
-        if ( coloring == "ctt" )
-            diff_subtrees( tree1, tree2, ConfigToTargetSubPathCollector());
-
-        if ( coloring == "ltt" )
-            diff_subtrees( tree1, tree2, LeafToTargetSubPathCollector());
-    }
-}
-
 void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 {
-    if (auto ir_out = cli.template get< cli::IROut >())
-        circuit->serialize(*ir_out);
+    using namespace circ;
+    using namespace circ::print;
+    using namespace circ::inspect;
 
-    if (auto json_out = cli.template get< cli::JsonOut >())
-        circ::print_circuit(*json_out, circ::print_json, circuit.get());
+    if ( auto ir_out = cli.template get< cli::IROut >() )
+        circuit->serialize( *ir_out );
 
-    if (auto dot_out = cli.template get< cli::DotOut >()) {
-        auto colorer = [ & ]() -> std::function< circ::print::Color(circ::Operation *) >
+    if ( auto json_out = cli.template get< cli::JsonOut >() )
+        print_circuit( *json_out, print_json, circuit.get() );
+
+    if ( auto dot_out = cli.template get< cli::DotOut >() )
+    {
+        if ( auto input_colors = cli.template get< cli::DotHighlight >() )
         {
-            if ( auto input_colors = cli.template get< cli::DotHighlight >())
-                return circ::print::HighlightColorer( std::move( *input_colors ));
+            auto hl = HighlightColorer( std::move( *input_colors ) );
+            DotPrinter< decltype( hl ) > dp( hl );
+            return print_circuit( *dot_out, dp, circuit.get() );
+        }
 
-            if ( auto coloring = cli.template get< cli::DotDiff >())
+        if ( cli.template present< cli::DotSemantics >() )
+        {
+            circ::DotPrinter< SemanticsColorer > dp;
+            return circ::print_circuit( *dot_out, dp, circuit.get() );
+        }
+
+        if ( auto coloring = cli.template get< cli::DotDiff >() )
+        {
+            auto print_diff = [ & ]< inspect::SubPathCol T >()
             {
-                diff_subtree( cli, circuit );
-                return circ::print::diff_coloring;
-            }
+                return circ::print_circuit( *dot_out, DotPrinter< DiffColorer< T > >(),
+                                            circuit.get() );
+            };
 
-            if ( cli.template present< cli::DotSemantics >())
-            {
-                circ::inspect::taint_semantics_circuit( circuit.get() );
-                return circ::print::sem_taint_coloring;
-            }
-            return circ::print::no_coloring;
-        }();
+            if ( coloring == "ibtdr" )
+                return print_diff.template operator()< InstrBitsToDRSubPathCollector >();
 
-        circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
-                         std::unordered_map< circ::Operation *, std::string >{}, colorer);
+            if ( coloring == "full" )
+                return print_diff.template operator()< LeafToVISubPathCollector >();
+
+            // the following color schemes are based on semantic tainting
+            SemanticsColorer sc;
+            sc.color_circuit( circuit.get() );
+            if ( coloring == "ctt" )
+                print_diff.template operator()< ConfigToTargetSubPathCollector >();
+
+            if ( coloring == "ltt" )
+                print_diff.template operator()< LeafToTargetSubPathCollector >();
+
+            return sc.remove_coloring( circuit.get() );
+        }
+
+        circ::DotPrinter< EmptyColorer > dp;
+        return circ::print_circuit( *dot_out, dp, circuit.get() );
     }
 
     if (auto verilog_out = cli.template get< cli::VerilogOut >())
-        circ::print_circuit(*verilog_out, circ::print_verilog, "circuit", circuit.get());
+        circ::print_circuit(*verilog_out, circ::VerilogPrinter("circuit"), circuit.get());
 }
 
 template< typename OptsList >
