@@ -48,6 +48,11 @@ namespace circ {
       meta[std::move(key)] = std::move(val);
     }
 
+    void remove_meta( key_t key )
+    {
+        meta.erase( std::move( key ) );
+    }
+
     std::string dump_meta() const {
       std::stringstream ss;
       auto format = [&](const auto &key, const auto &val) {
