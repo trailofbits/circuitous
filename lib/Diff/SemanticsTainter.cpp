@@ -7,8 +7,8 @@ namespace circ::inspect {
 
     void SemanticsTainterVisitor::taint(circ::Operation *op){
         /*
-        * instruction bits are by definition related to decoding
-        * Advice are meant to represent dependancy inversion which are chosen by decoding
+        * Instruction bits are by definition related to decoding.
+        * Advice are meant to represent dependency inversion which are chosen by decoding
         *      Honestly not 100% whether it should always be a decode value
         *
         * Constants are decodes until they are hit by a different value
@@ -91,8 +91,6 @@ namespace circ::inspect {
              * with only decode constants are suddenly promoted to semantics
              * This shouldn't be an issue for now as there shouldn't be semantics that are
              * of the form OP imm, imm
-             *
-             *
              */
             if ( isa< Constant >( o ) && !all_children_are_same( op ))
             {
