@@ -364,9 +364,18 @@ struct SubPathCollector : BacktrackingPathVisitor<Derived, IsConst>
         }
     }
 
+    /*
+     * The intended way of calling.
+     * Clears out the old collection and starts visiting from the provided op.
+     */
     std::vector<std::vector< Operation * > > operator()( Operation *op )
     {
         this->collected.clear();
+        /*
+         * BacktrackingPathVisitor only adds nodes during dispatch
+         * which only will be called for the children of op.
+         */
+        this->current_path.push_back(op);
         visit( op );
         return this->collected;
     }
