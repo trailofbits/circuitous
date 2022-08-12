@@ -35,8 +35,7 @@ namespace circ::print
         }
     }
 
-    HighlightColorer::opt_name
-    HighlightColorer::name_for_op(Operation *op) {
+    HighlightColorer::opt_name_t HighlightColorer::name_for_op(Operation *op) {
         auto is_prefix_to_op_name = [&](const std::string &lhs) {
             return std::equal( lhs.begin(), lhs.end(), op->name().begin(),
                                [](char a, char b) {
@@ -46,7 +45,7 @@ namespace circ::print
         auto highlight = std::find_if( highlight_nodes.begin(), highlight_nodes.end(),
                                        is_prefix_to_op_name );
         if ( highlight != highlight_nodes.end()) {
-            return opt_name{ *highlight};
+            return opt_name_t { *highlight};
         }
         return std::nullopt;
     }

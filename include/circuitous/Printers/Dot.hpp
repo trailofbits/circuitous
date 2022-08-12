@@ -54,7 +54,7 @@ namespace circ::print
     struct HighlightColorer
     {
         using names_t = std::vector< std::string >;
-        using opt_name = std::optional< std::string_view >;
+        using opt_name_t = std::optional< std::string_view >;
 
         HighlightColorer(const names_t &highlight_nodes);
 
@@ -70,7 +70,7 @@ namespace circ::print
         uint32_t color_counter = 0;
         std::unordered_map< std::string_view, uint32_t > node_to_color_map;
 
-        opt_name name_for_op(Operation *op);
+        opt_name_t name_for_op(Operation *op);
     };
 
     struct SemanticsColorer
