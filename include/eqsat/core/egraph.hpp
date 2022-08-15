@@ -190,9 +190,6 @@ namespace eqsat::graph
 
         // stores equality ids of enodes
         std::unordered_map< node_pointer, node_handle > _ids;
-
-        // modified eclasses that needs to be rebuild
-        std::vector< node_id_t > _pending;
     };
 
 } // namespace eqsat::graph

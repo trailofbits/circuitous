@@ -15,11 +15,9 @@ namespace eqsat {
             : egraph(std::forward< egraph >(graph))
         {}
 
-        // return value of equality saturation
-        enum class stop_reason
-        {
-            saturated, iteration_limit, node_limit, time_limit, unknown
-        };
+      private:
+        // modified eclasses that needs to be rebuild
+        std::vector< node_id_t > _pending;
     };
 
 } // namespace eqsat
