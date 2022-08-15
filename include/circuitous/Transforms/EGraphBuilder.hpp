@@ -7,6 +7,8 @@
 #include <circuitous/IR/Visitors.hpp>
 #include <circuitous/Transforms/EGraph.hpp>
 
+#include <spdlog/spdlog.h>
+
 #include <unordered_map>
 
 namespace circ
@@ -142,7 +144,7 @@ namespace circ
         using NodeTemplateBuilder::dispatch;
 
         ENodeHandle add_nodes_recurse(Operation *op, EGraphBuilderState &state) {
-            if (!state.nodes_map.count(op)) {
+            if (!state.nodes_map.contains(op)) {
                 auto node = make_node(op, state);
                 state.nodes_map[op] = node;
                 for (const auto &child : op->operands) {
