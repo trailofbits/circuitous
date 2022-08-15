@@ -16,15 +16,12 @@ namespace eqsat
 
     using maybe_rewrite_rule  = std::optional< rewrite_rule >;
 
-
     std::string_view ltrim(std::string_view line) {
         line.remove_prefix(std::min(line.find_first_not_of(" \n\r\t"), line.size()));
         return line;
     }
 
-
     bool is_commented(std::string_view line) { return ltrim(line).starts_with('#'); }
-
 
     std::optional< std::string > get_nonempty_line(std::istream &is) {
         std::string line;
@@ -47,7 +44,7 @@ namespace eqsat
             return std::nullopt;
         }
         if (!line.ends_with(']')) {
-            spdlog::error("missing closing bracket: {}", line);
+            spdlog::error("[eqsat] missing closing bracket: {}", line);
             return std::nullopt;
         }
         return line.substr(1, line.size() - 2);
@@ -60,45 +57,45 @@ namespace eqsat
         return std::nullopt;
     }
 
-    std::optional< std::string_view > parse_rule_name(std::string_view line) {
+    std::optional< std::string > parse_rule_name(std::string_view line) {
         if (line.ends_with(':'))
-            return line.substr(0, line.size() - 1);
+            return std::string(line.substr(0, line.size() - 1));
         return std::nullopt;
     }
 
-    std::optional< std::string_view > parse_pattern(std::string_view line) {
+    std::optional< std::string > parse_pattern(std::string_view line) {
         line = ltrim(line);
         if (line.starts_with('-'))
-            return line.substr(2);
+            return std::string(line.substr(2));
         return std::nullopt;
     }
 
     maybe_rewrite_rule parse_rule(std::string_view name_line, std::istream &is) {
-        auto pattern = [&]() -> std::optional< std::string_view > {
+        auto pattern = [&]() -> std::optional< std::string > {
             if (auto line = get_nonempty_line(is)) {
                 if (auto pat = parse_pattern(*line)) {
                     return pat;
                 } else {
-                    spdlog::error("expected a pattern: {}", *line);
+                    spdlog::error("[eqsat] expected a pattern: {}", *line);
                     return std::nullopt;
                 }
             }
 
-            spdlog::error("missing pattern");
+            spdlog::error("[eqsat] missing pattern");
             return std::nullopt;
         };
 
         if (auto name = parse_rule_name(name_line)) {
-            spdlog::debug("rule: {}", *name);
+            spdlog::debug("[eqsat] rule: {}", *name);
             auto lhs = pattern();
             auto rhs = pattern();
             if (lhs && rhs) {
-                spdlog::debug("lhs: ", *lhs);
-                spdlog::debug("rhs: ", *rhs);
+                spdlog::debug("[eqsat] lhs: {}", *lhs);
+                spdlog::debug("[eqsat] rhs: {}", *rhs);
                 return rewrite_rule{ *name, *lhs, *rhs };
             }
         } else {
-            spdlog::error("expected rule name: {}", name_line);
+            spdlog::error("[eqsat] expected rule name: {}", name_line);
             return std::nullopt;
         }
 
@@ -106,6 +103,7 @@ namespace eqsat
     }
 
     std::vector< rule_set > parse_rules(const std::string &filename) {
+        spdlog::debug("[eqsat] parse rules from: {}", filename);
         std::ifstream file(filename, std::ios::in);
         return parse_rules(file);
     }
@@ -119,12 +117,12 @@ namespace eqsat
 
         while (auto line = get_nonempty_line(is)) {
             if (auto ruleset = maybe_new_ruleset(*line)) {
-                spdlog::debug("new set of rules: {}", ruleset->name);
+                spdlog::debug("[eqsat] new set of rules: {}", ruleset->name);
                 rulesets.push_back(std::move(*ruleset));
             } else if (auto rule = parse_rule(*line, is)) {
                 add_to_current_ruleset(std::move(*rule));
             } else {
-                spdlog::error("syntax error: {}", *line);
+                spdlog::error("[eqsat] syntax error: {}", *line);
             }
         }
 
