@@ -19,6 +19,7 @@ add_headers( ../eqsat CIRCUITOUS_EQSAT_HEADERS
 add_circuitous_library( eqsat
   SOURCES
     parser.cpp
+    pattern.cpp
   LINK_LIBS
     gap::gap
     spdlog::spdlog
