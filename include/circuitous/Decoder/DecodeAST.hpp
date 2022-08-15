@@ -102,6 +102,7 @@ namespace circ::decoder {
         self_t& name(const Id& name) { _function_name = name; return *this; };
         self_t& arg_insert(const VarDecl& args) { _args.emplace_back(args); return *this; };
         self_t& body_insert(const Expr& expr) { _body.emplace_back(expr); return *this; };
+        self_t& body_insert_statement(const Expr& expr) { _body.emplace_back(Statement(expr)); return *this; };
         self_t& body(const StatementBlock& b) { _body = b; return *this; };
         FunctionDeclaration make() {
             return FunctionDeclaration( _retType, _function_name, _args, _body );
