@@ -25,6 +25,7 @@ namespace circ::decoder {
             switch (style) {
                 case ExprStyle::FuncArgs: return make_guard( GuardStyle::Parens );
                 case ExprStyle::FuncBody: return make_guard( GuardStyle::Curly );
+                case ExprStyle::EnumBody: return make_guard( GuardStyle::Curly );
             }
         }();
 
@@ -35,6 +36,7 @@ namespace circ::decoder {
                 switch (style) {
                     case ExprStyle::FuncArgs: raw(", "); break;
                     case ExprStyle::FuncBody: raw(";").endl() ; break;
+                    case ExprStyle::EnumBody: raw(", ").endl(); break;
                 }
             }
         }
@@ -56,6 +58,14 @@ namespace circ::decoder {
                 [&](const Empty &arg) {},
                 [&](const Var &arg) { raw(arg.name); },
                 [&](const VarDecl &arg) { raw(arg.value().type, " ", arg.value().name); },
+                [&]( const EnumValue &arg) { raw(arg.e->enum_name, "::", arg.e->index(arg.index)); },
+                [&]( const Enum &arg ) { raw( arg.enum_name ); },
+                [&]( const EnumDecl &arg )
+                {
+                    raw( "enum class ", arg.value().enum_name )
+                        .expr_array< Id >( arg.value().names, ExprStyle::EnumBody )
+                        .endl();
+                },
                 [&](const IndexVar &arg) { expr(arg.lhs()).expr(arg.rhs(), GuardStyle::Square); },
                 [&](const Dereference &arg) { raw("(*").expr(arg.value()).raw(")"); }, // TODO(sebas): guard styles don't take results of raw as a direct argument
                 [&](const Statement &arg) {

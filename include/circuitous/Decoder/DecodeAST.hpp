@@ -138,11 +138,37 @@ namespace circ::decoder {
         std::vector< Expr > args;
     };
 
+    struct Enum;
+
+    struct EnumValue {
+        EnumValue( const std::shared_ptr< Enum > &e, std::size_t index) : e( e ), index(index) { }
+        std::shared_ptr<Enum> e; // shared pointer? should not copy at least
+        std::size_t index;
+    };
+
+    struct Enum {
+        Enum( const Id &enumName ) : enum_name( enumName ) { }
+        void Register( const Id &value_name ) { names.push_back( value_name ) };
+        Id index( std::size_t index ) { return names[ index ]; }
+        std::optional<EnumValue> get_by_name( Id name )
+        {
+            auto index = std::find(names.begin(), names.end(), name);
+            if ( index != names.end() )
+                return EnumValue(std::make_shared<Enum>(*this),
+                                  static_cast< size_t >( index - names.begin() ) );
+            return std::nullopt;
+        }
+        Id enum_name;
+        std::vector<Id> names;
+    };
+
+    struct EnumDecl: UnaryOp<Enum>{ using UnaryOp::UnaryOp; };
+
     struct Empty { };
 
     using op_t = std::variant<
             Expr, Int, Uint64, Id, //primitive types Expr, int, std::string
-            Var, VarDecl, Statement, Return, CastToUint64, IndexVar, Dereference, // unary
+            Var, VarDecl, Statement, Return, CastToUint64, IndexVar, EnumValue, Enum, EnumDecl, Dereference, // unary
             Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, BitwiseAnd, Assign, Shfl, Equal, And, // binary
             If, IfElse,
             FunctionDeclaration, FunctionCall, // function
@@ -172,6 +198,7 @@ namespace circ::decoder {
     enum class ExprStyle : uint32_t {
         FuncArgs,
         FuncBody,
+        EnumBody
     };
 
     enum class GuardStyle : uint32_t{
