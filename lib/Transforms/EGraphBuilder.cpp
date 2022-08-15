@@ -4,7 +4,7 @@
 
 #include <circuitous/Transforms/EGraphBuilder.hpp>
 
-namespace circ::eqsat
+namespace circ
 {
     //
     // Visits
@@ -157,4 +157,4 @@ namespace circ::eqsat
 
     NodeTemplate NodeTemplateBuilder::visit(Circuit *op) { return opcode(op); }
 
-} // namespace circ::eqsat
+} // namespace circ

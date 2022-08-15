@@ -12,9 +12,9 @@
 #include <string>
 #include <variant>
 
-namespace circ::eqsat
+namespace circ
 {
-    using ::eqsat::bitwidth_t;
+    using eqsat::bitwidth_t;
 
     using maybe_bitwidth_t = std::optional< bitwidth_t >;
 
@@ -78,15 +78,15 @@ namespace circ::eqsat
     //
     // Circuit EGraph Representation
     //
-    using CircuitENode = ::eqsat::graph::node< NodeTemplate >;
+    using CircuitENode = eqsat::graph::node< NodeTemplate >;
     static_assert(gap::graph::node_like< CircuitENode >);
 
-    using ENodeHandle = ::eqsat::graph::node_handle;
+    using ENodeHandle = eqsat::graph::node_handle;
 
-    using CircuitEdge = ::eqsat::graph::edge< CircuitENode >;
+    using CircuitEdge = eqsat::graph::edge< CircuitENode >;
     static_assert(gap::graph::edge_like< CircuitEdge >);
 
-    using CircuitEGraph = ::eqsat::graph::egraph< CircuitENode >;
+    using CircuitEGraph = eqsat::graph::egraph< CircuitENode >;
     static_assert(gap::graph::graph_like< CircuitEGraph >);
 
     // std::string node_name(const NodeTemplate &op);
@@ -97,4 +97,4 @@ namespace circ::eqsat
 
     // std::string name(const circuit_enode *enode);
 
-} // namespace circ::eqsat
+} // namespace circ
