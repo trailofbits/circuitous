@@ -10,7 +10,7 @@
 #include <eqsat/core/egraph.hpp>
 #include <eqsat/algo/saturation.hpp>
 
-namespace circ::eqsat
+namespace circ
 {
     EGraphBuilderState make_circuit_egraph(const CircuitPtr &circuit) {
         EGraphBuilder builder;
@@ -21,7 +21,7 @@ namespace circ::eqsat
         log_info() << "Start equality saturation";
         auto [egraph, nodes_map] = make_circuit_egraph(circuit);
 
-        auto saturation = ::eqsat::saturation(std::move(egraph));
+        auto saturation = eqsat::saturation(std::move(egraph));
         // TODO use some algorithm
         saturation.apply(rules);
 
@@ -30,4 +30,4 @@ namespace circ::eqsat
         return nullptr; // TODO circuit from optimal
     }
 
-} // namespace circ::eqsat
+} // namespace circ

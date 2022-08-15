@@ -9,14 +9,13 @@
 // #include <doctest/doctest.h>
 // #include <circuitous/ADT/EGraph.hpp>
 // #include <circuitous/Transforms/eqsat/pattern.hpp>
-// #include <circuitous/Util/Overloads.hpp>
 // #include <circuitous/Support/Check.hpp>
 
 // #include <fstream>
 // #include <string>
 // #include <map>
 
-// namespace circ::eqsat {
+// namespace circ {
 
 //   using StringNode = ENode< std::string >;
 
