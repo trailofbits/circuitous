@@ -9,7 +9,7 @@
 
 #include <unordered_map>
 
-namespace circ::eqsat
+namespace circ
 {
     struct NodeTemplateBuilder : NonDefaultingVisitor< NodeTemplateBuilder > {
         //
@@ -168,4 +168,4 @@ namespace circ::eqsat
         }
     };
 
-} // namespace circ::eqsat
+} // namespace circ

@@ -64,4 +64,4 @@ namespace eqsat {
         // }
     };
 
-} // namespace circ::eqsat
+} // namespace eqsat

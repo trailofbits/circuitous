@@ -16,7 +16,7 @@
 // #include <numeric>
 // #include <support/EGraph.hpp>
 
-// namespace circ::eqsat {
+// namespace circ {
 
 //   auto count_matches(const Matches &matches)
 //   {
@@ -594,4 +594,4 @@
 //     }
 //   }
 
-// } // namespace circ::eqsat
+// } // namespace circ

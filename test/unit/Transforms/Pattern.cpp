@@ -13,7 +13,7 @@
 // #include <optional>
 // #include <variant>
 
-// namespace circ::eqsat {
+// namespace circ {
 
 //   TEST_CASE("Expr Parser") {
 //     auto parser = pattern_parser();
@@ -167,4 +167,4 @@
 //     CHECK(parser("((let M (op_mul):C) (disjoint C...) (match $M...))"));
 //   }
 
-// } // namespace circ::eqsat
+// } // namespace circ
