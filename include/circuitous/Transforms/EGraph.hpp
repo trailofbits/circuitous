@@ -89,7 +89,7 @@ namespace circ
     using CircuitEGraph = eqsat::graph::egraph< CircuitENode >;
     static_assert(gap::graph::graph_like< CircuitEGraph >);
 
-    // std::string node_name(const NodeTemplate &op);
+    std::string node_name(const NodeTemplate &op);
 
     // std::string to_string(const NodeTemplate &op);
 
