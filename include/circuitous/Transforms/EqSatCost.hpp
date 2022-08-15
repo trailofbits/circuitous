@@ -8,10 +8,10 @@
 
 #include <eqsat/core/cost_graph.hpp>
 
-namespace circ::eqsat
+namespace circ
 {
     struct CircuitCostFunction {
-        using Cost    = ::eqsat::cost_t;
+        using Cost    = eqsat::cost_t;
         using NodePtr = CircuitEGraph::node_pointer;
 
         Cost operator()(const NodePtr node) {
@@ -26,18 +26,18 @@ namespace circ::eqsat
         }
     };
 
-    using CircuitCostGraph = ::eqsat::cost_graph< CircuitEGraph, CircuitCostFunction >;
+    using CircuitCostGraph = eqsat::cost_graph< CircuitEGraph, CircuitCostFunction >;
     static_assert(gap::graph::graph_like< CircuitCostGraph >);
 
     auto make_circuit_cost_graph(CircuitEGraph &&graph) -> CircuitCostGraph {
         return CircuitCostGraph(std::move(graph), CircuitCostFunction{});
     }
 
-    using OptimalCircuitGraphView = ::eqsat::optimal_graph_view< CircuitEGraph, CircuitCostFunction >;
+    using OptimalCircuitGraphView = eqsat::optimal_graph_view< CircuitEGraph, CircuitCostFunction >;
     static_assert(gap::graph::graph_like< OptimalCircuitGraphView >);
 
     auto make_optimal_circuit_graph(CircuitEGraph &&graph) -> OptimalCircuitGraphView {
         return OptimalCircuitGraphView(std::move(graph), CircuitCostFunction{});
     }
 
-} // namespace circ::eqsat
+} // namespace circ
