@@ -2,13 +2,12 @@
  * Copyright (c) 2022 Trail of Bits, Inc.
  */
 
-#include <circuitous/Transforms/EqualitySaturation.hpp>
-#include <circuitous/Transforms/EqSatCost.hpp>
 #include <circuitous/Transforms/EGraph.hpp>
 #include <circuitous/Transforms/EGraphBuilder.hpp>
-
-#include <eqsat/core/egraph.hpp>
+#include <circuitous/Transforms/EqSatCost.hpp>
+#include <circuitous/Transforms/EqualitySaturation.hpp>
 #include <eqsat/algo/saturation.hpp>
+#include <eqsat/core/egraph.hpp>
 
 namespace circ
 {
@@ -18,15 +17,13 @@ namespace circ
     };
 
     CircuitPtr run_equality_saturation(CircuitPtr &&circuit, std::span< RuleSet > rules) {
-        log_info() << "Start equality saturation";
+        spdlog::debug("[eqsat] start equality saturation");
         auto [egraph, nodes_map] = make_circuit_egraph(circuit);
 
-        auto saturation = eqsat::saturation(std::move(egraph));
-        // TODO use some algorithm
-        saturation.apply(rules);
+        auto [saturation, status] = eqsat::saturate(std::move(egraph), rules);
 
         auto optimal = make_optimal_circuit_graph(std::move(saturation));
-        log_info() << "Equality saturation stopped";
+        spdlog::debug("[eqsat] stop equality saturation");
         return nullptr; // TODO circuit from optimal
     }
 
