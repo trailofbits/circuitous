@@ -7,6 +7,7 @@
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/Support/Log.hpp>
 
+#include <gap/core/overloads.hpp>
 
 namespace circ::shadowinst
 {
@@ -75,7 +76,7 @@ namespace circ::shadowinst
         auto c = query::get_combinator([](auto l, auto r) {
             return l;
         });
-        auto s = this->query(query::overloaded{q, c});
+        auto s = this->query(gap::overloaded{q, c});
         check(s);
 
         Regions out(*s);
