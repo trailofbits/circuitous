@@ -26,6 +26,8 @@
 #include <circuitous/Util/InstructionBytes.hpp>
 #include <circuitous/Util/LLVMUtil.hpp>
 
+#include <gap/core/overloads.hpp>
+
 namespace circ::shadowinst
 {
 
@@ -382,9 +384,6 @@ namespace circ::shadowinst
             return std::make_optional( c(*lhs, *rhs) );
         }
 
-        template< class ... Ts > struct overloaded : Ts ... { using Ts::operator() ...; };
-        template< class ... Ts > overloaded(Ts ...) -> overloaded< Ts ... >;
-
         static inline auto and_combine()
         {
             return []< typename T >(T rhs, T lhs) {
@@ -412,7 +411,7 @@ namespace circ::shadowinst
 
         static inline auto is_marked(std::size_t idx)
         {
-            return overloaded
+            return gap::overloaded
             {
                 [=]< answers_queries_t V >(const V &region) {
                     return std::make_optional(region.is_marked(idx));
@@ -423,7 +422,7 @@ namespace circ::shadowinst
 
         static inline auto is_empty()
         {
-            return overloaded
+            return gap::overloaded
             {
                 []< answers_queries_t V >(const V &region) {
                     return std::make_optional(region.empty());
