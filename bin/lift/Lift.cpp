@@ -26,6 +26,9 @@ CIRCUITOUS_RELAX_WARNINGS
 #include <glog/logging.h>
 CIRCUITOUS_UNRELAX_WARNINGS
 
+#include <spdlog/cfg/env.h>
+#include <spdlog/cfg/argv.h>
+
 #include <remill/OS/OS.h>
 
 #include <fstream>
@@ -339,6 +342,9 @@ void reload_test(const circ::CircuitPtr &circuit)
 }
 
 int main(int argc, char *argv[]) {
+    spdlog::cfg::load_env_levels();
+    spdlog::cfg::load_argv_levels(argc, argv);
+
     auto maybe_parsed_cli = parse_and_validate_cli< cmd_opts_list >(argc, argv);
     if (!maybe_parsed_cli)
     {
