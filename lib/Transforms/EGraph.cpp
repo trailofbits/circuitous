@@ -1,15 +1,18 @@
-#include <optional>
+/*
+ * Copyright (c) 2022 Trail of Bits, Inc.
+ */
 
-#include <llvm/ADT/SmallVector.h>
-#include <llvm/ADT/APSInt.h>
-#include <llvm/ADT/Twine.h>
+#include <circuitous/Transforms/EGraph.hpp>
+
+#include <optional>
+#include <variant>
 
 namespace circ
 {
-  // std::string node_name(const NodeTemplate &op)
-  // {
-  //   return std::visit( [] (const auto &o) { return o.op_code_name; }, op );
-  // }
+  std::string node_name(const NodeTemplate &op)
+  {
+    return std::visit( [] (const auto &o) { return o.op_code_name; }, op );
+  }
 
   // std::string to_string(const NodeTemplate &op)
   // {
