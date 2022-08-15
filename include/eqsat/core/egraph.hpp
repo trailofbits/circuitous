@@ -53,9 +53,16 @@ namespace eqsat::graph
         explicit storage_node(storage && data) : storage(std::move(data)) {}
     };
 
+    template< typename storage >
+    static inline std::string node_name(const storage_node< storage > &n) {
+        return node_name(static_cast< storage >(n));
+    }
+
     struct bond_node {
         std::vector< std::size_t > children_parents;
     };
+
+    static inline std::string node_name(const bond_node &n) { return "bond"; }
 
     template< typename storage >
     using node_variants = std::variant< storage_node< storage >, bond_node >;
@@ -90,6 +97,11 @@ namespace eqsat::graph
 
         node_variants< storage > data;
     };
+
+    template< typename storage >
+    std::string node_name(const node< storage > &n) {
+        return std::visit( [] (const auto &n) { return node_name(n); }, n.data);
+    }
 
     //
     // eclass
