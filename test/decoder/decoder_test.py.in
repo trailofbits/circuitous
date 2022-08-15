@@ -1,17 +1,15 @@
 import os.path
 import subprocess
+import tempfile
 from functools import reduce
 import math
-from pathlib import Path
 
 circuitous_prefix = "@PROJECT_BINARY_DIR@/bin"
-circuitous_decoder = os.path.abspath(
-    os.path.join(circuitous_prefix, "decoder/circuitous-decoder"))
-decoder_test_runner = "decoder_tester.cpp"
+circuitous_decoder = os.path.abspath(os.path.join(circuitous_prefix, "decoder/circuitous-decoder"))
+decoder_test_runner = "@PROJECT_BINARY_DIR@/test/decoder/decoder_tester.cpp"
 
-output = "tests/"
-Path(output).mkdir(parents=True, exist_ok=True)
-
+output = tempfile.mkdtemp()
+output = os.path.abspath(output)
 
 # Decoders for circuitous are in essence a set of checks between instr_bits and constant
 # values in the DecoderResult subtree. We assume that any value bit that is not explicitly
@@ -95,7 +93,7 @@ def create_input_at_file(test_file, test_enc_conditions):
 
 
 # Expects output file name, and a list of ([<instr_encoding_bytes>],
-#                                     [ (<offsets from extract node of the decode_condition>)] )
+# [ (<offsets from extract node of the decode_condition>)] )
 def run_test(test_name, test_enc_conditions):
     output_file_name = output + test_name
     bytes_in = reduce(lambda str, enc_cond: str + bytes_to_str_without_leading_0x(enc_cond[0]),
