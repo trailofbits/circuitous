@@ -50,11 +50,10 @@ jobs:
             sudo ctest --preset ninja-system-remill-x64-linux-rel-test --output-on-failure || exit 1
 
             sudo cpack -G TXZ --config ./builds/ninja-system-remill-x64-linux-rel/CPackConfig.cmake || exit 1
-            pwd
 
       - name: Upload circuitous package artifact
         uses: actions/upload-artifact@v3
         with:
             name: circuitous-ubuntu-22.04
-            path: circuitous/package/
+            path: /workspaces/circuitous/builds/ninja-system-remill-x64-linux-rel/package
             retention-days: 30
