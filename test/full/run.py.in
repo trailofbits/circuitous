@@ -47,10 +47,6 @@ def red(what):
 def yellow(what):
     return colorize(Colors.YELLOW, what)
 
-
-def update_relative_paths():
-    pass
-
 def log_error(what):
     print("[ ! ]", what)
 
