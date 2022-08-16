@@ -15,7 +15,12 @@ RUN if [ "${REINSTALL_CMAKE_VERSION_FROM_SOURCE}" != "none" ]; then \
 
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends llvm-14 llvm-14-dev libclang-14-dev \
-        build-essential ccache cmake-curses-gui libedit-dev libpfm4-dev python3-pip
+        build-essential ccache cmake-curses-gui libedit-dev libpfm4-dev zlib1g-dev python3-pip
+
+# Remill dependencies
+RUN dpkg --add-architecture i386
+RUN apt-get update
+RUN apt-get -y install --no-install-recommends libc6-dev:i386 libstdc++-10-dev:i386 g++-multilib
 
 RUN update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-14 60
 RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-14 60
@@ -28,8 +33,20 @@ RUN git clone -b port-files https://github.com/lifting-bits/cxx-common.git /usr/
 
 # setup remill
 WORKDIR /usr/src/
-RUN wget https://github.com/lifting-bits/remill/releases/download/v5.0.4/remill_ubuntu-20.04_packages.zip \
-    && unzip remill_ubuntu-20.04_packages.zip
-RUN apt-get install ./ubuntu-20.04_llvm14_deb_package/remill-5.0.4.43cfa8c-x86_64.deb
+RUN git clone -b vcpkg-manifest https://github.com/lifting-bits/remill.git
 
+WORKDIR /usr/src/remill
+RUN cmake -B build -S . \
+    -DCMAKE_TOOLCHAIN_FILE=/usr/local/vcpkg/scripts/buildsystems/vcpkg.cmake \
+    -DVCPKG_OVERLAY_TRIPLETS=/usr/src/cxx-common/triplets \
+    -DVCPKG_OVERLAY_PORTS=/usr/src/cxx-common/ports \
+    -DVCPKG_TARGET_TRIPLET="x64-linux-rel" \
+    -DVCPKG_HOST_TRIPLET="x64-linux-rel" \
+    -DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON \
+    -DREMILL_ENABLE_TESTING=OFF \
+    -DUSE_SYSTEM_DEPENDENCIES=ON
+
+RUN cmake --build build --target install
+
+# Install python dependencies
 RUN python3 -m pip install microx pytest
