@@ -55,5 +55,6 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
             name: circuitous-ubuntu-22.04
-            path: /workspaces/circuitous/builds/ninja-system-remill-x64-linux-rel/package
+            path: /home/runner/work/circuitous/circuitous/builds/ninja-system-remill-x64-linux-rel/package
             retention-days: 30
+
