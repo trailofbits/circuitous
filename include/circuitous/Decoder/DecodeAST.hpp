@@ -17,9 +17,13 @@ namespace circ::decoder {
     using Id = std::string;
 
     struct Var {
-        explicit Var(Id s, Id t = "auto") : name( std::move( s )), type( std::move( t )) {};
+        explicit Var( Id s, Id t = "auto", bool is_struct = false, bool is_pointer = false ) :
+            name( std::move( s ) ), type( std::move( t ) ), is_struct( is_struct ),
+            is_pointer( is_pointer ) {};
         Id name;
         Id type;
+        bool is_struct;
+        bool is_pointer;
     };
 
     struct Int {
@@ -132,6 +136,17 @@ namespace circ::decoder {
     };
 
     struct FunctionCall {
+        FunctionCall( const Var &var, const Id &func, std::vector< Expr > args ) : args( args )
+        {
+            if ( !var.is_struct )
+            {
+                function_name = var.name;
+                return;
+            }
+            auto delim = var.is_pointer ? "->" : ".";
+            this->function_name = Id( var.name + delim + func );
+        };
+
         FunctionCall(const Id &functionName, std::vector< Expr > args)
                                     : function_name( functionName ), args( args ) {} ;
 
@@ -149,21 +164,53 @@ namespace circ::decoder {
 
     struct Enum {
         Enum( const Id &enumName ) : enum_name( enumName ) { }
-        void Register( const Id &value_name ) { names.push_back( value_name ) };
-        Id index( std::size_t index ) { return names[ index ]; }
+        void Register( const Id &value_name, Operation *op ) { names.push_back( { value_name, op} ); };
+        std::pair<Id,Operation*> index( std::size_t index ) { return names[ index ]; }
         std::optional<EnumValue> get_by_name( Id name )
         {
-            auto index = std::find(names.begin(), names.end(), name);
+            auto index = std::find_if(names.begin(), names.end(), [&](std::pair<Id, Operation*> pair) { return pair.first == name; });
+            if ( index != names.end() )
+                return EnumValue(std::make_shared<Enum>(*this),
+                                  static_cast< size_t >( index - names.begin() ) );
+            return std::nullopt;
+        }
+
+        std::optional<EnumValue> get_by_op( Operation *op )
+        {
+            auto index = std::find_if(names.begin(), names.end(), [&](std::pair<Id, Operation*> pair) { return pair.second == op; });
             if ( index != names.end() )
                 return EnumValue(std::make_shared<Enum>(*this),
                                   static_cast< size_t >( index - names.begin() ) );
             return std::nullopt;
         }
         Id enum_name;
-        std::vector<Id> names;
+
+        // This operation should represent the subtree of a specialization
+        // TODO Extract this operation out and let it be an Expr
+        std::vector<std::pair<Id, Operation*>> names;
     };
 
     struct EnumDecl: UnaryOp<Enum>{ using UnaryOp::UnaryOp; };
+
+    struct Struct
+    {
+        Struct( const int templateSize ) : template_size( templateSize ), templatized( templateSize == 0)
+        {
+            for(int i = 0; i < templateSize; i++){
+                template_typenames.push_back(Id("T" + std::to_string(i)));
+            }
+        }
+
+        Id name;
+        const int template_size;
+        const bool templatized;
+        std::vector<Id> template_typenames;
+
+        void insert_method(FunctionDeclaration method);
+        std::vector<FunctionDeclaration> methods;
+    };
+
+    struct StructDecl: UnaryOp<Struct>{ using UnaryOp::UnaryOp; };
 
     struct Empty { };
 

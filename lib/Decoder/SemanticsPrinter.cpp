@@ -1,3 +1,4 @@
+#include <circuitous/Decoder/DecoderPrinter.hpp>
 #include <circuitous/Decoder/SemanticsPrinter.hpp>
 #include <circuitous/IR/Shapes.hpp>
 
@@ -7,35 +8,33 @@ namespace circ::decoder::semantics
     void register_leaf_intrinsics();
     void register_selects(); //???
 
-    void specialize_tree(); // This is VI level? --> try to get rid of selects as much as possible
+    void
+    specialize_tree(); // This is VI level? --> try to get rid of selects as much as possible
     void emit_llvm(); // ??
 
     void print_semantics( Circuit *circ )
     {
-
-
-
-
-        std::cout << "printing semantics, VIs: " << circ->attr< VerifyInstruction >().size() << std::endl;
+        std::cout << "printing semantics, VIs: " << circ->attr< VerifyInstruction >().size()
+                  << std::endl;
 
         SelectStorage st;
-        select_vis sel(&st);
+        select_vis sel( &st );
         for ( auto vi : circ->attr< VerifyInstruction >() )
-            sel.visit(vi);
-        ExpressionPrinter ep(std::cout);
+            sel.visit( vi );
+        ExpressionPrinter ep( std::cout );
 
-        for(auto& func : st.get_functions_for_select())
-            ep.print(func);
+        for ( auto &func : st.get_functions_for_select() )
+            ep.print( func );
 
-        std::vector<FunctionDeclaration> lifted_funcs;
+        std::vector< FunctionDeclaration > lifted_funcs;
         for ( auto vi : circ->attr< VerifyInstruction >() )
         {
             lifted_funcs.push_back(
                 get_function_for_VI( static_cast< VerifyInstruction * >( vi ), st, 0 ) );
         }
 
-        for ( auto lf : lifted_funcs)
-            ep.print(lf);
+        for ( auto lf : lifted_funcs )
+            ep.print( lf );
     }
 
     /*
@@ -58,15 +57,45 @@ namespace circ::decoder::semantics
      *      we exposen iterators naar vectors
      */
 
-    Operation* select_index(Select* op) { return op->operands[0]; }
-    std::vector<Operation*> select_values(Select* op) { return std::vector<Operation*>(op->operands.begin() + 1, op->operands.end()); }
+    // should be used to fill out struct?
+    struct operation_to_vistor_setup_visitor : UniqueVisitor<operation_to_vistor_setup_visitor>
+    {
+        void visit( Operation *op )
+        {
+            //check if even should be added in the first place (by checking enum regs)
+            auto key = op->name();
+            // assumes all binary operators have two operands
+            if ( op_to_method.contains( key ) )
+                return;
 
+            auto name = "visit_" + op->name();
+            FunctionDeclarationBuilder fdb;
+            fdb.name( name );
 
-    std::size_t hash_select(Select* op){
-        print::PrettyPrinter pp;
-        return std::hash<std::string>{}( pp.Hash(select_values(op)) );
-    }
+            // TODO these T's should come from struct definition
+            // We assume all operations can be reduced to two binaries
+            // Maybe these T's should be auto?
+            if ( op->operands.size() >= 2 )
+            {
+                fdb.arg_insert( VarDecl( Var( "lhs", "T" ) ) );
+                fdb.arg_insert( VarDecl( Var( "rhs", "T" ) ) );
+            }
+            if ( op->operands.size() == 1 )
+                fdb.arg_insert( VarDecl( "value", "T" ) );
 
+            op_to_method.insert( { key, fdb.make() } );
+        }
+
+        std::optional< FunctionDeclaration > get_by_operation( Operation *op )
+        {
+            auto key = op->name();
+            if ( op_to_method.contains( key ) )
+                return std::optional< FunctionDeclaration >( op_to_method[ key ] );
+            return std::nullopt;
+        }
+
+        std::map< std::string, FunctionDeclaration > op_to_method;
+    };
 
     struct test_vis : Visitor<test_vis> {
         bool first = false;
@@ -160,9 +189,33 @@ namespace circ::decoder::semantics
         down_collector.Run( op );
 
         ExpressionPrinter ep(std::cout);
-        fdb.retType(Id("void")).name("lifted_func_" + std::to_string(op->id()));
-        fdb.arg_insert()
-        circIR_to_llvmIR_visitor to_semIR( &st, op, std::string() );
+        auto lifted_func_name = "lifted_func_" + std::to_string(op->id());
+        fdb.retType(Id("llvm::Function*")).name(lifted_func_name );
+        /*
+         * TODO: Decide what the length of input bits should be.
+         * We have two options
+         *  1. Have it equal to the size of the instructions --> would give trouble once VI get's varaible length
+         *  2. HAve it the size of the architecture
+         */
+
+        fdb.arg_insert(Var("input_bits", "std::bitset<" + std::to_string(MAX_ENCODING_LENGTH) + ">"));
+        Var llvm_func("func");
+        auto getVoidTy = decoder::FunctionCall("Type::getVoidTy", { llvm_context } );
+        auto getFuncTy = decoder::FunctionCall("FunctionType::get", { getVoidTy } );
+
+        fdb.body_insert_statement(
+            Assign( VarDecl( llvm_func ),
+                    decoder::FunctionCall( "Function::Create",
+                                           { getFuncTy, Id( "Function::ExternalLinkage" ),
+                                             Id( lifted_func_name ) } ) ) );
+
+        Var bb("bb");
+        fdb.body_insert_statement( Assign(
+            VarDecl( bb ), FunctionCall( "BasicBlock::Create", { llvm_context, Id( "\"\""), llvm_func } ) ) );
+        fdb.body_insert_statement(FunctionCall(irb.name + ".SetInsertPoint", { bb } ));
+
+        //TODO module must be context?
+//        circIR_to_llvmIR_visitor to_semIR( &st, op, "irb", Var("llvm_context") );
         for(auto& constraint : down_collector.collected)
         {
             if ( isa< RegConstraint >( constraint ) )
@@ -175,6 +228,7 @@ namespace circ::decoder::semantics
 
 
         }
+        fdb.body_insert(Return(llvm_func));
         return fdb.make();
     }
 
@@ -201,82 +255,14 @@ namespace circ::decoder::semantics
 
         return ac->operands[0] == advice ? ac->operands[1] : ac->operands[0]; // return other value
     }
-
-    std::size_t SelectStorage::hash_select_targets( Select *sel )
+    Expr emit_llvm_context()
     {
-        print::PrettyPrinter pp;
-        return std::hash< std::string > {}( pp.Hash( select_values( sel ) ) );
+        StatementBlock statements;
+        statements.push_back(Statement(Assign(llvm_context, Id("std::make_unique<Module>(\"circ_sem_mod\", " + llvm_context.name + ")"))));
+        statements.push_back(Statement(Assign(irb, FunctionCall(irb.type, { llvm_context })) ));
+
+        return statements;
     }
 
-    void SelectStorage::register_select( Select *sel )
-    {
-        FunctionDeclarationBuilder fdb;
-        print::PrettyPrinter pp;
-        auto values_hash = hash_select(sel);
 
-        fdb.name("select_" + std::to_string(values_hash));
-        //TODO get type of
-        fdb.retType(Id("Register"));
-        Var select_index = Var("index", "int:" + std::to_string(sel->bits));
-        fdb.arg_insert(VarDecl(select_index));
-        for(std::size_t i = 0; i < select_values( sel ).size(); i++ )
-        {
-            // TODO replace with to string visitor
-            auto res = pp.Print( sel->operands[ i ], 0 );
-            //TODO turn ifelse into if
-            auto if_expr =  If( Equal( select_index, Uint64(i) ), Return( Id( res ) ));
-            fdb.body_insert( if_expr );
-//                ss << "selector == " << std::to_string(i) <<  << "\n";
-        }
-
-        selects.insert( std::make_pair( values_hash, fdb.make() ) );
-    }
-
-    std::vector< decoder::FunctionDeclaration > SelectStorage::get_functions_for_select()
-    {
-        std::vector< decoder::FunctionDeclaration > funcs;
-        print::PrettyPrinter pp;
-        std::stringstream sl;
-
-
-        // This needs to be only done once per key
-        // Still need to verify that all keys have same size, maybe during registration
-        // Need to safe the functions somewhere, maybe during registration?
-        for(auto & k : selects)
-        {
-//            FunctionDeclarationBuilder fdb;
-//            fdb.name("select_" + std::to_string(k.first));
-//            //TODO get type of
-//            fdb.retType(Id("Register"));
-//            Var select_index = Var("index", "int:" + std::to_string(k.second->bits));
-//            fdb.arg_insert(VarDecl(select_index));
-//            for(std::size_t i = 0; i < select_values(k.second ).size(); i++ )
-//            {
-//                // TODO replace with to string visitor
-//                auto res = pp.Print( k.second->operands[ i ], 0 );
-//                //TODO turn ifelse into if
-//                auto if_expr =  IfElse( Equal( select_index, Uint64(i) ), Return( Id( res ) ), Id("<Else>") );
-//                fdb.body_insert( Statement( ) );
-////                ss << "selector == " << std::to_string(i) <<  << "\n";
-//            }
-            funcs.push_back(k.second);
-
-//            std::stringstream ss;
-//            ss << "Register select_" << std::to_string(k.first) << "(selector:" << std::to_string(select_values(k.second).size()) << ") {\n";
-//            for(std::size_t i = 0; i < select_values(k.second).size(); i++){
-//                ss << "selector == " << std::to_string(i) << pp.Print(k.second->operands[i],0) << "\n";
-//            }
-//            ss << "}\n";
-//            sl << ss.str();
-        }
-//        return sl.str();
-
-
-        return funcs;
-    }
-    decoder::FunctionCall SelectStorage::get_specialization( circ::Select *sel, Expr index )
-    {
-        auto func = selects.at( hash_select(sel));
-        return decoder::FunctionCall( func.function_name, { index } );
-    }
 };

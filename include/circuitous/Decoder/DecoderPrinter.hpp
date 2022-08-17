@@ -18,6 +18,21 @@ namespace circ::decoder {
     uint64_t negate(uint64_t value);
     InputType ctoit(const char c); //char to input type
 
+    struct SelectStorage{
+        void register_select (Select* sel);
+        decoder::FunctionCall get_specialization (circ::Select* sel, Expr index);
+        std::vector<decoder::FunctionDeclaration> get_functions_for_select();
+
+    private:
+        std::unordered_map<std::size_t, decoder::FunctionDeclaration> selects;
+        std::size_t hash_select_targets(Select* sel);
+    };
+
+    std::size_t hash_select(Select* op);
+    Operation* select_index(Select* op);
+    std::vector<Operation*> select_values(Select* op);
+
+
     /*
      * Data structure representing a group of bits that can also be an ignore/don't care bit
      */
@@ -44,15 +59,17 @@ namespace circ::decoder {
     };
 
     struct ExtractedCtx {
-        ExtractedCtx(const std::string &name, uint8_t size,
-                     const std::vector<ExtractedDecodeCondition> &decodeConditions) :
+        ExtractedCtx( const std::string &name, uint8_t size,
+                      const std::vector< ExtractedDecodeCondition > &decodeConditions,
+                      VerifyInstruction *vi ) :
                 generated_name( name ),
                 encoding_size_in_bytes( size ),
-                decodeConditions( decodeConditions ) {};
+                decodeConditions( decodeConditions ), vi( vi ) {};
 
         std::string generated_name;
         uint8_t encoding_size_in_bytes;
         std::vector<ExtractedDecodeCondition> decodeConditions; // Extract info we need from this
+        VerifyInstruction* vi;
 
         std::vector< OptionalBitArray<8> > convert_circIR_to_input_type_array() const;
         InputType get_input_type_at_index(std::size_t i) const;
@@ -110,11 +127,13 @@ namespace circ::decoder {
      */
     class DecoderPrinter {
     public:
-        DecoderPrinter(const circ::CircuitPtr &circ) : circuit( circ ), os( std::cout ) {
+        DecoderPrinter(const circ::CircuitPtr &circ) : circuit( circ ), os( std::cout ), ep(os) {
             extract_ctx();
         }
         DecoderPrinter(const circ::CircuitPtr &circ, std::ostream &os) : circuit( circ ),
-                                                                         os( os ) {
+                                                                         os( os ),
+                                                                         ep(os)
+        {
             extract_ctx();
         }
 
@@ -126,10 +145,16 @@ namespace circ::decoder {
         inline static const Var inner_func_arg2 = Var( "second8bytes", "uint64_t");
         inline static const std::array<Var,2> inner_func_args = {inner_func_arg1, inner_func_arg2};
 
+
         const circ::CircuitPtr &circuit;
         std::ostream &os;
         std::vector< ExtractedCtx > extracted_ctxs;
+
         int max_depth = 0; // used to measure performance of selection tree generation
+
+        SelectStorage st;
+        ExpressionPrinter ep;
+
 
         // funcs for conversion
         void extract_ctx();
@@ -140,9 +165,11 @@ namespace circ::decoder {
         // general printing
         void print_file_headers();
         void print_include(const std::string& name);
+        void print_globals();
 
         // user facing decoder function printing
         Expr create_top_level_function();
+
         static Expr get_top_level_arg_conversion();
         static std::vector< Expr >
         top_to_inner_level_args(const Var &array_input, const Var &arg,
