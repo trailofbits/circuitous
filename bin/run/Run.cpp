@@ -189,10 +189,6 @@ void export_derived(I inspect, const std::string &export_derived_to)
     }
 }
 
-void print_dot() {
-
-}
-
 template< typename Runner, typename CLI >
 void run(const CLI &parsed_cli)
 {
@@ -241,7 +237,8 @@ void run(const CLI &parsed_cli)
             values[op] = (val) ? llvm::toString(*val, 16, false) : std::string("{ undef }");
         }
         std::ofstream os(*dot_out);
-        circ::print_dot(os, circuit.get(), values);
+        circ::DotPrinter< circ::print::EmptyColorer > dp( values );
+        circ::print_circuit( *dot_out, dp, circuit.get() );
     }
 }
 
@@ -345,7 +342,6 @@ int main(int argc, char *argv[])
 
     if (cli.present< circ::cli::Dbg >())
         circ::add_sink< circ::severity::dbg >(std::cout);
-
     if (cli.present< circ::cli::run::Verify >())
         run< circ::run::VQueueInterpreter >(cli);
     else if (cli.present< circ::cli::run::Derive >())
