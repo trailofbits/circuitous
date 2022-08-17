@@ -2,7 +2,6 @@
 
 #include <circuitous/Diff/Diff.hpp>
 #include <circuitous/Diff/SemanticsTainter.hpp>
-#include <string>
 
 namespace circ::inspect
 {
@@ -45,8 +44,8 @@ namespace circ::inspect
             diffmarker_write( o, key_this );
     }
 
-    void clear_mark(Operation* op){
-        if( op->has_meta(meta_key))
-            op->remove_meta(meta_key);
+    void clear_mark( Operation *op )
+    {
+        op->remove_meta( meta_key );
     }
 }
