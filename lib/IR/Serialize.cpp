@@ -447,6 +447,7 @@ void serialize(std::ostream &os, Circuit *circuit)
 void serialize(std::filesystem::path filename, Circuit *circuit)
 {
     std::ofstream file(filename, std::ios::binary | std::ios::trunc);
+    check(file);
     return serialize(file, circuit);
 }
 
@@ -468,6 +469,7 @@ auto deserialize(std::istream &is) -> circuit_ptr_t
 auto deserialize(std::filesystem::path filename) -> circuit_ptr_t
 {
     std::ifstream file(std::string{filename}, std::ios::binary);
+    check(file);
     return deserialize(file);
 }
 
