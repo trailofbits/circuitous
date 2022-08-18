@@ -172,7 +172,7 @@ namespace circ::run
 
         // `[ current, next ]`.
         // In `next` only values "visible" by this transition are updated.
-        std::tuple< std::string, std::string > to_traces()
+        std::tuple< std::string, std::string > to_traces() const
         {
             auto trace = Trace::make(circuit);
             std::string current_trace(trace.total_size, '0');
