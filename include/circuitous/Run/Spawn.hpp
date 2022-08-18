@@ -180,10 +180,15 @@ namespace circ::run
 
             auto inject = [&](auto &where, auto op, auto &field) {
                 const auto &[start, size, _] = field;
+                if (!node_state.has_value(op))
+                {
+                    check(is_one_of< Advice, circ::Memory >(op));
+                    return;
+                }
                 auto maybe_value = node_state.get(op);
                 check(maybe_value);
 
-                auto val_as_str = maybe_value->toString(2, false);
+                auto val_as_str = llvm::toString(*maybe_value, 2, false);
                 if (val_as_str.size() < size)
                 {
                     auto diff = size - val_as_str.size();
