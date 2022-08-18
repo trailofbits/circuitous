@@ -4,6 +4,7 @@
 
 add_headers( Printers CIRCUITOUS_PRINTERS_HEADERS
   Verilog.hpp
+  Dot.hpp
 )
 
 add_circuitous_library( printers
