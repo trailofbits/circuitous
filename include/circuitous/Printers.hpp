@@ -30,17 +30,28 @@ namespace circ {
         void operator()(std::ostream &os, Circuit *circuit);
     };
 
-    template < print::GraphColorer Colorer >
+    template <print::GraphColorer Colorer>
     struct DotPrinter
     {
-        Colorer colorer;
-        DotPrinter() { colorer = Colorer(); }
-        DotPrinter( print::GraphColorer auto&& c ) : colorer( c ) { }
+      using value_map_t = std::unordered_map<Operation *, std::string>;
 
-        void operator()( std::ostream &os, Circuit *circuit )
-        {
-            print::print_dot( os, circuit, colorer );
-        }
+      DotPrinter( const value_map_t &nodeValues = {} ) : node_values(nodeValues)
+      {
+        colorer = Colorer();
+      }
+
+      DotPrinter(print::GraphColorer auto &&c,
+                 const value_map_t &nodeValues = {} )
+          : colorer(c),
+            node_values(nodeValues) {}
+
+      void operator()(std::ostream &os, Circuit *circuit)
+      {
+        print::print_dot(os, circuit, colorer, node_values);
+      }
+
+      Colorer colorer;
+      const value_map_t node_values;
     };
 
     template< typename Printer>

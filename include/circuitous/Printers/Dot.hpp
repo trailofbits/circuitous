@@ -215,10 +215,10 @@ namespace circ::print
         ColorFunc color_op;
     };
 
-    void print_dot( std::ostream &os, Circuit *circuit, GraphColorer auto &&c )
+    void print_dot( std::ostream &os, Circuit *circuit, GraphColorer auto &&c, const std::unordered_map< Operation *, std::string > &values = {} )
     {
         c.color_circuit( circuit );
-        Printer< std::function< print::Color( Operation * ) > > dot_os( os, {},
+        Printer< std::function< print::Color( Operation * ) > > dot_os( os, values,
                                                                         c.get_to_color() );
         dot_os.visit( circuit );
         c.remove_coloring( circuit );
