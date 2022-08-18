@@ -39,6 +39,24 @@ namespace circ::run
         }
     };
 
+    struct ExportRawTraces
+    {
+        using step_trace_t = std::tuple< std::string, std::string >;
+        step_trace_t states;
+
+      private:
+        ExportRawTraces(step_trace_t &&states) : states(std::move(states)) {}
+        ExportRawTraces() = default;
+
+      public:
+        static ExportRawTraces error() { return {}; }
+        static ExportRawTraces reject() { return {}; }
+        static ExportRawTraces accept(const auto &spawn)
+        {
+            return ExportRawTraces(spawn.to_traces());
+        }
+    };
+
     // A really simple mechanism to keep track of how transitions between states went,
     // possible results to export and signalisation of early termination.
     // Object is expected to be stateful. It is guaranteed that before each `next_memory`
