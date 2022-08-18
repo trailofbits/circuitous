@@ -43,11 +43,14 @@ namespace circ::run
     // possible results to export and signalisation of early termination.
     // Object is expected to be stateful. It is guaranteed that before each `next_memory`
     // there will be at least one call to `process` - all of which must return `true`.
+    template< typename ToExport >
     struct DefaultControl
     {
         std::optional< Memory > memory;
         // TODO(lukas): Make configurable - we may want to export full traces for example.
-        std::vector< ExportMemory > to_export;
+        // TODO(lukas): We also want this probably to be its own object that can hold
+        //              a collection if more entries are relevant.
+        std::vector< ToExport > to_export;
 
         auto result() const { check(!to_export.empty()); return to_export.back().result; }
 
@@ -101,16 +104,16 @@ namespace circ::run
             if (!accepted(joined))
             {
                 if (rejected(joined))
-                    to_export.emplace_back(ExportMemory::reject());
+                    to_export.emplace_back(ToExport::reject());
                 if (error(joined))
-                    to_export.emplace_back(ExportMemory::error());
+                    to_export.emplace_back(ToExport::error());
                 return false;
             }
 
             auto acceptor = get_acceptor(std::move(results));
             check(acceptor);
 
-            to_export.emplace_back(ExportMemory::accept(*acceptor));
+            to_export.emplace_back(ToExport::accept(*acceptor));
             memory = acceptor->take_memory();
 
             return true;
