@@ -52,6 +52,7 @@ namespace circ
 
     auto CircuitSmithy::forge() -> circuit_ptr_t
     {
+        check(!batch->empty()) << "No valid instructions provided, cannot produce circuit.";
         batch.fuzz();
         batch.lift< ILifter< OpaqueILifter > >();
         return lower_fn(CircuitMaker(ctx).make_from(std::move(batch)), ctx);
