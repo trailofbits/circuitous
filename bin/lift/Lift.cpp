@@ -20,6 +20,7 @@
 
 #include <circuitous/Lifter/CircuitSmithy.hpp>
 
+#include <eqsat/pattern/parser.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <gflags/gflags.h>
