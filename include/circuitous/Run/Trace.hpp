@@ -19,7 +19,6 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <circuitous/IR/Trace.hpp>
 
 #include <circuitous/Run/State.hpp>
-#include <circuitous/Util/Error.hpp>
 
 namespace circ::run::trace
 {
