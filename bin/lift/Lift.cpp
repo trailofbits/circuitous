@@ -7,6 +7,7 @@
 #include <circuitous/Printers.hpp>
 #include <circuitous/Transforms.hpp>
 #include <circuitous/IR/Cost.hpp>
+#include <circuitous/IR/Serialize.hpp>
 
 #include <circuitous/Printers/Verilog.hpp>
 #include <circuitous/Util/Warnings.hpp>
@@ -156,7 +157,7 @@ circ::CircuitPtr get_input_circuit(auto &cli)
         return make_circuit(as_string_view(*bytes));
 
     if (auto ir_file = cli.template get< cli::IRIn >())
-        return circ::Circuit::deserialize(*ir_file);
+        return circ::deserialize(*ir_file);
 
     if (auto cif = cli.template get< cli::CiffIn >())
         return make_circuit(circ::CIFFReader().read(*cif).take_bytes());
@@ -170,7 +171,7 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
     using namespace circ::inspect;
 
     if ( auto ir_out = cli.template get< cli::IROut >() )
-        circuit->serialize( *ir_out );
+        serialize(*ir_out, circuit.get());
 
     if ( auto json_out = cli.template get< cli::JsonOut >() )
         print_circuit( *json_out, print_json, circuit.get() );
@@ -273,8 +274,8 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
 
 void reload_test(const circ::CircuitPtr &circuit)
 {
-    circuit->serialize("reload_test.circir");
-    auto reload = circ::Circuit::deserialize("reload_test.circir");
+    circ::serialize("reload_test.circir", circuit.get());
+    auto reload = circ::deserialize("reload_test.circir");
     VerifyCircuit("Reload test starting ...\n", reload.get(), "Reload test successful.\n");
 }
 
