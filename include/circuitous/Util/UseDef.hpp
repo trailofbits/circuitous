@@ -124,8 +124,8 @@ namespace circ
         {
             auto it = fetch_user(other);
 
-            --it->second;
-            if (it->second == 0)
+            --std::get< 1 >(*it);
+            if (std::get< 1 >(*it) == 0)
                 _users.erase(it);
         }
 
