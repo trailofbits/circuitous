@@ -15,6 +15,7 @@
 
 #include <circuitous/IR/Verify.hpp>
 #include <circuitous/IR/IR.hpp>
+#include <circuitous/IR/Serialize.hpp>
 #include <circuitous/Printers.hpp>
 
 #include <fstream>
@@ -83,12 +84,8 @@ namespace circ::cli::run
 
 auto load_circ(const std::string &file)
 {
-    // Read input circuit file
-    std::ifstream ir(file, std::ios::binary);
-    circ::check(ir, []() { return std::strerror(errno); });
-
     // Deserialize circuit from binary IR file
-    auto circuit = circ::Circuit::deserialize(ir);
+    auto circuit = circ::deserialize(file);
 
     auto verify_res = circ::verify_circuit(circuit.get());
     circ::check(!verify_res.has_errors(), [&]() {
@@ -139,7 +136,7 @@ llvm::json::Object serialize(const circ::run::ExportMemory &entry)
 }
 
 // TODO(lukas): Generalize.
-llvm::json::Object serialize(const circ::run::DefaultControl &ctl)
+llvm::json::Object serialize(const auto &ctl)
 {
     llvm::json::Object out;
 
@@ -174,7 +171,7 @@ void run(const CLI &parsed_cli)
     auto trace = circ::run::trace::native::load_json(*json_trace);
     circ::check(trace.entries.size() >= 2) << trace.entries.size();
 
-    circ::run::DefaultControl ctrl;
+    circ::run::DefaultControl< circ::run::ExportMemory > ctrl;
     circ::run::test_trace(circuit.get(), trace, ctrl);
 
     auto as_json = serialize(ctrl);
