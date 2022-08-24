@@ -4,6 +4,7 @@
 #include <circuitous/IR/Verify.hpp>
 #include <circuitous/Transforms.hpp>
 #include <circuitous/IR/Cost.hpp>
+#include <circuitous/IR/Serialize.hpp>
 
 #include <circuitous/Printers/Verilog.hpp>
 #include <circuitous/Util/Warnings.hpp>
@@ -86,7 +87,7 @@ circ::CircuitPtr get_input_circuit(auto &cli)
         return make_circuit(as_string_view(*bytes));
 
     if (auto ir_file = cli.template get< cli::IRIn >())
-        return circ::Circuit::deserialize(*ir_file);
+        return circ::deserialize(*ir_file);
 
     if (auto cif = cli.template get< cli::CiffIn >())
         return make_circuit(circ::CIFFReader().read(*cif).take_bytes());
