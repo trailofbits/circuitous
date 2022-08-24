@@ -96,7 +96,7 @@ namespace eqsat
     }
 
     constexpr parser< label_t > auto label_reference_parser() {
-        return (char_parser('$') < label_name_parser()) | report< label_t >("label reference");
+        return char_parser('$') < (label_name_parser() | report< label_t >("label reference"));
     }
 
     constexpr parser< single_context > auto single_context_parser() {
