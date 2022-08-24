@@ -9,7 +9,6 @@ add_subdirectory(lib)
 add_executable( test-circuitous
   main.cpp
 
-  Transforms/Pattern.cpp
   Transforms/EqualitySaturation.cpp
 )
 
