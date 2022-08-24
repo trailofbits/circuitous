@@ -229,7 +229,6 @@ namespace eqsat
 
     using constraints_t = std::vector< constraint_t >;
 
-
     struct match_pattern {
         match_pattern(named_exprs list, constraints_t constraints, match_action action)
             : action(action)
