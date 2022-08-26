@@ -276,13 +276,6 @@ namespace eqsat
             | report< apply_pattern >("apply pattern");
     }
 
-    parser< rule_t > auto rule_parser() {
-        auto match = match_pattern_parser();
-        auto apply = apply_pattern_parser();
-        return from_tuple< rule_t >(match & apply)
-            | report< rule_t >("rewrite rule");
-    }
-
     template< parser_function parser_t >
     auto make_parse(parser_t parser, std::string_view str)
         -> std::optional< parse_type< parser_t > >
