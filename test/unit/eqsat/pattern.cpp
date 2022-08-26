@@ -20,6 +20,8 @@ namespace eqsat::test {
 
     atom_t label(std::string name) { return { unary_label{ std::move(name) } }; }
 
+    TEST_SUITE("eqsat::pattern-parser") {
+
     TEST_CASE("Expr Parser") {
         CHECK(parse_simple_expr("(op_add ?x ?y)"));
         CHECK(parse_simple_expr("(op_add ?x (op_mul 2 ?y))"));
@@ -144,5 +146,6 @@ namespace eqsat::test {
 
         CHECK(parse_match_pattern("((let M (op_mul):C) (disjoint C...) (match $M...))"));
     }
+    } // test suite: eqsat::pattern-parser
 
 } // namespace eqsat::test

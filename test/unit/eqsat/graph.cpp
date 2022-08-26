@@ -14,7 +14,6 @@
 
 namespace eqsat::test
 {
-
     struct string_storage
     {
         explicit string_storage( std::string_view str ) : data( str ) { }
@@ -47,6 +46,7 @@ namespace eqsat::test
         return egraph.find( node );
     }
 
+    TEST_SUITE("eqsat::building-and-merging") {
     TEST_CASE( "EGraph Merge Leaf Nodes" )
     {
         test_graph egraph;
@@ -192,4 +192,7 @@ namespace eqsat::test
     //     CHECK(bitwidth(&sx) == 32);
     //     CHECK(bitwidth(&sy) == 32);
     //   }
+
+    } // test suite: eqsat::building-and-merging
+
 } // namespace eqsat::test
