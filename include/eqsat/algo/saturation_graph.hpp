@@ -14,6 +14,10 @@ namespace eqsat {
     template< gap::graph::graph_like egraph >
     struct saturable_egraph : egraph {
 
+        using base = egraph;
+
+        using handle_hash = typename base::handle_hash;
+
         explicit saturable_egraph(egraph &&graph)
             : egraph(std::forward< egraph >(graph))
         {}
@@ -32,14 +36,30 @@ namespace eqsat {
             }
 
             // TODO maybe can be moved to rebuild?
-            merge_eclasses(lhs, rhs);
+            merge_eclasses({lid}, {rid});
 
             return { merge(lid, rid) };
         }
 
+        using base::find;
 
+        // Restores the egraph invariants, i.e, congruence equality and enode uniqueness
+        void rebuild() {
+            for (auto eclass : _pending) {
+                this->canonicalize(eclass);
+            }
 
-        void rebuild() {}
+            std::unordered_set< node_handle, handle_hash > changed_classes;
+            for (auto eclass : _pending) {
+                changed_classes.insert(find(eclass));
+            }
+
+            for (auto eclass : changed_classes) {
+                this->repair(eclass);
+            }
+
+            _pending.clear();
+        }
 
       private:
 
@@ -54,12 +74,12 @@ namespace eqsat {
         gap::rank_type rank(node_id_t id) { return this->_unions.rank(id); }
         gap::rank_type rank(node_id_t id) const { return this->_unions.rank(id); }
 
-        node_id_t merge(node_id_t lhs, node_id_t rhs) {
-            return _pending.emplace_back(this->_unions.merge(lhs, rhs));
+        node_handle merge(node_id_t lhs, node_id_t rhs) {
+            return _pending.emplace_back(node_handle{this->_unions.merge(lhs, rhs)});
         }
 
         // modified eclasses that needs to be rebuild
-        std::vector< node_id_t > _pending;
+        std::vector< node_handle > _pending;
     };
 
 } // namespace eqsat
