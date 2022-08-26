@@ -16,6 +16,7 @@ add_circuitous_library( transforms
     ConjureALU.cpp
   LINK_LIBS
     circuitous::eqsat
+    fmt::fmt
   HEADERS
     ${CIRCUITOUS_TRANSFORMS_HEADERS}
 )

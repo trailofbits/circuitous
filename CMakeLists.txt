@@ -62,7 +62,7 @@ endif ()
 #
 find_package( remill CONFIG REQUIRED )
 find_package( gflags CONFIG REQUIRED )
-
+find_package( fmt    CONFIG REQUIRED )
 #
 # standard compilation options
 #
