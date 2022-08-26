@@ -7,6 +7,7 @@
 #include <circuitous/Transforms/EqSatCost.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
 #include <eqsat/algo/saturation.hpp>
+#include <eqsat/algo/print.hpp>
 #include <eqsat/core/egraph.hpp>
 
 namespace circ
@@ -16,9 +17,13 @@ namespace circ
         return builder.build(circuit.get());
     };
 
+    using node_pointer_t = CircuitEGraph::node_pointer;
+
     CircuitPtr run_equality_saturation(CircuitPtr &&circuit, std::span< RuleSet > rules) {
         spdlog::debug("[eqsat] start equality saturation");
         auto [egraph, nodes_map] = make_circuit_egraph(circuit);
+
+        eqsat::to_dot(egraph, "initial.dot");
 
         auto [saturation, status] = eqsat::saturate(std::move(egraph), rules);
 

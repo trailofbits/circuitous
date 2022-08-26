@@ -16,6 +16,8 @@ namespace eqsat::graph
 {
     struct node_handle {
         node_id_t id;
+
+        constexpr bool operator==(const node_handle& other) const = default;
     };
 
     constexpr gap::hash_code hash_value(gap::hash_code code, const node_handle& val) {
@@ -70,6 +72,7 @@ namespace eqsat::graph
     template< typename storage >
     struct node : base {
         using node_pointer = node *;
+        using const_node_pointer = node const*;
         using storage_type = storage;
 
         explicit node(node_variants< storage > &&n) : data(std::move(n)) {}
@@ -111,6 +114,11 @@ namespace eqsat::graph
         std::vector< enode_pointer > nodes;
     };
 
+    template< typename enode_pointer >
+    static eclass< enode_pointer > singleton_eclass(enode_pointer node) {
+        return {{ node }};
+    }
+
     //
     // egraph edge
     //
@@ -136,12 +144,17 @@ namespace eqsat::graph
     //
     template< typename enode >
     struct egraph {
-        using node_type    = enode;
+        using node_type = enode;
         using storage_type = typename node_type::storage_type;
         using node_pointer = typename node_type::node_pointer;
+        using const_node_pointer = typename node_type::const_node_pointer;
 
-        using edge_type    = edge< node_type >;
-        using eclass_type  = eclass< node_pointer >;
+        using edge_type      = edge< node_type >;
+        using eclass_type    = eclass< node_pointer >;
+        using eclass_pointer = eclass_type *;
+
+        using handle_hash  = gap::hash< node_handle >;
+        using eclass_map   = std::unordered_map< node_handle, eclass_type, handle_hash >;
 
         egraph()           = default;
 
@@ -161,21 +174,51 @@ namespace eqsat::graph
                 co_yield node.get();
         }
 
-        gap::generator< edge_type > edges() {}
+        gap::generator< edge_type > edges() {
+            for (auto &node : nodes()) {
+                for (auto &ch : node->children()) {
+                    auto cls = eclass(ch);
+                    co_yield edge_type{node, &cls};
+                }
+            }
+        }
 
-        gap::generator< const edge_type > edges() const {}
+        gap::generator< const edge_type > edges() const {
+            for (const auto &node : nodes()) {
+                for (const auto &ch : node->children()) {
+                    const auto &cls = _classes.at(ch);
+                    co_yield edge_type{node, const_cast< const eclass_pointer >(&cls)};
+                }
+            }
+        }
 
-        node_handle find(node_pointer ptr) { return _ids[ptr]; }
+        using eclass_pair = typename eclass_map::value_type;
+        gap::generator< const eclass_pair & > eclasses() const {
+            for (const auto &pair : _classes)
+                co_yield pair;
+        }
+
+        node_handle find(const_node_pointer ptr) const {
+            return _ids.at(const_cast< node_pointer >(ptr));
+        }
+        node_handle find(node_pointer ptr) { return _ids.at(ptr); }
 
         node_pointer add_node(storage_type &&data) {
-            _nodes.emplace_back(
+            auto node = _nodes.emplace_back(
                 std::make_unique< node_type >(std::move(data))
-            );
+            ).get();
 
-            // TODO make singular eclass & canonicalize egraph
+            node_handle id{ _unions.make_new_set().parent };
 
-            return _nodes.back().get();
+            _classes.emplace(id, singleton_eclass(node));
+
+            _ids.emplace(node, id);
+
+            return node;
         }
+
+        eclass_pointer eclass(node_handle handle) const { return _classes.at(handle); }
+        eclass_pointer eclass(node_handle handle) { return _classes.at(handle); }
 
       private:
         // stores heap allocated nodes of egraph
@@ -185,8 +228,7 @@ namespace eqsat::graph
         gap::resizable_union_find _unions = gap::resizable_union_find(0);
 
         // all equavalent ids  map to the same class
-        using handle_hash = gap::hash< node_handle >;
-        std::unordered_map< node_handle, eclass_type, handle_hash > _classes;
+        eclass_map _classes;
 
         // stores equality ids of enodes
         std::unordered_map< node_pointer, node_handle > _ids;
