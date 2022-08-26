@@ -286,10 +286,6 @@ namespace eqsat
         apply_pattern rhs;
     };
 
-    struct rewrite_rule_t {};
-
-    std::optional< rewrite_rule_t > parser_rewrite_rule();
-
     std::optional< atom_t > parse_atom(std::string_view str);
 
     std::optional< simple_expr > parse_simple_expr(std::string_view str);

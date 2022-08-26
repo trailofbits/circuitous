@@ -400,6 +400,4 @@ namespace eqsat
         return result;
     }
 
-    std::optional< rewrite_rule_t > parser_rewrite_rule() { return std::nullopt; }
-
 } // namespace eqsat
