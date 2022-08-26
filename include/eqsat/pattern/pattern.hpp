@@ -277,15 +277,6 @@ namespace eqsat
         named_exprs list;
     };
 
-    struct rule_t {
-        rule_t(match_pattern lhs, apply_pattern rhs)
-            : lhs(lhs)
-            , rhs(rhs) {}
-
-        match_pattern lhs;
-        apply_pattern rhs;
-    };
-
     std::optional< atom_t > parse_atom(std::string_view str);
 
     std::optional< simple_expr > parse_simple_expr(std::string_view str);
