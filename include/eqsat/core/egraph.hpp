@@ -43,7 +43,10 @@ namespace eqsat::graph
             _children.push_back(handle);
         }
 
-        void update_children(gap::invocable auto &&fn) { std::for_each(_children, fn); }
+        template< typename Fn >
+        void update_children(Fn &&fn) {
+            std::for_each(_children.begin(), _children.end(), std::forward< Fn >(fn));
+        }
 
         children_t _children;
     };
@@ -114,6 +117,8 @@ namespace eqsat::graph
         void merge(eclass &&other) {
             std::move(other.nodes.begin(), other.nodes.end(), std::back_inserter(nodes));
         }
+
+        bool operator==(const eclass&) const = default;
 
         std::vector< enode_pointer > nodes;
     };
@@ -202,14 +207,23 @@ namespace eqsat::graph
                 co_yield pair;
         }
 
+        std::size_t num_of_eclasses() const { return _classes.size(); }
+
         node_handle find(const_node_pointer ptr) const {
             return _ids.at(const_cast< node_pointer >(ptr));
         }
         node_handle find(node_pointer ptr) { return _ids.at(ptr); }
 
-        node_pointer add_node(storage_type &&data) {
-            // TODO canonicalize node
+        node_handle find(node_handle node) const { return { _unions.find(node.id) }; }
+        node_handle find(node_handle node) { return { _unions.find(node.id) }; }
 
+        void canonicalize(node_type &node) {
+            node.update_children([&](node_handle child) {
+                return _unions.find(child.id); /* compresses paths */
+            });
+        }
+
+        node_pointer add_node(storage_type &&data) {
             auto node = _nodes.emplace_back(
                 std::make_unique< node_type >(std::move(data))
             ).get();
@@ -220,14 +234,47 @@ namespace eqsat::graph
 
             // TODO add child - parent link
 
-
             _ids.emplace(node, id);
 
             return node;
         }
 
-        eclass_pointer eclass(node_handle handle) const { return _classes.at(handle); }
-        eclass_pointer eclass(node_handle handle) { return _classes.at(handle); }
+        const eclass_type &eclass(node_handle handle) const { return _classes.at(find(handle)); }
+        eclass_type &eclass(node_handle handle) { return _classes.at(find(handle)); }
+
+        void canonicalize(node_handle eclass) {
+            for (auto node : _classes[eclass].nodes) {
+                this->canonicalize(*node);
+            }
+        }
+
+        // require canonicalized eclasses
+        void repair(node_handle eclass) { repair(_classes[eclass]); }
+
+        void repair(eclass_type &eclass) {
+            // deduplicate the parents, noting that equal
+            // parents get merged and put on the worklist
+            // std::unordered_set< node_handle, handle_hash > seen;
+            // std::vector< node_pointer > new_parents;
+            // for (auto *node : eclass.parents) {
+            //     if (auto id = _unions.find( _ids[node] ); !seen.count(id)) {
+            //     new_parents.push_back(node);
+            //     seen.insert(id);
+            //     }
+            // }
+
+            // eclass.parents = std::move(new_parents);
+
+            // obliterate empty classes
+            remove_empty_eclasses();
+        }
+
+        void remove_empty_eclasses() {
+            std::erase_if(_classes, [](const auto& eclass) {
+                const auto &[handle, cls] = eclass;
+                return cls.nodes.empty();
+            });
+        }
 
       protected:
         // stores heap allocated nodes of egraph
