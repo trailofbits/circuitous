@@ -4,6 +4,7 @@
   "dependencies": [
     "doctest",
     "spdlog",
+    "fmt",
     "gap"
   ],
   "default-features": [
