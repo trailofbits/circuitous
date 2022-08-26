@@ -30,6 +30,7 @@ add_test(
 add_executable( test-eqsat
   main.cpp
   eqsat/pattern.cpp
+  eqsat/graph.cpp
 )
 
 target_link_libraries( test-eqsat
