@@ -111,6 +111,10 @@ namespace eqsat::graph
     //
     template< typename enode_pointer >
     struct eclass {
+        void merge(eclass &&other) {
+            std::move(other.nodes.begin(), other.nodes.end(), std::back_inserter(nodes));
+        }
+
         std::vector< enode_pointer > nodes;
     };
 
@@ -204,6 +208,8 @@ namespace eqsat::graph
         node_handle find(node_pointer ptr) { return _ids.at(ptr); }
 
         node_pointer add_node(storage_type &&data) {
+            // TODO canonicalize node
+
             auto node = _nodes.emplace_back(
                 std::make_unique< node_type >(std::move(data))
             ).get();
@@ -211,6 +217,9 @@ namespace eqsat::graph
             node_handle id{ _unions.make_new_set().parent };
 
             _classes.emplace(id, singleton_eclass(node));
+
+            // TODO add child - parent link
+
 
             _ids.emplace(node, id);
 
@@ -220,7 +229,7 @@ namespace eqsat::graph
         eclass_pointer eclass(node_handle handle) const { return _classes.at(handle); }
         eclass_pointer eclass(node_handle handle) { return _classes.at(handle); }
 
-      private:
+      protected:
         // stores heap allocated nodes of egraph
         std::vector< std::unique_ptr< node_type > > _nodes;
 
