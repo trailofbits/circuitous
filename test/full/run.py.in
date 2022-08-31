@@ -19,6 +19,7 @@ import tools.model_test as mp
 
 from tools.execute import run_multitrace
 from tools.result import ResultValue, ResultAccumulator
+from tools.circuit import RawCircuit
 
 circuitous_prefix = "@PROJECT_BINARY_DIR@/bin"
 
