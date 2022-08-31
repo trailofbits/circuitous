@@ -235,6 +235,8 @@ namespace eqsat
             , constraints(constraints)
             , list(list) {}
 
+        explicit match_pattern(match_action action) : action(action) {}
+
         match_action action;
         constraints_t constraints;
         named_exprs list;

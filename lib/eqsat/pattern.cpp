@@ -40,7 +40,7 @@ namespace eqsat
     template< typename T >
     constexpr parser< T > auto report(std::string_view msg) {
         return [=](parse_input_t in) -> parse_result_t< T > {
-            spdlog::warn("can't parse {} from {}", msg, in);
+            spdlog::debug("can't parse {} from {}", msg, in);
             return std::nullopt;
         };
     }
@@ -259,6 +259,7 @@ namespace eqsat
         auto cons   = option(constraints_t{}, constraints_parser());
         auto list   = option(named_exprs{}, named_exprs_parser());
         return from_tuple< match_pattern >(paren(combine(list, cons, action)))
+            | construct< match_pattern >(match_action_parser())
             | report< match_pattern >("match pattern");
     }
 
