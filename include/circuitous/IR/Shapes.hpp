@@ -5,15 +5,16 @@
 #pragma once
 
 #include <circuitous/IR/Circuit.hpp>
-#include <circuitous/Support/Check.hpp>
+#include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Visitors.hpp>
+
+#include <circuitous/Support/Check.hpp>
 
 #include <deque>
 #include <sstream>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
-#include "IR.hpp"
 
 namespace circ
 {
