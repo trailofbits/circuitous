@@ -17,38 +17,6 @@
 
 namespace circ {
 
-template<typename T, typename ...Ts>
-bool IsOneOf(Operation *op) {
-  if (op->op_code == T::kind) {
-    return true;
-  }
-
-  if constexpr (sizeof...(Ts) == 0) {
-    return false;
-  } else {
-    return IsOneOf<Ts...>(op);
-  }
-}
-
-static inline bool IsLeafNode(Operation *op) {
-  switch(op->op_code) {
-    case InputRegister::kind:
-    case OutputRegister::kind:
-    case Constant::kind:
-    case Advice::kind:
-    case Undefined::kind:
-    case InputInstructionBits::kind:
-      return true;
-    default:
-      return false;
-  }
-}
-
-template<typename T>
-bool Is(Operation *op) {
-  return op->op_code == T::kind;
-}
-
 using operation_set_t = std::unordered_set<Operation *>;
 
 template<typename T>
