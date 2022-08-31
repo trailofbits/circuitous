@@ -18,44 +18,6 @@
 
 namespace circ
 {
-
-    template< typename T >
-    struct SubtreeCollector
-    {
-        std::unordered_multiset< T * > collected;
-
-        template< typename C >
-        SubtreeCollector< T > &Run( C &&ops )
-        {
-            for ( auto op : ops )
-                Run( op );
-            return *this;
-        }
-
-        SubtreeCollector< T > &Run( Operation *o )
-        {
-            if ( o->op_code == T::kind )
-                collected.insert( dynamic_cast< T * >( o ) );
-
-            for ( auto op : o->operands() )
-                Run(op);
-
-            return *this;
-        }
-
-        template< typename CB >
-        auto Apply( CB cb )
-        {
-            using res_t = decltype( cb( *collected.begin() ) );
-            std::vector< res_t > out;
-
-            for ( auto x : collected )
-              out.push_back( cb( x ) );
-
-            return out;
-        }
-    };
-
     namespace print
     {
         template< typename Derived >
@@ -197,36 +159,49 @@ namespace circ
             }
         };
 
-
-        template< typename ...Ts >
-        struct UpTree
+        template< typename Self >
+        struct TreeCollector
         {
             std::unordered_set< Operation * > collected;
 
-            void Run( Operation *op )
+            auto take() { return std::move( collected ); }
+            Self &self() { return static_cast< Self & >( *this ); }
+
+            Self &run( Operation *op )
             {
-                if ( is_one_of< Ts... >( op ) )
+                if ( self().accepted( op ) )
                     collected.insert( op );
 
-                for ( auto o : op->users() )
-                  Run( o );
+                self().dispatch( op );
+                return self();
             }
         };
 
-
-        template< typename ...Ts >
-        struct DownTree
+        template< typename ... Ts >
+        struct MatchOn
         {
-            std::unordered_set< Operation * > collected;
+            bool accepted( Operation *op ) { return is_one_of< Ts ... >( op ); }
+        };
 
-            void Run( Operation *op )
+        template< typename ... Ts >
+        struct UpTree : MatchOn< Ts ... >, TreeCollector< UpTree< Ts ... > >
+        {
+            void dispatch( Operation *op )
             {
-                if ( is_one_of< Ts... >( op ) )
-                    collected.insert(op);
-
-                for ( auto o : op->operands() )
-                    Run( o );
+                for ( auto u : op->users() )
+                    this->run( u );
             }
+        };
+
+        template< typename ... Ts >
+        struct DownTree : MatchOn< Ts ... >, TreeCollector< DownTree< Ts ... > >
+        {
+            void dispatch( Operation *op )
+            {
+                for ( auto o : op->operands() )
+                    this->run( o );
+            }
+
         };
     } // namespace collect
 
@@ -294,23 +269,18 @@ namespace circ
 
     static inline Operation *GetContext( Operation *op )
     {
-        collect::UpTree< VerifyInstruction > collector;
-        collector.Run( op );
-        auto &ctxs = collector.collected;
+        auto ctxs = collect::UpTree< VerifyInstruction >{}.run( op ).take();
         check( ctxs.size() == 1 );
         return *( ctxs.begin() );
     }
 
     static inline std::unordered_set< Operation * > GetContexts( Operation *op )
     {
-        collect::UpTree< VerifyInstruction > up_collector;
-        up_collector.Run( op );
+        auto up = collect::UpTree< VerifyInstruction >().run( op ).take();
+        auto down = collect::DownTree< VerifyInstruction >().run( op ).take();
 
-        SubtreeCollector< VerifyInstruction > down_collector;
-        auto down_collected = std::move( down_collector.Run( op ).collected );
-
-        up_collector.collected.insert( down_collected.begin(), down_collected.end() );
-        return std::move( up_collector.collected );
+        up.insert( down.begin(), down.end() );
+        return up;
     }
 
     /*
@@ -383,7 +353,7 @@ namespace circ
     void run_visitor_on(Operation *op, Visitor &&vis)
     {
         collect::DownTree <TL> down_collector; // Works on more than just circuit unlike attr
-        down_collector.Run( op );
+        down_collector.run( op );
         for (auto &o: down_collector.collected) {
             vis.visit( o );
         }
