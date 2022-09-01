@@ -17,6 +17,7 @@ add_headers( Lifter CIRCUITOUS_LIFTER_HEADERS
   Lifter.hpp
   LLVMToCircIR.hpp
   Memory.hpp
+  ToLLVM.hpp
   SelectFold.hpp
   ShadowMat.hpp
   Shadows.hpp
@@ -32,6 +33,7 @@ add_circuitous_library( lifter
     Instruction.cpp
     Remill.cpp
     ShadowMat.cpp
+    ToLLVM.cpp
     Shadows.cpp
   LINK_LIBS
     circuitous::dbg
