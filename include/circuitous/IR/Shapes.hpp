@@ -175,6 +175,24 @@ namespace circ
                 self().dispatch( op );
                 return self();
             }
+
+            template< typename T >
+            gap::generator< T * > peek()
+            {
+                for ( auto op : collected )
+                    if ( isa< T >( op ) )
+                        co_yield static_cast< T * >( op );
+            }
+
+            template< typename T, typename C = std::unordered_set< T * > >
+            C freeze_as()
+            {
+                C out;
+                // There is a different type as sentinel.
+                for ( auto x : peek< T >() )
+                    out.emplace( x );
+                return out;
+            }
         };
 
         template< typename ... Ts >
