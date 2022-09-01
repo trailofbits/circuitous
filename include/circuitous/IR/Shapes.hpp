@@ -160,7 +160,7 @@ namespace circ
         };
 
         template< typename Self >
-        struct TreeCollector
+        struct TreeCollector_
         {
             std::unordered_set< Operation * > collected;
 
@@ -172,7 +172,8 @@ namespace circ
                 if ( self().accepted( op ) )
                     collected.insert( op );
 
-                self().dispatch( op );
+                for ( auto o : self().next( op ) )
+                    run( o );
                 return self();
             }
 
@@ -201,26 +202,28 @@ namespace circ
             bool accepted( Operation *op ) { return is_one_of< Ts ... >( op ); }
         };
 
-        template< typename ... Ts >
-        struct UpTree : MatchOn< Ts ... >, TreeCollector< UpTree< Ts ... > >
+        struct Up
         {
-            void dispatch( Operation *op )
-            {
-                for ( auto u : op->users() )
-                    this->run( u );
-            }
+            auto next( Operation *op ) { return op->users(); }
         };
 
-        template< typename ... Ts >
-        struct DownTree : MatchOn< Ts ... >, TreeCollector< DownTree< Ts ... > >
+        struct Down
         {
-            void dispatch( Operation *op )
-            {
-                for ( auto o : op->operands() )
-                    this->run( o );
-            }
-
+            auto next( Operation *op ) { return op->operands(); }
         };
+
+        template< typename Dir, typename ... Ts >
+        struct TreeCollector : TreeCollector_< TreeCollector< Dir, Ts ... > >,
+                               MatchOn< Ts ... >,
+                               Dir
+        {};
+
+        template< typename ... Ts >
+        using UpTree = TreeCollector< Up, Ts ... >;
+
+        template< typename ... Ts >
+        using DownTree = TreeCollector< Down, Ts ... >;
+
     } // namespace collect
 
     template< typename ...Collectors >
@@ -372,7 +375,7 @@ namespace circ
     {
         collect::DownTree <TL> down_collector; // Works on more than just circuit unlike attr
         down_collector.run( op );
-        for (auto &o: down_collector.collected) {
+        for (auto &o: down_collector.take()) {
             vis.visit( o );
         }
     }
