@@ -145,9 +145,9 @@ void BottomUpDependencyVisitor<T>::Visit(llvm::Function *context, llvm::Value *v
 
 struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 {
-    explicit IRImporter(const remill::Arch *arch_, const llvm::DataLayout &dl_,
-                      Circuit *impl_)
-        : arch(arch_), dl(dl_), impl(impl_)
+    explicit IRImporter(const llvm::DataLayout &dl_,
+                        Circuit *impl_)
+        : dl(dl_), impl(impl_)
     {}
 
     void VisitArgument(llvm::Function *, llvm::Argument *val)
@@ -684,7 +684,6 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
     bool contains(llvm::Value *key) const { return val_to_op.count(key); }
 
-    const remill::Arch *arch;
     const llvm::DataLayout &dl;
     Circuit *impl;
     VerifyInstruction *verifier{nullptr};
@@ -711,17 +710,17 @@ void clear_names(llvm::Function *fn)
 }  // namespace
 
 
-Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func, Ctx &ctx)
+Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func,
+                                std::size_t ptr_size)
 {
-    const auto &arch = ctx.arch();
     clear_names(circuit_func);
 
     const auto module = circuit_func->getParent();
     const auto &dl = module->getDataLayout();
 
     log_info() << "IRImpoter starting.";
-    auto impl = std::make_unique<Circuit>(ctx.ptr_size);
-    IRImporter importer(arch, dl, impl.get());
+    auto impl = std::make_unique<Circuit>(ptr_size);
+    IRImporter importer(dl, impl.get());
 
     //TODO(lukas): Since extract does need operand, we need to have the node already present
     importer.conjure_instbits(kMaxNumInstBits);
