@@ -177,17 +177,6 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         unreachable() << "Unsupported memory read intrinsic: " << name.str();
     }
 
-    auto is_supported(auto triple)
-    {
-        auto arch_name = remill::GetArchName(triple);
-        return arch_name == remill::kArchAMD64 || arch_name == remill::kArchX86;
-    }
-
-    auto get_triple(llvm::Function *fn)
-    {
-        return llvm::Triple(fn->getParent()->getTargetTriple());
-    }
-
     auto inst_bits_node()
     {
         check(impl->attr< InputInstructionBits >().size() == 1);
@@ -203,10 +192,6 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
     Operation *VisitExtractIntrinsic(llvm::CallInst *call, llvm::Function *fn)
     {
-        // TODO(lukas): Refactor into separate method and check in a better way
-        //              that includes `_avx` variants.
-        check(is_supported(get_triple(fn)));
-
         auto [extract_from, size] = irops::Extract::parse_args(fn);
         auto arg = extract_argument(call, fn);
 
@@ -252,10 +237,6 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
 
     Operation *VisitExtractRawIntrinsic(llvm::CallInst *call, llvm::Function *fn)
     {
-        // TODO(lukas): Refactor into separate method and check in a better way
-        //              that includes `_avx` variants.
-        check(is_supported(get_triple(fn)));
-
         auto arg = extract_argument(call, fn);
         auto [from, size] = irops::ExtractRaw::parse_args(fn);
         auto op = Emplace< Extract >(call, static_cast< uint32_t >(from),
