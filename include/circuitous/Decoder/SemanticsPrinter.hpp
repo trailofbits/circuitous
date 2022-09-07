@@ -13,6 +13,21 @@ namespace circ::decoder::semantics
 {
 
 
+    /*
+     * Approach for semantics emitter:
+     *  Create enums <Arity>Operation i.e UnaryOperation::Trunc, BinaryOperation::Add. Note that arity is w.r.t to undefined arguments, So Trunc is unary as the size to truncate to is known beforehand
+     *
+     *  goal is to create a minimal set of functions such that it can execute (OP_OF_ARITY_X, <arg_1, arg_2, ..., arg_X>)
+     *  Advantage of all operations being passed a lot of possible re-use.
+     *  Disadvantage is that we have a separate function for every possible (used) call structure
+     *      i.e (a op b) op c generates a different function than a op (b op c)
+     *
+     *  The entire call structure can be obtained by looking at the vector of the arguments.
+     *  As each (sub)tree starts with a known N-ary value, we can parse until we hit N arguments which represent a terminal value.
+     *
+     */
+
+
 
     /*
      *  General:
@@ -101,7 +116,27 @@ namespace circ::decoder::semantics
         }
     };
 
-//    struct vi_to_semanti
+    struct OpCall {
+        FunctionCall op;
+        std::vector<Operation *> argumetns; //leave argumetns that will need to be converted, only values from the enum
+
+
+    };
+
+    struct FunctionVisitor : Visitor<FunctionVisitor>
+    {
+        using hash_t = std::string;
+        std::pair<FunctionCall, hash_t> visit(Operation *op){
+            std::stringstream ss;
+            ss << std::to_string(op->size);
+            for(auto o : op->operands)
+                ss << dispatch(o).second;
+
+            FunctionCall call = FunctionCall(hash, )
+        }
+
+
+    };
 
     /*
      * The first pass of semantics emission is to go and find all possible specializations
