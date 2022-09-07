@@ -550,23 +550,23 @@ def main():
     for x in tests:
         total += len(x.cases)
     log_info("Filtered " + str(len(tests)) + " tests with " + str(total) + " cases")
-    not_passed = None
+    passed = None
     if args.persist:
         log_info("Creating persistent directory")
         test_dir = tempfile.mkdtemp(dir=os.getcwd())
-        not_passed = execute_tests(tests, test_dir, command_args, args.fragile, args.jobs)
+        passed = execute_tests(tests, test_dir, command_args, args.fragile, args.jobs)
     else:
         log_info("Creating temporary directory")
         with tempfile.TemporaryDirectory(dir=os.getcwd()) as tmpdir:
-            not_passed = execute_tests(tests, tmpdir, command_args, args.fragile, args.jobs)
-    return not_passed
+            passed = execute_tests(tests, tmpdir, command_args, args.fragile, args.jobs)
+    return passed
 
 
 if __name__ == "__main__":
     x = main()
     if x is None:
         sys.exit(2)
-    elif x != 0:
+    elif x == False:
         sys.exit(1)
     else:
         sys.exit(0)
