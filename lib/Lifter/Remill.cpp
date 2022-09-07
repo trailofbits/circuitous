@@ -736,9 +736,6 @@ Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func,
         }
     }
 
-    check(0u < num_input_regs);
-    check(num_input_regs == num_output_regs);
-
     auto all_verifications = impl->create<OnlyOneCondition>();
     impl->add_operand(all_verifications);
 
