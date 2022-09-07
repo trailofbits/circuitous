@@ -321,6 +321,13 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         if (name.startswith("__remill_undefined_")) {
             return Emplace< Undefined >(call, SizeFromSuffix(name));
         }
+
+        if (irops::Reg::is(fn)) {
+            auto [ size, reg, io_type ] = irops::Reg::parse_args(fn);
+            return VisitIOLeaf< InputRegister, OutputRegister >(
+                    call, fn, io_type, reg, static_cast< uint32_t >( size ) );
+        }
+
         if (irops::Extract::is(fn)) {
             return VisitExtractIntrinsic(call, fn);
         }
@@ -405,6 +412,14 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         if (irops::Timestamp::is(fn)) {
             auto [size, io_type] = irops::Timestamp::parse_args(fn);
             return VisitIOLeaf< InputTimestamp, OutputTimestamp >(call, fn, io_type, static_cast< uint32_t >(size));
+        }
+        if (irops::InstBits::is(fn)) {
+            auto [size, io_type] = irops::InstBits::parse_args(fn);
+            check(io_type == irops::io_type::in);
+            // TODO(lukas): Extract out.
+            auto val = fetch_leave< InputInstructionBits >(fn, static_cast< uint32_t >(size));
+            val_to_op[ call ] = val;
+            return val;
         }
         unreachable() << "Unsupported function: " << remill::LLVMThingToString(call);
     }
