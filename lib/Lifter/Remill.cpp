@@ -261,15 +261,15 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
         return out;
     }
 
-    template< typename IT, typename OT >
+    template< typename IT, typename OT, typename ... Args >
     auto VisitIOLeaf(llvm::CallInst *call, llvm::Function *fn,
-                     uint32_t io_type, std::size_t size)
+                     uint32_t io_type, Args && ... args)
     {
         auto leaf = [&]() {
             if (io_type == irops::io_type::in)
-                return fetch_leave< IT >(fn, static_cast< uint32_t >(size));
+                return fetch_leave< IT >(fn, std::forward< Args >( args ) ... );
             if (io_type == irops::io_type::out)
-                return fetch_leave< OT >(fn, static_cast< uint32_t >(size));
+                return fetch_leave< OT >(fn, std::forward< Args >( args ) ... );
             unreachable() << "Unreachable";
         }();
         val_to_op[call] = leaf;
@@ -619,12 +619,12 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
        inst_bits[size] = impl->create< InputInstructionBits >(size);
     }
 
-    template< typename I >
-    Operation *fetch_leave(llvm::Function *fn, uint32_t size)
+    template< typename I, typename ... Args >
+    Operation *fetch_leave(llvm::Function *fn, Args && ... args )
     {
         if (!leaves.count(fn)) {
             // TODO(lukas): What about possible metadata?
-            leaves[fn] = impl->create< I >(size);
+            leaves[fn] = impl->create< I >( std::forward< Args >( args ) ... );
         }
         return leaves[fn];
     }
