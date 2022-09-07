@@ -751,4 +751,13 @@ Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func,
     return impl;
 }
 
+Circuit::circuit_ptr_t lower_module(llvm::Module *lmodule,
+                                    std::size_t ptr_size)
+{
+    for ( auto &fn : *lmodule )
+        if ( !fn.isDeclaration() )
+            return lower_fn( &fn, ptr_size );
+    return {};
+}
+
 }  // namespace circ

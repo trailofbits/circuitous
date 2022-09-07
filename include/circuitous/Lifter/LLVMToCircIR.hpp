@@ -13,4 +13,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 namespace circ
 {
     Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func, std::size_t ptr_size);
+
+    // Expects there is exactly one function with a body to be lowered.
+    Circuit::circuit_ptr_t lower_module(llvm::Module *circuit_module, std::size_t ptr_size);
 } // namespace circ
