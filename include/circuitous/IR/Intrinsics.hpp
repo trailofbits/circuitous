@@ -23,6 +23,8 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <circuitous/IR/IntrinsicsHelpers.hpp>
 #include <circuitous/IR/Memory.hpp>
 
+#include <gap/core/generator.hpp>
+
 namespace circ::irops
 {
 
@@ -147,6 +149,15 @@ namespace circ::irops
     {
         check(c_arg);
         return I::emit(ir, std::vector< llvm::Value * >{c_arg}, std::forward<Args>(args)...);
+    }
+
+    template< typename I, typename ... Args >
+    auto make(llvm::IRBuilder<> &ir, gap::generator< llvm::Value * > cargs, Args && ... args)
+    {
+        std::vector< llvm::Value * > c;
+        for ( auto a : cargs )
+            c.push_back( a );
+        return make< I >( ir, std::move( c ), std::forward< Args >( args ) ... );
     }
 
     // See `make`, but without any `c_args`.
