@@ -697,6 +697,14 @@ namespace circ::irops::impl
                                 SStack< FixSized< 1 > >,
                                 Melts
                               >;
+    template< typename, typename Def >
+    using reg_allocator_t = Fn< Def,
+                                DStack<>,
+                                SStack< R< suffix::size >,
+                                        S< suffix::reg >,
+                                        S< suffix::IO< io_type > > >,
+                                Melts
+                              >;
 
 
     template< typename, typename Def >
