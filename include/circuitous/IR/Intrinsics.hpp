@@ -96,6 +96,7 @@ namespace circ::irops
     simple_intrinsic(Memory, impl::mem_allocator_t, "__circuitous.memory");
     // Create Advice of dynamic value.
     simple_intrinsic(Advice, impl::raw_allocator_t, "__circuitous.advice");
+    simple_intrinsic(AdviceIndexed, impl::idx_allocator_t, "__circuitous.advice_i");
     // Creates opaque pointer.
     // Used by instruction lifters to handle destination operands.
     simple_intrinsic(AllocateDst, impl::raw_allocator_t, "__circuitous.allocate_dst");
@@ -127,6 +128,8 @@ namespace circ::irops
     leaf_intrinsic(ErrorBit, 1, impl::fixed_leaf_t, "__circuitous.error_bit");
     leaf_intrinsic(Timestamp, 64,  impl::fixed_leaf_t, "__circuitous.timestamp");
     leaf_intrinsic(InstBits, 15 * 8, impl::fixed_leaf_t, "__circuitous.instbits");
+
+    simple_intrinsic(Reg, impl::reg_allocator_t, "__circuitous.reg");
 
     using io_type = impl::io_type;
 
