@@ -163,20 +163,6 @@ namespace circ
             return op;
         }
 
-        template< typename ...Args >
-        Operation *adopt(uint64_t id, uint32_t kind, Args &&...args)
-        {
-            Operation *out;
-            auto adopt = [&](auto op)
-            {
-                using raw_t = std::remove_pointer_t< std::decay_t< decltype( op ) > >;
-                if constexpr ( std::is_constructible_v< raw_t, Args ... > ) {
-                    out = this->adopt< raw_t >( id, std::forward< Args >( args )... );
-                }
-            };
-            return out;
-        }
-
         // TODO(lukas) : Return optional to signal failure.
         template< typename What >
         auto fetch_singular()
