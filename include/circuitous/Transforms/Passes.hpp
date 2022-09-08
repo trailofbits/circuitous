@@ -45,23 +45,6 @@ namespace circ
     std::vector<eqsat::RuleSet> rulesets;
   };
 
-
-  // Merge all of the hint inputs into a single "wide" input hint that is of
-  // sufficient size to support all verifiers. In place of the individual hints,
-  // the verifiers pull out slices of wide hint value with an EXTRACT.
-  bool MergeAdvices(Circuit *circuit);
-
-  struct MergeAdvicesPass : PassBase
-  {
-    CircuitPtr run(CircuitPtr &&circuit) override
-    {
-      MergeAdvices(circuit.get());
-      return std::move(circuit);
-    }
-
-    static Pass get() { return std::make_shared< MergeAdvicesPass >(); }
-  };
-
     /*
      * Semantics from remill calculate the overflow flag directly from the values instead of
      * re-using existing flags. This leads to unnecessary computation as we have access
@@ -156,7 +139,6 @@ namespace circ
       static inline std::map< std::string, Pass > known_passes
       {
           { "eqsat", EqualitySaturationPass::get() },
-          { "merge-advices", MergeAdvicesPass::get() },
           { "dummy-pass", DummyPass::get() },
           { "trivial-concat-removal", TrivialConcatRemovalPass::get() },
           { "overflow-flag-fix", RemillOFPatch::get() },
