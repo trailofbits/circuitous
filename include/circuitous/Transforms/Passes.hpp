@@ -135,19 +135,19 @@ namespace circ
 
   struct PassesBase
   {
-      // list of recognized passes
-      static inline std::map< std::string, Pass > known_passes
+      Pass make_known_pass( const std::string &name )
       {
-          { "eqsat", EqualitySaturationPass::get() },
-          { "dummy-pass", DummyPass::get() },
-          { "trivial-concat-removal", TrivialConcatRemovalPass::get() },
-          { "overflow-flag-fix", RemillOFPatch::get() },
-          { "merge-transitive-advices", MergeAdviceConstraints::get() }
-      };
+            if ( name == "eqsat" )                    return EqualitySaturationPass::get();
+            if ( name == "dummy-pass" )               return DummyPass::get();
+            if ( name == "trivial-concat-removal" )   return TrivialConcatRemovalPass::get();
+            if ( name == "overflow-flag-fix" )        return RemillOFPatch::get();
+            if ( name == "merge-transitive-advices" ) return MergeAdviceConstraints::get();
+            log_kill() << "Unkown pass option:" << name;
+      }
 
       NamedPass &add_pass( const std::string &name )
       {
-          auto pass = known_passes.at( name );
+          auto pass = make_known_pass( name );
           log_info() << "Adding pass: " << name;
           return passes.emplace_back( name, pass );
       }
