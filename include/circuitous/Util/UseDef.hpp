@@ -233,8 +233,9 @@ namespace circ
 
         void replace_all_uses_with(T *other)
         {
-            for (auto &[op, _] : _users)
-                op->replace_all_operands_with(self(), other);
+            auto it_num = _users.size();
+            for ( std::size_t i = 0; i < it_num; ++i )
+                std::get< 0 >( _users.back() )->replace_all_operands_with(self(), other);
         }
 
         void destroy()
