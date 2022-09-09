@@ -368,7 +368,7 @@ namespace circ {
         irops::disable_opts< irops::VerifyInst, irops::Select >(ctx.module());
 
         remill::VerifyModule(ctx.module());
-        optimize_silently(ctx.arch(), ctx.module(), {circuit_fn});
+        optimize_silently(ctx.module(), {circuit_fn});
 
         auto selects_map =
             ContextCollector< irops::VerifyInst, irops::Select >(circuit_fn).run();
@@ -380,10 +380,10 @@ namespace circ {
         irops::enable_opts< irops::VerifyInst, irops::AdviceConstraint,
                             irops::ReadConstraint, irops::WriteConstraint >(ctx.module());
 
-        optimize_silently(ctx.arch(), ctx.module(), {circuit_fn});
+        optimize_silently(ctx.module(), {circuit_fn});
         unfold_advice_constraints(circuit_fn);
         propagate_undefs();
-        optimize_silently(ctx.arch(), ctx.module(), {circuit_fn});
+        optimize_silently(ctx.module(), {circuit_fn});
         remill::VerifyModule(ctx.module());
 
 

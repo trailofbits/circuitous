@@ -205,7 +205,7 @@ namespace circ {
         }
     };
 
-    void optimize_silently(const remill::Arch *arch, llvm::Module *module,
+    void optimize_silently(llvm::Module *module,
                            const std::vector<llvm::Function *> &fns)
     {
         llvm::legacy::FunctionPassManager func_manager(module);
