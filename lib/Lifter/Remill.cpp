@@ -421,6 +421,16 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             val_to_op[ call ] = val;
             return val;
         }
+
+        if (irops::AdviceIndexed::is(fn)) {
+            auto [size, idx] = irops::AdviceIndexed::parse_args(fn);
+            auto ctor = [&, s = size]()
+            {
+                return Emplace< Advice >( call, static_cast< uint32_t >( s ), ++advice_idx );
+            };
+            return get_or_make_cached( fn, ctor );
+
+        }
         unreachable() << "Unsupported function: " << remill::LLVMThingToString(call);
     }
 
@@ -642,6 +652,28 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             leaves[fn] = impl->create< I >( std::forward< Args >( args ) ... );
         }
         return leaves[fn];
+    }
+
+    bool is_cached( llvm::Function *fn )
+    {
+        return leaves.count( fn );
+    }
+
+    std::optional< Operation * > get_cached( llvm::Function *fn )
+    {
+        if ( !is_cached( fn ) )
+            return {};
+        return { leaves[ fn ] };
+    }
+
+    template< typename Ctor >
+    Operation *get_or_make_cached( llvm::Function *fn, Ctor &&ctor )
+    {
+        if ( auto op = get_cached( fn ) )
+            return *op;
+        auto val = ctor();
+        leaves[ fn ] = val;
+        return val;
     }
 
     Operation *Fetch(llvm::Function *fn, llvm::Value *val)
