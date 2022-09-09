@@ -360,6 +360,7 @@ namespace circ
         auto entry = llvm::BasicBlock::Create( lmodule->getContext(), "", fn );
         auto irb = llvm::IRBuilder<>( entry );
         convert_to_llvm( circuit, irb );
+        irb.CreateRetVoid();
         return fn;
     }
 
