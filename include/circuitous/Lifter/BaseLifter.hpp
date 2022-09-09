@@ -37,9 +37,17 @@ CIRCUITOUS_UNRELAX_WARNINGS
 namespace circ
 {
 
-    void optimize_silently(const remill::Arch *arch,
-                           llvm::Module *module,
+    void optimize_silently(llvm::Module *module,
                            const std::vector<llvm::Function *> &fns);
+
+    static inline void optimize_silently( llvm::Module *lmodule )
+    {
+        std::vector< llvm::Function * > fns;
+        for ( auto &fn : *lmodule )
+            if ( !fn.isDeclaration() )
+                fns.push_back( &fn );
+        return optimize_silently( lmodule, fns );
+    }
 
     // Flatten all control flow into pure data-flow inside of a function.
     // TODO(lukas): Write down what are guarantees w.r.t. to metadata.
@@ -66,7 +74,7 @@ namespace circ
 
             auto has_error = verify_function(*fn);
             check(!has_error) << "Trying to post-process invalid function.\n" << *has_error;
-            optimize_silently(ctx.arch(), ctx.module(), { fn });
+            optimize_silently(ctx.module(), { fn });
 
             if (fn->size() == 1)
                 return fn;
@@ -79,7 +87,7 @@ namespace circ
             check_unsupported_intrinsics({ fn });
             // TOOD(lukas): Inline into the loop once the `optimize_silently` does
             //              only function verification (now does module).
-            optimize_silently(ctx.arch(), ctx.module(), { fn });
+            optimize_silently(ctx.module(), { fn });
 
             // We're done; make the instruction functions more amenable for inlining
             // and elimination.
