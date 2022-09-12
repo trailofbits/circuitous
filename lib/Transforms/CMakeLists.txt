@@ -4,6 +4,7 @@ add_subdirectory( EqSat )
 
 add_headers( Transforms CIRCUITOUS_TRANSFORMS_HEADERS
   EqualitySaturation.hpp
+  MergeAdvices.hpp
   PassBase.hpp
   Passes.hpp
   Pattern.hpp
