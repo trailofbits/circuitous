@@ -402,42 +402,40 @@ namespace circ
         // in the same context, since that is an error.
         void verify_constraints(Circuit *circuit)
         {
-            using verifies_t = std::unordered_set< VerifyInstruction * >;
-            std::unordered_map< Operation *, verifies_t > hint_to_ctxs;
-            std::unordered_map< Operation *, VerifyInstruction * > ctx;
-
-            for (auto verif : circuit->attr<VerifyInstruction>()) {
-                for (auto op : verif->operands()) {
-                    if (op->op_code == AdviceConstraint::kind)
-                    {
-                        ctx[op] = verif;
-
-                        if (op->operand(AdviceConstraint::kFixed)->op_code != Advice::kind)
-                            res.add_error() << "ADVICE_CONSTRAINT hint operand is not ADVICE.";
-
-                        bool found_hint = false;
-                        for (auto hint : op->operands())
-                        {
-                            if (hint->op_code == Advice::kind)
-                            {
-                                if (found_hint)
-                                    res.add_warning() << "ADVICE_CONSTRAINT has at least"
-                                                      << "two direct ADVICE operands!";
-
-                                found_hint = true;
-                                if (hint_to_ctxs[hint].count(verif))
-                                {
-                                    res.add_error() << "Advice is under two hint checks"
-                                                    << "in the same context!";
-                                }
-                            }
-                        }
-                        if (!found_hint)
-                            res.add_error() << "ADVICE_CONSTRAINT does not have ADVICE"
-                                            << "as direct operand!\n";
-                    }
+            auto handle = [ & ]( Operation *ctx, AdviceConstraint *ac,
+                                 std::unordered_set< Operation * > &already_constrained )
+            {
+                auto advice = ac->advice();
+                if ( !advice )
+                {
+                    res.add_error() << "AdviceConstraint advice operand is not an advice."
+                                    << " Got " << pretty_print< false >( ac->fixed() )
+                                    << " instead.";
+                    return;
                 }
+
+                if ( already_constrained.count( advice ) )
+                {
+                    res.add_error() << "Advice" << pretty_print< false >( advice )
+                                    << " is constrained more than once in the same context!\n"
+                                    << advice->id() << " in ctx " << ctx->id();
+                }
+                already_constrained.emplace( advice );
+            };
+
+            for ( auto verif : circuit->attr< VerifyInstruction >() )
+            {
+                std::unordered_set< Operation * > already_constrained;
+                for ( auto op : verif->operands() )
+                    if ( auto ac = dyn_cast< AdviceConstraint >( op ) )
+                        handle( verif, ac, already_constrained );
             }
+
+            for ( auto ac : circuit->attr< AdviceConstraint >() )
+                for ( auto user : ac->users() )
+                    if ( !isa< VerifyInstruction >( user ) )
+                        res.add_error() << "AdviceConstraint has user that is "
+                                        << "not top-level context!";
         }
 
 
