@@ -52,12 +52,7 @@ namespace circ
 
         void run()
         {
-            auto ctxs = collect_ops();
-            dbg( ctxs );
-            auto size = op_size( ctxs );
-            auto bp_pool = generate_bps( ctxs, size );
-            assign( std::move( bp_pool ), ctxs, size );
-            // We may end up not using some blueprints
+            do_assign( C::collect( circuit ) );
             circuit->remove_unused();
         }
 
@@ -67,103 +62,192 @@ namespace circ
                 return lhs->id() > rhs->id();
             return lhs->size > rhs->size;
         };
-        using ordered_ops_t = std::multiset< Op *, decltype( order_by_size ) >;
 
-        struct Collected
+        struct C
         {
             Operation *ctx;
-            ordered_ops_t ops;
 
-            Collected( Operation *ctx ) : ctx( ctx ) {}
-            Collected( Operation *ctx, ordered_ops_t ops )
-                : ctx( ctx ), ops( std::move( ops ) )
-            {}
-
-            Collected( const Collected & ) = delete;
-            Collected &operator=( const Collected & ) = delete;
-
-            bool operator==( const Collected &other ) const
-            {
-                return ctx == other.ctx;
-            }
-
-            uint32_t required_size() const
-            {
-                uint32_t out = 0;
-                for ( auto op : ops )
-                    out = std::max< uint32_t >( out, op->size );
-                return out;
-            }
-
-            bool operator!=( const Collected & ) const = default;
+            using ops_bucket_t = std::set< Op *, decltype( order_by_size ) >;
+            std::map< uint32_t, ops_bucket_t > buckets;
 
             std::string to_string() const
             {
                 std::stringstream os;
                 os << "Collected of : " << pretty_print< false >( ctx ) << "\n";
-                os << "[\n";
-                for ( auto op : ops )
-                    os << "\t" << op->size << ": " << pretty_print< false >( op ) << "\n";
-                os << "]\n";
+                for ( const auto &[ size, bucket ] : buckets )
+                {
+                    os << "[ " << size << " ]\n";
+                    for ( auto op : bucket )
+                        os << "\t | " << pretty_print< false >( op ) << "\n";
+                }
                 return os.str();
+            }
+
+            void add( Op *op )
+            {
+                buckets[ op->size ].emplace( op );
+            }
+
+            // ctx -> C
+            using CS = std::unordered_map< Operation *, C >;
+            static CS collect( Circuit *circuit )
+            {
+                CS out;
+
+                CtxCollector ctx_info;
+                ctx_info.Run( circuit );
+
+                for ( auto op : circuit->attr< Op >() )
+                    for ( auto ctx : ctx_info.op_to_ctxs[ op ] )
+                    {
+                        out[ ctx ].add( op );
+                        out[ ctx ].ctx = ctx;
+                    }
+                return out;
             }
         };
 
-        inline static auto order_by_ops_count = []( const Collected &a, const Collected &b )
+        static inline auto buckets_by_size = []( const auto &a, const auto &b )
         {
-            if ( a.ops.size() == b.ops.size() )
-                return a.ctx->id() > b.ctx->id();
-            return a.ops.size() > b.ops.size();
+            return std::get< 1 >( a ).size() > std::get< 1 >( b ).size();
         };
 
-        using collected_set_t = std::multiset< Collected, decltype( order_by_ops_count ) >;
-
-        void dbg( const collected_set_t &cs )
+        using ordered_buckets_t = std::unordered_map< Operation *,
+                                                      typename C::ops_bucket_t >;
+        ordered_buckets_t fetch_buckets( typename C::CS &cs, uint32_t size )
         {
-            log_dbg() << "std::multiset< Collected > contains:";
-            for ( const auto &c : cs )
-                log_dbg() << c.to_string();
-            log_dbg() << "EOL";
+            ordered_buckets_t out;
+            for ( auto &[ ctx, c ] : cs )
+                out.emplace( ctx, c.buckets[ size ] );
+            return out;
+
         }
 
         using blueprint_t = Op *;
-        using blueprint_pool_t = std::vector< blueprint_t >;
-        using blueprint_handle_t = std::size_t;
 
-        blueprint_t mk_bp( uint32_t size )
+        struct BlueprintPool
         {
-            auto x = circuit->create< Op >( size );
-            for ( std::size_t i = 0; i < 2; ++i )
-                x->add_operand( circuit->create< Advice >( size, ++advice_idx ) );
-            return x;
+            using pool_t = std::vector< blueprint_t >;
+            std::map< uint32_t, std::vector< blueprint_t > > pools;
+
+            std::size_t advice_idx = 0;
+            Circuit *circuit;
+
+            BlueprintPool( Circuit *circuit ) : circuit( circuit )
+            {
+                for ( auto a : circuit->attr< Advice >() )
+                    advice_idx = std::max< std::size_t >( a->advice_idx, advice_idx );
+                advice_idx += 1;
+            }
+
+            blueprint_t emplace( uint32_t size, std::size_t arity )
+            {
+                auto x = circuit->create< Op >( size );
+                for ( std::size_t i = 0; i < arity; ++i )
+                    x->add_operand( circuit->create< Advice >( size, ++advice_idx ) );
+                return pools[ size ].emplace_back( x );
+            }
+
+            pool_t &pool( uint32_t size )
+            {
+                return pools[ size ];
+            }
+        };
+
+        static inline auto decreasing = []( const auto &a, const auto &b )
+        {
+            return a > b;
+        };
+
+        std::set< uint32_t, decltype( decreasing ) > sizes() const
+        {
+            std::set< uint32_t, decltype( decreasing ) > out;
+            for ( auto op : circuit->attr< Op >() )
+                out.emplace( op->size );
+            return out;
         }
 
-        uint32_t op_size( const collected_set_t &cs )
+        void do_assign( typename C::CS cs )
         {
-            uint32_t size = 0;
-            for ( const auto &c : cs )
-                size = std::max< uint32_t >( size, c.required_size() );
-            return size;
-        }
+            CtxCollector ctx_info;
+            ctx_info.Run( circuit );
 
-        blueprint_pool_t generate_bps( const collected_set_t &cs, uint32_t size )
-        {
-            // We know they are oredered by the size of their operands to be replaced.
-            if ( cs.empty() )
-                return {};
+            auto all_pools = BlueprintPool( circuit );
+            auto todo_sizes = sizes();
 
-            if ( size == 0 )
-                return {};
+            std::unordered_map< Operation *, std::set< blueprint_t > > global_usages;
 
-            blueprint_pool_t pool;
-            for ( std::size_t i = 0; i < cs.begin()->ops.size(); ++i )
-                pool.emplace_back( mk_bp( size ) );
-            return pool;
+            auto do_level = [ & ]( auto &item, auto level, auto &states )
+            {
+                auto &[ ctx, todo ] = item;
+                std::map< Op *, blueprint_t > matched;
+
+                for ( auto op : todo )
+                {
+                    auto bp = [ & ]()
+                    {
+                        for ( auto &[ size, pool ] : all_pools.pools )
+                        {
+                            if ( size < op->size )
+                                break;
+                            for ( auto bp : pool )
+                            {
+                                std::size_t reserved_count = 0;
+                                for ( auto req_ctx : ctx_info.op_to_ctxs[ op ] )
+                                    reserved_count += global_usages[ req_ctx ].count( bp );
+                                if ( reserved_count == 0 )
+                                    return bp;
+                            }
+                        }
+                        return all_pools.emplace( op->size, op->operands_size() );
+                    }();
+
+                    global_usages[ ctx ].insert( bp );
+                    matched.emplace( op, bp );
+                }
+
+                for ( auto &[ o_ctx, o_todo ] : states )
+                {
+                    for ( auto &[ matched_op, matched_bp ] : matched )
+                    {
+                        if ( !o_todo.count( matched_op ) )
+                            continue;
+
+                        o_todo.erase( matched_op );
+                        emit_constraints( o_ctx, matched_op, matched_bp );
+
+                        global_usages[ o_ctx ].emplace( matched_bp );
+                    }
+                }
+
+                for ( auto &[ matched_op, matched_bp ] : matched )
+                {
+                    auto coerced = [ &, m_op = matched_op, m_bp = matched_bp ]() -> Operation *
+                    {
+                        if ( m_bp->size == m_op->size )
+                            return m_bp;
+                        check( m_bp->size > m_op->size );
+                        auto trunc = circuit->create< Trunc >( m_op->size );
+                        trunc->add_operand( m_bp );
+                        return trunc;
+                    }();
+                    matched_op->replace_all_uses_with( coerced );
+                }
+            };
+
+            for ( auto level : todo_sizes )
+            {
+                auto todo = fetch_buckets( cs, level );
+                for ( auto todo_item : todo )
+                    do_level( todo_item, level, todo );
+            }
+
         }
 
         void emit_constraints( Operation *ctx, Operation *op, blueprint_t bp )
         {
-            check( op->operands_size() == bp->operands_size() );
+            check( op->operands_size() == bp->operands_size() )
+                << op->operands_size() << "!=" << bp->operands_size();
             for ( std::size_t i = 0; i < op->operands_size(); ++i)
             {
                 auto coerced = [ & ]( Operation *concrete, Operation *advice ) -> Operation *
@@ -184,113 +268,9 @@ namespace circ
                 ctx->add_operand( ac );
             }
         }
-
-        inline static auto op_ordering = []( const Operation *a, const Operation *b )
-        {
-            return a->id() < b->id();
-        };
-
-        void assign( blueprint_pool_t pool, const collected_set_t &cs,
-                     uint32_t bp_size )
-        {
-            using ops_t = std::multiset< Operation *, decltype( order_by_size ) >;
-            using used_bp_t = std::set< blueprint_t, decltype( op_ordering ) >;
-
-            // op to all its contexta. Required when selecting an available blueprint.
-            CtxCollector ctx_info;
-            ctx_info.Run( circuit );
-
-            // Context -> all its operations that are yet to be replaced.
-            std::unordered_map< Operation *, ops_t > states;
-            // Context -> blueprints that are not available to it.
-            std::unordered_map< Operation *, used_bp_t > global_usages;
-
-            for ( const auto &c : cs )
-                states.emplace( c.ctx, ops_t{ c.ops.begin(), c.ops.end() } );
-
-
-            for ( const auto &c : cs )
-            {
-                // Compute all matches - replacement is done after to avoid some container
-                // invalidations.
-                std::map< Operation *, blueprint_t > matched;
-                for ( auto op : states[ c.ctx ] )
-                {
-                    auto bp = [&]()
-                    {
-                        for ( auto bp : pool )
-                        {
-                            std::size_t reserved_count = 0;
-                            for ( auto req_ctx : ctx_info.op_to_ctxs[ op ] )
-                                reserved_count += global_usages[ req_ctx ].count( bp );
-                            if ( reserved_count == 0 )
-                                return bp;
-                        }
-                        return pool.emplace_back( mk_bp( bp_size ) );
-                    }();
-
-                    global_usages[ c.ctx ].insert( bp );
-                    matched.emplace( op, bp );
-                }
-
-                // Emit constraints and update local structures with computed results.
-                for ( auto &[ ctx, todo ] : states )
-                {
-                    // Process matches one by one
-                    for ( auto &[ op, bp ] : matched )
-                    {
-                        // Skip as there is nothing to be done.
-                        if ( !todo.count( op ) )
-                            continue;
-
-                        todo.erase( op );
-                        emit_constraints( ctx, op, bp );
-
-                        // Add information about this context already using this `bp`.
-                        global_usages[ ctx ].insert( bp );
-
-                    }
-                }
-
-                // Now replace operation with its blueprint - constraints are already in place.
-                for ( auto &[ op_, bp_ ] : matched )
-                {
-                    auto coerced = [ &, op = op_, bp = bp_ ]() -> Operation *
-                    {
-                        if ( bp->size == op->size )
-                            return bp;
-                        check( bp->size > op->size );
-                        auto trunc = circuit->create< Trunc >( op->size );
-                        trunc->add_operand( bp );
-                        return trunc;
-                    }();
-                    op_->replace_all_uses_with( coerced );
-                }
-            }
-        }
-
-
-
-        collected_set_t collect_ops()
-        {
-            std::map< Operation *, ordered_ops_t > tmp;
-
-            CtxCollector ctx_info;
-            ctx_info.Run( circuit );
-
-            for ( auto op : circuit->attr< Op >() )
-                for ( auto ctx : ctx_info.op_to_ctxs[ op ] )
-                    tmp[ ctx ].insert( op );
-
-            collected_set_t out;
-            for ( auto &&[ ctx, ops ] : tmp )
-                out.emplace( ctx, std::move( ops ) );
-
-            return out;
-        }
     };
 
-    using allowed_ops_ts = tl::TL< Mul, Add, Sub >;
+    using allowed_ops_ts = tl::TL< Mul, Add, Sub, SDiv, UDiv, URem, SRem, PopulationCount >;
 
 
     auto merge_with_advice( Circuit::circuit_ptr_t &&circuit,
