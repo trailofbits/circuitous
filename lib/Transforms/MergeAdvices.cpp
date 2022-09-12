@@ -37,9 +37,11 @@ namespace circ
     }
 
 
-    template< typename Op >
+    template< typename Op, template< typename > class Config >
     struct MergeWithAdvice
     {
+        using config = Config< Op >;
+
         Circuit *circuit;
         std::size_t advice_idx = 0;
 
@@ -99,10 +101,11 @@ namespace circ
 
                 for ( auto op : circuit->attr< Op >() )
                     for ( auto ctx : ctx_info.op_to_ctxs[ op ] )
-                    {
-                        out[ ctx ].add( op );
-                        out[ ctx ].ctx = ctx;
-                    }
+                        if ( config::replace( op ) )
+                        {
+                            out[ ctx ].add( op );
+                            out[ ctx ].ctx = ctx;
+                        }
                 return out;
             }
         };
@@ -159,11 +162,12 @@ namespace circ
             return a > b;
         };
 
-        std::set< uint32_t, decltype( decreasing ) > sizes() const
+        std::set< uint32_t, decltype( decreasing ) > sizes( const auto &cs ) const
         {
             std::set< uint32_t, decltype( decreasing ) > out;
-            for ( auto op : circuit->attr< Op >() )
-                out.emplace( op->size );
+            for ( const auto &[ _, c ] : cs )
+                for ( const auto &[ size, _1 ] : c.buckets )
+                    out.emplace( size );
             return out;
         }
 
@@ -173,7 +177,7 @@ namespace circ
             ctx_info.Run( circuit );
 
             auto all_pools = BlueprintPool( circuit );
-            auto todo_sizes = sizes();
+            auto todo_sizes = sizes( cs );
 
             std::unordered_map< Operation *, std::set< blueprint_t > > global_usages;
 
@@ -190,6 +194,9 @@ namespace circ
                         {
                             if ( size < op->size )
                                 break;
+                            if ( !config::can_extend() && size != op->size )
+                                continue;
+
                             for ( auto bp : pool )
                             {
                                 std::size_t reserved_count = 0;
@@ -222,15 +229,7 @@ namespace circ
 
                 for ( auto &[ matched_op, matched_bp ] : matched )
                 {
-                    auto coerced = [ &, m_op = matched_op, m_bp = matched_bp ]() -> Operation *
-                    {
-                        if ( m_bp->size == m_op->size )
-                            return m_bp;
-                        check( m_bp->size > m_op->size );
-                        auto trunc = circuit->create< Trunc >( m_op->size );
-                        trunc->add_operand( m_bp );
-                        return trunc;
-                    }();
+                    auto coerced = config::adjust_result( circuit, matched_bp, matched_op );
                     matched_op->replace_all_uses_with( coerced );
                 }
             };
@@ -250,17 +249,7 @@ namespace circ
                 << op->operands_size() << "!=" << bp->operands_size();
             for ( std::size_t i = 0; i < op->operands_size(); ++i)
             {
-                auto coerced = [ & ]( Operation *concrete, Operation *advice ) -> Operation *
-                {
-                    if ( concrete->size == advice->size )
-                        return concrete;
-                    check( concrete->size < advice->size );
-
-                    auto sext = circuit->create< SExt >( advice->size );
-                    sext->add_operand( concrete );
-                    return sext;
-                }( op->operand( i ), bp->operand( i ) );
-
+                auto coerced = config::adjust_operand( circuit, bp, op->operand( i ) );
 
                 auto ac = circuit->create< AdviceConstraint >();
                 ac->add_operand( coerced );
@@ -270,8 +259,191 @@ namespace circ
         }
     };
 
-    using allowed_ops_ts = tl::TL< Mul, Add, Sub, SDiv, UDiv, URem, SRem, PopulationCount >;
+    template< typename Op, typename Trg >
+    struct PropagateOp
+    {
+        Circuit *circuit;
 
+        void run()
+        {
+            for ( auto op : circuit->attr< Op >() )
+                run( op );
+        }
+
+        void run( Op *op )
+        {
+            std::unordered_map< std::size_t, uint32_t > can_propagate;
+            std::size_t op_idx = 0;
+
+            for ( auto operand : op->operands() )
+            {
+                auto advice = dyn_cast< Advice >( operand );
+                if ( !advice )
+                    continue;
+
+                if ( auto size = size_of_extension( advice, op ); size != 0 )
+                    can_propagate.emplace( op_idx, size );
+                ++op_idx;
+            }
+
+            if ( can_propagate.empty() )
+                return;
+
+            for ( auto &[ idx, size ] : can_propagate )
+            {
+                auto old_advice = dyn_cast< Advice >( op->operand( idx ) );
+                check( old_advice );
+                auto new_size = old_advice->size - size;
+                check( new_size != 0 );
+
+                auto new_advice = circuit->create< Advice >( new_size, old_advice->advice_idx );
+                auto coerced_advice = circuit->create< Trg >( old_advice->size );
+                coerced_advice->add_operand( new_advice );
+
+                op->replace_operand( idx, coerced_advice );
+
+                std::unordered_map< Operation *, Operation * > to_replace;
+                for ( auto user : old_advice->users() )
+                {
+                    if ( user == op )
+                        continue;
+                    check( isa< AdviceConstraint >( user ) );
+                    auto ac = circuit->create< AdviceConstraint >();
+
+                    auto old_cast = dyn_cast< Trg >( user->operand( 0 ) );
+                    check( old_cast );
+                    auto raw_op = old_cast->operand( 0 );
+
+                    auto coerced = [ & ]() -> Operation *
+                    {
+                        if ( raw_op->size == new_advice->size )
+                            return raw_op;
+                        auto new_cast = circuit->create< Trg >( new_advice->size );
+                        new_cast->add_operand( raw_op );
+                        return new_cast;
+                    }();
+
+                    ac->add_operand( coerced );
+                    ac->add_operand( new_advice );
+                    to_replace[ user ] = ac;
+                }
+
+                for ( auto &[ old, replacement ] : to_replace )
+                    old->replace_all_uses_with( replacement );
+            }
+
+        }
+
+        uint32_t size_of_extension( Advice *advice, Op *self )
+        {
+            uint32_t size = advice->size;
+            for ( auto user : advice->users() )
+            {
+                if ( user == self )
+                    continue;
+                auto ac = dyn_cast< AdviceConstraint >( user );
+                check( ac );
+
+                auto sext = dyn_cast< Trg >( ac->runtime_value() );
+                if ( !sext )
+                    return 0;
+
+                size = std::min< uint32_t >( size, sext->size - sext->operand( 0 )->size );
+            }
+            return size;
+        }
+
+    };
+
+    using allowed_ops_ts = tl::TL<
+        Mul, Add, Sub, SDiv, UDiv, URem, SRem, PopulationCount,
+        LShr, AShr, Shl
+    >;
+
+    template< typename T >
+    struct MergeConfig{};
+
+    template< typename Op >
+    struct BasicConfig
+    {
+        static bool replace( Op * ) { return true; }
+        static bool can_extend() { return true; }
+
+        static Operation *adjust_operand( Circuit *circuit, Operation *advice,
+                                          Operation *runtime )
+        {
+            if ( advice->size == runtime->size )
+                return runtime;
+            check( advice->size > runtime->size );
+            auto cast = circuit->create< SExt >( advice->size );
+            cast->add_operand( runtime );
+            return cast;
+        }
+
+        static Operation *adjust_result( Circuit *circuit, Op *op, Operation *old )
+        {
+            if ( op->size == old->size )
+                return op;
+            check( op->size > old->size );
+            auto trunc = circuit->create< Trunc >( old->size );
+            trunc->add_operand( op );
+            return trunc;
+        }
+    };
+
+    template<> struct MergeConfig< Mul > : BasicConfig< Mul > {};
+    template<> struct MergeConfig< Add > : BasicConfig< Add > {};
+    template<> struct MergeConfig< Sub > : BasicConfig< Sub > {};
+    template<> struct MergeConfig< SDiv > : BasicConfig< SDiv > {};
+    template<> struct MergeConfig< UDiv > : BasicConfig< UDiv > {};
+    template<> struct MergeConfig< SRem > : BasicConfig< SRem > {};
+    template<> struct MergeConfig< URem > : BasicConfig< URem > {};
+    template<> struct MergeConfig< PopulationCount > : BasicConfig< PopulationCount > {};
+
+
+    template< typename Op >
+    struct ShiftConfig
+    {
+        static bool replace( Op *op )
+        {
+            // Constant shifts should be really cheap.
+            return !isa< Constant >( op->operand( 1 ) );
+        }
+
+        static bool can_extend() { return true; }
+
+        static Operation *adjust_operand( Circuit *circuit, Operation *advice,
+                                          Operation *runtime )
+        {
+            if ( advice->size == runtime->size )
+                return runtime;
+            check( advice->size > runtime->size );
+
+            auto diff = runtime->size - advice->size;
+            auto zero = std::string( diff, '0' );
+            auto fill = circuit->create< Constant >( zero, diff );
+            auto concat = circuit->create< Concat >( runtime->size );
+            concat->add_operand( runtime );
+            concat->add_operand( fill );
+
+            return concat;
+        }
+
+        static Operation *adjust_result( Circuit *circuit, Op *op, Operation *old )
+        {
+            if ( op->size == old->size )
+                return op;
+            check( op->size > old->size );
+
+            auto extract = circuit->create< Extract >( 0u, old->size );
+            extract->add_operand( op );
+            return extract;
+        }
+    };
+
+    template<> struct MergeConfig< LShr > : ShiftConfig< LShr > {};
+    template<> struct MergeConfig< AShr > : ShiftConfig< AShr > {};
+    template<> struct MergeConfig< Shl > : ShiftConfig< Shl > {};
 
     auto merge_with_advice( Circuit::circuit_ptr_t &&circuit,
                             const std::vector< Operation::kind_t > &kinds )
@@ -279,7 +451,13 @@ namespace circ
     {
         auto merge_one = [&]< typename Op >()
         {
-            MergeWithAdvice< Op >{ circuit.get() }.run();
+            MergeWithAdvice< Op, MergeConfig >{ circuit.get() }.run();
+            if constexpr ( Op::kind != LShr::kind && Op::kind != AShr::kind &&
+                           Op::kind != Shl::kind )
+            {
+                PropagateOp< Op, SExt >{ circuit.get() }.run();
+                PropagateOp< Op, ZExt >{ circuit.get() }.run();
+            }
         };
 
         for ( auto kind : kinds )
