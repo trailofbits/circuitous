@@ -67,11 +67,9 @@ namespace circ::decoder {
 
     void DecoderPrinter::extract_ctx() {
         for (auto &vi: GetContexts( circuit.get()->operand(0) )) {
-            SubtreeCollector< DecodeCondition > dc_collector;
-            dc_collector.Run( vi->operands() );
-
-            std::unordered_multiset< DecodeCondition * > decNodes = dc_collector.collected;
-
+            auto decNodes = collect::DownTree< DecodeCondition >()
+                .run( vi )
+                .freeze_as< DecodeCondition, std::unordered_multiset< DecodeCondition * > >();
             auto encoding_length = get_encoding_length( decNodes );
 
             std::vector<ExtractedDecodeCondition> dec;
