@@ -196,6 +196,14 @@ namespace circ
         return (isa< Ts >(op->op_code) || ...);
     }
 
+    template< typename T > requires ( std::is_base_of_v< Operation, T > )
+    T *dyn_cast( Operation * op )
+    {
+        if ( !isa< T >( op ) )
+            return nullptr;
+        return static_cast< T * >( op );
+    }
+
     template< typename ... Ts >
     bool is_one_of(Operation *op, tl::TL< Ts ... >) { return is_one_of< Ts ... >(op); }
 
