@@ -467,6 +467,9 @@ namespace circ
         {
             return "advice_constraint." + EnforceCtx::suffix_();
         }
+
+        Advice *advice() { return dyn_cast< Advice >( this->EnforceCtx::fixed() ); }
+        Operation *runtime_value() { return this->EnforceCtx::dynamic(); }
     };
 
     struct WriteConstraint : MemoryConstraint
