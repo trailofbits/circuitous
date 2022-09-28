@@ -15,6 +15,7 @@
 #include <circuitous/Support/Check.hpp>
 
 #include <gap/core/generator.hpp>
+#include <gap/core/ranges.hpp>
 
 namespace circ
 {
@@ -238,4 +239,23 @@ namespace circ
                 op->purge_user(self());
         }
     };
+
+    template< typename T, gap::ranges::range R >
+    requires ( std::is_same_v< typename T::value_type, typename R::value_type > )
+    T freeze( R &&range )
+    {
+        T out;
+        for ( auto op : range )
+            out.insert( out.end(), op );
+        return out;
+    }
+
+    template< template< typename ... > class T, gap::ranges::range R >
+    T< typename R::value_type > freeze( R &&range )
+    {
+        T< typename R::value_type > out;
+        for ( auto op : range )
+            out.insert( out.end(), op );
+        return out;
+    }
 } // namespace circ
