@@ -41,4 +41,9 @@ namespace circ::util
     {
         return static_cast< std::underlying_type_t< E > >(e);
     }
+
+    template< typename From, typename To >
+    using copy_const_t = std::conditional_t< std::is_const_v< From >,
+                                             std::add_const_t< To >, To >;
+
 } // namespace circ::util
