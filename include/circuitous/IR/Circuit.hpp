@@ -25,6 +25,13 @@ namespace circ
                                          ptr_size(ptr_size_)
         {}
 
+        template< typename CB >
+        void for_each_operation( CB &&cb )
+        {
+            cb( this );
+            this->CircuitStorage::for_each_operation( std::forward< CB >( cb ) );
+        }
+
         uint32_t ptr_size;
     };
 
