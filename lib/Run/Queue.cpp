@@ -56,9 +56,9 @@ namespace circ::run
     }
 
     MemoryOrdering::MemoryOrdering(Circuit *circuit,
-                                   CtxCollector *collector,
+                                   const CtxCollector &ctx_info,
                                    VerifyInstruction *current)
-        : collector(collector)
+        : ctx_info(ctx_info)
     {
         init< WriteConstraint >(circuit, current);
         init< ReadConstraint >(circuit, current);

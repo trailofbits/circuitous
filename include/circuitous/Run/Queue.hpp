@@ -28,13 +28,14 @@ namespace circ::run
 
       private:
 
-        CtxCollector *collector;
+        const CtxCollector &ctx_info;
         constraints_t constraints;
 
       public:
         uint32_t allowed = 0;
 
-        MemoryOrdering(Circuit *circuit, CtxCollector *collector, VerifyInstruction *current);
+        MemoryOrdering(Circuit *circuit, const CtxCollector &ctx_info,
+                       VerifyInstruction *current);
 
         // Check what is memory index of given operation.
         std::optional< uint64_t > mem_idx(Operation *op) const;
@@ -51,7 +52,7 @@ namespace circ::run
         {
             for (auto op : circuit->attr< MO >())
             {
-                if (!collector->op_to_ctxs[op].count(current))
+                if (!ctx_info[op].count(current))
                     continue;
 
                 auto idx = op->mem_idx();
