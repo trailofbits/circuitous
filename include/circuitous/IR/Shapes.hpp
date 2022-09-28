@@ -159,6 +159,7 @@ namespace circ
             }
         };
 
+        // TODO(lukas): Rename and rework using generators.
         template< typename Self >
         struct TreeCollector_
         {
@@ -212,6 +213,25 @@ namespace circ
             auto next( Operation *op ) { return op->operands(); }
         };
 
+        template< typename Dir >
+        struct Unique : Dir
+        {
+            std::unordered_set< Operation * > seen;
+
+            gap::generator< Operation * > next( Operation *op )
+            {
+                // TODO(lukas): Use generic filter.
+                for ( auto x : this->Dir::next( op ) )
+                {
+                    if ( seen.count( x ) )
+                        continue;
+                    seen.insert( x );
+                    co_yield x;
+                }
+            }
+        };
+
+
         template< typename Dir, typename ... Ts >
         struct TreeCollector : TreeCollector_< TreeCollector< Dir, Ts ... > >,
                                MatchOn< Ts ... >,
@@ -226,41 +246,142 @@ namespace circ
 
     } // namespace collect
 
-    template< typename ...Collectors >
-    struct Collector : Collectors ...
+    template< typename ... Ts >
+    gap::generator< Operation * > all_parents_of_types( Operation *op )
     {
-        using self_t = Collector< Collectors... >;
+        // TODO(lukas): Recursive generator.
+        using namespace collect;
+        for ( auto x : TreeCollector< Unique< Up >, Ts ... >().run( op ).take() )
+            co_yield x;
+    }
 
-        using entry_t = std::pair< Operation *, Operation * >;
-        std::deque< entry_t > todo;
+    template< typename ... Ts >
+    auto all_parents_of_types( tl::TL< Ts ... >, Operation *op )
+    {
+        return users_of_types< Ts ... >( op );
+    }
 
-        self_t &Run( Circuit *circuit )
+
+    static inline std::unordered_set< VerifyInstruction * > get_contexts( Operation *op )
+    {
+        std::unordered_set< VerifyInstruction * > out;
+        for ( auto x : all_parents_of_types< VerifyInstruction >( op ) )
         {
-          for ( auto x : circuit->attr< VerifyInstruction >() )
-          {
-              ( Collectors::Root( x ), ... );
-              todo.push_back( { x, nullptr } );
-          }
-
-          while ( !todo.empty() )
-          {
-              const auto &[ x, y ] = todo.front();
-              todo.pop_front();
-              Update( x, y );
-          }
-          return *this;
+            auto casted = dyn_cast< VerifyInstruction >( x );
+            check( x );
+            out.emplace( casted );
         }
+        return out;
+    }
 
-        void Update( Operation *node, Operation *user )
+    static inline std::optional< VerifyInstruction * > get_context( Operation *op )
+    {
+        auto all = get_contexts( op );
+        if ( all.size() != 1 )
+            return {};
+        return { *all.begin() };
+    }
+
+    // TODO(lukas): Generalise walking mechanism.
+    struct CtxCollector
+    {
+        using ctxs_t = std::unordered_set< Operation * >;
+        using ctxs_map_t = std::unordered_map< Operation *, ctxs_t >;
+
+        Circuit *circuit;
+        ctxs_map_t ctx_map;
+
+      protected:
+
+        struct Runner
         {
-            ( Collectors::Update( node, user ), ... );
+          private:
+            std::unordered_map< Operation *, std::size_t > blocked;
+            std::deque< Operation * > todo;
+            ctxs_map_t ctx_map;
+            Circuit *circuit;
 
-            for ( auto op : node->operands() )
-              todo.emplace_back( op, node );
+            Runner( Circuit *circuit_ )
+                : circuit( circuit_ )
+            {
+                for ( auto ctx : circuit->attr< VerifyInstruction >() )
+                {
+                    ctx_map[ ctx ].emplace( ctx );
+                    signal_unblocked( ctx );
+                }
+
+                while ( !todo.empty() )
+                {
+                    auto x = todo.front();
+                    todo.pop_front();
+                    process( x );
+                }
+            }
+
+            void process( Operation *op )
+            {
+                auto &ctxs = ctx_map[ op ];
+                for ( auto user : op->users() )
+                {
+                    auto &user_ctxs = ctx_map[ user ];
+                    ctxs.insert( user_ctxs.begin(), user_ctxs.end() );
+                }
+                signal_unblocked( op );
+            }
+
+            void mk_blocked( Operation *op )
+            {
+                blocked[ op ] = op->users_size();
+            }
+
+            void mk_todo( Operation *op ) { todo.push_back( op ); }
+
+            void signal_unblocked( Operation *user )
+            {
+                std::unordered_set< Operation * > uniques;
+                for ( auto op : user->operands() )
+                    uniques.insert( op );
+                for ( auto op : uniques )
+                {
+                    if ( !blocked.count( op ) )
+                        mk_blocked( op );
+
+                    auto &blocking = blocked[ op ];
+                    check( blocking >= 1 ) << "Blocking is" << blocking
+                                           << "which may signal there is a cycle in the IR.";
+                    --blocking;
+                    if ( blocking == 0 )
+                        mk_todo( op );
+                }
+            }
+
+          public:
+
+            static ctxs_map_t run( Circuit *circuit )
+            {
+                return std::move( Runner( circuit ).ctx_map );
+            }
+        };
+
+      public:
+
+        CtxCollector( Circuit *circuit )
+            : circuit( circuit ), ctx_map( Runner::run( circuit ) )
+        {}
+
+        CtxCollector( CtxCollector && ) = default;
+        CtxCollector( const CtxCollector & ) = default;
+
+        CtxCollector &operator=( CtxCollector && ) = default;
+        CtxCollector &operator=( const CtxCollector & ) = default;
+
+        const ctxs_t &operator[]( Operation *ctx ) const
+        {
+            auto it = ctx_map.find( ctx );
+            check( it != ctx_map.end() );
+            return it->second;
         }
     };
-
-    using CtxCollector = Collector< collect::Ctxs >;
 
     static inline bool allows_undef_( Operation *op, std::unordered_set< Operation * > &seen )
     {
@@ -288,21 +409,6 @@ namespace circ
         return allows_undef_( op, seen );
     }
 
-    static inline Operation *GetContext( Operation *op )
-    {
-        auto ctxs = collect::UpTree< VerifyInstruction >{}.run( op ).take();
-        check( ctxs.size() == 1 );
-        return *( ctxs.begin() );
-    }
-
-    static inline std::unordered_set< Operation * > GetContexts( Operation *op )
-    {
-        auto up = collect::UpTree< VerifyInstruction >().run( op ).take();
-        auto down = collect::DownTree< VerifyInstruction >().run( op ).take();
-
-        up.insert( down.begin(), down.end() );
-        return up;
-    }
 
     /*
      *  Finds sub-trees in a DFS starting at some node
