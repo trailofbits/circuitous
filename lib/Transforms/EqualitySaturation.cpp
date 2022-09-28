@@ -749,7 +749,7 @@ namespace circ::eqsat {
     std::vector<std::pair<Operation *, Operation *>> remove;
     for (auto &[advice, users] : collected) {
       if (auto aconstraint = getSingleAdviceContraint(advice, users)) {
-        for (auto ctx : GetContexts(aconstraint)) {
+        for (auto ctx : get_contexts(aconstraint)) {
           remove.emplace_back(aconstraint, ctx);
         }
       }

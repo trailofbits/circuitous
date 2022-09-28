@@ -66,7 +66,7 @@ namespace circ::decoder {
     }
 
     void DecoderPrinter::extract_ctx() {
-        for (auto &vi: GetContexts( circuit.get()->operand(0) )) {
+        for (auto &vi: get_contexts( circuit.get()->operand(0) )) {
             auto decNodes = collect::DownTree< DecodeCondition >()
                 .run( vi )
                 .freeze_as< DecodeCondition, std::unordered_multiset< DecodeCondition * > >();
