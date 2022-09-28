@@ -31,7 +31,7 @@ namespace circ::run
 
         Circuit *circuit;
         VerifyInstruction *current;
-        CtxCollector *collector;
+        const CtxCollector &ctx_info;
         // Queue of Operations to be dispatched.
         TodoQueue todo;
 
@@ -44,11 +44,12 @@ namespace circ::run
         NodeState node_state;
 
         Spawn(Circuit *circuit, VerifyInstruction *current,
-              CtxCollector *collector, const NodeState &node_state, const Memory &memory)
+              const CtxCollector &ctx_info,
+              const NodeState &node_state, const Memory &memory)
         : circuit(circuit),
           current(current),
-          collector(collector),
-          todo(MemoryOrdering(circuit, collector, current)),
+          ctx_info(ctx_info),
+          todo(MemoryOrdering(circuit, ctx_info, current)),
           semantics(this, circuit),
           memory(memory),
           node_state(node_state)
@@ -97,7 +98,7 @@ namespace circ::run
                 return;
             }
             // This node is not used in current context, just skip.
-            if (!collector->op_to_ctxs[op].count(current) && !isa< leaf_values_ts >(op))
+            if (!ctx_info[op].count(current) && !isa< leaf_values_ts >(op))
             {
                 log_dbg() << "Assign:" << pretty_print< false >(op)
                           << "node not in the current context, do not set value.";
@@ -134,7 +135,7 @@ namespace circ::run
 
         void dispatch(Operation *op)
         {
-            if (collector->op_to_ctxs[op].count(current))
+            if (ctx_info[op].count(current))
                 semantics.dispatch(op);
         }
 
@@ -142,7 +143,7 @@ namespace circ::run
         {
             return [&](const auto &op)
             {
-                return collector->op_to_ctxs[op].count(current);
+                return ctx_info[op].count(current);
             };
         }
 

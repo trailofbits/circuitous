@@ -30,7 +30,7 @@ namespace circ::run
 
         Circuit *circuit;
         // For each context, we want to only interpret operations that are relevant for it.
-        CtxCollector collector;
+        CtxCollector ctx_info;
 
         NodeState initial_node_state;
         Memory initial_memory;
@@ -39,10 +39,10 @@ namespace circ::run
 
         QueueInterpreter(Circuit *circuit,
                          const NodeState &node_state, const Memory &memory)
-            : circuit(circuit), initial_node_state(node_state), initial_memory(memory)
-        {
-            collector.Run(circuit);
-        }
+            : circuit(circuit),
+              ctx_info(circuit),
+              initial_node_state(node_state), initial_memory(memory)
+        {}
 
         using result_t = typename Spawn::result_t;
         // Result of the run + the entire spawn for end state investigation.
@@ -60,7 +60,7 @@ namespace circ::run
             for (auto ctx : circuit->attr< VerifyInstruction >())
             {
                 auto runner = std::make_unique< Spawn >(
-                        circuit, ctx, &collector, initial_node_state, initial_memory);
+                        circuit, ctx, ctx_info, initial_node_state, initial_memory);
                 runner->derive( to_derive );
                 auto status = runner->run();
                 results.push_back(std::make_tuple(status, std::move(runner)));
