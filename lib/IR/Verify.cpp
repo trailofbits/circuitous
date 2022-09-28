@@ -215,18 +215,11 @@ namespace circ
         }
     };
 
-    Operation *get_decoder_result(Operation *root)
+    Operation *get_decoder_result(VerifyInstruction *root)
     {
-        Operation *out = nullptr;
-        for (auto op : root->operands())
-        {
-            if (isa< DecoderResult >(op))
-            {
-                check(!out);
-                out = op;
-            }
-        }
-        return out;
+        auto out = root->decoder();
+        check( out && *out );
+        return *out;
     }
 
     VerifierResult verify_ctxs_uniqueness(Circuit *circuit)
@@ -309,7 +302,7 @@ namespace circ
         }
 
 
-        void verify_arity(Operation *op)
+        void verify_single(Operation *op)
         {
             dcheck(op, [](){ return "Expected valid pointer."; });
             switch (op->op_code)
@@ -371,16 +364,10 @@ namespace circ
             unreachable() << "Cannot verify kind: " << op_code_str(op->op_code);
         }
 
-        self_t &verify_arity(Operation *op, bool recursive)
+        self_t &verify_arity(Circuit *circuit)
         {
-            dcheck(op, [](){ return "Expected valid pointer."; });
-            verify_arity(op);
-            if (!recursive)
-                return *this;
-
-            for (auto o : op->operands())
-                verify_arity(o, recursive);
-
+            auto wrap = [&]( auto op ) { this->verify_single( op ); };
+            circuit->for_each_operation( wrap );
             return *this;
         }
     };
@@ -426,9 +413,8 @@ namespace circ
             for ( auto verif : circuit->attr< VerifyInstruction >() )
             {
                 std::unordered_set< Operation * > already_constrained;
-                for ( auto op : verif->operands() )
-                    if ( auto ac = dyn_cast< AdviceConstraint >( op ) )
-                        handle( verif, ac, already_constrained );
+                for ( auto ac : filter< AdviceConstraint >( verif->operands() ) )
+                    handle( verif, ac, already_constrained );
             }
 
             for ( auto ac : circuit->attr< AdviceConstraint >() )
@@ -439,17 +425,15 @@ namespace circ
         }
 
 
-        void verify_users(Operation *circuit)
+        void verify_users( Circuit *circuit )
         {
-            Verifier::advice_users_t collected;
-            Verifier::CollectAdviceUsers(circuit, collected);
-
             auto advice_to_str = [](auto op) {
                 return pretty_print(op);
             };
 
-            for (auto &[a, users] : collected)
+            for ( auto a : circuit->attr< Advice >() )
             {
+                auto users = freeze< std::vector >( a->users() );
                 if (users.size() == 0)
                     res.add_error() << advice_to_str(a) << " has no users.";
 
@@ -539,54 +523,85 @@ namespace circ
 
         void verify_ids(Circuit *circuit)
         {
-            std::unordered_set< Operation * > seen;
             std::unordered_map< uint64_t, uint64_t > ids;
-            collect_ids(circuit, seen, ids);
+
+            auto collect_ids = [ & ]( auto op )
+            {
+                if ( !ids.count( op->id() ) )
+                    ids[ op->id() ] = 0;
+                ids[ op->id() ] += 1;
+            };
+
+            circuit->for_each_operation( collect_ids );
+
 
             for (auto &[id, count] : ids)
-            {
                 if (count != 1)
                     res.add_error() << "ID: " << id << " is present " << count << " times.";
+        }
+    };
+
+    struct DAGVerifier : OwnsResult
+    {
+        using self_t = DAGVerifier;
+        using OwnsResult::OwnsResult;
+
+        self_t &verify( Circuit *circuit )
+        {
+            std::unordered_map< Operation *, bool > seen;
+            if ( circuit->users_size() != 0 )
+            {
+                res.add_error() << "Circuit node has non-zero users!";
+                return *this;
             }
+            dfs( circuit, seen );
+            return *this;
         }
 
-        void collect_ids(Operation *op,
-                         std::unordered_set< Operation * > &seen,
-                         std::unordered_map< uint64_t, uint64_t > &ids)
+        void dfs( Operation *op, std::unordered_map< Operation *, bool > &seen )
         {
-            if (seen.count(op))
-                return;
-            seen.insert(op);
+            seen[ op ] = true;
 
-            if (ids.count(op->id()))
-                ids[op->id()] += 1;
-            else
-                ids[op->id()] = 1;
+            for ( auto o : op->operands() )
+            {
+                auto it = seen.find( o );
+                if ( it == seen.end() )
+                    dfs( o, seen );
+                else if ( it->second == true )
+                    res.add_error() << "Cycle found: "
+                                    << pretty_print( op ) << " was able to reach back at "
+                                    << pretty_print( o );
+            }
 
-            for (auto o : op->operands())
-                collect_ids(o, seen, ids);
+            seen[ op ] = false;
+
         }
     };
 
 
-    VerifierResult verify_arity(Operation *op, bool recursive)
+    VerifierResult verify_arity( Circuit *circuit )
     {
-        return ArityVerifier().verify_arity(op, recursive).take();
+        return ArityVerifier().verify_arity( circuit ).take();
     }
 
-    VerifierResult verify_advices(Circuit *circuit)
+    VerifierResult verify_advices( Circuit *circuit )
     {
-        return AdviceVerifier().verify(circuit).take();
+        return AdviceVerifier().verify( circuit ).take();
     }
 
-    VerifierResult verify_decoder_result(Circuit *circuit)
+    VerifierResult verify_decoder_result( Circuit *circuit )
     {
-        return DecoderResultVerifier().verify(circuit).take();
+        return DecoderResultVerifier().verify( circuit ).take();
     }
 
-    VerifierResult verify_ids(Circuit *circuit)
+    VerifierResult verify_ids( Circuit *circuit )
     {
-        return IDVerifier().verify(circuit).take();
+        return IDVerifier().verify( circuit ).take();
+    }
+
+    VerifierResult verify_dag( Circuit *circuit )
+    {
+        return DAGVerifier().verify( circuit ).take();
     }
 
 }  // namespace circ

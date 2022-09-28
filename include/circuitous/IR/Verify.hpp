@@ -9,9 +9,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <circuitous/IR/IR.hpp>
+#include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Metadata.hpp>
-#include <circuitous/IR/Shapes.hpp>
 #include <circuitous/Support/Check.hpp>
 
 namespace circ
@@ -102,10 +101,11 @@ namespace circ
 
     VerifierResult verify_ctxs_uniqueness(Circuit *circuit);
 
-    VerifierResult verify_arity(Operation *circuit, bool recursive = true);
+    VerifierResult verify_arity( Circuit *circuit );
     VerifierResult verify_advices(Circuit *circuit);
     VerifierResult verify_decoder_result(Circuit *circuit);
     VerifierResult verify_ids(Circuit *circuit);
+    VerifierResult verify_dag(Circuit *circuit);
 
     // Really simple structural verifier
     struct Verifier
@@ -118,7 +118,8 @@ namespace circ
 
         self_t &run_all(Circuit *circuit)
         {
-            run(verify_arity, circuit, true);
+            run(verify_dag, circuit);
+            run(verify_arity, circuit );
             run(verify_advices, circuit);
             run(verify_decoder_result, circuit);
             run(verify_ids, circuit);
