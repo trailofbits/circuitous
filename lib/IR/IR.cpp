@@ -38,4 +38,12 @@ uint32_t Memory::expected_size(uint32_t ptr_size) {
   return irops::memory::size(ptr_size);
 }
 
+std::optional< DecoderResult * > VerifyInstruction::decoder()
+{
+    for ( auto op : this->operands() )
+        if ( auto decoder_res = dyn_cast< DecoderResult >( op ) )
+            return decoder_res;
+    return {};
+}
+
 }  // namespace circ
