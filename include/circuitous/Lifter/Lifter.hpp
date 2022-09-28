@@ -636,10 +636,8 @@ namespace circ
             llvm::IRBuilder<> ir(block);
 
             llvm::Value *out = ir.CreateAdd(segment_reg, base_reg);
-            auto scale_shift =
-                ir.CreateShl(ir.getIntN(static_cast<uint32_t>(word_size), 1), scale);
 
-            auto scale_factor = ir.CreateMul(scale_shift, index_reg);
+            auto scale_factor = ir.CreateShl( index_reg, scale );
             out = ir.CreateAdd(out, scale_factor);
             out = ir.CreateAdd(out, displacement);
 
