@@ -153,6 +153,17 @@ namespace circ
         uint64_t _id = 0;
     };
 
+    template< typename O >
+    concept circ_ir_op = std::is_base_of_v< Operation, O >;
+
+    template< typename O >
+    concept circ_ir_ptr = circ_ir_op< std::remove_pointer_t< O > > && std::is_pointer_v< O >;
+
+    static inline std::unordered_set< const Operation * > unique_operands( const Operation *op )
+    {
+        return freeze< std::unordered_set< const Operation * > >( op->operands() );
+    }
+
     template< typename R >
     std::optional< Operation::kind_t > reconstruct_kind(R r)
     {
@@ -164,8 +175,27 @@ namespace circ
        return {};
     }
 
-    template< class O >
-    concept is_operation_type = std::is_base_of_v< Operation, O >;
+    // TODO(lukas): Move to some class that inherits from gap::generator? Together with
+    //              freeze possibly define more generic framework in a range-like fashion.
+    template< circ_ir_op Op, gap::ranges::range From >
+        requires ( circ_ir_ptr< typename From::value_type > )
+    auto filter( From &&from )
+        -> gap::generator< util::copy_const_t< typename From::value_type, Op * > >
+    {
+        for ( auto &&op : from )
+            if ( auto casted = dyn_cast< Op >( op ) )
+                co_yield casted;
+    }
+
+    static inline auto frozen_users( Operation *op )
+    {
+        return freeze< std::vector >( op->users() );
+    }
+    static inline auto frozen_operands( Operation *op )
+    {
+        return freeze< std::vector >( op->operands() );
+    }
+
 
     template< class T >
     concept is_type_list = requires (T t)
