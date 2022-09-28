@@ -793,11 +793,25 @@ namespace circ
     }
 
     circuitous_make_bool_op(DecodeCondition, 0);
-    circuitous_make_bool_op(VerifyInstruction, 1);
     circuitous_make_bool_op(OnlyOneCondition, 3);
     circuitous_make_bool_op(DecoderResult, 5);
 
     #undef circuitous_make_bool_op
+
+    struct DecoderResult;
+
+    struct VerifyInstruction : Operation
+    {
+        static constexpr Operation::kind_t kind = Operation::kind_t::kVerifyInstruction;
+
+        explicit VerifyInstruction( unsigned size ) : Operation( size, kind ) {}
+        explicit VerifyInstruction() : VerifyInstruction( Operation::bool_size ) {}
+
+        static std::string op_code_str() { return "VerifyInstruction"; }
+        std::string name() const override { return op_code_str(); }
+
+        std::optional< DecoderResult * > decoder();
+    };
 
     using bool_ops_ts = tl::TL< DecodeCondition, VerifyInstruction, OnlyOneCondition,
                                 DecoderResult >;
