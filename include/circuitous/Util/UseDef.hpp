@@ -95,12 +95,6 @@ namespace circ
     };
 
     template< typename T >
-    struct UseList : std::vector< T * >
-    {
-        using impl = std::vector< T * >;
-    };
-
-    template< typename T >
     struct Node
     {
       protected:
