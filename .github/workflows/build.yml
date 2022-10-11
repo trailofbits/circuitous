@@ -43,6 +43,8 @@ jobs:
           fetch-depth: 1
 
       - name: Build and test
+        env:
+          CXX_COMMON_ROOT: "/usr/src/cxx-common"
         run: |
           cmake --preset ninja-system-remill-x64-linux-rel
           cmake --build ./builds/ninja-system-remill-x64-linux-rel -j $(nproc)
