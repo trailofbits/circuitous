@@ -15,7 +15,7 @@ RUN if [ "${REINSTALL_CMAKE_VERSION_FROM_SOURCE}" != "none" ]; then \
 
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends llvm-14 llvm-14-dev libclang-14-dev \
-        build-essential ccache cmake-curses-gui libedit-dev libpfm4-dev zlib1g-dev python3-pip
+        build-essential ninja-build ccache cmake-curses-gui libedit-dev libpfm4-dev zlib1g-dev python3-pip
 
 # Remill dependencies
 RUN dpkg --add-architecture i386
