@@ -21,8 +21,6 @@ on:
       - '*'
 
 env:
-  # Tells vcpkg where binary packages are stored.
-  VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/vcpkg/bincache
   # Setup compiler
   CC: clang-14
   CXX: clang++-14
