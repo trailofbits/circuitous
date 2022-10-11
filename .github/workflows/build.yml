@@ -31,6 +31,8 @@ jobs:
   build_linux:
     runs-on: ubuntu-22.04
     timeout-minutes: 15
+    container:
+      image: "xheno/circuitous-ubuntu-22.04-dev:latest"
 
     steps:
       # setup circuitous
@@ -40,16 +42,14 @@ jobs:
           submodules: true
           fetch-depth: 1
 
-      - name: Build and run dev container task
-        uses: devcontainers/ci@v0.2
-        with:
-          runCmd: |
-            sudo cmake --preset ninja-system-remill-x64-linux-rel || exit 1
-            sudo cmake --build ./builds/ninja-system-remill-x64-linux-rel -j $(nproc) || exit 1
+      - name: Build and test
+        run: |
+          cmake --preset ninja-system-remill-x64-linux-rel
+          cmake --build ./builds/ninja-system-remill-x64-linux-rel -j $(nproc)
 
-            sudo ctest --preset ninja-system-remill-x64-linux-rel-test --output-on-failure || exit 1
+          ctest --preset ninja-system-remill-x64-linux-rel-test --output-on-failure
 
-            sudo cpack -G TXZ --config ./builds/ninja-system-remill-x64-linux-rel/CPackConfig.cmake || exit 1
+          cpack -G TXZ --config ./builds/ninja-system-remill-x64-linux-rel/CPackConfig.cmake
 
       - name: Upload circuitous package artifact
         uses: actions/upload-artifact@v3
