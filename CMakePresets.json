@@ -7,6 +7,13 @@
   },
   "configurePresets": [
     {
+        "name": "ports",
+        "hidden": true,
+        "cacheVariables": {
+            "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports"
+        }
+    },
+    {
         "name": "release",
         "description": "Configure release build",
         "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
@@ -24,13 +31,14 @@
         "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
         "cacheVariables": {
             "VCPKG_OVERLAY_TRIPLETS": "$env{CXX_COMMON_ROOT}/triplets",
-            "VCPKG_OVERLAY_PORTS": "$env{CXX_COMMON_ROOT}/ports"
+            "VCPKG_OVERLAY_PORTS": "${sourceDir}/ports;$env{CXX_COMMON_ROOT}/ports"
         }
     },
     {
         "name": "system-llvm",
         "hidden": true,
         "description": "Configure without cxx-common llvm",
+        "inherits": [ "ports" ],
         "cacheVariables": {
             "VCPKG_MANIFEST_FEATURES": "system-llvm",
             "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "ON"
