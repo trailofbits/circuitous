@@ -96,6 +96,29 @@ namespace circ::run
         return node_values.find(op)->second;
     }
 
+    std::string NodeState::to_string() const
+    {
+        std::stringstream ss;
+
+        auto id = []( auto o ) { return "[" + std::to_string( o->id() ) + "]"; };
+        auto fmt = []( auto v ) -> std::string
+        {
+            if ( !v ) return "[ NOT SET ]";
+            return llvm::toString( *v, 16, false );
+        };
+
+        for ( auto &[ op, val ] : node_values )
+        {
+            ss << "Value: " << pretty_print( op ) << std::endl
+               << id( op ) << " := " << fmt( val ) << std::endl;
+            for ( auto o : op->operands() )
+            {
+                ss << "\t" << id( o ) << " <- " << fmt( val ) << std::endl;
+            }
+        }
+        return ss.str();
+    }
+
     auto MemoryBuilder::set(std::size_t addr, const std::string &data) -> self_t &
     {
         check(data.size() % 2 == 0);

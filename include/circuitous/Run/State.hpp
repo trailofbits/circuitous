@@ -67,6 +67,8 @@ namespace circ::run
         }
 
         auto take() { return std::move(node_values); }
+
+        std::string to_string() const;
     };
 
     struct StateOwner
