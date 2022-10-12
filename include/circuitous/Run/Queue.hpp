@@ -52,7 +52,7 @@ namespace circ::run
         {
             for (auto op : circuit->attr< MO >())
             {
-                if (!ctx_info[op].count(current))
+                if ( !ctx_info.is_in_ctx( op, current ) )
                     continue;
 
                 auto idx = op->mem_idx();
