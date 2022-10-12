@@ -180,10 +180,10 @@ namespace circ
     //              freeze possibly define more generic framework in a range-like fashion.
     template< circ_ir_op Op, gap::ranges::range From >
         requires ( circ_ir_ptr< typename From::value_type > )
-    auto filter( From &&from )
+    auto filter( From from )
         -> gap::generator< util::copy_const_t< typename From::value_type, Op * > >
     {
-        for ( auto &&op : from )
+        for ( auto op : from )
             if ( auto casted = dyn_cast< Op >( op ) )
                 co_yield casted;
     }
