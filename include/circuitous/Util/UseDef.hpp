@@ -197,6 +197,20 @@ namespace circ
             value->add_user(self());
         }
 
+        void add_operands(gap::ranges::range auto &&vs)
+        {
+            for (auto v : vs)
+                add_operand(v);
+        }
+
+        template< typename H, typename ... Ts >
+        void add_operands(H op, Ts ... ops)
+        {
+            add_operand(op);
+            if constexpr (sizeof ... (Ts) != 0)
+                return add_operands< Ts ... >(ops ...);
+        }
+
         void replace_operand(std::size_t idx, T *value)
         {
             _operands[idx]->remove_user(self());
