@@ -446,6 +446,23 @@ namespace circ
                         res.add_error() << advice_to_str(a)
                                         << " has only one user that is not a constraint.";
                 }
+
+                auto only_acs = [&]()
+                {
+                    for ( auto user : users )
+                    {
+                        auto ac = dyn_cast< AdviceConstraint >( user );
+                        if ( !ac || ac->advice() != a )
+                            return false;
+                    }
+                    return true;
+                }();
+
+                if ( only_acs )
+                {
+                    res.add_error() << advice_to_str(a)
+                                    << " has only advice constraints as users";
+                }
             }
         }
 
