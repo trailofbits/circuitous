@@ -249,8 +249,12 @@ namespace circ
 
         void destroy()
         {
-            for (auto &op : _operands)
-                op->purge_user(self());
+            for ( auto &op : _operands )
+                op->purge_user( self() );
+            for ( auto &[ user, _ ] : _users )
+                std::erase( user->_operands, self() );
+            this->_operands.clear();
+            this->_users.clear();
         }
     };
 
