@@ -236,7 +236,6 @@ namespace circ::run
 
             while (!todo.empty()) {
                 auto x = todo.pop();
-                log_dbg() << "Dispatching" << pretty_print< true >(x);
                 dispatch(x);
                 // If decoder result failed, we can just return a false as the result will
                 // be false.
@@ -245,7 +244,6 @@ namespace circ::run
                     return result_t::not_decoded;
                 }
             }
-            log_dbg() << "Run done, fetching result.";
             if (!node_state.has_value(current))
             {
                 no_value_reached_witness();
