@@ -218,15 +218,14 @@ namespace circ::run
             // This can happen if `op` is not in `current` context.
             if (!node_state.has_value(op))
                 return {};
-            switch (op->op_code) {
-                case DecoderResult::kind:
-                {
-                    if (node_state.get(op) == semantics.false_val())
-                        return std::make_optional(false);
-                    return {};
-                }
-                default: return {};
-            }
+            auto decoder = current->decoder();
+            check( decoder );
+            if ( *decoder != op )
+                return {};
+
+            if (node_state.get(op) == semantics.false_val())
+                return { false };
+            return {};
         }
 
         result_t run() {
