@@ -416,6 +416,13 @@ namespace circ::print::verilog
         std::string visit(ReadConstraint *op) { return make_memory_constraint(op, false); }
         std::string visit(WriteConstraint *op) { return make_memory_constraint(op, true); }
 
+        std::string visit(UnusedConstraint *op)
+        {
+            auto hint = get(op->operand(0));
+            auto zero = impl::bin_zero(op->operand(0)->size);
+            return make_wire(op, hint + " == " + zero);
+        }
+
         /* Decode condition */
         std::string visit(DecodeCondition *op) { return make(zip(), op); }
 
