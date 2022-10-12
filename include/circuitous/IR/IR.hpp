@@ -92,6 +92,7 @@ namespace circ
             kParity,
             kNot,
 
+            kSwitch,
             kSelect,
 
             // Condition
@@ -748,6 +749,51 @@ namespace circ
         uint32_t bits = 0;
     };
 
+    // Interprets its operands as follows
+    // `[ ( key, value ), ( key, value ) ... ]`
+    // where `key`s are boolean (one bit) and values are all the same size
+    // which is also the size of this operation.
+    //
+    // Main purpose of this operation is to model mux.
+    struct Switch : Operation
+    {
+        static constexpr Operation::kind_t kind = Operation::kind_t::kSwitch;
+
+        explicit Switch(uint32_t size) : Operation(size, kind) {}
+
+        static std::string op_code_str() { return "switch"; }
+        std::string name() const override
+        {
+            std::stringstream ss;
+            ss << "switch." << size;
+            return ss.str();
+        }
+
+        using kv_pair_t = std::tuple< Operation *, Operation * >;
+        gap::generator< kv_pair_t > mappings()
+        {
+            for ( std::size_t i = 0; i < _operands.size(); i += 2 )
+                co_yield kv_pair_t( _operands[ i ], _operands[ i + 1 ] );
+        }
+
+        std::optional< Operation * > maps_to( Operation *key )
+        {
+            for ( auto [ k, v ] : mappings() )
+                if ( k == key )
+                    return { v };
+            return {};
+        }
+
+        void add_mapping( kv_pair_t kv )
+        {
+            auto [ k, v ] = kv;
+            check( k->size == 1 );
+            check( v->size == size );
+            add_operands( k, v );
+        }
+
+    };
+
     struct ExternalComputation : Operation
     {
         static constexpr Operation::kind_t kind = Operation::kind_t::kParity;
@@ -780,7 +826,7 @@ namespace circ
         submodule_t submodule_type;
     };
 
-    using uncategorized_ops_ts = tl::TL< Select, ExternalComputation >;
+    using uncategorized_ops_ts = tl::TL< Select, Switch, ExternalComputation >;
 
     #define circuitous_make_bool_op(cls, idx) \
     struct cls final : Operation \
