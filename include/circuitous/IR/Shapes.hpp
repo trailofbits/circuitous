@@ -375,11 +375,20 @@ namespace circ
         CtxCollector &operator=( CtxCollector && ) = default;
         CtxCollector &operator=( const CtxCollector & ) = default;
 
-        const ctxs_t &operator[]( Operation *ctx ) const
+        const ctxs_t &operator[]( Operation *op ) const
         {
-            auto it = ctx_map.find( ctx );
+            auto it = ctx_map.find( op );
             check( it != ctx_map.end() );
             return it->second;
+        }
+
+        bool is_in_ctx( Operation *op, Operation *ctx ) const
+        {
+            check( isa< VerifyInstruction >( ctx ) );
+            auto it = ctx_map.find( op );
+            if ( it == ctx_map.end() )
+                return false;
+            return it->second.count( ctx );
         }
     };
 
