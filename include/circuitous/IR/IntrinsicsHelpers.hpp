@@ -759,8 +759,8 @@ namespace circ::irops::impl
 
     template< typename, typename Def >
     using unary_check_t = Fn< Def,
-                              DStack<>,
-                              SStack< FixSized< 1 >, SizedOps< 1 > >,
+                              DStack< NAry >,
+                              SStack< FixSized< 1 > >,
                               Melts
                             >;
     template< typename, typename Def >
