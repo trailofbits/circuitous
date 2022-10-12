@@ -98,7 +98,7 @@ namespace circ::run
                 return;
             }
             // This node is not used in current context, just skip.
-            if (!ctx_info[op].count(current) && !isa< leaf_values_ts >(op))
+            if (!ctx_info.is_in_ctx(op, current) && !isa< leaf_values_ts >(op))
             {
                 log_dbg() << "Assign:" << pretty_print< false >(op)
                           << "node not in the current context, do not set value.";
@@ -135,7 +135,7 @@ namespace circ::run
 
         void dispatch(Operation *op)
         {
-            if (ctx_info[op].count(current))
+            if (ctx_info.is_in_ctx(op, current))
                 semantics.dispatch(op);
         }
 
@@ -143,7 +143,7 @@ namespace circ::run
         {
             return [&](const auto &op)
             {
-                return ctx_info[op].count(current);
+                return ctx_info.is_in_ctx(op, current);
             };
         }
 
