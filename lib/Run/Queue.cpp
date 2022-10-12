@@ -109,8 +109,6 @@ namespace circ::run
     void TodoQueue::notify(Operation *from, Operation *to)
     {
         _notify(to);
-        log_dbg() << pretty_print< false >(from) << " -- notifies --> "
-                  << pretty_print< false >(to) << status(to);
     }
 
     // Implementation
