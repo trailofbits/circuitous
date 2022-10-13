@@ -8,7 +8,7 @@
 
 add_library( test_support INTERFACE )
 target_include_directories( test_support INTERFACE
-  "${CMAKE_CURRENT_SOURCE_DIR}/support"
+  "${CMAKE_CURRENT_SOURCE_DIR}"
 )
 
 add_library( circuitous::testing ALIAS test_support )
