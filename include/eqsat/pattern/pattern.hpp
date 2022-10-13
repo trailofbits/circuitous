@@ -5,9 +5,12 @@
 #pragma once
 
 #include <eqsat/core/common.hpp>
+#include <gap/core/bigint.hpp>
 #include <gap/core/overloads.hpp>
 #include <gap/core/parser.hpp>
+#include <gap/core/recursive_generator.hpp>
 #include <gap/core/strong_type.hpp>
+
 #include <optional>
 #include <unordered_set>
 #include <variant>
@@ -310,6 +313,62 @@ namespace eqsat
 
     using places_t = std::vector< place_t >;
 
-    places_t gather_places(const simple_expr &expr);
+    using places_generator = gap::recursive_generator< place_t >;
+
+    places_generator places(const atom_t &atom, auto &filter) {
+        co_yield std::visit( gap::overloaded {
+            [&](const place_t& p) -> places_generator {
+                if (!filter(p)) {
+                    co_yield place_t(p);
+                }
+            },
+            [&] (const label_t& /* l */) -> places_generator {
+                __builtin_unreachable(); /* TODO */
+            },
+            [&] (const auto &) -> places_generator { co_return; /* noop */ }
+        }, atom);
+    }
+
+    places_generator places(const simple_expr &expr, auto &filter) {
+        co_yield std::visit( gap::overloaded {
+            [&] (const atom_t &a) -> places_generator {
+                co_yield places(a, filter);
+            },
+            [&] (const expr_list &list) -> places_generator {
+                for (const auto &elem: list) {
+                    co_yield places(elem, filter);
+                }
+            }
+        }, expr);
+    }
+
+    places_generator places(const expr_with_context &expr, auto &filter) {
+        co_yield places(expr.expr, filter);
+    }
+
+    places_generator places(const named_expr &expr, auto &filter) {
+        co_yield places(expr.expr, filter);
+    }
+
+    places_generator places(const match_pattern &pat, auto &filter) {
+        for (const auto &expr : pat.list) {
+            co_yield places(expr, filter);
+        }
+    }
+
+    places_t gather_places(const auto &expr) {
+        places_t result;
+
+        std::unordered_set< place_t > seen;
+        auto unique_yield = [&seen] (const place_t &place) {
+            return !seen.insert(place).second;
+        };
+
+        for (auto place : places(expr, unique_yield)) {
+            result.push_back(std::move(place));
+        }
+
+        return result;
+    }
 
 } // namespace eqsat
