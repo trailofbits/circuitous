@@ -9,42 +9,11 @@
 #include <doctest/doctest.h>
 #include <eqsat/algo/saturation_graph.hpp>
 #include <eqsat/core/egraph.hpp>
-#include <fmt/ranges.h>
-#include <spdlog/spdlog.h>
+
+#include <support/egraph.hpp>
 
 namespace eqsat::test
 {
-    struct string_storage
-    {
-        explicit string_storage( std::string_view str ) : data( str ) { }
-
-        bool operator==( const string_storage & ) const = default;
-
-        std::string data;
-    };
-
-    std::string node_name( const string_storage &node )
-    {
-        return node.data;
-    }
-
-    using test_node = eqsat::graph::node< string_storage >;
-    static_assert( gap::graph::node_like< test_node > );
-
-    using test_edge = eqsat::graph::edge< test_node >;
-    static_assert( gap::graph::edge_like< test_edge > );
-
-    using test_graph = eqsat::graph::egraph< test_node >;
-    static_assert( gap::graph::graph_like< test_graph > );
-
-    template < typename... children_t >
-    auto make_node( test_graph &egraph, std::string_view name, children_t... children )
-        -> graph::node_handle
-    {
-        auto node = egraph.add_node( string_storage( name ) );
-        ( node->add_child( children ), ... );
-        return egraph.find( node );
-    }
 
     TEST_SUITE("eqsat::building-and-merging") {
     TEST_CASE( "EGraph Merge Leaf Nodes" )
