@@ -27,14 +27,20 @@ namespace circ
 
     struct EqualitySaturationPass : PassBase
     {
+        using rules_t = std::vector< eqsat::RuleSet >;
+
+        EqualitySaturationPass() = default;
+        EqualitySaturationPass( rules_t &&rules )
+        {
+            add_rules( std::move( rules ) );
+        }
+
         CircuitPtr run(CircuitPtr &&circuit) override
         {
             return eqsat::EqualitySaturation(std::move(circuit), rulesets);
         }
 
-        static Pass get() { return std::make_shared< EqualitySaturationPass >(); }
-
-        void add_rules(std::vector< eqsat::RuleSet > &&ruleset)
+        void add_rules( rules_t &&ruleset )
         {
             rulesets.insert(
                 rulesets.end(),
@@ -87,8 +93,6 @@ namespace circ
 
             return std::move(circuit);
         }
-
-        static Pass get() { return std::make_shared< RemillOFPatch >(); }
     };
 
 
@@ -118,16 +122,12 @@ namespace circ
             }
             return std::move( circuit );
         }
-
-        static Pass get() { return std::make_shared< MergeAdviceConstraints >(); }
     };
 
 
     struct DummyPass : PassBase
     {
         CircuitPtr run( CircuitPtr &&circuit ) override { return std::move( circuit ); }
-
-        static Pass get() { return std::make_shared< DummyPass >(); }
     };
 
     struct TrivialConcatRemovalPass : PassBase
@@ -142,27 +142,23 @@ namespace circ
 
             return std::move( circuit );
         }
-
-        static Pass get() { return std::make_shared< TrivialConcatRemovalPass >(); }
     };
 
     struct PassesBase
     {
-        Pass make_known_pass( const std::string &name )
+        NamedPass &add_pass( const std::string &name, Pass pass )
         {
-              if ( name == "eqsat" )                    return EqualitySaturationPass::get();
-              if ( name == "dummy-pass" )               return DummyPass::get();
-              if ( name == "trivial-concat-removal" )   return TrivialConcatRemovalPass::get();
-              if ( name == "overflow-flag-fix" )        return RemillOFPatch::get();
-              if ( name == "merge-transitive-advices" ) return MergeAdviceConstraints::get();
-              log_kill() << "Unkown pass option:" << name;
+            log_info() << "Adding pass: " << name;
+            return passes.emplace_back( name, std::move( pass ) );
         }
 
-        NamedPass &add_pass( const std::string &name )
+        template< typename P, typename ... Args >
+        std::shared_ptr< P > emplace_pass( const std::string &name, Args && ... args )
         {
-            auto pass = make_known_pass( name );
-            log_info() << "Adding pass: " << name;
-            return passes.emplace_back( name, pass );
+            log_info() << "Creating pass" << name;
+            auto pass = std::make_shared< P >( std::forward< Args >( args ) ... );
+            add_pass( name, pass );
+            return pass;
         }
 
         CircuitPtr run_pass( const Pass &pass, CircuitPtr &&circuit )
