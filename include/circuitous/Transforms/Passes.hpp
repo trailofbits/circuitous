@@ -102,23 +102,15 @@ namespace circ
         {
             for ( auto ac : circuit->attr< AdviceConstraint >() )
             {
-                if ( ac->operands_size() != 2 ||
-                     !isa< Advice >( ac->operand( 0 ) ) ||
-                     !isa< Advice >( ac->operand( 1 ) ) )
+                check( ac->operands_size() == 2 );
+                if ( !isa< Advice >( ac->advice() ) ||
+                     !isa< Advice >( ac->runtime_value() ) )
                 {
                     continue;
                 }
 
-                auto lhs = ac->operand( 0 );
-                auto rhs = ac->operand( 1 );
-
-                /*
-                 * It is important to clear usages of the AC before we replace the uses
-                 * since otherwise advice_1 will gain two uses of the AC.
-                 * Which at the time of writing can cause trouble when deleting.
-                 */
+                ac->advice()->replace_all_uses_with( ac->runtime_value() );
                 ac->destroy();
-                rhs->replace_all_uses_with( lhs );
             }
             return std::move( circuit );
         }
@@ -130,19 +122,41 @@ namespace circ
         CircuitPtr run( CircuitPtr &&circuit ) override { return std::move( circuit ); }
     };
 
-    struct TrivialConcatRemovalPass : PassBase
+
+    template< typename ... Ops >
+    struct CollapseUnary : PassBase
     {
+
+        template< typename H, typename ... Tail >
+        static void do_run( Circuit *circuit )
+        {
+            collapse< H >( circuit );
+            if constexpr ( sizeof ... ( Tail ) != 0 )
+                return do_run< Tail ... >( circuit );
+        }
+
+        template< typename Op >
+        static void collapse( Circuit *circuit )
+        {
+            for ( auto op : circuit->attr< Op >() )
+                if ( op->operands_size() == 1 )
+                    op->replace_all_uses_with( op->operand( 0 ) );
+        }
+
         CircuitPtr run( CircuitPtr &&circuit ) override
         {
-            for ( auto c : circuit->attr< Concat >() )
-                if ( c->operands_size() == 1 )
-                {
-                    c->replace_all_uses_with( c->operand( 0 ) );
-                }
-
+            do_run< Ops ... >( circuit.get() );
             return std::move( circuit );
         }
     };
+
+    template< typename ... Ops >
+    struct CollapseUnary< tl::TL< Ops ... > > : CollapseUnary< Ops ... >
+    {
+        using CollapseUnary< Ops ... >::run;
+    };
+
+    using CollapseOpsPass = CollapseUnary< collapsable >;
 
     struct PassesBase
     {
