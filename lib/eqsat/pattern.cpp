@@ -4,7 +4,7 @@
 
 #include <eqsat/pattern/pattern.hpp>
 #include <gap/core/overloads.hpp>
-
+#include <iostream>
 #include <spdlog/spdlog.h>
 
 namespace eqsat
@@ -29,6 +29,7 @@ namespace eqsat
     using gap::parser::from_tuple;
 
     using gap::parser::char_parser;
+    using gap::parser::bigint_parser;
     using gap::parser::length_parser;
     using gap::parser::number_parser;
     using gap::parser::string_parser;
@@ -52,10 +53,10 @@ namespace eqsat
         return  left < p > right;
     }
 
-    constexpr parser< constant_t > auto constant_parser() {
+    parser< constant_t > auto constant_parser() {
         using value_t = constant_t::underlying_t;
         auto value    = [](value_t v) { return constant_t(v); };
-        return fmap(value, number_parser< value_t >());
+        return fmap(value, bigint_parser());
     }
 
     constexpr parser< name_t > auto name_parser() {
@@ -117,7 +118,7 @@ namespace eqsat
         return to_vector_parser(context_parser());
     }
 
-    constexpr parser< atom_t > auto atom_parser() {
+    parser< atom_t > auto atom_parser() {
         auto con = construct< atom_t >(constant_parser());
         auto op  = construct< atom_t >(operation_parser());
         auto plc = construct< atom_t >(place_parser());
@@ -291,6 +292,10 @@ namespace eqsat
         return make_parse(atom_parser(), str);
     }
 
+    std::optional< constant_t > parse_constant(std::string_view str) {
+        return make_parse(constant_parser(), str);
+    }
+
     std::optional< simple_expr > parse_simple_expr(std::string_view str) {
         return make_parse(expr_parser(), str);
     }
@@ -350,48 +355,6 @@ namespace eqsat
 
     expr_list children(const match_action &action) {
         return std::visit( [] (const auto &a) { return children(a); }, action);
-    }
-
-    namespace detail {
-        template< typename Yield >
-        void places(const atom_t &atom, Yield &yield) {
-            return std::visit( gap::overloaded{
-                [&](const place_t& p) { yield(p); },
-                [&](const label_t& /* l */) { __builtin_unreachable(); /* TODO */ },
-                [&] (const auto &) { /* noop */ }
-            }, atom);
-        }
-
-        template< typename Yield >
-        void places(const simple_expr &expr, Yield &yield) {
-            return std::visit( gap::overloaded {
-                [&] (const atom_t &a) { return detail::places(a, yield); },
-                [&] (const expr_list &list) {
-                    for (const auto &elem: list)
-                        detail::places(elem, yield);
-                }
-            }, expr);
-        }
-
-    } // namespace detail
-
-    template< typename Yield >
-    void places(const simple_expr& expr, Yield &&yield) {
-        std::unordered_set< place_t > seen;
-
-        auto unique_yield = [yield = std::forward< Yield >(yield), &seen] (const place_t &place) {
-            if (auto [_, inserted] = seen.insert(place); inserted)
-                yield(place);
-        };
-
-        return detail::places(expr, unique_yield);
-    }
-
-    places_t gather_places(const simple_expr &expr) {
-        places_t result;
-        places(expr, [&](const auto &place) { result.push_back(place); });
-
-        return result;
     }
 
 } // namespace eqsat
