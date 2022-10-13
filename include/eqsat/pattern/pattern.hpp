@@ -82,7 +82,7 @@ namespace eqsat
     // atom ::= constant | operation | place | label
     //
     struct constant_tag;
-    using constant_t = gap::strong_type< std::int64_t, constant_tag >;
+    using constant_t = gap::strong_type< gap::bigint, constant_tag >;
 
     // operation has to be named with prefix 'op_'
     struct operation_tag;
@@ -100,13 +100,21 @@ namespace eqsat
 
         atom_t(const base& atom, bitwidth_t bw)
             : base(std::move(atom))
-            , bitwidth(bw) {}
+            , _bitwidth(bw) {}
 
         atom_t(base&& atom, bitwidth_t bw)
             : base(std::move(atom))
-            , bitwidth(bw) {}
+            , _bitwidth(bw) {}
 
-        std::optional< bitwidth_t > bitwidth;
+        std::optional< bitwidth_t > bitwidth() const {
+            if (auto con = std::get_if< constant_t >(this)) {
+                return con->ref().bits;
+            }
+
+            return _bitwidth;
+        }
+    private:
+        std::optional< bitwidth_t > _bitwidth;
     };
 
     template< typename stream >
@@ -117,6 +125,10 @@ namespace eqsat
             [&](const place_t& p) { os << p; },
             [&](const label_t& l) { os << l; },
         }, atom);
+
+        if (auto bw = atom.bitwidth()) {
+            os << ":" << std::to_string(bw.value());
+        }
         return os;
     }
 
@@ -283,6 +295,8 @@ namespace eqsat
     };
 
     std::optional< atom_t > parse_atom(std::string_view str);
+
+    std::optional< constant_t > parse_constant(std::string_view str);
 
     std::optional< simple_expr > parse_simple_expr(std::string_view str);
 
