@@ -8,7 +8,6 @@
 #include <circuitous/IR/Verify.hpp>
 
 #include <circuitous/Transforms/PassBase.hpp>
-#include <circuitous/Transforms/MergeAdvices.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
 #include <optional>
 #include <string>
@@ -143,7 +142,6 @@ namespace circ
             if ( name == "trivial-concat-removal" )   return TrivialConcatRemovalPass::get();
             if ( name == "overflow-flag-fix" )        return RemillOFPatch::get();
             if ( name == "merge-transitive-advices" ) return MergeAdviceConstraints::get();
-            if ( name == "wip-merge-with-advices" )   return MergeWithAdvicesPass::get();
             log_kill() << "Unkown pass option:" << name;
       }
 
