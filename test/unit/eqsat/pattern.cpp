@@ -10,34 +10,64 @@
 #include <eqsat/pattern/pattern.hpp>
 #include <eqsat/pattern/parser.hpp>
 
+#include <gap/core/concepts.hpp>
+
 namespace eqsat::test {
+
+    template< gap::unsigned_integral value_type >
+    constexpr std::size_t bit_size() noexcept {
+        return sizeof(value_type) * CHAR_BIT;
+    }
 
     atom_t operation(std::string name) { return { operation_t{ std::move(name) } }; }
 
-    atom_t constant(std::int64_t value) { return { constant_t{ value } }; }
+    atom_t constant(gap::bigint value) { return atom_t( constant_t{ value } ); }
+
+    template< gap::unsigned_integral value_type >
+    atom_t constant(value_type value) {
+        return constant(gap::bigint{ bit_size< value_type >(), value });
+    }
 
     atom_t place(std::string name) { return { place_t{ std::move(name) } }; }
 
     atom_t label(std::string name) { return { unary_label{ std::move(name) } }; }
 
+    std::string as_value_string(const auto &atom) {
+        return std::get< constant_t >(atom).ref().to_string(10);
+    }
+
     TEST_SUITE("eqsat::pattern-parser") {
+
+    TEST_CASE("Constant Parser") {
+        {
+            auto atom = parse_atom("4:64");
+            CHECK(atom);
+            CHECK(std::holds_alternative< constant_t >(atom.value()));
+            CHECK_EQ(as_value_string(atom.value()), "4");
+
+            CHECK(atom->bitwidth());
+            CHECK_EQ(atom->bitwidth().value(), 64);
+        }
+
+        CHECK(parse_constant("400:64"));
+    }
 
     TEST_CASE("Expr Parser") {
         CHECK(parse_simple_expr("(op_add ?x ?y)"));
-        CHECK(parse_simple_expr("(op_add ?x (op_mul 2 ?y))"));
+        CHECK(parse_simple_expr("(op_add ?x (op_mul 2:64 ?y))"));
 
         {
-            auto expr = parse_simple_expr("(op_add ?x (op_mul 2 ?y))");
+            auto expr = parse_simple_expr("(op_add ?x (op_mul 2:64 ?y))");
             CHECK(expr);
             CHECK_EQ(root(expr.value()), operation("add"));
         }
 
         {
-            auto expr = parse_simple_expr("(op_add (op_mul 1 ?x) 3)");
+            auto expr = parse_simple_expr("(op_add (op_mul 1:64 ?x) 3:64)");
             CHECK(expr);
             CHECK_EQ(root(expr.value()), operation("add"));
             auto ch = children(expr.value());
-            CHECK_EQ(std::get< atom_t >(ch[1]), constant(3));
+            CHECK_EQ(std::get< atom_t >(ch[1]), constant(3u));
 
             auto subexpr = ch[0];
             CHECK_EQ(root(subexpr), operation("mul"));
@@ -47,7 +77,7 @@ namespace eqsat::test {
             CHECK_EQ(gather_places(expr.value()).size(), 1);
         }
 
-        CHECK(!parse_simple_expr("(op_add ?x (op_mul 2 ?y)"));
+        CHECK(!parse_simple_expr("(op_add ?x (op_mul 2:64 ?y)"));
     }
 
     TEST_CASE("Pattern Places") {
@@ -59,8 +89,8 @@ namespace eqsat::test {
         CHECK_EQ(count_places("(op_mul ?x ?y)"), 2);
         CHECK_EQ(count_places("(op_mul ?x ?x)"), 1);
         CHECK_EQ(count_places("(?x ?y ?z)"), 3);
-        CHECK_EQ(count_places("(op_add (op_mul 1 ?x) ?y)"), 2);
-        CHECK_EQ(count_places("(op_add (op_mul 1 ?x) ?x)"), 1);
+        CHECK_EQ(count_places("(op_add (op_mul 1:64 ?x) ?y)"), 2);
+        CHECK_EQ(count_places("(op_add (op_mul 1:64 ?x) ?x)"), 1);
     }
 
     TEST_CASE("Named Expr") {
@@ -128,9 +158,9 @@ namespace eqsat::test {
     }
 
     TEST_CASE("Bitwidth") {
-        CHECK(parse_atom("op_add:32")->bitwidth == 32);
-        CHECK(parse_atom("op_add:64")->bitwidth == 64);
-        CHECK(!parse_atom("op_add")->bitwidth.has_value());
+        CHECK(parse_atom("op_add:32")->bitwidth() == 32);
+        CHECK(parse_atom("op_add:64")->bitwidth() == 64);
+        CHECK(!parse_atom("op_add")->bitwidth().has_value());
     }
 
     TEST_CASE("Variadic") {
