@@ -873,6 +873,8 @@ namespace circ
         Select
     >;
 
+    using collapsable = tl::TL< Concat, And, Or >;
+
     using subnode_list_t = tl::merge< generic_list_t, llvm_ops_t,
                                       leaf_values_ts,
                                       constraint_opts_ts >;
