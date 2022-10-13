@@ -71,23 +71,22 @@ namespace
 
     // optimize the circuit.
     template< typename Optimizer, typename CLI >
-    circuit_ptr_t optimize(circuit_ptr_t &&circuit, const CLI &cli)
+    circuit_ptr_t optimize( circuit_ptr_t &&circuit, const CLI &cli )
     {
         Optimizer opt;
 
-        if (cli.template present<cli::EqSat>()) {
-          auto &[name, pass] = opt.add_pass("eqsat");
-          if (auto patterns = cli.template get<cli::Patterns>()) {
-            auto eqpass =
-                std::dynamic_pointer_cast<circ::EqualitySaturationPass>(pass);
-            eqpass->add_rules(circ::eqsat::parse_rules(patterns.value()));
-          }
+        if ( cli.template present<cli::EqSat>() )
+        {
+            auto pass = opt.template emplace_pass< circ::EqualitySaturationPass >( "eqsat" );
+            if ( auto patterns = cli.template get< cli::Patterns >() )
+                pass->add_rules( circ::eqsat::parse_rules( patterns.value() ) );
         }
 
-        if(cli.template present< cli::Simplify >() )
+        if ( cli.template present< cli::Simplify >() )
         {
-            opt.add_pass( "overflow-flag-fix" );
-            opt.add_pass( "merge-transitive-advices" );
+            opt.template emplace_pass< circ::RemillOFPatch >( "overflow-flag-fix" );
+            opt.template emplace_pass< circ::MergeAdviceConstraints >( "merge-advices" );
+            opt.template emplace_pass< circ::CollapseOpsPass >( "collapse-ops" );
         }
 
         auto result = opt.run(std::move(circuit));
