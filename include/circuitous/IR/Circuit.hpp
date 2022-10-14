@@ -39,38 +39,40 @@ namespace circ
 
     // TODO(lukas): Generalise comparator and move to `tl::`.
     template< typename F, typename H, typename ... Tail >
-    auto runtime_find_(Operation::kind_t rkind, F &&f)
+    auto dispatch_on_kind( Operation::kind_t rkind, F &&f )
     {
-        if (H::kind == rkind)
-            return f(static_cast< H * >(nullptr));
+        if ( H::kind == rkind )
+            return f.template operator()< H >();
 
-        if constexpr (sizeof...(Tail) != 0) {
-            return runtime_find_< F, Tail ... >(rkind, f);
-        } else {
+        if constexpr ( sizeof ... ( Tail ) != 0 )
+            return dispatch_on_kind< F, Tail ... >( rkind, f );
+        else
             unreachable() << "runtime find on: "
-                          << std::to_string(util::to_underlying(rkind))
+                          << std::to_string( util::to_underlying( rkind ) )
                           << " failed";
-        }
     }
 
-    // These may be quite expensive to re-compute, if they are called
-    // often, consider refactor or at least caching.
     template< typename F, typename ... Ts >
-    auto runtime_find( tl::TL< Ts ... >, Operation::kind_t rkind, F &&f)
+    auto dispatch_on_kind( tl::TL< Ts ... >, Operation::kind_t rkind, F &&f )
     {
-        return runtime_find_< F, Ts... >(rkind, std::forward< F >(f));
+        return dispatch_on_kind< F, Ts ... >( rkind, std::forward< F >( f ) );
+    }
+
+    template< typename F >
+    auto dispatch_on_kind_to_all( Operation::kind_t kind, F &&f )
+    {
+        return dispatch_on_kind( all_nodes_list_t{}, kind, std::forward< F >( f ) );
     }
 
     static inline std::string op_code_str(Operation::kind_t rkind)
     {
-        auto get_name = [](auto x) {
-            using raw_t = std::remove_pointer_t< std::decay_t< decltype( x ) > >;
-            return raw_t::op_code_str();
+        auto get_name = []< typename  Op >() {
+            return Op::op_code_str();
         };
 
         static std::unordered_map< Operation::kind_t, std::string > cache;
         if (!cache.count(rkind))
-            cache[rkind] = runtime_find(all_nodes_list_t{}, rkind, get_name);
+            cache[rkind] = dispatch_on_kind_to_all(rkind, get_name);
 
         return cache[rkind];
     }
