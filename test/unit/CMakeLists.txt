@@ -2,7 +2,9 @@
 # Copyright (c) 2021 Trail of Bits, Inc.
 #
 
-find_package(doctest CONFIG REQUIRED)
+find_package( doctest CONFIG REQUIRED )
+find_package( fmt CONFIG REQUIRED )
+find_package( spdlog REQUIRED )
 
 add_subdirectory(lib)
 
@@ -15,6 +17,9 @@ add_executable( test-circuitous
 target_link_libraries( test-circuitous
   PRIVATE
     doctest::doctest
+    spdlog::spdlog
+    fmt::fmt
+
     circuitous::settings
     circuitous::ir
     circuitous::decoder
@@ -31,11 +36,15 @@ add_executable( test-eqsat
   main.cpp
   eqsat/pattern.cpp
   eqsat/graph.cpp
+  eqsat/match.cpp
 )
 
 target_link_libraries( test-eqsat
   PRIVATE
     doctest::doctest
+    spdlog::spdlog
+    fmt::fmt
+
     circuitous::settings
     circuitous::eqsat
     circuitous::testing
