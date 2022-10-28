@@ -324,6 +324,12 @@ namespace eqsat
         return make_parse(apply_pattern_parser(), str);
     }
 
+    named_expr get_expr_with_name(const label_t label, const match_pattern &pat) {
+        return *std::find_if(std::begin(pat.list), std::end(pat.list), [&] (const named_expr &e) {
+            return e.name == label;
+        });
+    }
+
     const atom_t &root(const simple_expr &expr) {
         return std::visit( gap::overloaded {
             [] (const atom_t &atom) -> const atom_t& { return atom; },
@@ -355,6 +361,21 @@ namespace eqsat
 
     expr_list children(const match_action &action) {
         return std::visit( [] (const auto &a) { return children(a); }, action);
+    }
+
+    places_t gather_places(const match_pattern &expr) {
+        places_t result;
+
+        std::unordered_set< place_t > seen;
+        auto unique_yield = [&seen] (const place_t &place) {
+            return !seen.insert(place).second;
+        };
+
+        for (auto &&place : places(expr, unique_yield)) {
+            result.push_back(std::move(place));
+        }
+
+        return result;
     }
 
 } // namespace eqsat
