@@ -91,6 +91,8 @@ namespace circ
 
     std::string node_name(const NodeTemplate &op);
 
+    std::optional< gap::bigint > extract_constant(const NodeTemplate &op);
+
     // std::string to_string(const NodeTemplate &op);
 
     // maybe_bitwidth bitwidth(const NodeTemplate &op);
