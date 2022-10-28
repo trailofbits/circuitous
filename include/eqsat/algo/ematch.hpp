@@ -44,6 +44,7 @@ namespace eqsat {
     match_generator match(
           const constant_t &c
         , const typename egraph::node_type &node
+        , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
         , const matched_places_t &matched_places
@@ -60,6 +61,7 @@ namespace eqsat {
     match_generator match(
           const operation_t &o
         , const typename egraph::node_type &node
+        , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
         , const matched_places_t &matched_places
@@ -80,6 +82,7 @@ namespace eqsat {
     match_generator match(
           const place_t &p
         , const typename egraph::node_type &node
+        , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
         , const matched_places_t &matched_places
@@ -103,12 +106,14 @@ namespace eqsat {
     match_generator match(
           const label_t &p
         , const typename egraph::node_type &node
+        , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
         , const matched_places_t &matched_places
     ) {
-        spdlog::error("not implemented match label");
-        __builtin_abort();
+        co_yield match(
+            get_expr_with_name(p, pattern).expr, node, pattern, graph, places, matched_places
+        );
     }
 
     //
@@ -118,12 +123,13 @@ namespace eqsat {
     match_generator match(
           const atom_t &atom
         , const typename egraph::node_type &node
+        , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
         , const matched_places_t &matched_places
     ) {
         co_yield std::visit([&] (const auto &a) -> match_generator {
-            co_yield match(a, node, graph, places, matched_places);
+            co_yield match(a, node, pattern, graph, places, matched_places);
         }, atom);
     }
 
@@ -135,6 +141,7 @@ namespace eqsat {
     match_generator match_children(
           const auto &pattern_children
         , const auto &node_children
+        , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
         , const matched_places_t &matched_places
@@ -143,7 +150,7 @@ namespace eqsat {
 
         auto match_child = [&] () -> match_generator {
             eclass_type child_class = graph.eclass(node_children.front());
-            co_yield match(pattern_children.front(), child_class, graph, places, matched_places);
+            co_yield match(pattern_children.front(), child_class, pattern, graph, places, matched_places);
         };
 
         if (pattern_children.size() == 1) {
@@ -151,7 +158,7 @@ namespace eqsat {
         } else {
             for (auto m : match_child()) {
                 co_yield match_children(
-                    tail(pattern_children), tail(node_children), graph, places, m.matched_places
+                    tail(pattern_children), tail(node_children), pattern, graph, places, m.matched_places
                 );
             }
         }
@@ -161,11 +168,12 @@ namespace eqsat {
     match_generator match(
           const expr_list &list
         , const typename egraph::node_type &node
+        , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
         , const matched_places_t &matched_places
     ) {
-        for (auto head : match(list.front(), node, graph, places, matched_places)) {
+        for (auto head : match(list.front(), node, pattern, graph, places, matched_places)) {
             auto pattern_children = tail(list);
 
             if (pattern_children.empty()) {
@@ -180,11 +188,27 @@ namespace eqsat {
                     node_children.push_back(std::move(ch));
                 }
 
-                for (auto m : match_children(pattern_children, node_children, graph, places, head.matched_places)) {
+                for (auto m : match_children(pattern_children, node_children, pattern, graph, places, head.matched_places)) {
                     co_yield { head.root, m.matched_places };
                 }
             }
         }
+    }
+
+    //
+    // match expr with context
+    //
+    template< gap::graph::graph_like egraph >
+    match_generator match(
+          const expr_with_context &expr
+        , const typename egraph::node_type &node
+        , const match_pattern &pattern
+        , const egraph &graph
+        , const places_t &places
+        , const matched_places_t &matched_places
+    ) {
+        // TODO deal with context matching
+        co_yield match(expr.expr, node, pattern, graph, places, matched_places);
     }
 
     //
@@ -194,12 +218,13 @@ namespace eqsat {
     match_generator match(
           const simple_expr &expr
         , const typename egraph::node_type &node
+        , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
         , const matched_places_t &matched_places
     ) {
         co_yield std::visit([&] (const auto &a) -> match_generator {
-            co_yield match(a, node, graph, places, matched_places);
+            co_yield match(a, node, pattern, graph, places, matched_places);
         }, expr);
     }
 
@@ -207,12 +232,13 @@ namespace eqsat {
     match_generator match(
           const simple_expr &expr
         , const typename egraph::eclass_type &eclass
+        , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
         , const matched_places_t &matched_places
     ) {
         for (const auto &node : eclass.nodes) {
-            co_yield match(expr, *node, graph, places, matched_places);
+            co_yield match(expr, *node, pattern, graph, places, matched_places);
         }
     }
 
@@ -223,6 +249,7 @@ namespace eqsat {
     match_generator match(
           const match_expr &expr
         , const typename egraph::node_type &node
+        , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
         , const matched_places_t &matched_places
@@ -241,7 +268,7 @@ namespace eqsat {
         auto match_by_action = [&] (const auto &node) -> match_generator {
             co_yield std::visit([&] (const auto &a) -> match_generator {
                 matched_places_t matched_places;
-                co_yield match(a, node, graph, places, matched_places);
+                co_yield match(a, node, pattern, graph, places, matched_places);
             }, pattern.action);
         };
 
