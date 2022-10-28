@@ -15,6 +15,9 @@
 #include <unordered_set>
 #include <variant>
 #include <vector>
+#include <iostream>
+
+#include <fmt/format.h>
 
 namespace eqsat
 {
@@ -77,6 +80,11 @@ namespace eqsat
     using variadic_context = gap::strong_type< name_t, variadic_context_tag >;
 
     using context_t = std::variant< single_context, variadic_context >;
+
+    template< typename stream >
+    stream& operator<<(stream& os, const context_t& ctx) {
+        return std::visit([&](const auto& c) -> stream& { return os << c; }, ctx);
+    }
 
     //
     // atom ::= constant | operation | place | label
@@ -156,8 +164,7 @@ namespace eqsat
     using match_expr = std::variant< basic_match_expr, commutative_match_expr >;
 
     static inline const auto& labels(const match_expr& e) {
-        return std::visit(
-            [](const auto& m) -> const auto& { return m.labels; }, e);
+        return std::visit([](const auto& m) -> const auto& { return m.labels; }, e);
     }
 
     // expression is either atom or compound expression
@@ -181,8 +188,7 @@ namespace eqsat
 
     template< typename stream >
     stream& operator<<(stream& os, const simple_expr& expr) {
-        std::visit([&](const auto& e) { os << e; }, expr);
-        return os;
+        return std::visit([&](const auto& e) -> stream& { return os << e; }, expr);
     }
 
     // expression of form: (expr):ctx;
@@ -197,6 +203,15 @@ namespace eqsat
         std::optional< context_t > context = std::nullopt;
     };
 
+    template< typename stream >
+    stream& operator<<(stream& os, const expr_with_context& e) {
+        os << e.expr << " : ";
+        if (e.context) {
+            return os << e.context.value();
+        }
+        return os << "no-context";
+    }
+
     // expression of form: (let name (expr):ctx);
     struct named_expr {
         named_expr(label_t name, expr_with_context expr)
@@ -207,7 +222,21 @@ namespace eqsat
         expr_with_context expr;
     };
 
+    template< typename stream >
+    stream& operator<<(stream& os, const named_expr& e) {
+        return os << e.name << " : " << e.expr;
+    }
+
     using named_exprs = std::vector< named_expr >;
+
+    template< typename stream >
+    stream& operator<<(stream& os, const named_exprs& e) {
+        os << "( ";
+        for (const auto& v : e)
+            os << v << ' ';
+        os << ')';
+        return os;
+    }
 
     // Action is the last part of a match pattern that specifies
     // how to match the pattern.
@@ -215,14 +244,10 @@ namespace eqsat
     // It is either generic expression or match expression.
     using match_action = std::variant< simple_expr, match_expr >;
 
-    // template< typename stream >
-    // stream& operator<<(stream& os, const named_exprs& e) {
-    //     os << "( ";
-    //     for (const auto& v : e)
-    //         os << v << ' ';
-    //     os << ')';
-    //     return os;
-    // }
+    template< typename stream >
+    stream& operator<<(stream& os, const match_action& action) {
+        return std::visit([&](const auto& a) -> stream& { return os << a; }, action);
+    }
 
     //
     // constaint ::= disjoint | equiv
@@ -256,6 +281,13 @@ namespace eqsat
         constraints_t constraints;
         named_exprs list;
     };
+
+    named_expr get_expr_with_name(const label_t label, const match_pattern &pat);
+
+    template< typename stream >
+    stream& operator<<(stream& os, const match_pattern& m) {
+        return os << "match " << m.action;
+    }
 
     // apply pattern:
     //
@@ -329,60 +361,51 @@ namespace eqsat
 
     using places_generator = gap::recursive_generator< place_t >;
 
-    places_generator places(const atom_t &atom, auto &filter) {
+    places_generator places(const atom_t &atom, const match_pattern &pattern, auto &filter) {
         co_yield std::visit( gap::overloaded {
             [&](const place_t& p) -> places_generator {
                 if (!filter(p)) {
                     co_yield place_t(p);
                 }
             },
-            [&] (const label_t& /* l */) -> places_generator {
-                __builtin_unreachable(); /* TODO */
+            [&] (const label_t& l) -> places_generator {
+                co_yield places(get_expr_with_name(l, pattern), pattern, filter);
             },
             [&] (const auto &) -> places_generator { co_return; /* noop */ }
         }, atom);
     }
 
-    places_generator places(const simple_expr &expr, auto &filter) {
+    places_generator places(const simple_expr &expr, const match_pattern &pattern, auto &filter) {
         co_yield std::visit( gap::overloaded {
             [&] (const atom_t &a) -> places_generator {
-                co_yield places(a, filter);
+                co_yield places(a, pattern, filter);
             },
             [&] (const expr_list &list) -> places_generator {
                 for (const auto &elem: list) {
-                    co_yield places(elem, filter);
+                    co_yield places(elem, pattern, filter);
                 }
             }
         }, expr);
     }
 
-    places_generator places(const expr_with_context &expr, auto &filter) {
-        co_yield places(expr.expr, filter);
+    places_generator places(const expr_with_context &expr, const match_pattern &pattern, auto &filter) {
+        co_yield places(expr.expr, pattern, filter);
     }
 
-    places_generator places(const named_expr &expr, auto &filter) {
-        co_yield places(expr.expr, filter);
+    places_generator places(const named_expr &expr, const match_pattern &pattern, auto &filter) {
+        co_yield places(expr.expr, pattern, filter);
+    }
+
+    places_generator places(const match_action &action, const match_pattern &pattern, auto &filter) {
+        co_yield std::visit([&] (const auto &a) -> places_generator {
+            co_yield places(a, pattern, filter);
+        }, action);
     }
 
     places_generator places(const match_pattern &pat, auto &filter) {
-        for (const auto &expr : pat.list) {
-            co_yield places(expr, filter);
-        }
+        co_yield places(pat.action, pat, filter);
     }
 
-    places_t gather_places(const auto &expr) {
-        places_t result;
-
-        std::unordered_set< place_t > seen;
-        auto unique_yield = [&seen] (const place_t &place) {
-            return !seen.insert(place).second;
-        };
-
-        for (auto place : places(expr, unique_yield)) {
-            result.push_back(std::move(place));
-        }
-
-        return result;
-    }
+    places_t gather_places(const match_pattern &expr);
 
 } // namespace eqsat
