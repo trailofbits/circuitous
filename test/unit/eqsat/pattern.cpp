@@ -63,7 +63,7 @@ namespace eqsat::test {
         }
 
         {
-            auto expr = parse_simple_expr("(op_add (op_mul 1:64 ?x) 3:64)");
+            auto expr = parse_simple_expr("(op_add (op_mul 1:32 ?x) 3:32)");
             CHECK(expr);
             CHECK_EQ(root(expr.value()), operation("add"));
             auto ch = children(expr.value());
@@ -73,8 +73,6 @@ namespace eqsat::test {
             CHECK_EQ(root(subexpr), operation("mul"));
             auto subch = children(subexpr);
             CHECK_EQ(std::get< atom_t >(subch[1]), place("x"));
-
-            CHECK_EQ(gather_places(expr.value()).size(), 1);
         }
 
         CHECK(!parse_simple_expr("(op_add ?x (op_mul 2:64 ?y)"));
@@ -82,7 +80,10 @@ namespace eqsat::test {
 
     TEST_CASE("Pattern Places") {
         auto count_places = [](std::string_view in) {
-            return gather_places(parse_simple_expr(in).value()).size();
+            auto match = parse_match_pattern(in);
+            CHECK(match);
+
+            return gather_places(match.value()).size();
         };
 
         CHECK_EQ(count_places("(?x)"), 1);
@@ -91,6 +92,7 @@ namespace eqsat::test {
         CHECK_EQ(count_places("(?x ?y ?z)"), 3);
         CHECK_EQ(count_places("(op_add (op_mul 1:64 ?x) ?y)"), 2);
         CHECK_EQ(count_places("(op_add (op_mul 1:64 ?x) ?x)"), 1);
+        CHECK_EQ(count_places("((let X (?x)) (let Y (?y)) (op_mul $X $Y))"), 2);
     }
 
     TEST_CASE("Named Expr") {
