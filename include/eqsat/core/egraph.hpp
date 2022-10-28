@@ -9,6 +9,7 @@
 #include <gap/core/graph.hpp>
 #include <gap/core/hash.hpp>
 #include <gap/core/union_find.hpp>
+#include <gap/core/bigint.hpp>
 #include <unordered_map>
 #include <vector>
 
@@ -34,10 +35,12 @@ namespace eqsat::graph
     struct base {
         using child_type   = node_handle;
 
-        gap::generator< node_handle > children() {
+        gap::generator< node_handle > children() const {
             for (auto ch : _children)
                 co_yield ch;
         }
+
+        std::size_t num_of_children() const { return _children.size(); }
 
         void add_child(node_handle handle) {
             _children.push_back(handle);
@@ -59,8 +62,13 @@ namespace eqsat::graph
     };
 
     template< typename storage >
-    static inline std::string node_name(const storage_node< storage > &n) {
+    std::string node_name(const storage_node< storage > &n) {
         return node_name(static_cast< storage >(n));
+    }
+
+    template< typename storage >
+    std::optional< gap::bigint > extract_constant(const storage_node< storage > &n) {
+        return extract_constant(static_cast< storage >(n));
     }
 
     struct bond_node {
@@ -68,6 +76,10 @@ namespace eqsat::graph
     };
 
     static inline std::string node_name(const bond_node &n) { return "bond"; }
+
+    static inline std::optional< gap::bigint > extract_constant(const bond_node &n) {
+        return std::nullopt;
+    }
 
     template< typename storage >
     using node_variants = std::variant< storage_node< storage >, bond_node >;
@@ -107,6 +119,11 @@ namespace eqsat::graph
     template< typename storage >
     std::string node_name(const node< storage > &n) {
         return std::visit( [] (const auto &n) { return node_name(n); }, n.data);
+    }
+
+    template< typename storage >
+    std::optional< gap::bigint > extract_constant(const node< storage > &n) {
+        return std::visit( [] (const auto &n) { return extract_constant(n); }, n.data);
     }
 
     //
@@ -281,7 +298,7 @@ namespace eqsat::graph
         std::vector< std::unique_ptr< node_type > > _nodes;
 
         // stores equivalence relation between equaltity classes
-        gap::resizable_union_find _unions = gap::resizable_union_find(0);
+        mutable gap::resizable_union_find _unions = gap::resizable_union_find(0);
 
         // all equavalent ids  map to the same class
         eclass_map _classes;
