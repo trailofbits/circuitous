@@ -9,10 +9,16 @@
 
 namespace circ
 {
-  std::string node_name(const NodeTemplate &op)
-  {
-    return std::visit( [] (const auto &o) { return o.op_code_name; }, op );
-  }
+    std::string node_name( const NodeTemplate &op )
+    {
+        return std::visit( [](const auto &o) { return o.op_code_name; }, op );
+    }
+
+    std::optional< gap::bigint > extract_constant( const NodeTemplate &op )
+    {
+        __builtin_abort();
+        return std::nullopt;
+    }
 
   // std::string to_string(const NodeTemplate &op)
   // {
