@@ -17,19 +17,38 @@
 
 namespace eqsat
 {
-    using matched_places_t = gap::dense_map< std::uint32_t, graph::node_handle >;
+    struct maybe_node_handle {
+        explicit maybe_node_handle() : _handle(0) {}
+        explicit maybe_node_handle(graph::node_handle handle)
+            : _handle(handle.id.ref() + 1)
+        {}
+
+        graph::node_handle handle() const { return graph::node_handle(id()); }
+        node_id_t id() const { return node_id_t( _handle - 1 ); }
+
+        constexpr auto operator<=>(const maybe_node_handle& other) const = default;
+
+    private:
+        node_id_t::underlying_t _handle;
+    };
+
+    using matched_places_t = gap::dense_map< std::uint32_t, maybe_node_handle >;
     struct match_result {
         graph::node_handle root;
         matched_places_t matched_places;
     };
 
     template< typename stream >
-    stream& operator<<(stream& os, const match_result& m) {
-        os << "match " << m.root.id.ref();
-        for (auto p : m.matched_places) {
-            os << fmt::format(" {} -> {}", p.first, p.second.id.ref());
+    stream& operator<<(stream& os, const matched_places_t& places) {
+        for (auto p : places) {
+            os << fmt::format(" {} -> {}", p.first, p.second.id().ref());
         }
         return os;
+    }
+
+    template< typename stream >
+    stream& operator<<(stream& os, const match_result& m) {
+        return os << "match " << m.root.id.ref() << m.matched_places;
     }
 
     using match_generator = gap::recursive_generator< match_result >;
@@ -89,13 +108,14 @@ namespace eqsat {
     ) {
         auto id = std::uint32_t(place_index(p, places));
         auto handle = graph.find(&node);
-
-        if (auto it = matched_places.find(id); it != matched_places.end() && it->second != handle) {
-            co_return;
+        if (auto it = matched_places.find(id); it != matched_places.end()) {
+            if (it->second.handle() != handle) {
+                co_return;
+            }
         }
 
         match_result result = { handle, matched_places };
-        result.matched_places.emplace(id, handle);
+        result.matched_places.emplace(id, maybe_node_handle(handle));
         co_yield result;
     }
 
