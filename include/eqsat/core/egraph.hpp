@@ -12,10 +12,13 @@
 #include <gap/core/bigint.hpp>
 #include <unordered_map>
 #include <vector>
+#include <iostream>
 
 namespace eqsat::graph
 {
     struct node_handle {
+        explicit node_handle(node_id_t id) : id(id) {}
+
         node_id_t id;
 
         constexpr bool operator==(const node_handle& other) const = default;
@@ -133,16 +136,18 @@ namespace eqsat::graph
     struct eclass {
         void merge(eclass &&other) {
             std::move(other.nodes.begin(), other.nodes.end(), std::back_inserter(nodes));
+            std::move(other.parents.begin(), other.parents.end(), std::back_inserter(parents));
         }
 
         bool operator==(const eclass&) const = default;
 
         std::vector< enode_pointer > nodes;
+        std::vector< enode_pointer > parents;
     };
 
     template< typename enode_pointer >
     static eclass< enode_pointer > singleton_eclass(enode_pointer node) {
-        return {{ node }};
+        return {{ node }, {}};
     }
 
     //
@@ -212,7 +217,7 @@ namespace eqsat::graph
         gap::generator< const edge_type > edges() const {
             for (const auto &node : nodes()) {
                 for (const auto &ch : node->children()) {
-                    const auto &cls = _classes.at(ch);
+                    const auto &cls = _classes.at(find(ch));
                     co_yield edge_type{node, const_cast< const eclass_pointer >(&cls)};
                 }
             }
@@ -227,17 +232,27 @@ namespace eqsat::graph
         std::size_t num_of_eclasses() const { return _classes.size(); }
 
         node_handle find(const_node_pointer ptr) const {
-            return _ids.at(const_cast< node_pointer >(ptr));
+            return find(_ids.at(const_cast< node_pointer >(ptr)));
         }
-        node_handle find(node_pointer ptr) { return _ids.at(ptr); }
 
-        node_handle find(node_handle node) const { return { _unions.find(node.id) }; }
-        node_handle find(node_handle node) { return { _unions.find(node.id) }; }
+        node_handle find(node_pointer ptr) { return find(_ids.at(ptr)); }
+
+        node_handle find(node_handle node) const {
+            return node_handle( _unions.find(node.id) );
+        }
+
+        node_handle find(node_handle node) {
+            return node_handle( _unions.find(node.id) );
+        }
 
         void canonicalize(node_type &node) {
             node.update_children([&](node_handle child) {
                 return _unions.find(child.id); /* compresses paths */
             });
+        }
+
+        void add_parent(node_handle eclass, node_pointer parent) {
+            _classes.at(eclass).parents.push_back(parent);
         }
 
         node_pointer add_node(storage_type &&data) {
@@ -249,7 +264,10 @@ namespace eqsat::graph
 
             _classes.emplace(id, singleton_eclass(node));
 
-            // TODO add child - parent link
+            // add child - parent link
+            for (auto child : node->children()) {
+                add_parent(child, node);
+            }
 
             _ids.emplace(node, id);
 
@@ -258,6 +276,10 @@ namespace eqsat::graph
 
         const eclass_type &eclass(node_handle handle) const { return _classes.at(find(handle)); }
         eclass_type &eclass(node_handle handle) { return _classes.at(find(handle)); }
+
+        const auto& parents(node_handle handle) const {
+            return eclass(handle).parents;
+        }
 
         void canonicalize(node_handle eclass) {
             for (auto node : _classes[eclass].nodes) {
@@ -305,6 +327,9 @@ namespace eqsat::graph
 
         // stores equality ids of enodes
         std::unordered_map< node_pointer, node_handle > _ids;
+
+        // modified eclasses that needs to be rebuild
+        std::vector< node_id_t > _pending;
     };
 
 } // namespace eqsat::graph
