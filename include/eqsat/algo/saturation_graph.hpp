@@ -28,7 +28,7 @@ namespace eqsat {
             auto rid = find(rhs.id);
 
             if (lid == rid) {
-                return {lid};
+                return node_handle(lid);
             }
 
             if (rank(lid) < rank(rid)) {
@@ -36,7 +36,7 @@ namespace eqsat {
             }
 
             // TODO maybe can be moved to rebuild?
-            merge_eclasses({lid}, {rid});
+            merge_eclasses(node_handle(lid), node_handle(rid));
 
             return { merge(lid, rid) };
         }
