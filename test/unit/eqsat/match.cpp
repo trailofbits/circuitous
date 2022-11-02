@@ -114,6 +114,26 @@ namespace eqsat::test {
         CHECK(count_matches(match(rule, saturable)) == 4);
     }
 
+    TEST_CASE("nested same arguments") {
+        test_graph egraph;
+        auto ida  = make_node(egraph, "a:64");
+        auto idb  = make_node(egraph, "b:64");
+        auto idc  = make_node(egraph, "c:64");
+        auto add1 = make_node(egraph, "add", ida, idb);
+        /* auto add2 = */ make_node(egraph, "add", idc, add1);
+
+        auto rule = rewrite_rule("twice", "(op_add ?x ?x)", "(op_mul 2:64 ?x)");
+        CHECK(count_matches(match(rule, egraph)) == 0);
+
+        auto saturable = saturable_egraph(std::move(egraph));
+
+        saturable.merge(ida, idb);
+        saturable.merge(idc, add1);
+        saturable.rebuild();
+
+        CHECK(count_matches(match(rule, saturable)) == 8);
+    }
+
     } // test suite: eqsat::pattern-patching
 
 } // namespace eqsat::test
