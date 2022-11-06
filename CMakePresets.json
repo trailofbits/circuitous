@@ -102,6 +102,26 @@
             "VCPKG_HOST_TRIPLET": "x64-linux"
         }
     },
+    {
+        "name": "arm64-osx-rel",
+        "hidden": true,
+        "description": "Configure with arm64-osx-rel triplet",
+        "inherits": "cxx-common",
+        "cacheVariables": {
+            "VCPKG_TARGET_TRIPLET": "arm64-osx-rel",
+            "VCPKG_HOST_TRIPLET": "arm64-osx-rel"
+        }
+    },
+    {
+        "name": "arm64-osx",
+        "hidden": true,
+        "description": "Configure with arm64-osx triplet",
+        "inherits": "cxx-common",
+        "cacheVariables": {
+            "VCPKG_TARGET_TRIPLET": "arm64-osx",
+            "VCPKG_HOST_TRIPLET": "arm64-osx"
+        }
+    },
 
     {
         "name": "ninja-cxx-common-x64-osx-rel",
@@ -130,6 +150,20 @@
         "displayName": "Ninja debug with cxx-common",
         "description": "Configure with cxx-common toolchain for x64-linux",
         "inherits": [ "debug", "x64-linux", "cxx-common-llvm-14" ]
+    },
+    {
+        "name": "ninja-cxx-common-arm64-osx-rel",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja release with cxx-common",
+        "description": "Configure with cxx-common toolchain for arm64-osx-rel",
+        "inherits": [ "release", "arm64-osx-rel", "cxx-common-llvm-14" ]
+    },
+    {
+        "name": "ninja-cxx-common-arm64-osx-deb",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja debug with cxx-common",
+        "description": "Configure with cxx-common toolchain for arm64-osx",
+        "inherits": [ "debug", "arm64-osx", "cxx-common-llvm-14" ]
     },
 
     {
@@ -160,6 +194,20 @@
         "description": "Configure with cxx-common toolchain for x64-osx with system llvm",
         "inherits": [ "debug", "x64-osx", "system-llvm" ]
     },
+    {
+        "name": "ninja-cxx-common-system-llvm-arm64-osx-rel",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja osx release with cxx-common",
+        "description": "Configure with cxx-common toolchain for arm64-osx-rel with system llvm",
+        "inherits": [ "release", "arm64-osx-rel", "system-llvm" ]
+    },
+    {
+        "name": "ninja-cxx-common-system-llvm-arm64-osx-deb",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja osx debug with cxx-common",
+        "description": "Configure with cxx-common toolchain for arm64-osx with system llvm",
+        "inherits": [ "debug", "arm64-osx", "system-llvm" ]
+    },
 
     {
         "name": "ninja-system-remill-x64-linux-rel",
@@ -188,6 +236,20 @@
         "displayName": "Ninja osx debug with system remill",
         "description": "Configure for x64-osx with system remill",
         "inherits": [ "debug", "x64-osx", "system-remill" ]
+    },
+    {
+        "name": "ninja-system-remill-arm64-osx-rel",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja osx release with system remill",
+        "description": "Configure for arm64-osx-rel with system remill",
+        "inherits": [ "release", "arm64-osx-rel", "system-remill" ]
+    },
+    {
+        "name": "ninja-system-remill-arm64-osx-deb",
+        "binaryDir": "${sourceDir}/builds/${presetName}",
+        "displayName": "Ninja osx debug with system remill",
+        "description": "Configure for arm64-osx with system remill",
+        "inherits": [ "debug", "arm64-osx", "system-remill" ]
     }
   ],
   "buildPresets": [
@@ -210,6 +272,16 @@
         "name": "ninja-cxx-common-linux-deb",
         "configurePreset": "ninja-cxx-common-x64-linux-deb",
         "displayName": "Build linux-debug with cxx-common"
+    },
+    {
+        "name": "ninja-cxx-common-arm64-osx-rel",
+        "configurePreset": "ninja-cxx-common-arm64-osx-rel",
+        "displayName": "Build osx-release with cxx-common"
+    },
+    {
+        "name": "ninja-cxx-common-arm64-osx-deb",
+        "configurePreset": "ninja-cxx-common-arm64-osx-deb",
+        "displayName": "Build osx-debug with cxx-common"
     }
   ],
   "testPresets": [
@@ -232,6 +304,16 @@
         "name": "ninja-cxx-common-linux-rel-test",
         "displayName": "Test linux with cxx-common config",
         "configurePreset": "ninja-cxx-common-x64-linux-rel"
+    },
+    {
+        "name": "ninja-cxx-common-arm64-osx-deb-test",
+        "displayName": "Test osx with cxx-common config",
+        "configurePreset": "ninja-cxx-common-arm64-osx-deb"
+    },
+    {
+        "name": "ninja-cxx-common-arm64-osx-rel-test",
+        "displayName": "Test osx with cxx-common config",
+        "configurePreset": "ninja-cxx-common-arm64-osx-rel"
     },
     {
       "name": "ninja-system-remill-x64-linux-rel-test",
