@@ -29,6 +29,8 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <iostream>
 #include <unordered_map>
 
+#include <circuitous/SEG/SEGMultiGraph.hpp>
+
 // TODO(lukas): Clean this up once remill gets rid of gflags.
 DEFINE_string(arch, "", "");
 DEFINE_string(os, REMILL_OS, "");
@@ -135,6 +137,59 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
 }
 
 int main(int argc, char *argv[]) {
+//    std::cout << printmeeeeeee() << std::endl;
+//
+//    circ::SEGGraph segg;
+//
+//    circ::SEGNode sg("root");
+//    auto n = std::make_shared<circ::SEGNode>("n0");
+//    auto n1 = std::make_shared<circ::SEGNode>("n1"); // contians 23
+//    auto n2 = std::make_shared<circ::SEGNode>("n2");
+//    auto n3 = std::make_shared<circ::SEGNode>("n3");
+//    auto n4 = std::make_shared<circ::SEGNode>("n4"); // contains 56
+//    auto n5 = std::make_shared<circ::SEGNode>("n5");
+//    auto n6 = std::make_shared<circ::SEGNode>("n6");
+//
+//    sg.add_child(n);
+//    n->add_child(n1);
+//    n1->add_child(n2);
+//    n1->add_child(n3);
+//    sg.add_child(n4);
+//    n4->add_child(n5);
+//    n4->add_child(n6);
+//
+//    //
+////    n->_nodes.push_back(n1);
+////    n->_nodes.push_back(n4);
+////    n1->_nodes.push_back(n2);
+////    n1->_nodes.push_back(n3);
+////
+////    n4->_nodes.push_back(n5);
+////    n4->_nodes.push_back(n6);
+//    segg._nodes.push_back(std::make_shared<circ::SEGNode>(sg));
+//    segg._nodes.push_back(n1);
+//    segg._nodes.push_back(n2);
+//    segg._nodes.push_back(n3);
+//    segg._nodes.push_back(n4);
+//    segg._nodes.push_back(n5);
+//    segg._nodes.push_back(n6);
+//
+//
+////    std::vector<int> vec = {1,2,3,4,5};
+////    int tval  =2;
+////    std::cout << "before " << vec.size() << std::endl;
+////    std::remove_if(std::begin(vec), std::end(vec), [&](int val) { return tval == val; });
+////    vec.erase(1);
+////    std::cout << "after " << vec.size() << std::endl;
+//
+//    for(auto& to_hash : gap::graph::dfs<gap::graph::yield_node::on_close>(segg))
+//        std::cout << to_hash->id << ": " << to_hash->get_hash() << std::endl;
+//    std::cout << "---------------------" << std::endl;
+//    circ::dedup(segg);
+//    std::cout << "---------------------" << std::endl;
+//    circ::dedup(segg);
+//    circ::dfs_graph(segg);
+//    circ::print_nodes_graph(segg);
     auto maybe_parsed_cli = parse_and_validate_cli< cmd_opts_list >(argc, argv);
     if (!maybe_parsed_cli)
     {
@@ -170,20 +225,86 @@ int main(int argc, char *argv[]) {
 
     VerifyCircuit("Verifying loaded circuit.", circuit.get(), "Circuit is valid.");
 
-    if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >()){
-        if ( *dec_out != "cout" ) {
-            auto o = std::ofstream ( *dec_out );
-            auto decGen = circ::decoder::DecoderPrinter( circuit, o );
-            decGen.print_file();
-        }
-        else {
-            auto decGen = circ::decoder::DecoderPrinter( circuit );
-            decGen.print_file();
+
+    auto seg = circ::circ_to_segg(circuit.get());
+    std::cout << "Number of starting nodes: "  << seg->_nodes.size() << std::endl;
+    circ::dedup(*seg.get());
+    std::cout << "---------------------" << std::endl;
+    for(auto& to_hash : gap::graph::dfs<gap::graph::yield_node::on_close>(*seg.get()))
+        std::cout << to_hash->id << ": " << to_hash->get_hash() << std::endl;
+
+
+    std::cout << "Number of functions: " << std::count_if(seg->_nodes.begin(), seg->_nodes.end(), [](auto node) { return node->isRoot;}) <<  " out of #paths: " << seg->_nodes.size() << std::endl;
+
+
+    // pair(Node, Op*)
+
+    std::map<std::string, circ::Operation*> speciliazes;
+//    circ::specialize(speciliazes, )
+    for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(*seg.get()))
+    {
+        if(node->isRoot)
+        {
+            for(auto & op : node->root_operations)
+                circ::specialize(speciliazes, node, op );
         }
     }
-    else{
-        circ::unreachable() << "Decoder out was not specified";
+
+
+    for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(*seg.get()))
+        std::cout << node->id << "( " << node->inline_cost << "): " << node->print_hash() << std::endl;
+
+    std::cout << "newwww" << std::endl;
+
+    for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(*seg.get()))
+    {
+
+        node->inline_cost = 1;
+        for(auto &c : node->_nodes)
+        {
+            if(c->fd)
+                node->inline_cost++;
+            else
+                node->inline_cost += c->inline_cost;
+        }
+
+
+//        node->inline_cost
+//            = std::accumulate( node->children().begin(), node->children().end(), 0,
+//                               []( int current, std::shared_ptr< circ::SEGNode > n ) {
+//                                    if(n->fd == false)
+//                                        return current + n->inline_cost;
+//                                    else
+//                                        return current + 1;
+//                               } );
+        if(node->inline_cost >= 5)
+            node->fd = true;
+
+        std::cout << node->id << "( " << node->inline_cost;
+        if(node->fd)
+            std::cout << "*" << "";
+        std::cout << " ): " << node->print_hash()<< std::endl;
     }
+
+
+    /*
+     * Next up, specializations
+     */
+
+//    if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >()){
+//        if ( *dec_out != "cout" ) {
+//            auto o = std::ofstream ( *dec_out );
+//            auto decGen = circ::decoder::DecoderPrinter( circuit, o );
+//            decGen.print_file();
+//        }
+//        else {
+//            auto decGen = circ::decoder::DecoderPrinter( circuit );
+//            decGen.print_file();
+//        }
+//    }
+//    else{
+//        circ::unreachable() << "Decoder out was not specified";
+//    }
 
 
     return 0;
