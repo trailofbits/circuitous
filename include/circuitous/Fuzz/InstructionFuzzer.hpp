@@ -144,12 +144,8 @@ namespace circ
                 if (!permutations[i])
                   continue;
 
-                log_dbg() << permutations.size() - 1 - i
-                          << ": checking structure of:\n" << permutations[i]->Serialize();
                 for (std::size_t op_i = 0; op_i < rinst.operands.size(); ++op_i)
                 {
-                    log_dbg() << "Operand: " << op_i;
-
                     using namespace ifuzz::permutate;
                     auto item = to_item(rinst, op_i);
                     auto res = Comparator(arch).compare(rinst, *permutations[i], item);
@@ -157,7 +153,6 @@ namespace circ
                     if (DiffResult().are_dirty(res,item))
                         dirts[op_i].insert(static_cast< uint32_t >(permutations.size() - 1 - i));
                 }
-                log_dbg() << "Done.";
             }
             return std::make_tuple(op_bits, dirts);
         }
@@ -710,7 +705,6 @@ namespace circ
 
         void reg_enlarge(shadowinst::Instruction &s_inst, const idx_vector_t &todo)
         {
-            log_dbg() << "Going to enlarge regs.";
             reg_enlarge_< 0 >(s_inst, todo);
             reg_enlarge_< 1 >(s_inst, todo);
             reg_enlarge_< 2 >(s_inst, todo);
