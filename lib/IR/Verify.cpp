@@ -565,14 +565,55 @@ namespace circ
 
         self_t &verify( Circuit *circuit )
         {
-            std::unordered_map< Operation *, bool > seen;
-            if ( circuit->users_size() != 0 )
+            if ( !circuit->root )
             {
-                res.add_error() << "Circuit node has non-zero users!";
+                res.add_error() << "Circuit does not have root!";
                 return *this;
             }
-            dfs( circuit, seen );
+            loop_dfs( circuit->root );
             return *this;
+        }
+
+        void loop_dfs( Operation *root )
+        {
+            std::unordered_map< Operation *, bool > seen;
+            using entry_t = std::tuple< Operation *, std::size_t >;
+            std::vector< entry_t > stack;
+            stack.emplace_back( root, 0 );
+
+
+            auto err_with_bt = [ & ]( auto next )
+            {
+                std::stringstream ss;
+                ss << "Was reachable: " << pretty_print( next ) << "\n";
+                for ( auto &[ op, op_idx ] : stack )
+                    ss << "\t" << pretty_print( op ) << "\n \t * " << op_idx - 1 << "\n";
+                res.add_error() << "Cycle was found!\n" << ss.str();
+            };
+
+            while ( !stack.empty() )
+            {
+                auto [ op, idx ] = stack.back();
+                stack.pop_back();
+
+                if ( idx != op->operands_size() )
+                {
+                    stack.emplace_back( op, idx + 1 );
+                    auto next = op->operand( idx );
+                    auto it = seen.find( next );
+                    if ( it == seen.end() )
+                    {
+                        seen[ op ] = true;
+                        stack.emplace_back( next, 0 );
+                    } else if ( it->second == true ) {
+                        err_with_bt( next );
+                    }
+                } else {
+                    seen[ op ] = false;
+                }
+
+            }
+
         }
 
         void dfs( Operation *op, std::unordered_map< Operation *, bool > &seen )
