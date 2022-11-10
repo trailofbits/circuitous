@@ -67,11 +67,9 @@ namespace
         return std::string_view( reinterpret_cast<char *>(buf.data()), buf.size());
     }
 
-    using circuit_ptr_t = circ::Circuit::circuit_ptr_t;
-
     // optimize the circuit.
     template< typename Optimizer, typename CLI >
-    circuit_ptr_t optimize( circuit_ptr_t &&circuit, const CLI &cli )
+    circuit_owner_t optimize( circuit_owner_t &&circuit, const CLI &cli )
     {
         Optimizer opt;
 
@@ -339,7 +337,7 @@ int main(int argc, char *argv[]) {
     if (parsed_cli.present< cli::Dbg >())
     {
         circ::log_dbg() << "Stats of final circuit:\n";
-        circ::log_dbg() << circ::GetStats(circuit.get());
+        circ::log_dbg() << circ::GetStats(circuit->root);
     }
 
     circ::log_info() << "Storing circuit.";

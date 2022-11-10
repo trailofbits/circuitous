@@ -66,7 +66,7 @@ namespace circ
 
     struct RemillOFPatch : PassBase
     {
-        CircuitPtr run( CircuitPtr &&circuit ) override
+        circuit_owner_t run( circuit_owner_t &&circuit ) override
         {
             auto output_of = circuit->fetch_reg< OutputRegister >( "OF" );
             auto output_cf = circuit->fetch_reg< OutputRegister >( "CF" );
@@ -98,7 +98,7 @@ namespace circ
 
     struct MergeAdviceConstraints : PassBase
     {
-        CircuitPtr run( CircuitPtr &&circuit ) override
+        circuit_owner_t run( circuit_owner_t &&circuit ) override
         {
             for ( auto ac : circuit->attr< AdviceConstraint >() )
             {
@@ -119,7 +119,7 @@ namespace circ
 
     struct DummyPass : PassBase
     {
-        CircuitPtr run( CircuitPtr &&circuit ) override { return std::move( circuit ); }
+        circuit_owner_t run( circuit_owner_t &&circuit ) override { return std::move( circuit ); }
     };
 
 
@@ -143,7 +143,7 @@ namespace circ
                     op->replace_all_uses_with( op->operand( 0 ) );
         }
 
-        CircuitPtr run( CircuitPtr &&circuit ) override
+        circuit_owner_t run( circuit_owner_t &&circuit ) override
         {
             do_run< Ops ... >( circuit.get() );
             return std::move( circuit );
@@ -175,14 +175,14 @@ namespace circ
             return pass;
         }
 
-        CircuitPtr run_pass( const Pass &pass, CircuitPtr &&circuit )
+        circuit_owner_t run_pass( const Pass &pass, circuit_owner_t &&circuit )
         {
             auto result = pass->run( std::move( circuit ) );
             result->remove_unused();
             return result;
         }
 
-        CircuitPtr run_pass( const NamedPass &npass, CircuitPtr &&circuit )
+        circuit_owner_t run_pass( const NamedPass &npass, circuit_owner_t &&circuit )
         {
             const auto &[ _, pass ] = npass;
             return run_pass( pass, std::move( circuit ) );
@@ -198,7 +198,7 @@ namespace circ
     {
         using Snapshot = std::pair< std::string, RawNodesCounter >;
 
-        CircuitPtr run_pass( const NamedPass &npass, CircuitPtr &&circuit )
+        circuit_owner_t run_pass( const NamedPass &npass, circuit_owner_t &&circuit )
         {
             const auto &[ name, pass ] = npass;
 
@@ -240,13 +240,13 @@ namespace circ
 
     private:
 
-        void make_snapshot( const CircuitPtr &circuit,
+        void make_snapshot( const circuit_owner_t &circuit,
                             std::optional< std::string > after = std::nullopt )
         {
             auto name = after ? after.value() : "start";
             log_info() << "Start capturing statistics.";
             RawNodesCounter collector;
-            collector.Run( circuit.get() );
+            collector.Run( circuit->root );
             log_info() << "Done capturing statistics.";
             history.emplace_back( name, std::move( collector ) );
         }
@@ -257,7 +257,7 @@ namespace circ
     template< typename Next >
     struct Defensive : Next
     {
-        CircuitPtr run_pass( const NamedPass &npass, CircuitPtr &&circuit )
+        circuit_owner_t run_pass( const NamedPass &npass, circuit_owner_t &&circuit )
         {
             const auto &[ name, pass ] = npass;
 
@@ -281,19 +281,19 @@ namespace circ
     template< typename Next >
     struct Passes : Next
     {
-        CircuitPtr run( CircuitPtr &&circuit )
+        circuit_owner_t run( circuit_owner_t &&circuit )
         {
             if ( this->passes.empty() )
                 return std::move( circuit );
 
-            CircuitPtr result = run_pass( this->passes.front(), std::move( circuit ) );
+            circuit_owner_t result = run_pass( this->passes.front(), std::move( circuit ) );
             for ( const auto &pass : detail::tail( this->passes ) )
                 result = run_pass( pass, std::move( result ) );
 
             return result;
         }
 
-        CircuitPtr run_pass( const NamedPass &pass, CircuitPtr &&circuit )
+        circuit_owner_t run_pass( const NamedPass &pass, circuit_owner_t &&circuit )
         {
           return this->Next::run_pass( pass, std::move( circuit ) );
         }

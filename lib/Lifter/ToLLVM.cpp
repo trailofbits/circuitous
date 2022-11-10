@@ -71,9 +71,10 @@ namespace circ
                 return v;
             }
 
+            // TODO(lukas): Remove.
             void emit()
             {
-                std::ignore = get ( circuit );
+                std::ignore = get( circuit->root );
             }
 
             // TODO(lukas): Remove default once implementation is done, as this should
@@ -82,12 +83,6 @@ namespace circ
             {
                 log_kill() << "Default ToLLVM::visit() was reached a case is missing for"
                            << pretty_print< true >( op );
-            }
-
-            // Top-level
-            llvm::Value *visit( const Circuit *op )
-            {
-                return get( op->operand( 0 ) );
             }
 
             // Non-io leaves

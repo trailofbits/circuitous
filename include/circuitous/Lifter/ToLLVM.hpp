@@ -28,7 +28,7 @@ namespace circ
     // Returns context and function.
     [[ nodiscard ]]
     std::tuple< std::shared_ptr< llvm::LLVMContext >, std::unique_ptr< llvm::Module > >
-    convert_to_llvm( Circuit *circuit, const std::string &module_name );
+    convert_to_llvm( circuit_ref_t circuit, const std::string &module_name );
 
     // Convert circuit to llvm function using only the provided builder.
     // It is expected this builder already is properly set up - i.e. has an
@@ -37,6 +37,6 @@ namespace circ
 
     // Convert circuit to llvm function with given name in the provided module.
     [[ nodiscard ]] llvm::Function *
-    convert_to_llvm( Circuit *circuit, llvm::Module *lmodule, const std::string &name );
+    convert_to_llvm( circuit_ref_t circuit, llvm::Module *lmodule, const std::string &name );
 
 } // namespace circ

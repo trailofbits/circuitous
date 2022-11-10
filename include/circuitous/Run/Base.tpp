@@ -127,8 +127,3 @@ void OpSem<S>::visit(DecoderResult *op)
     };
     return safe(op, and_);
 }
-
-inline void BaseSemantics::visit(Circuit *op)
-{
-    this->set_node_val(op, this->get_node_val(op->operand(0)));
-}

@@ -112,12 +112,12 @@ namespace circ::print
                 PrintOperands(op);
             }
 
-            void visit(Circuit *op) {
+            void visit( circuit_ref_t circuit )
+            {
                 os << "digraph {\n"
                     << "node [shape=plain];\n";
-                op->traverse(*this);
-                PrintNodeName(op);
-                PrintOperands(op);
+                if ( circuit->root )
+                    this->dispatch( circuit->root );
                 os << "}\n";
             }
 
