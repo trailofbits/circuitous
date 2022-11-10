@@ -18,6 +18,32 @@
 
 namespace circ
 {
+    // It is expected `accept` will be copied.
+    template< typename Accept >
+    std::vector< Operation * > topology( Operation *root, Accept accept )
+    {
+        std::vector< Operation * > out;
+        std::unordered_set< Operation * > seen;
+        topology( root, out, seen, accept );
+        return out;
+    }
+
+    template< typename Accept >
+    void topology( Operation *root, std::vector< Operation * > &collected,
+                                    std::unordered_set< Operation * > &seen,
+                                    Accept accept )
+    {
+        if ( seen.count( root ) )
+            return;
+        seen.emplace( root );
+
+        for ( auto op : root->operands() )
+            topology( op, collected, seen, accept );
+
+        if ( accept( root ) )
+            collected.push_back( root );
+    }
+
     namespace print
     {
         template< typename Derived >
