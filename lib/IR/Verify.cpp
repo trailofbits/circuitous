@@ -339,7 +339,6 @@ namespace circ
                     return more_than(1, op);
                 case VerifyInstruction::kind:
                 case OnlyOneCondition::kind:
-                case Circuit::kind:
                 case Or::kind:
                 case And::kind:
                 case DecoderResult::kind:

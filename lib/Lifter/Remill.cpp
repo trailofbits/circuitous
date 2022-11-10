@@ -738,8 +738,8 @@ void clear_names(llvm::Function *fn)
 }  // namespace
 
 
-Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func,
-                                std::size_t ptr_size)
+circuit_owner_t lower_fn(llvm::Function *circuit_func,
+                         std::size_t ptr_size)
 {
     clear_names(circuit_func);
 
@@ -768,13 +768,12 @@ Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func,
         }
     }
 
-    auto all_verifications = impl->create<OnlyOneCondition>();
-    impl->add_operand(all_verifications);
+    impl->root = impl->create< OnlyOneCondition >();
 
     auto visit_context = [&](llvm::CallInst *verify_inst) {
         importer.Visit(circuit_func, verify_inst);
         check(importer.get(verify_inst)->op_code == VerifyInstruction::kind);
-        all_verifications->add_operand(importer.get(verify_inst));
+        impl->root->add_operand(importer.get(verify_inst));
     };
     irops::VerifyInst::for_all_in(circuit_func, visit_context);
     log_info() << "IRImpoter done.";
@@ -783,7 +782,7 @@ Circuit::circuit_ptr_t lower_fn(llvm::Function *circuit_func,
     return impl;
 }
 
-Circuit::circuit_ptr_t lower_module(llvm::Module *lmodule,
+circuit_owner_t lower_module(llvm::Module *lmodule,
                                     std::size_t ptr_size)
 {
     for ( auto &fn : *lmodule )

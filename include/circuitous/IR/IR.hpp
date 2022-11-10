@@ -31,7 +31,6 @@ namespace circ
         {
             kFirst = 0,
             kOperation = 1,
-            kCircuit = 2,
 
             kInputRegister,
             kOutputRegister,
@@ -875,7 +874,8 @@ namespace circ
 
     using collapsable = tl::TL< Concat, And, Or >;
 
-    using subnode_list_t = tl::merge< generic_list_t, llvm_ops_t,
-                                      leaf_values_ts,
-                                      constraint_opts_ts >;
+    using all_nodes_list_t = tl::merge< generic_list_t, llvm_ops_t,
+                                        leaf_values_ts,
+                                        constraint_opts_ts,
+                                        uncategorized_ops_ts >;
 }  // namespace circ

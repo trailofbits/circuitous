@@ -68,16 +68,18 @@ namespace circ::print
 
     struct SemanticsColorer
     {
-        void color_circuit( Circuit *circ )
+        void color_circuit( Circuit *circuit )
         {
-            run_visitor_on< leaf_values_ts >( circ, inspect::SemanticsTainterVisitor() );
+            run_visitor_on< leaf_values_ts >( circuit->root,
+                                              inspect::SemanticsTainterVisitor() );
         }
 
         std::function< Color( Operation * ) > get_to_color() { return sem_taint_coloring; }
 
-        void remove_coloring( Circuit *circ )
+        void remove_coloring( Circuit *circuit )
         {
-            run_visitor_on< leaf_values_ts >( circ, inspect::SemanticsTainterRemovalVisitor() );
+            run_visitor_on< leaf_values_ts >( circuit->root,
+                                              inspect::SemanticsTainterRemovalVisitor() );
         }
     };
 
@@ -184,12 +186,6 @@ namespace circ::print
             os << " }}" << '"' << "];\n";
         }
 
-        void init()
-        {
-            os << "digraph {" << std::endl;
-            os << "node [shape=record];";
-        }
-
         void visit( Operation *op )
         {
             op->traverse( *this );
@@ -198,14 +194,13 @@ namespace circ::print
                 edge( op, op->operand( i ), i );
         }
 
-        void visit( Circuit *op )
+        void visit( circuit_ref_t circuit )
         {
-            init();
+            os << "digraph {" << std::endl;
+            os << "node [shape=record];";
 
-            op->traverse( *this );
-            node( op );
-            for ( std::size_t i = 0; i < op->operands_size(); ++i )
-                edge( op, op->operand( i ), i );
+            if ( circuit->root )
+                this->dispatch( circuit->root );
 
             os << "}";
         }

@@ -99,7 +99,6 @@ namespace circ::run
             log_kill() << "BaseSemantics cannot export derived mem.";
         }
 
-        void visit(Circuit *op);
         void visit(URem *)            { not_implemented(); }
         void visit(SRem *)            { not_implemented(); }
         void visit(circ::Memory *)    { not_implemented(); }

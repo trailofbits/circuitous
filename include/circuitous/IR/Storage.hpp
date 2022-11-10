@@ -95,7 +95,7 @@ namespace circ
         template< typename T >
         using type = MaterializedDefList< T >;
     };
-    using m_def_lists = tl::apply< subnode_list_t, to_mat_def_list >;
+    using m_def_lists = tl::apply< all_nodes_list_t, to_mat_def_list >;
     using AllAttributes = Attributes< m_def_lists >;
 
     // NOTE(lukas): This is not templated - it is not like we are going

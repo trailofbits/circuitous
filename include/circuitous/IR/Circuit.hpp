@@ -9,33 +9,20 @@
 
 namespace circ
 {
-
-    struct Circuit : CircuitStorage, Operation
+    struct Circuit : CircuitStorage
     {
-        static constexpr Operation::kind_t kind = Operation::kind_t::kCircuit;
-        virtual ~Circuit() = default;
+        using ptr_size_t = uint32_t;
 
-        using circuit_ptr_t = std::unique_ptr<Circuit>;
-
-        static std::string op_code_str() { return "circuit"; }
-
-        std::string name() const override { return "circuit"; }
         // TODO(lukas): Will be deprecated in the future.
-        Circuit(uint32_t ptr_size_=64) : Operation(this->bool_size, kind),
-                                         ptr_size(ptr_size_)
-        {}
+        explicit Circuit( ptr_size_t ptr_size=64 ) : ptr_size( ptr_size ) {}
 
-        template< typename CB >
-        void for_each_operation( CB &&cb )
-        {
-            cb( this );
-            this->CircuitStorage::for_each_operation( std::forward< CB >( cb ) );
-        }
-
-        uint32_t ptr_size;
+        Operation *root = nullptr;
+        ptr_size_t ptr_size;
     };
 
-    using all_nodes_list_t = tl::push_front< Circuit, subnode_list_t >;
+    // Owner of Circuit, in case non-owning reference is desired, use raw pointer.
+    using circuit_owner_t = std::unique_ptr< Circuit >;
+    using circuit_ref_t = Circuit *;
 
     // TODO(lukas): Generalise comparator and move to `tl::`.
     template< typename F, typename H, typename ... Tail >

@@ -586,8 +586,6 @@ namespace circ::print::verilog
             return make_wire(op, concat({padding, last_tn}));
         }
 
-        std::string visit(Circuit *op) { return get(op->operand(0)); }
-
         std::string write(Operation *op) { return get(op); }
     };
 
@@ -802,13 +800,13 @@ namespace circ::print::verilog
     template< typename Ctx >
     using checker_module_header = ModuleHeader< CheckerModuleHeader< Ctx > >;
 
-    static inline std::string get_module_name(Operation *op)
+    static inline std::string get_module_name( std::optional< Operation * > maybe_op = {} )
     {
-        check(!isa< leaf_values_ts >(op));
-        switch (op->op_code) {
-            case Circuit::kind: return "full_circuit";
-            default : return op_code_str(op->op_code) + "_" + std::to_string(op->size);
-        }
+        if ( !maybe_op )
+            return "full_circuit";
+        auto op = *maybe_op;
+        check(!isa< leaf_values_ts >((op)));
+        return op_code_str(op->op_code) + "_" + std::to_string(op->size);
     }
 
     static inline void print(std::ostream &os, const std::string &module_name, Circuit *c)
@@ -819,8 +817,8 @@ namespace circ::print::verilog
         //core_module_header< iarg_fmt::UseName, ctx_t > header(ctx);
         checker_module_header< ctx_t > header(ctx);
 
-        header.declare_module(module_name, c);
-        auto ret = OpFmt< ctx_t >(ctx).write(c);
+        header.declare_module(module_name, c->root);
+        auto ret = OpFmt< ctx_t >(ctx).write(c->root);
         header.assign_out_arg("result", ret);
         header.assign_out_arg("dummy", impl::bin_zero(1u));
         header.end_module();

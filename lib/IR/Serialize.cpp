@@ -29,6 +29,7 @@ namespace circ
             LeafOperation = 0x1,
             Metadatum = 0x3,
             Invalid = 0x4,
+            Storage = 0x5,
             Reference = 0xff
         };
 
@@ -39,6 +40,7 @@ namespace circ
         {
             switch( sel )
             {
+                case Selector::Storage   :     return "Storage";
                 case Selector::Operation :     return "Operation";
                 case Selector::LeafOperation : return "LeafOperation";
                 case Selector::Invalid   :     return "Invalid";
@@ -76,7 +78,14 @@ namespace circ
 
         explicit SerializeVisitor( std::ostream &os_ ) : os( os_ ) {}
 
-        void serialize( Operation *op ) { return Write( op ); }
+        void serialize( circuit_ref_t circuit )
+        {
+            Write( Selector::Storage );
+            Write( circuit->ptr_size );
+
+            if ( circuit->root )
+                Write( circuit->root );
+        }
 
         Selector get_selector( Operation *op )
         {
@@ -168,9 +177,6 @@ namespace circ
                 Write( val );
             }
         }
-
-        // TODO(lukas): This should be called, but is not.
-        void visit( Circuit *op ) { write( op->ptr_size );  }
 
         void visit( Operation *op ) { write( op->size ); }
 
@@ -294,23 +300,34 @@ namespace circ
         using DeserializeSimple< DeserializeVisitor >::visit;
 
         std::istream &is;
-        std::unordered_map<uint64_t, Operation *> id_to_op;
-        std::unique_ptr< Circuit > circuit;
+        std::unordered_map< uint64_t, Operation * > id_to_op;
+        circuit_owner_t circuit;
 
-        explicit DeserializeVisitor( std::istream &is_ )
-            : is( is_ )
-        {}
+        explicit DeserializeVisitor( std::istream &is ) : is( is ) {}
 
-        Circuit *get_circuit()
+        circuit_ref_t get_circuit()
         {
             check( circuit );
             return circuit.get();
         }
 
-        std::unique_ptr< Circuit > take_circuit()
+        circuit_owner_t take_circuit()
         {
             check( circuit );
             return std::move( circuit );
+        }
+
+        // TODO(lukas): Move to ctor?
+        // Returns false is reading of header failed.
+        bool deserialize_storage()
+        {
+            auto [ sel ] = read< Selector >();
+            if ( sel != Selector::Storage )
+                return false;
+
+            auto [ ptr_size ] = read< Circuit::ptr_size_t >();
+            circuit = std::make_unique< Circuit >( ptr_size );
+            return true;
         }
 
         void Read( Selector &sel )
@@ -429,23 +446,12 @@ namespace circ
             };
             return std::apply( make, std::forward< std::tuple< Args ... > >( args ) );
         }
-
-        Operation *visit( Circuit *, uint64_t id )
-        {
-            check( !circuit ) << "Found multiple Circuit * while deserializing!";
-
-            auto [ptr_size] = read< uint32_t >();
-            circuit = std::make_unique< Circuit >( ptr_size );
-            return circuit.get();
-        }
     };
 
 
     void serialize( std::ostream &os, Circuit *circuit )
     {
         SerializeVisitor vis( os );
-        // TODO(lukas): `Write` should be called on Circuit.
-        check( circuit->operands_size() == 1 );
         vis.serialize( circuit );
 
         auto write_metadata = [&]( auto op ) { vis.write_metadata( op ); };
@@ -469,6 +475,7 @@ namespace circ
         auto old_flags = is.flags();
         is.unsetf( std::ios::skipws );
 
+        vis.deserialize_storage();
         while ( is.good() && !is.eof() && EOF != is.peek() )
             std::ignore = vis.Read();
 
