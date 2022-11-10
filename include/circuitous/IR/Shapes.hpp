@@ -285,7 +285,7 @@ namespace circ
     // TODO(lukas): Generalise walking mechanism.
     struct CtxCollector
     {
-        using ctxs_t = std::unordered_set< Operation * >;
+        using ctxs_t = std::unordered_set< VerifyInstruction * >;
         using ctxs_map_t = std::unordered_map< Operation *, ctxs_t >;
 
         Circuit *circuit;
@@ -384,7 +384,12 @@ namespace circ
 
         bool is_in_ctx( Operation *op, Operation *ctx ) const
         {
-            check( isa< VerifyInstruction >( ctx ) );
+            auto casted = dyn_cast< VerifyInstruction >( ctx );
+            return casted && is_in_ctx( op, casted );
+        }
+
+        bool is_in_ctx( Operation *op, VerifyInstruction *ctx ) const
+        {
             auto it = ctx_map.find( op );
             if ( it == ctx_map.end() )
                 return false;
