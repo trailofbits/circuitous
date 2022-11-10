@@ -284,7 +284,18 @@ namespace circ
     template< typename ... Ts >
     auto all_parents_of_types( tl::TL< Ts ... >, Operation *op )
     {
-        return users_of_types< Ts ... >( op );
+        return all_parents_of_types< Ts ... >( op );
+    }
+
+    static inline bool is_in_decoder_subtree( Operation *op )
+    {
+        for ( auto _ : all_parents_of_types< DecoderResult >( op ) )
+        {
+            // To avoid warning about unused variable.
+            std::ignore = _;
+            return true;
+        }
+        return false;
     }
 
 
