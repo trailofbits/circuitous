@@ -5,6 +5,8 @@
 #pragma once
 
 #include <eqsat/algo/saturation_graph.hpp>
+#include <eqsat/algo/ematch.hpp>
+#include <eqsat/algo/apply.hpp>
 
 #include <eqsat/core/egraph.hpp>
 #include <eqsat/core/cost_graph.hpp>
@@ -32,7 +34,9 @@ namespace eqsat
         saturable_egraph< egraph > &&graph,
         const rewrite_rule &rule
     ) {
-        // TODO(Heno) match & apply
+        for (const auto &m : match(rule, graph)) {
+            apply(rule, m, graph);
+        }
         return graph;
     }
 
@@ -74,8 +78,8 @@ namespace eqsat
     }
 
     template< gap::graph::graph_like egraph >
-    saturation_result< egraph > saturate( egraph &&graph, std::span< rule_set > rules) {
-        return saturate( saturable_egraph(std::forward< egraph >(graph)), rules);
+    saturation_result< egraph > saturate(egraph &&graph, std::span< rule_set > rules) {
+        return saturate(saturable_egraph(std::forward< egraph >(graph)), rules);
     }
 
 } // namespace eqsat
