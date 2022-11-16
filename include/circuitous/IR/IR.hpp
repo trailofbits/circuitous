@@ -234,6 +234,20 @@ namespace circ
         return static_cast< T * >( op );
     }
 
+    template< typename T > requires ( circ_ir_op< T > )
+    gap::generator< T * > dyn_cast( const std::vector< Operation * > &from )
+    {
+        for ( auto x : from )
+            co_yield dyn_cast< T >( x );
+    }
+
+    template< typename T, gap::ranges::range From > requires ( circ_ir_op< T > )
+    gap::generator< T * > dyn_cast( From from )
+    {
+        for ( auto x : from )
+            co_yield dyn_cast< T >( x );
+    }
+
     template< typename ... Ts >
     bool is_one_of(Operation *op, tl::TL< Ts ... >) { return is_one_of< Ts ... >(op); }
 
