@@ -278,7 +278,10 @@ namespace circ
                                Concat,
                                PopulationCount,
                                CountLeadingZeroes,
-                               CountTrailingZeroes
+                               CountTrailingZeroes,
+
+                               Switch,
+                               Option
                               >;
 
     using conditions_ts = tl::merge< bool_ops_ts, constraint_opts_ts, tl::TL< Parity > >;
@@ -376,53 +379,74 @@ namespace circ
         }
 
 
-        void ReadOps( Operation *elems )
+        void read_operands( Operation *elems )
         {
             auto [size] = read< std::size_t >();
             for ( auto i = 0u; i < size; ++i )
-                elems->add_operand( Read() );
+                elems->add_operand( read_operation() );
         }
 
         Operation *read_new_op( Selector sel )
         {
             // Same for all.
-            auto [hash, op_code] = read< raw_id_t, Operation::kind_t >();
+            auto [ id, op_code]  = read< raw_id_t, Operation::kind_t >();
 
             // Op specific.
-            auto op = Decode( hash, op_code );
-            id_to_op[hash] = op;
+            auto op = this->dispatch( op_code, id );
+            id_to_op[ id ] = op;
 
             // Operands last.
             if ( sel == Selector::Operation )
-                ReadOps( op );
+                read_operands( op );
 
             return op;
         }
 
-        Operation *Read()
+        Operation *read_operation()
         {
-          auto [sel] = read< Selector >();
+          auto [ sel ] = read< Selector >();
 
           if ( is_op_definition( sel ) )
                 return read_new_op( sel );
 
-          if ( sel == Selector::Reference ) {
-              auto [hash] = read< raw_id_t >();
+          if ( sel == Selector::Reference )
+              return read_ref();
 
-              auto op_it = id_to_op.find( hash );
-              check( op_it != id_to_op.end() ) << "Could not reference with id: " << hash;
-              return op_it->second;
-          }
-          if ( sel == Selector::Metadatum ) {
+          unreachable() << "Expected operation def or ref, got:"
+                        << this->to_string( sel ) << "instead";
+        }
+
+        Operation *read_ref()
+        {
+            auto [ id ] = read< raw_id_t >();
+            auto op_it = id_to_op.find( id );
+            check( op_it != id_to_op.end() ) << "Could not reference with id: " << id;
+            return op_it->second;
+        }
+
+        void read_metadatum()
+        {
+            auto [ sel ] = read< Selector >();
+            check( sel == Selector::Metadatum ) << "Expected metadata, found"
+                                                << to_string( sel ) << "instead";
+
+            return read_metadatum_entry();
+        }
+
+        void read_metadatum_entry()
+        {
               auto [id, key, val] = read< raw_id_t, std::string, std::string >();
               check( id_to_op.count( id ) )
                   << "Trying to attach metadata [ " << key << ": " << val
                   << "] to operation with id" << id << "that is not present.";
               id_to_op[id]->set_meta( std::move( key ), std::move( val ) );
-              return nullptr;
-          }
-          unreachable() << "Unexpected tag for an operation reference: "
-                        << this->to_string( sel );
+        }
+
+
+        void deserialize_metadata()
+        {
+            while ( is.good() && !is.eof() && EOF != is.peek() )
+                read_metadatum();
         }
 
         template< typename T >
@@ -431,11 +455,6 @@ namespace circ
             unreachable() << "Cannot deserialize "
                           << op_code_str( T::kind )
                           << ". Most likely cause is missing impl.";
-        }
-
-        Operation *Decode( raw_id_t id, Operation::kind_t op_code )
-        {
-            return this->dispatch( op_code, id );
         }
 
         template< typename T, typename ...Args >
@@ -476,8 +495,8 @@ namespace circ
         is.unsetf( std::ios::skipws );
 
         vis.deserialize_storage();
-        while ( is.good() && !is.eof() && EOF != is.peek() )
-            std::ignore = vis.Read();
+        vis.get_circuit()->root = vis.read_operation();
+        vis.deserialize_metadata();
 
         is.flags( old_flags );
         return vis.take_circuit();
