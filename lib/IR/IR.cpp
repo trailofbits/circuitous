@@ -19,31 +19,35 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <sstream>
 #include <unordered_map>
 
-namespace circ {
-
-std::string Operation::name() const {
-  unreachable() << util::to_underlying(op_code) << " does not provide name() method override.";
-}
-
-std::string Constant::name() const {
-  std::stringstream ss;
-  ss << "CONST_" << size << "_";
-  for (auto i = 0U; i < size; ++i) {
-    ss << bits[size - i - 1];
-  }
-  return ss.str();
-}
-
-uint32_t Memory::expected_size(uint32_t ptr_size) {
-  return irops::memory::size(ptr_size);
-}
-
-std::optional< DecoderResult * > VerifyInstruction::decoder()
+namespace circ
 {
-    for ( auto op : this->operands() )
-        if ( auto decoder_res = dyn_cast< DecoderResult >( op ) )
-            return decoder_res;
-    return {};
-}
+
+    std::string Operation::name() const
+    {
+        unreachable() << util::to_underlying(op_code)
+                      << " does not provide name() method override.";
+    }
+
+    std::string Constant::name() const
+    {
+        std::stringstream ss;
+        ss << "CONST_" << size << "_";
+        for (auto i = 0U; i < size; ++i)
+            ss << bits[size - i - 1];
+        return ss.str();
+    }
+
+    uint32_t Memory::expected_size(uint32_t ptr_size)
+    {
+        return irops::memory::size(ptr_size);
+    }
+
+    std::optional< DecoderResult * > VerifyInstruction::decoder()
+    {
+        for ( auto op : this->operands() )
+            if ( auto decoder_res = dyn_cast< DecoderResult >( op ) )
+                return decoder_res;
+        return {};
+    }
 
 }  // namespace circ
