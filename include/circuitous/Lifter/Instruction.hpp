@@ -17,7 +17,6 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ
 {
-
     // TODO(lukas): Provide better api than `remill::Instruction`.
     struct Instruction
     {
@@ -117,6 +116,26 @@ namespace circ
 
         insts_t take() { return std::move(insts); }
         const insts_t &get() const { return insts; }
+
+        std::string categories() const;
     };
+
+    //struct MemorySelection
+    //{
+    //    RegSelection base;
+    //    RegSelection scale;
+    //};
+
+    //struct OpSelections
+    //{
+    //    using allocation_idx_t = std::size_t;
+    //    using rinst_t = remill::Instruction;
+    //    using rinst_mapping_t = std::map< std::size_t, allocation_idx_t >;
+
+    //    std::unordered_map< rinst_t, rinst_mapping_t > mapping;
+    //    std::vector< shadowinst::Operand > allocations;
+
+    //    void allocate( const InstructionBatch &batch );
+    //};
 
 } // namespace circ

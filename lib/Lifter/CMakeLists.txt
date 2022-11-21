@@ -14,6 +14,7 @@ add_headers( Lifter CIRCUITOUS_LIFTER_HEADERS
   Error.hpp
   Flatten.hpp
   Instruction.hpp
+  ISELBank.hpp
   Lifter.hpp
   LLVMToCircIR.hpp
   Memory.hpp
@@ -31,6 +32,7 @@ add_circuitous_library( lifter
     CircuitSmithy.cpp
     Decoder.cpp
     Instruction.cpp
+    ISELBank.cpp
     Remill.cpp
     ShadowMat.cpp
     ToLLVM.cpp

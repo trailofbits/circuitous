@@ -292,6 +292,20 @@ namespace circ
         return { std::move(error) };
     }
 
+    static inline void verify_or_die( llvm::Function &fn )
+    {
+        auto has_error = verify_function( fn );
+        check( !has_error ) << "Function did not verify, following output is provided:\n"
+                            << *has_error;
+    }
+
+    static inline void inline_or_die( llvm::CallInst *call )
+    {
+        llvm::InlineFunctionInfo info;
+        auto was_inlined = llvm::InlineFunction( *call, info );
+        check( was_inlined.isSuccess() );
+    }
+
     // `bits` is taken by copy since it is reversed inplace.
     static inline auto make_APInt(auto bits, std::size_t from, std::size_t size)
     {
@@ -315,4 +329,9 @@ namespace circ
         return irb.CreateLoad(ptr_ty->getPointerElementType(), from);
     }
 
+    static inline std::size_t bw( llvm::Module &m, llvm::Type *type )
+    {
+        auto dl = m.getDataLayout();
+        return dl.getTypeSizeInBits( type );
+    }
 } // namespace circ

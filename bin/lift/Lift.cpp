@@ -31,6 +31,8 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
+
+
 #include <circuitous/Diff/SemanticsTainter.hpp>
 
 // TODO(lukas): Clean this up once remill gets rid of gflags.
@@ -83,13 +85,6 @@ namespace
     circuit_owner_t optimize( circuit_owner_t &&circuit, const CLI &cli )
     {
         Optimizer opt;
-
-        if ( cli.template present<cli::EqSat>() )
-        {
-            auto pass = opt.template emplace_pass< circ::EqualitySaturationPass >( "eqsat" );
-            if ( auto patterns = cli.template get< cli::Patterns >() )
-                pass->add_rules( circ::eqsat::parse_rules( patterns.value() ) );
-        }
 
         if ( cli.template present< cli::Simplify >() )
         {

@@ -97,6 +97,7 @@ namespace circ::irops
     // Create Advice of dynamic value.
     simple_intrinsic(Advice, impl::raw_allocator_t, "__circuitous.advice");
     simple_intrinsic(AdviceIndexed, impl::idx_allocator_t, "__circuitous.advice_i");
+    simple_intrinsic(OpSelector, impl::idx_allocator_t, "__circuitous.op_selector");
     // Creates opaque pointer.
     // Used by instruction lifters to handle destination operands.
     simple_intrinsic(AllocateDst, impl::raw_allocator_t, "__circuitous.allocate_dst");
@@ -111,6 +112,10 @@ namespace circ::irops
 
     // Helps to unify later all decoder related selections and operations
     simple_intrinsic(RegSelector, impl::type_idx_t, "__circuitous.reg_selector");
+
+    simple_intrinsic(ISemSrcArg, impl::type_idx_t, "__circuitous.ise_src_arg");
+    simple_intrinsic(ISemDstArg, impl::type_idx_t, "__circuitous.isem_dst_arg");
+    simple_intrinsic(InstructionSize, impl::int_like_allocator, "__circuitous.inst_size");
 
     simple_intrinsic(WasDecoded, impl::type_idx_t, "__circuitous.op.was_decoded");
     // Denotes that given hint/advice is not used and should be zeroed.
@@ -130,6 +135,15 @@ namespace circ::irops
     leaf_intrinsic(InstBits, 15 * 8, impl::fixed_leaf_t, "__circuitous.instbits");
 
     simple_intrinsic(Reg, impl::reg_allocator_t, "__circuitous.reg");
+
+    simple_intrinsic(Commit, impl::commit, "__circuitous.commit");
+
+    simple_intrinsic(Entry, impl::bitcast, "__circuitous.entry");
+    simple_intrinsic(Leave, impl::bitcast, "__circuitous.leave");
+
+
+    simple_intrinsic(Switch, impl::concat_t, "__circuitous.switch");
+    simple_intrinsic(Option, impl::option_t, "__circuitous.option");
 
     using io_type = impl::io_type;
 
@@ -187,6 +201,49 @@ namespace circ::irops
         check(selector_size && ret_size);
         return I::emit(irb, c_args, *ret_size, *selector_size);
     }
+
+    // Return an integral type that is big enough to hold any value can inhabit the
+    // register associated with `reg`.
+    static inline llvm::IntegerType *int_reg_type( llvm::Module &module,
+                                                           const auto *reg )
+    {
+        // TODO(pag): Add other architecture flag names here.
+        static const std::unordered_set< std::string > flag_regs =
+        {
+            "SF", "OF", "PF", "AF", "ZF", "CF"
+        };
+
+        if ( reg->type->isIntegerTy() )
+        {
+            if ( flag_regs.count( reg->name ) )
+                return llvm::Type::getInt1Ty( module.getContext() );
+
+            return llvm::dyn_cast< llvm::IntegerType >( reg->type );
+        }
+
+        return llvm::Type::getIntNTy(
+            module.getContext(),
+            static_cast< unsigned >(
+                module.getDataLayout().getTypeAllocSize( reg->type ) * 8u ) );
+    }
+
+    static inline llvm::Value *mk_reg( llvm::IRBuilder<> &irb, const auto &reg, auto io )
+    {
+        auto &m = *irb.GetInsertBlock()->getParent()->getParent();
+        auto type = int_reg_type( m, reg );
+        return irops::make_leaf< irops::Reg >( irb, bw( m, type ), reg->name, io );
+    }
+
+    static inline llvm::Value *input_reg( llvm::IRBuilder<> &irb, const auto &reg )
+    {
+        return mk_reg( irb, reg, irops::io_type::in );
+    }
+
+    static inline llvm::Value *output_reg( llvm::IRBuilder<> &irb, const auto &reg )
+    {
+        return mk_reg( irb, reg, irops::io_type::out );
+    }
+
 
     // Queries.
     template< typename T, typename ... Ts >

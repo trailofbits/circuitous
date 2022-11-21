@@ -431,6 +431,23 @@ struct IRImporter : public BottomUpDependencyVisitor< IRImporter >
             return get_or_make_cached( fn, ctor );
 
         }
+
+        if (irops::Entry::is(fn))
+        {
+            auto [type] = irops::Entry::parse_args(fn);
+            auto size = irops::impl::suffix::llvm_type::to_bw< uint32_t >(type);
+
+            auto args = call_args( call );
+            check( args.size() == 1 );
+            if ( size != value_size( args[ 0 ] ) )
+            {
+                log_kill() << "Not implementede yet.";
+            }
+            auto op = Fetch( call->getParent()->getParent(), args[ 0 ] );
+            val_to_op.emplace( call, op );
+            return op;
+        }
+
         unreachable() << "Unsupported function: " << remill::LLVMThingToString(call);
     }
 
@@ -745,6 +762,10 @@ circuit_owner_t lower_fn(llvm::Function *circuit_func,
 
     const auto module = circuit_func->getParent();
     const auto &dl = module->getDataLayout();
+
+    circuit_func->print(llvm::errs());
+    llvm::errs() << "\n";
+    llvm::errs().flush();
 
     log_info() << "IRImpoter starting.";
     auto impl = std::make_unique<Circuit>(ptr_size);

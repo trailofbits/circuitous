@@ -55,6 +55,7 @@ namespace circ
         check(!batch->empty()) << "No valid instructions provided, cannot produce circuit.";
         batch.fuzz();
         batch.lift< ILifter< OpaqueILifter > >();
+        std::ignore = CircuitMaker_v2( ctx ).make_from( batch );
         return lower_fn(CircuitMaker(ctx).make_from(std::move(batch)),
                         ctx.ptr_size);
     }

@@ -121,6 +121,8 @@ namespace circ::eqsat {
     OpTemplate visit(And *op) { return sized(op); }
     OpTemplate visit(Xor *op) { return sized(op); }
 
+    OpTemplate visit(Switch *op) { return sized(op); }
+
     OpTemplate visit(Circuit *) { unreachable() << "Unexpected case encountered in visit."; }
   };
 
@@ -144,13 +146,8 @@ namespace circ::eqsat {
     std::pair< CircuitEGraph, Nodes > build(Circuit *circuit)
     {
       CircuitEGraph egraph;
-      add_node_recurse(circuit, egraph);
+      add_node_recurse(circuit->root, egraph);
       return {std::move(egraph), nodes};
-    }
-
-    OpTemplate make_template(Circuit *ci)
-    {
-      return template_builder.opcode(ci);
     }
 
     OpTemplate make_template(Operation *op)
@@ -324,7 +321,7 @@ namespace circ::eqsat {
     using ENode  = typename Graph::Node;
     using Nodes  = std::map< Operation *, ENode * >;
 
-    static EqSatRunner make_runner(const CircuitPtr &circuit)
+    static EqSatRunner make_runner(const circuit_owner_t &circuit)
     {
       EGraphBuilder builder;
       auto [graph, nodes] = builder.build(circuit.get());
@@ -692,7 +689,8 @@ namespace circ::eqsat {
       check(name(node) == "circuit");
 
       for (const auto &child : graph.children(node))
-        circuit->add_operand( extract(child, circuit.get()) );
+        // TODO(lukas): We should assert this only happens once?
+        circuit->root = add_operand( extract(child, circuit.get()) );
       return circuit;
     }
 
@@ -742,9 +740,9 @@ namespace circ::eqsat {
     return nullptr;
   }
 
-  CircuitPtr postprocess(CircuitPtr &&circuit) {
+  circuit_owner_t postprocess(circuit_owner_t &&circuit) {
     Verifier::advice_users_t collected;
-    Verifier::CollectAdviceUsers(circuit.get(), collected);
+    Verifier::CollectAdviceUsers(circuit->root, collected);
 
     std::vector<std::pair<Operation *, Operation *>> remove;
     for (auto &[advice, users] : collected) {
@@ -763,7 +761,7 @@ namespace circ::eqsat {
     return std::move(circuit);
   }
 
-  CircuitPtr lower(auto &runner, const auto &circ) {
+  circuit_owner_t lower(auto &runner, const auto &circ) {
     lower_advices(runner.egraph(), runner.builder());
 
     auto eval = [](const auto &node) -> std::int64_t {
@@ -790,7 +788,7 @@ namespace circ::eqsat {
     return eqsat::DefaultRunner::make_runner(circuit);
   }
 
-  CircuitPtr apply_rules(auto &&runner, RuleSets rules, auto &&circuit) {
+  circuit_owner_t apply_rules(auto &&runner, RuleSets rules, auto &&circuit) {
     if (rules.empty())
       return lower(runner, std::move(circuit));
 
@@ -811,7 +809,7 @@ namespace circ::eqsat {
     }
   }
 
-  CircuitPtr EqualitySaturation(CircuitPtr &&circuit, RuleSets rules) {
+  circuit_owner_t EqualitySaturation(circuit_owner_t &&circuit, RuleSets rules) {
     log_info() << "Start equality saturation";
     auto runner = make_runner(circuit);
     auto result = apply_rules(runner, rules, std::move(circuit));

@@ -478,6 +478,8 @@ namespace circ::shadowinst
         using materializations_t = std::unordered_set< materialized_t >;
         using key_t = Key_t;
 
+        using self_t = TranslationMap< key_t, materialized_t >;
+
         using storage_t = std::map< key_t, materializations_t >;
 
         std::size_t bitsize = 0;
@@ -496,6 +498,20 @@ namespace circ::shadowinst
         using storage_t::end;
         using storage_t::count;
         using storage_t::find;
+
+        bool is_subset_of( const self_t &o ) const
+        {
+            // TODO(lifter): Implement properly.
+            for ( const auto &[ key, value ] : *this )
+            {
+                auto o_it = o.find( key );
+                if ( o_it == o.end() )
+                    return false;
+                if ( o_it->second != value )
+                    return false;
+            }
+            return true;
+        }
 
         // TODO(lukas): See if really needed.
         bool has_only(const key_t &k) const
@@ -646,6 +662,8 @@ namespace circ::shadowinst
     {
         return os << tm.to_string();
     }
+
+    using TM_t = TranslationMap< std::string, std::vector< bool > >;
 
     struct Reg : has_regions
     {
