@@ -813,7 +813,7 @@ namespace circ
             for ( auto op : dyn_cast< Option >( operands() ) )
             {
                 check( op );
-                if ( op == value )
+                if ( op->value() == value )
                     return { op };
             }
             return {};
