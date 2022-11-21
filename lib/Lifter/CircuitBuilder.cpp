@@ -365,15 +365,10 @@ namespace circ {
 
         ctx.clean_module({circuit_fn});
 
-        irops::disable_opts< irops::VerifyInst, irops::Select >(ctx.module());
+        irops::enable_opts< irops::VerifyInst, irops::Select >(ctx.module());
 
         remill::VerifyModule(ctx.module());
         optimize_silently(ctx.module(), {circuit_fn});
-
-        auto selects_map =
-            ContextCollector< irops::VerifyInst, irops::Select >(circuit_fn).run();
-        SelectFolder folder{ std::move(selects_map), circuit_fn };
-        folder.run();
 
         remill::VerifyModule(ctx.module());
         irops::disable_opts< irops::Select, irops::Advice >(ctx.module());
@@ -381,7 +376,6 @@ namespace circ {
                             irops::ReadConstraint, irops::WriteConstraint >(ctx.module());
 
         optimize_silently(ctx.module(), {circuit_fn});
-        unfold_advice_constraints(circuit_fn);
         propagate_undefs();
         optimize_silently(ctx.module(), {circuit_fn});
         remill::VerifyModule(ctx.module());
