@@ -58,6 +58,8 @@ namespace circ::run
 
         raw_value_type value(bool v) const { return (v) ? true_val() : false_val(); }
 
+        raw_value_type zero(uint32_t size) { return llvm::APInt( size, 0, false ); }
+
         bool has_value(Operation *op) const
         {
             return state->has_value(op);
@@ -99,11 +101,26 @@ namespace circ::run
             log_kill() << "BaseSemantics cannot export derived mem.";
         }
 
+        template< gap::ranges::range R >
+        value_type compute_or( R from, raw_value_type init )
+        {
+            for ( auto op : from )
+            {
+                if ( !has_value( op ) )
+                    return {};
+                init |= *(this->get_node_val( op ));
+            }
+            return { init };
+        }
+
         void visit(URem *)            { not_implemented(); }
         void visit(SRem *)            { not_implemented(); }
         void visit(circ::Memory *)    { not_implemented(); }
         void visit(InputTimestamp *)  { not_implemented(); }
         void visit(OutputTimestamp *) { not_implemented(); }
+
+        void visit(Switch *) { not_implemented(); }
+        void visit(Option *) { not_implemented(); }
 
         void init() {};
     };
@@ -214,6 +231,9 @@ namespace circ::run
 
         void visit(Icmp_eq *op) { safe(op, [&](auto o){ return bv(lhs(o) == rhs(o)); } ); }
         void visit(Icmp_ne *op) { safe(op, [&](auto o){ return bv(lhs(o) != rhs(o)); } ); }
+
+        void visit( Switch * );
+        void visit( Option * );
     };
 
     #include "Base.tpp"
