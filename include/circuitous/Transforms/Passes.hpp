@@ -8,8 +8,9 @@
 #include <circuitous/IR/Verify.hpp>
 
 #include <circuitous/Transforms/PassBase.hpp>
-#include <circuitous/Transforms/EqualitySaturation.hpp>
+#include <circuitous/Transforms/ConjureALU.hpp>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
