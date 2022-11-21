@@ -55,10 +55,21 @@ DEFINE_string(ciff_in, "", "Load input from circuitous-seed --dbg produced file"
 
 DEFINE_string(patterns, "", "Equality saturation patterns.");
 DEFINE_bool(eqsat, false, "Enable equality saturation based optimizations.");
+DEFINE_bool(conjure_alu, false, "Enable conjure-alu optimization.");
 DEFINE_bool(dbg, false, "Enable various debug dumps");
 DEFINE_bool(quiet, false, "");
 
 namespace cli = circ::cli;
+
+namespace circ::cli
+{
+    struct ConjureALU : circ::DefaultCmdOpt, Arity< 0 >
+    {
+        static inline const auto opt = circ::CmdOpt( "--conjure-alu", false );
+    };
+};
+
+using circuit_owner_t = circ::circuit_owner_t;
 
 namespace
 {
@@ -85,6 +96,26 @@ namespace
             opt.template emplace_pass< circ::RemillOFPatch >( "overflow-flag-fix" );
             opt.template emplace_pass< circ::MergeAdviceConstraints >( "merge-advices" );
             opt.template emplace_pass< circ::CollapseOpsPass >( "collapse-ops" );
+        }
+
+        if ( cli.template present< circ::cli::ConjureALU >() )
+        {
+            std::vector< circ::Operation::kind_t > kinds =
+            {
+                circ::Mul::kind,
+                circ::Add::kind,
+                circ::Sub::kind,
+
+                circ::UDiv::kind,
+                circ::SDiv::kind,
+
+                circ::URem::kind,
+                circ::SRem::kind,
+
+                circ::PopulationCount::kind,
+                circ::Select::kind,
+            };
+            opt.template emplace_pass< circ::ConjureALUPass >( "conjure-alu", kinds );
         }
 
         auto result = opt.run(std::move(circuit));
@@ -127,10 +158,15 @@ using other_options = circ::tl::TL<
     circ::cli::Quiet,
     circ::cli::Dbg,
     circ::cli::BitBlastStats,
-    circ::cli::EqSat,
-    circ::cli::Patterns,
     circ::cli::Help,
     circ::cli::Version
+>;
+
+using optimization_options = circ::tl::TL<
+    circ::cli::Simplify,
+    circ::cli::ConjureALU,
+    circ::cli::EqSat,
+    circ::cli::Patterns
 >;
 
 using cmd_opts_list = circ::tl::merge<
@@ -139,7 +175,8 @@ using cmd_opts_list = circ::tl::merge<
     output_options,
     remill_config_options,
     other_options,
-    dot_options
+    dot_options,
+    optimization_options
 >;
 
 circ::CircuitPtr get_input_circuit(auto &cli)
@@ -262,6 +299,9 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
     {
         return {};
     }
+
+    if (v.check(implies< circ::cli::Patterns, circ::cli::EqSat >()).process_errors(yield_err))
+        return {};
 
     if (v.validate_leaves( OptsList{} ).process_errors(yield_err))
         return {};

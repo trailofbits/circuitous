@@ -73,23 +73,25 @@ namespace circ
 
         value_type operator[](uint32_t idx) { return std::next(defs.begin(), idx)->get(); }
 
-        // CB should have type `void()(std::uniqe_ptr<T> &&)` -- it will be given
+        // Postprocess should have type `void()(std::uniqe_ptr<T> &&)` -- it will be given
         // ownership of the object.
-        template< typename CB >
-        std::size_t remove_unused(CB cb)
+        template< typename Predicate, typename Postprocess >
+        std::size_t remove_if( Predicate &&should_be_removed, Postprocess &&process )
         {
             std::size_t num = 0;
             for (auto it = defs.begin(); it != defs.end();)
             {
-                if ((*it)->users_size() == 0) {
-                    cb(std::move(*it));
-                    it = defs.erase(it);
-                    ++num;
-                } else {
+                if ( !should_be_removed( (*it).get() ) )
+                {
                     ++it;
+                    continue;
                 }
-            }
-            return num;
+
+                process( std::move( *it ) );
+                it = defs.erase( it );
+                ++num;
+             }
+             return num;
         }
 
         storage_t defs;

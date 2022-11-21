@@ -11,10 +11,30 @@ namespace circ
 {
     struct Circuit : CircuitStorage
     {
+        using storage_t = CircuitStorage;
         using ptr_size_t = uint32_t;
 
         // TODO(lukas): Will be deprecated in the future.
         explicit Circuit( ptr_size_t ptr_size=64 ) : ptr_size( ptr_size ) {}
+
+        auto get_has_no_users() const
+        {
+            return [ = ]( auto op )
+            {
+                return root != op && op->users_size() == 0;
+            };
+        }
+
+        std::size_t remove_unused()
+        {
+            return this->storage_t::remove_if( get_has_no_users() );
+        }
+
+        template< typename Op >
+        std::size_t remove_unused()
+        {
+            return this->storage_t::remove_if< Op >( get_has_no_users() );
+        }
 
         Operation *root = nullptr;
         ptr_size_t ptr_size;
