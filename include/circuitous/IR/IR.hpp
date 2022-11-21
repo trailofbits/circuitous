@@ -756,6 +756,9 @@ namespace circ
             return ss.str();
         }
 
+        bool is_extension_of( const Select *other ) const;
+        bool can_be_extended_to( const Select *other ) const;
+
         Operation *selector() { return _operands[0]; }
 
         // Return one of the `2 ^ bits` values. It is also expected that this node
