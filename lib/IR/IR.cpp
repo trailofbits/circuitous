@@ -4,6 +4,7 @@
 
 #include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Memory.hpp>
+#include <circuitous/IR/Circuit.hpp>
 
 #include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Check.hpp>
@@ -49,5 +50,51 @@ namespace circ
                 return decoder_res;
         return {};
     }
+
+
+    bool Select::is_extension_of( const Select *other ) const
+    {
+        if ( operands_size() < other->operands_size() )
+            return false;
+
+        return other->can_be_extended_to( this );
+    }
+
+    bool Select::can_be_extended_to( const Select *other ) const
+    {
+        if ( operands_size() > other->operands_size() )
+            return false;
+
+        auto size = other->operands_size();
+
+        // Correctly select operand (wrt to stride).
+        auto op = [ & ]( auto from, auto i )
+        {
+            auto total = from->operands_size();
+            auto idx = i + ( i - 1 ) * ( ( total - 1 ) / ( size - 1 ) - 1);
+            return from->operand( idx );
+        };
+
+        auto is_undef = []( auto x ) { return isa< Undefined >( x ); };
+
+        for ( std::size_t i = 1; i < size; ++i )
+        {
+            auto small = op( this, i );
+            auto big = op( other, i );
+
+            // Undefs can be freely changed as we expect them to be
+            // "invalid execution paths" anyway.
+            if ( is_undef( small ) )
+                continue;
+
+            if ( small != big )
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+
 
 }  // namespace circ
