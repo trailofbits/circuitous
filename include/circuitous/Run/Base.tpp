@@ -127,3 +127,28 @@ void OpSem<S>::visit(DecoderResult *op)
     };
     return safe(op, and_);
 }
+
+template< typename S >
+void OpSem< S >::visit( Switch *op )
+{
+    auto value = this->compute_or( op->operands(), this->zero( op->size ) );
+    this->set_node_val( op, value );
+}
+
+template< typename S >
+void OpSem< S >::visit( Option *op )
+{
+    auto val = [ & ]() -> value_type
+    {
+        auto is_selected = this->compute_or( op->conditions(), this->false_val() );
+        if ( !is_selected )
+            return {};
+
+        if ( *is_selected == this->false_val() )
+            return llvm::APInt{ op->size, 0, false };
+
+        return this->get_node_val( op->value() );
+    }();
+
+    this->set_node_val( op, val );
+}
