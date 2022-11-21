@@ -337,6 +337,8 @@ namespace circ
                     return exactly((1 << op->operand(0)->size) + 1, op);
                 case Concat::kind:
                     return more_than(1, op);
+                case Option::kind:
+                    return more_than(2, op);
                 case VerifyInstruction::kind:
                 case OnlyOneCondition::kind:
                 case Or::kind:
@@ -346,6 +348,9 @@ namespace circ
                 default:
                     break;
             }
+
+            if ( isa< Switch >( op ) )
+                return;
 
             if (isa< leaf_values_ts >(op->op_code))
                 return exactly(0, op);
@@ -402,7 +407,7 @@ namespace circ
 
                 if ( already_constrained.count( advice ) )
                 {
-                    res.add_error() << "Advice" << pretty_print< false >( advice )
+                    res.add_error() << "Advice" << pretty_print< true >( advice )
                                     << " is constrained more than once in the same context!\n"
                                     << advice->id() << " in ctx " << ctx->id();
                 }
@@ -460,7 +465,8 @@ namespace circ
                 if ( only_acs )
                 {
                     res.add_error() << advice_to_str(a)
-                                    << " has only advice constraints as users";
+                                    << " has only " << users.size()
+                                    << " advice constraints as users";
                 }
             }
         }
@@ -519,8 +525,8 @@ namespace circ
         {
             auto allowed_nodes = collect_kinds< DecodeCondition, Constant,
                                                 DecoderResult, Extract,
-                                                InputInstructionBits, And, Advice, Icmp_eq,
-                                                Or, Xor >();
+                                                InputInstructionBits, And, Icmp_eq,
+                                                Or, Xor, Concat >();
             for (auto root : circuit->attr< DecoderResult >())
                 verify_constrained_subtree(root, root, allowed_nodes);
         }
