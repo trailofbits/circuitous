@@ -104,7 +104,7 @@ namespace circ::build
             return ir.getTrue();
 
         auto materializer = shadowinst::Materializer(ir, sreg);
-        auto selector = materializer.opaque_selector();
+        auto selector = materializer.region_selector();
         to_verify.push_back(materializer.tie_opaque_selector());
 
         if (sreg.tm().is_saturated())
