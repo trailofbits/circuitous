@@ -16,13 +16,15 @@ namespace circ
     {
         DefList< OP > data;
 
-        std::size_t remove_unused()
+        template< typename Predicate >
+        std::size_t remove_if( Predicate &&should_be_removed )
         {
-            auto notify_operands = [](auto &&x)
+            auto notify_operands = []( auto &&x )
             {
                 x->destroy();
             };
-            return data.remove_unused(notify_operands);
+            return data.remove_if( std::forward< Predicate >( should_be_removed ),
+                                   notify_operands );
         }
 
         template< typename CB >
@@ -78,7 +80,11 @@ namespace circ
             (this->Ops::apply(clear), ...);
         }
 
-        std::size_t remove_unused() { return (this->Ops::remove_unused() + ...); }
+        template< typename Predicate >
+        std::size_t remove_if( Predicate &&should_be_removed )
+        {
+            return ( this->Ops::remove_if( should_be_removed ) + ... );
+        }
 
         template< typename CB > auto match(Operation *op, CB cb)
         {
@@ -103,21 +109,19 @@ namespace circ
     //              error messages even further.
     struct CircuitStorage : Attributes< m_def_lists >
     {
-        void remove_unused()
-        {
-            while (this->AllAttributes::remove_unused()) {}
-        }
-
-        template< typename T >
-        std::size_t remove_unused()
-        {
-            return this->AllAttributes::parent< T >::remove_unused();
-        }
-
-        using AllAttributes::for_each_operation;
+        using attrs_t = Attributes< m_def_lists >;
+        using attrs_t::for_each_operation;
 
         uint64_t ids = 0;
         static constexpr inline uint64_t max_id = (1ull >> 60);
+
+        using attrs_t::remove_if;
+
+        template< typename Op, typename Predicate >
+        std::size_t remove_if( Predicate &&should_be_removed )
+        {
+            return attr< Op >().remove_if( std::forward< Predicate >( should_be_removed ) );
+        }
 
         template< typename T >
         auto &attr()
