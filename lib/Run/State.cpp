@@ -100,7 +100,10 @@ namespace circ::run
     {
         std::stringstream ss;
 
-        auto id = []( auto o ) { return "[" + std::to_string( o->id() ) + "]"; };
+        auto id = []( auto o )
+        {
+            return "[" + std::to_string( o->id() ) + "] " + "{ " + op_code_str( o->op_code ) + " }";
+        };
         auto fmt = []( auto v ) -> std::string
         {
             if ( !v ) return "[ NOT SET ]";
@@ -113,7 +116,7 @@ namespace circ::run
                << id( op ) << " := " << fmt( val ) << std::endl;
             for ( auto o : op->operands() )
             {
-                ss << "\t" << id( o ) << " <- " << fmt( val ) << std::endl;
+                ss << "\t" << id( o ) << " <- " << fmt( get( o ) ) << std::endl;
             }
         }
         return ss.str();
