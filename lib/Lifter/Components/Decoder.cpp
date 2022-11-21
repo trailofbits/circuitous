@@ -110,11 +110,10 @@ namespace circ::build
         if (sreg.tm().is_saturated())
             return ir.getTrue();
 
-
         values_t conds;
         for (auto &val : sreg.tm().complement())
             conds.push_back(ir.CreateICmpEQ(selector, ir.getInt(val)));
-        return ir.CreateNot(irops::make< irops::And >(ir, conds));
+        return ir.CreateNot(irops::make< irops::Or >(ir, conds));
     }
 
 }  // namespace circ::build
