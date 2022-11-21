@@ -48,7 +48,7 @@ namespace circ
         auto match_d(uint32_t kind, CB cb) -> decltype( cb( std::declval< OP * >() ) )
         {
             if (kind == OP::kind)
-                cb(static_cast<OP *>(nullptr));
+                cb.template operator()< OP >();
         }
     };
 
@@ -139,18 +139,17 @@ namespace circ
         {
             Operation *out = nullptr;
 
-            // NOTE(lukas): Templated lambda crashes my local clang
-            auto create = [&](auto op) {
-                using raw_t = std::remove_pointer_t< std::decay_t< decltype( op ) > >;
-                // Down the line we will invoke `raw_t( std::forward< Args >(args) ... )`
+            auto create = [&]< typename T >() {
+                // Down the line we will invoke `T( std::forward< Args >(args) ... )`
                 // and since ctors are not uniform, the invocation may not be well-formed
                 // which leads to compile error.
-                if constexpr ( std::is_constructible_v< raw_t, Args ... > ) {
-                    out = this->create< raw_t >( std::forward< Args >( args ) ... );
+                if constexpr ( std::is_constructible_v< T, Args ... > ) {
+                    out = this->create< T >( std::forward< Args >( args ) ... );
                 }
             };
 
             this->match_d( kind, create );
+            dcheck( out, [&](){ return "Failed to created Operation!"; });
             return out;
         }
 
