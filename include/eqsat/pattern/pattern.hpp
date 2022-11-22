@@ -365,6 +365,10 @@ namespace eqsat
 
     using places_t = std::vector< place_t >;
 
+    static inline auto place_index(const place_t &place, const places_t &places) {
+        return std::distance(places.begin(), std::find(places.begin(), places.end(), place));
+    }
+
     using places_generator = gap::recursive_generator< place_t >;
 
     places_generator places(const atom_t &atom, const match_pattern &pattern, auto &filter) {

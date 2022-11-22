@@ -90,10 +90,6 @@ namespace eqsat {
         }
     }
 
-    static inline auto place_index(const place_t &place, const places_t &places) {
-        return std::distance(places.begin(), std::find(places.begin(), places.end(), place));
-    }
-
     //
     // match place node
     //
