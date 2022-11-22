@@ -21,81 +21,81 @@ namespace circ
     //
     // Node Templates keep data required to rebuild circuitous IR from EGraph
     //
-    struct OpCodeNode {
+    struct op_code_node {
         std::string op_code_name;
     };
 
-    struct SizedNode {
+    struct sized_node {
         std::string op_code_name;
         maybe_bitwidth_t size;
     };
 
-    struct AdviceNode {
+    struct advice_node {
         std::string op_code_name;
         maybe_bitwidth_t size;
         std::optional< std::uint32_t > idx;
     };
 
-    struct RegisterNode {
+    struct register_node {
         std::string op_code_name;
         bitwidth_t size;
         std::string reg_name;
     };
 
-    struct ConstantNode {
+    struct constant_node {
         std::string op_code_name;
         bitwidth_t size;
         std::string bits;
     };
 
-    struct MemoryNode {
+    struct memory_node {
         std::string op_code_name;
         bitwidth_t mem_idx;
     };
 
-    struct ExtractNode {
+    struct extract_node {
         std::string op_code_name;
         std::uint32_t low_bit_inc, high_bit_exc;
     };
 
-    struct SelectNode {
+    struct select_node {
         std::string op_code_name;
         bitwidth_t size;
         std::uint32_t bits;
     };
 
-    using NodeTemplate = std::variant<
-        OpCodeNode,
-        SizedNode,
-        AdviceNode,
-        RegisterNode,
-        ConstantNode,
-        MemoryNode,
-        ExtractNode,
-        SelectNode
+    using node_template = std::variant<
+        op_code_node,
+        sized_node,
+        advice_node,
+        register_node,
+        constant_node,
+        memory_node,
+        extract_node,
+        select_node
     >;
 
     //
     // Circuit EGraph Representation
     //
-    using CircuitENode = eqsat::graph::node< NodeTemplate >;
-    static_assert(gap::graph::node_like< CircuitENode >);
+    using circuit_enode = eqsat::graph::node< node_template >;
+    static_assert(gap::graph::node_like< circuit_enode >);
 
-    using ENodeHandle = eqsat::graph::node_handle;
+    using enode_handle = eqsat::graph::node_handle;
 
-    using CircuitEdge = eqsat::graph::edge< CircuitENode >;
-    static_assert(gap::graph::edge_like< CircuitEdge >);
+    using circuit_edge = eqsat::graph::edge< circuit_enode >;
+    static_assert(gap::graph::edge_like< circuit_edge >);
 
-    using CircuitEGraph = eqsat::graph::egraph< CircuitENode >;
-    static_assert(gap::graph::graph_like< CircuitEGraph >);
+    using circuit_egraph = eqsat::graph::egraph< circuit_enode >;
+    static_assert(gap::graph::graph_like< circuit_egraph >);
 
-    std::string node_name(const NodeTemplate &op);
+    std::string node_name(const node_template &op);
 
-    std::optional< gap::bigint > extract_constant(const NodeTemplate &op);
+    std::optional< gap::bigint > extract_constant(const node_template &op);
 
-    // std::string to_string(const NodeTemplate &op);
+    // std::string to_string(const node_template &op);
 
-    // maybe_bitwidth bitwidth(const NodeTemplate &op);
+    // maybe_bitwidth bitwidth(const node_template &op);
 
     // std::string name(const circuit_enode *enode);
 

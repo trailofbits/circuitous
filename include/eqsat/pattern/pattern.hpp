@@ -176,6 +176,12 @@ namespace eqsat
         using variant::variant;
     };
 
+    static inline bool is_nested_list(const expr_list &list) {
+        return std::all_of(std::begin(list), std::end(list), [] (const auto &e) {
+            return std::holds_alternative< expr_list >(e);
+        });
+    }
+
     template< typename stream >
     stream& operator<<(stream& os, const expr_list& list) {
         os << "( ";

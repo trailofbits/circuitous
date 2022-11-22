@@ -37,6 +37,7 @@ add_executable( test-eqsat
   eqsat/pattern.cpp
   eqsat/graph.cpp
   eqsat/match.cpp
+  eqsat/saturation.cpp
 )
 
 target_link_libraries( test-eqsat
