@@ -21,7 +21,7 @@ namespace eqsat {
         const match_result &where,
         saturable_egraph< egraph > &graph
     ) {
-        auto patch = synthesize_simple_expr(expr, rule, places, where, graph);
+        auto patch = synthesize_simple_expr(expr, rule, places, where, {}, graph);
         return graph.merge(where.root, graph.find(patch));
     }
 
