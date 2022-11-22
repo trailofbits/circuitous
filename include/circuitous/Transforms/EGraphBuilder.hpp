@@ -126,6 +126,7 @@ namespace circ
                 auto node = make_node(op, state);
                 state.nodes_map[op] = node;
                 for (const auto &child : op->operands) {
+                    // TODO fix parents
                     node->add_child( add_nodes_recurse(child, state) );
                 }
             }
