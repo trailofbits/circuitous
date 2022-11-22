@@ -7,6 +7,7 @@
  */
 
 #include <eqsat/core/egraph.hpp>
+#include <eqsat/core/extend.hpp>
 
 #include <charconv>
 #include <string>
@@ -54,5 +55,25 @@ namespace eqsat::test {
         ( node->add_child( children ), ... );
         return egraph.find( node );
     }
+
+    struct test_graph_from_pattern_builder {
+
+        using storage_type = typename test_graph::storage_type;
+
+        static storage_type make(const eqsat::constant_t &con) {
+            // TODO build storage
+            throw std::runtime_error("not implemented constant synthesis");
+        }
+
+        static storage_type make(const eqsat::operation_t &op) {
+            // TODO build storage
+            throw std::runtime_error("not implemented support operation synthesis");
+
+        }
+    };
+
+    using extendable_test_graph = eqsat::extendable_egraph<
+        test_graph, test_graph_from_pattern_builder
+    >;
 
 } // namespace eqsat::test
