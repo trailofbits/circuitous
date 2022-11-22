@@ -21,14 +21,15 @@ namespace eqsat {
             : egraph(std::forward< egraph >(graph))
         {}
 
-        node_pointer make(const constant_t &con) {
-            return add_node(builder::make(con));
+        using egraph::add_node;
+        using egraph::find;
+
+        node_handle make(const constant_t &con) {
+            return find(add_node(builder::make(con)));
         }
 
-        using egraph::add_node;
-
-        node_pointer make(const operation_t &op) {
-            return add_node(builder::make(op));
+        node_handle make(const operation_t &op) {
+            return find(add_node(builder::make(op)));
         }
     };
 
