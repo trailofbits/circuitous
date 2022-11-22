@@ -36,17 +36,35 @@ namespace circ
       return run_equality_saturation(std::move(circuit), rulesets);
     }
 
-        void add_rules( rules_t &&ruleset )
-        {
-            rulesets.insert(
-                rulesets.end(),
-                std::make_move_iterator(ruleset.begin()),
-                std::make_move_iterator(ruleset.end())
-            );
-        }
+    static Pass get() { return std::make_shared< EqualitySaturationPass >(); }
 
-        rules_t rulesets;
-    };
+    void add_rules(std::vector< eqsat::rule_set > &&ruleset) {
+      rulesets.insert(
+        rulesets.end(),
+        std::make_move_iterator(ruleset.begin()),
+        std::make_move_iterator(ruleset.end())
+      );
+    }
+
+    std::vector< eqsat::rule_set > rulesets;
+  };
+
+
+  // Merge all of the hint inputs into a single "wide" input hint that is of
+  // sufficient size to support all verifiers. In place of the individual hints,
+  // the verifiers pull out slices of wide hint value with an EXTRACT.
+  bool MergeAdvices(Circuit *circuit);
+
+  struct MergeAdvicesPass : PassBase
+  {
+    CircuitPtr run(CircuitPtr &&circuit) override
+    {
+      MergeAdvices(circuit.get());
+      return std::move(circuit);
+    }
+
+    static Pass get() { return std::make_shared< MergeAdvicesPass >(); }
+  };
 
     /*
      * Semantics from remill calculate the overflow flag directly from the values instead of

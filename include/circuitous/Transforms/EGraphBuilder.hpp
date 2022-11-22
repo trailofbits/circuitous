@@ -7,143 +7,121 @@
 #include <circuitous/IR/Visitors.hpp>
 #include <circuitous/Transforms/EGraph.hpp>
 
+#include <eqsat/pattern/pattern.hpp>
+
 #include <spdlog/spdlog.h>
 
 #include <unordered_map>
 
 namespace circ
 {
-    struct NodeTemplateBuilder : NonDefaultingVisitor< NodeTemplateBuilder > {
+    struct node_template_builder : NonDefaultingVisitor< node_template_builder > {
         //
-        // NodeTemplate constructors
+        // node_template constructors
         //
-        OpCodeNode opcode(auto *op) const {
-            return { op->op_code_str() };
-        }
-
-        SizedNode sized(auto *op) const {
-            return { op->op_code_str(), op->size };
-        }
-
-        AdviceNode advice(Advice *op) const {
-            return { op->op_code_str(), op->size, op->advice_idx };
-        }
-
-        RegisterNode regop(auto *op) const {
-            return { op->op_code_str(), op->size, op->reg_name };
-        }
-
-        ConstantNode constop(Constant *op) const {
-            return { op->op_code_str(), op->size, op->bits };
-        }
-
-        MemoryNode memop(Memory *op) const {
-            return { op->op_code_str(), op->mem_idx };
-        }
-
-        ExtractNode extract(Extract *op) const {
-            return { op->op_code_str(), op->low_bit_inc, op->high_bit_exc };
-        }
-
-        SelectNode select(Select *op) const {
-            return { op->op_code_str(), op->size, op->bits };
-        }
+        op_code_node  opcode(auto *op) const;
+        sized_node    sized(auto *op) const;
+        advice_node   advice(Advice *op) const;
+        register_node regop(auto *op) const;
+        constant_node constop(Constant *op) const;
+        memory_node   memop(Memory *op) const;
+        extract_node  extract(Extract *op) const;
+        select_node   select(Select *op) const;
 
         //
         // Visits
         //
-        NodeTemplate visit(InputRegister  *op);
-        NodeTemplate visit(OutputRegister *op);
+        node_template visit(InputRegister  *op);
+        node_template visit(OutputRegister *op);
 
-        NodeTemplate visit(InputTimestamp  *op);
-        NodeTemplate visit(OutputTimestamp *op);
-        NodeTemplate visit(InputErrorFlag  *op);
-        NodeTemplate visit(OutputErrorFlag *op);
+        node_template visit(InputTimestamp  *op);
+        node_template visit(OutputTimestamp *op);
+        node_template visit(InputErrorFlag  *op);
+        node_template visit(OutputErrorFlag *op);
 
-        NodeTemplate visit(Undefined *op);
+        node_template visit(Undefined *op);
 
-        NodeTemplate visit(Memory *op);
+        node_template visit(Memory *op);
 
-        NodeTemplate visit(Constant *op);
+        node_template visit(Constant *op);
 
-        NodeTemplate visit(Advice *op);
+        node_template visit(Advice *op);
 
-        NodeTemplate visit(InputInstructionBits *op);
+        node_template visit(InputInstructionBits *op);
 
-        NodeTemplate visit(RegConstraint *op);
-        NodeTemplate visit(AdviceConstraint *op);
-        NodeTemplate visit(WriteConstraint *op);
-        NodeTemplate visit(ReadConstraint *op);
-        NodeTemplate visit(UnusedConstraint *op);
+        node_template visit(RegConstraint *op);
+        node_template visit(AdviceConstraint *op);
+        node_template visit(WriteConstraint *op);
+        node_template visit(ReadConstraint *op);
+        node_template visit(UnusedConstraint *op);
 
-        NodeTemplate visit(Add  *op);
-        NodeTemplate visit(Sub  *op);
-        NodeTemplate visit(Mul  *op);
-        NodeTemplate visit(UDiv *op);
-        NodeTemplate visit(SDiv *op);
-        NodeTemplate visit(SRem *op);
-        NodeTemplate visit(URem *op);
+        node_template visit(Add  *op);
+        node_template visit(Sub  *op);
+        node_template visit(Mul  *op);
+        node_template visit(UDiv *op);
+        node_template visit(SDiv *op);
+        node_template visit(SRem *op);
+        node_template visit(URem *op);
 
-        NodeTemplate visit(Shl  *op);
-        NodeTemplate visit(LShr  *op);
-        NodeTemplate visit(AShr  *op);
-        NodeTemplate visit(Trunc *op);
-        NodeTemplate visit(ZExt  *op);
-        NodeTemplate visit(SExt  *op);
+        node_template visit(Shl  *op);
+        node_template visit(LShr  *op);
+        node_template visit(AShr  *op);
+        node_template visit(Trunc *op);
+        node_template visit(ZExt  *op);
+        node_template visit(SExt  *op);
 
-        NodeTemplate visit(Icmp_ult *op);
-        NodeTemplate visit(Icmp_slt *op);
-        NodeTemplate visit(Icmp_ugt *op);
-        NodeTemplate visit(Icmp_eq  *op);
-        NodeTemplate visit(Icmp_ne  *op);
-        NodeTemplate visit(Icmp_uge *op);
-        NodeTemplate visit(Icmp_ule *op);
-        NodeTemplate visit(Icmp_sgt *op);
-        NodeTemplate visit(Icmp_sge *op);
-        NodeTemplate visit(Icmp_sle *op);
+        node_template visit(Icmp_ult *op);
+        node_template visit(Icmp_slt *op);
+        node_template visit(Icmp_ugt *op);
+        node_template visit(Icmp_eq  *op);
+        node_template visit(Icmp_ne  *op);
+        node_template visit(Icmp_uge *op);
+        node_template visit(Icmp_ule *op);
+        node_template visit(Icmp_sgt *op);
+        node_template visit(Icmp_sge *op);
+        node_template visit(Icmp_sle *op);
 
-        NodeTemplate visit(InputImmediate *op);
+        node_template visit(InputImmediate *op);
 
-        NodeTemplate visit(Extract *op);
+        node_template visit(Extract *op);
 
-        NodeTemplate visit(Concat *op);
+        node_template visit(Concat *op);
 
-        NodeTemplate visit(PopulationCount *op);
-        NodeTemplate visit(CountLeadingZeroes *op);
-        NodeTemplate visit(CountTrailingZeroes *op);
+        node_template visit(PopulationCount *op);
+        node_template visit(CountLeadingZeroes *op);
+        node_template visit(CountTrailingZeroes *op);
 
-        NodeTemplate visit(Not *op);
+        node_template visit(Not *op);
 
-        NodeTemplate visit(Parity *op);
+        node_template visit(Parity *op);
 
-        NodeTemplate visit(Select *op);
+        node_template visit(Select *op);
 
-        NodeTemplate visit(DecodeCondition *op);
-        NodeTemplate visit(DecoderResult *op);
-        NodeTemplate visit(VerifyInstruction *op);
-        NodeTemplate visit(OnlyOneCondition *op);
+        node_template visit(DecodeCondition *op);
+        node_template visit(DecoderResult *op);
+        node_template visit(VerifyInstruction *op);
+        node_template visit(OnlyOneCondition *op);
 
-        NodeTemplate visit(Or  *op);
-        NodeTemplate visit(And *op);
-        NodeTemplate visit(Xor *op);
+        node_template visit(Or  *op);
+        node_template visit(And *op);
+        node_template visit(Xor *op);
 
-        NodeTemplate visit(Circuit *);
+        node_template visit(Circuit *);
     };
 
-    using ENodePtr = CircuitENode::node_pointer;
-    using NodesMap = std::unordered_map< Operation*, ENodePtr >;
+    using nodes_map = std::unordered_map< Operation*, circuit_enode::node_pointer >;
 
-    struct EGraphBuilderState {
-        CircuitEGraph egraph;
-        NodesMap nodes_map;
+    struct egraph_builder_state {
+        circuit_egraph egraph;
+        nodes_map nodes_map;
     };
 
-    struct EGraphBuilder : NodeTemplateBuilder
+    struct circuit_egraph_builder : node_template_builder
     {
-        using NodeTemplateBuilder::opcode;
-        using NodeTemplateBuilder::dispatch;
+        using node_template_builder::opcode;
+        using node_template_builder::dispatch;
 
-        ENodeHandle add_nodes_recurse(Operation *op, EGraphBuilderState &state) {
+        enode_handle add_nodes_recurse(Operation *op, egraph_builder_state &state) {
             if (!state.nodes_map.contains(op)) {
                 auto node = make_node(op, state);
                 state.nodes_map[op] = node;
@@ -155,16 +133,16 @@ namespace circ
             return state.egraph.find(state.nodes_map[op]);
         }
 
-        NodeTemplate make_template(Circuit *ci) { return opcode(ci); }
+        node_template make_template(Circuit *ci) { return opcode(ci); }
 
-        NodeTemplate make_template(Operation *op) { return dispatch(op); }
+        node_template make_template(Operation *op) { return dispatch(op); }
 
-        ENodePtr make_node(auto *op, EGraphBuilderState &state) {
+        circuit_enode::node_pointer make_node(auto *op, egraph_builder_state &state) {
             return state.egraph.add_node(make_template(op));
         }
 
-        EGraphBuilderState build(Circuit *circuit) {
-            EGraphBuilderState state;
+        egraph_builder_state build(Circuit *circuit) {
+            egraph_builder_state state;
             add_nodes_recurse(circuit, state);
             return state;
         }
