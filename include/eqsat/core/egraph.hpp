@@ -45,6 +45,7 @@ namespace eqsat::graph
 
         std::size_t num_of_children() const { return _children.size(); }
 
+        // TODO fix parents
         void add_child(node_handle handle) {
             _children.push_back(handle);
         }

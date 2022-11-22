@@ -52,6 +52,7 @@ namespace eqsat::test {
         -> graph::node_handle
     {
         auto node = egraph.add_node( string_storage( name ) );
+        // TODO fix parents
         ( node->add_child( children ), ... );
         return egraph.find( node );
     }
@@ -66,9 +67,7 @@ namespace eqsat::test {
         }
 
         static storage_type make(const eqsat::operation_t &op) {
-            // TODO build storage
-            throw std::runtime_error("not implemented support operation synthesis");
-
+            return string_storage(op.ref());
         }
     };
 
