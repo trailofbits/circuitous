@@ -10,11 +10,9 @@
 
 namespace circ
 {
-    struct CircuitCostFunction {
-        using Cost    = eqsat::cost_t;
-        using NodePtr = CircuitEGraph::node_pointer;
+    struct circuit_cost_function {
 
-        Cost operator()(const NodePtr node) {
+        eqsat::cost_t operator()(const circuit_egraph::node_pointer node) {
             // TODO(Heno) implement cost function
             // if (name(node) == "Mul") {
             //   return 1000;  // * bitwidth(node).value();
@@ -26,18 +24,26 @@ namespace circ
         }
     };
 
-    using CircuitCostGraph = eqsat::cost_graph< CircuitEGraph, CircuitCostFunction >;
-    static_assert(gap::graph::graph_like< CircuitCostGraph >);
+    using circuit_cost_graph = eqsat::cost_graph<
+        circuit_egraph, circuit_cost_function
+    >;
 
-    auto make_circuit_cost_graph(CircuitEGraph &&graph) -> CircuitCostGraph {
-        return CircuitCostGraph(std::move(graph), CircuitCostFunction{});
+    static_assert(gap::graph::graph_like< circuit_cost_graph >);
+
+    auto make_circuit_cost_graph(circuit_egraph &&graph) -> circuit_cost_graph {
+        return circuit_cost_graph(std::move(graph), circuit_cost_function{});
     }
 
-    using OptimalCircuitGraphView = eqsat::optimal_graph_view< CircuitEGraph, CircuitCostFunction >;
-    static_assert(gap::graph::graph_like< OptimalCircuitGraphView >);
+    using optimal_circuit_graph_view = eqsat::optimal_graph_view<
+        circuit_egraph, circuit_cost_function
+    >;
 
-    auto make_optimal_circuit_graph(CircuitEGraph &&graph) -> OptimalCircuitGraphView {
-        return OptimalCircuitGraphView(std::move(graph), CircuitCostFunction{});
+    static_assert(gap::graph::graph_like< optimal_circuit_graph_view >);
+
+    auto make_optimal_circuit_graph(circuit_egraph &&graph)
+        -> optimal_circuit_graph_view
+    {
+        return optimal_circuit_graph_view(std::move(graph), circuit_cost_function{});
     }
 
 } // namespace circ

@@ -7,154 +7,190 @@
 namespace circ
 {
     //
+    // node_template constructors
+    //
+    op_code_node node_template_builder::opcode(auto *op) const {
+        return { op->op_code_str() };
+    }
+
+    sized_node node_template_builder::sized(auto *op) const {
+        return { op->op_code_str(), op->size };
+    }
+
+    advice_node node_template_builder::advice(Advice *op) const {
+        return { op->op_code_str(), op->size, op->advice_idx };
+    }
+
+    register_node node_template_builder::regop(auto *op) const {
+        return { op->op_code_str(), op->size, op->reg_name };
+    }
+
+    constant_node node_template_builder::constop(Constant *op) const {
+        return { op->op_code_str(), op->size, op->bits };
+    }
+
+    memory_node node_template_builder::memop(Memory *op) const {
+        return { op->op_code_str(), op->mem_idx };
+    }
+
+    extract_node node_template_builder::extract(Extract *op) const {
+        return { op->op_code_str(), op->low_bit_inc, op->high_bit_exc };
+    }
+
+    select_node node_template_builder::select(Select *op) const {
+        return { op->op_code_str(), op->size, op->bits };
+    }
+
+    //
     // Visits
     //
-    NodeTemplate NodeTemplateBuilder::visit(InputRegister *op) {
+    node_template node_template_builder::visit(InputRegister *op) {
         return regop(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(OutputRegister *op) {
+    node_template node_template_builder::visit(OutputRegister *op) {
         return regop(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(InputTimestamp *op) {
+    node_template node_template_builder::visit(InputTimestamp *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(OutputTimestamp *op) {
+    node_template node_template_builder::visit(OutputTimestamp *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(InputErrorFlag *op) {
+    node_template node_template_builder::visit(InputErrorFlag *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(OutputErrorFlag *op) {
+    node_template node_template_builder::visit(OutputErrorFlag *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(Undefined *op) {
+    node_template node_template_builder::visit(Undefined *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(Memory *op) {
+    node_template node_template_builder::visit(Memory *op) {
         return memop(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(Constant *op) {
+    node_template node_template_builder::visit(Constant *op) {
         return constop(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(Advice *op) {
+    node_template node_template_builder::visit(Advice *op) {
         return advice(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(InputInstructionBits *op) {
+    node_template node_template_builder::visit(InputInstructionBits *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(RegConstraint *op) {
+    node_template node_template_builder::visit(RegConstraint *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(AdviceConstraint *op) {
+    node_template node_template_builder::visit(AdviceConstraint *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(WriteConstraint *op) {
+    node_template node_template_builder::visit(WriteConstraint *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(ReadConstraint *op) {
+    node_template node_template_builder::visit(ReadConstraint *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(UnusedConstraint *op) {
+    node_template node_template_builder::visit(UnusedConstraint *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(Add *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Sub *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Mul *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(UDiv *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(SDiv *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(SRem *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(URem *op) { return sized(op); }
+    node_template node_template_builder::visit(Add *op)  { return sized(op); }
+    node_template node_template_builder::visit(Sub *op)  { return sized(op); }
+    node_template node_template_builder::visit(Mul *op)  { return sized(op); }
+    node_template node_template_builder::visit(UDiv *op) { return sized(op); }
+    node_template node_template_builder::visit(SDiv *op) { return sized(op); }
+    node_template node_template_builder::visit(SRem *op) { return sized(op); }
+    node_template node_template_builder::visit(URem *op) { return sized(op); }
 
-    NodeTemplate NodeTemplateBuilder::visit(Shl *op)   { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(LShr *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(AShr *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Trunc *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(ZExt *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(SExt *op)  { return sized(op); }
+    node_template node_template_builder::visit(Shl *op)   { return sized(op); }
+    node_template node_template_builder::visit(LShr *op)  { return sized(op); }
+    node_template node_template_builder::visit(AShr *op)  { return sized(op); }
+    node_template node_template_builder::visit(Trunc *op) { return sized(op); }
+    node_template node_template_builder::visit(ZExt *op)  { return sized(op); }
+    node_template node_template_builder::visit(SExt *op)  { return sized(op); }
 
-    NodeTemplate NodeTemplateBuilder::visit(Icmp_ult *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Icmp_slt *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Icmp_ugt *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Icmp_eq *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Icmp_ne *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Icmp_uge *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Icmp_ule *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Icmp_sgt *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Icmp_sge *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Icmp_sle *op) { return sized(op); }
+    node_template node_template_builder::visit(Icmp_ult *op) { return sized(op); }
+    node_template node_template_builder::visit(Icmp_slt *op) { return sized(op); }
+    node_template node_template_builder::visit(Icmp_ugt *op) { return sized(op); }
+    node_template node_template_builder::visit(Icmp_eq *op)  { return sized(op); }
+    node_template node_template_builder::visit(Icmp_ne *op)  { return sized(op); }
+    node_template node_template_builder::visit(Icmp_uge *op) { return sized(op); }
+    node_template node_template_builder::visit(Icmp_ule *op) { return sized(op); }
+    node_template node_template_builder::visit(Icmp_sgt *op) { return sized(op); }
+    node_template node_template_builder::visit(Icmp_sge *op) { return sized(op); }
+    node_template node_template_builder::visit(Icmp_sle *op) { return sized(op); }
 
-    NodeTemplate NodeTemplateBuilder::visit(InputImmediate *op) {
+    node_template node_template_builder::visit(InputImmediate *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(Extract *op) {
+    node_template node_template_builder::visit(Extract *op) {
         return extract(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(Concat *op) {
+    node_template node_template_builder::visit(Concat *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(PopulationCount *op) {
+    node_template node_template_builder::visit(PopulationCount *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(CountLeadingZeroes *op) {
+    node_template node_template_builder::visit(CountLeadingZeroes *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(CountTrailingZeroes *op) {
+    node_template node_template_builder::visit(CountTrailingZeroes *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(Not *op) {
+    node_template node_template_builder::visit(Not *op) {
         return sized(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(Parity *op) {
+    node_template node_template_builder::visit(Parity *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(Select *op) {
+    node_template node_template_builder::visit(Select *op) {
         return select(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(DecodeCondition *op) {
+    node_template node_template_builder::visit(DecodeCondition *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(DecoderResult *op) {
+    node_template node_template_builder::visit(DecoderResult *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(VerifyInstruction *op) {
+    node_template node_template_builder::visit(VerifyInstruction *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(OnlyOneCondition *op) {
+    node_template node_template_builder::visit(OnlyOneCondition *op) {
         return opcode(op);
     }
 
-    NodeTemplate NodeTemplateBuilder::visit(Or *op)  { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(And *op) { return sized(op); }
-    NodeTemplate NodeTemplateBuilder::visit(Xor *op) { return sized(op); }
+    node_template node_template_builder::visit(Or *op)  { return sized(op); }
+    node_template node_template_builder::visit(And *op) { return sized(op); }
+    node_template node_template_builder::visit(Xor *op) { return sized(op); }
 
-    NodeTemplate NodeTemplateBuilder::visit(Circuit *op) { return opcode(op); }
+    node_template node_template_builder::visit(Circuit *op) { return opcode(op); }
+
 
 } // namespace circ
