@@ -5,11 +5,14 @@
 #pragma once
 
 #include <eqsat/core/common.hpp>
+#include <eqsat/pattern/pattern.hpp>
+
 #include <gap/core/generator.hpp>
 #include <gap/core/graph.hpp>
 #include <gap/core/hash.hpp>
 #include <gap/core/union_find.hpp>
 #include <gap/core/bigint.hpp>
+
 #include <unordered_map>
 #include <vector>
 #include <iostream>
@@ -41,6 +44,10 @@ namespace eqsat::graph
         gap::generator< node_handle > children() const {
             for (auto ch : _children)
                 co_yield ch;
+        }
+
+        child_type child(std::size_t idx) const {
+            return _children[idx];
         }
 
         std::size_t num_of_children() const { return _children.size(); }
@@ -174,9 +181,9 @@ namespace eqsat::graph
     //
     // egraph
     //
-    template< typename enode >
+    template< typename enode, template< typename > typename builder >
     struct egraph {
-        using node_type = enode;
+        using node_type    = enode;
         using storage_type = typename node_type::storage_type;
         using node_pointer = typename node_type::node_pointer;
         using const_node_pointer = typename node_type::const_node_pointer;
@@ -188,7 +195,9 @@ namespace eqsat::graph
         using handle_hash  = gap::hash< node_handle >;
         using eclass_map   = std::unordered_map< node_handle, eclass_type, handle_hash >;
 
-        egraph()           = default;
+        using builder_type = builder< egraph >;
+
+        egraph() = default;
 
         egraph(egraph &&)            = default;
         egraph &operator=(egraph &&) = default;
@@ -252,27 +261,20 @@ namespace eqsat::graph
             });
         }
 
-        void add_parent(node_handle eclass, node_pointer parent) {
-            _classes.at(eclass).parents.push_back(parent);
+        node_handle insert(const constant_t &con) {
+            return insert(builder_type::make(con), {});
         }
 
-        node_pointer add_node(storage_type &&data) {
-            auto node = _nodes.emplace_back(
-                std::make_unique< node_type >(std::move(data))
-            ).get();
+        node_handle insert(const operation_t &op, std::span< node_handle > children) {
+            return insert(builder_type::make(op), children);
+        }
 
-            node_handle id{ _unions.make_new_set().parent };
-
-            _classes.emplace(id, singleton_eclass(node));
-
-            // add child - parent link
-            for (auto child : node->children()) {
-                add_parent(child, node);
+        node_handle insert(storage_type &&data, std::span< node_handle > children) {
+            auto node = add_node(std::move(data));
+            for (auto ch : children) {
+                add_child(node, ch);
             }
-
-            _ids.emplace(node, id);
-
-            return node;
+            return find(node);
         }
 
         const eclass_type &eclass(node_handle handle) const { return _classes.at(find(handle)); }
@@ -317,6 +319,30 @@ namespace eqsat::graph
         }
 
       protected:
+
+        void add_parent(node_handle eclass, node_pointer parent) {
+            _classes.at(eclass).parents.push_back(parent);
+        }
+
+        void add_child(node_pointer node, node_handle child) {
+            node->add_child(child);
+            add_parent(child, node);
+        }
+
+        node_pointer add_node(storage_type &&data) {
+            auto node = _nodes.emplace_back(
+                std::make_unique< node_type >(std::move(data))
+            ).get();
+
+            node_handle id{ _unions.make_new_set().parent };
+
+            _classes.emplace(id, singleton_eclass(node));
+
+            _ids.emplace(node, id);
+
+            return node;
+        }
+
         // stores heap allocated nodes of egraph
         std::vector< std::unique_ptr< node_type > > _nodes;
 
@@ -331,6 +357,7 @@ namespace eqsat::graph
 
         // modified eclasses that needs to be rebuild
         std::vector< node_id_t > _pending;
+
     };
 
 } // namespace eqsat::graph

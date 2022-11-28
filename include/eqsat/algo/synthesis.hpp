@@ -16,7 +16,7 @@ namespace eqsat {
         const match_result &where,
         egraph &graph
     ) -> node_handle {
-        return graph.make(constant);
+        return graph.insert(constant);
     }
 
     template< gap::graph::graph_like egraph >
@@ -28,7 +28,7 @@ namespace eqsat {
         std::span< node_handle > children,
         egraph &graph
     ) -> node_handle {
-        return graph.make(operation, children);
+        return graph.insert(operation, children);
     }
 
     template< gap::graph::graph_like egraph >
