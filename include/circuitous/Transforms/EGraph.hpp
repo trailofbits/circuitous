@@ -76,6 +76,25 @@ namespace circ
     >;
 
     //
+    // Circuit from pattern builder
+    //
+    template< typename egraph >
+    struct circuit_graph_from_pattern_builder {
+        using storage_type = typename egraph::storage_type;
+
+        static storage_type make(const eqsat::constant_t &con) {
+            // TODO build storage
+            throw std::runtime_error("not implemented constant synthesis");
+        }
+
+        static storage_type make(const eqsat::operation_t &op) {
+            // TODO build storage
+            throw std::runtime_error("not implemented operation synthesis");
+
+        }
+    };
+
+    //
     // Circuit EGraph Representation
     //
     using circuit_enode = eqsat::graph::node< node_template >;
@@ -86,7 +105,9 @@ namespace circ
     using circuit_edge = eqsat::graph::edge< circuit_enode >;
     static_assert(gap::graph::edge_like< circuit_edge >);
 
-    using circuit_egraph = eqsat::graph::egraph< circuit_enode >;
+    using circuit_egraph = eqsat::graph::egraph<
+        circuit_enode, circuit_graph_from_pattern_builder
+    >;
     static_assert(gap::graph::graph_like< circuit_egraph >);
 
     std::string node_name(const node_template &op);
