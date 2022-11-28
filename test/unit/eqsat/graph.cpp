@@ -22,7 +22,7 @@ namespace eqsat::test
 
         auto idx = make_node(egraph, "x");
         auto idy = make_node(egraph, "y");
-        auto ida = make_node(egraph, "+", idx, idy);
+        auto ida = make_node(egraph, "+", {idx, idy});
 
         auto saturable = saturable_egraph(std::move(egraph));
 
@@ -46,9 +46,9 @@ namespace eqsat::test
         auto idx = make_node(egraph, "x");
         auto idy = make_node(egraph, "y");
         auto idz = make_node(egraph, "z");
-        auto idp = make_node(egraph, "+", idx, idy);
-        auto idm = make_node(egraph, "*", idy, idz);
-        auto ids = make_node(egraph, "-", idp, idm);
+        auto idp = make_node(egraph, "+", {idx, idy});
+        auto idm = make_node(egraph, "*", {idy, idz});
+        auto ids = make_node(egraph, "-", {idp, idm});
 
         auto saturable = saturable_egraph(std::move(egraph));
 
@@ -75,9 +75,9 @@ namespace eqsat::test
         auto idx = make_node(egraph, "x");
         auto idy = make_node(egraph, "y");
         auto idz = make_node(egraph, "z");
-        auto idp = make_node(egraph, "+", idx, idy);
-        auto idm = make_node(egraph, "*", idy, idz);
-        auto ids = make_node(egraph, "-", idp, idm);
+        auto idp = make_node(egraph, "+", {idx, idy});
+        auto idm = make_node(egraph, "*", {idy, idz});
+        auto ids = make_node(egraph, "-", {idp, idm});
 
         auto saturable = saturable_egraph(std::move( egraph ));
 
@@ -115,9 +115,9 @@ namespace eqsat::test
         auto idx = make_node(egraph, "x");
         auto idy = make_node(egraph, "y");
         auto idz = make_node(egraph, "z");
-        auto idp = make_node(egraph, "+", idx, idy);
-        auto idm = make_node(egraph, "*", idy, idz);
-        auto ids = make_node(egraph, "-", idp, idm);
+        auto idp = make_node(egraph, "+", {idx, idy});
+        auto idm = make_node(egraph, "*", {idy, idz});
+        auto ids = make_node(egraph, "-", {idp, idm});
 
         auto saturable = saturable_egraph(std::move(egraph));
 

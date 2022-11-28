@@ -34,7 +34,7 @@ namespace eqsat::test {
 
         auto idx = make_node(egraph, "x");
         auto idy = make_node(egraph, "1:64");
-        make_node(egraph, "mul", idx, idy);
+        make_node(egraph, "mul", {idx, idy});
 
         SUBCASE("multiplication identity") {
             auto rule = rewrite_rule("multiplication identity", "(op_mul ?x 1:64)", "(?x)");
@@ -67,11 +67,11 @@ namespace eqsat::test {
 
         auto idx  = make_node(egraph, "x");
         auto idy  = make_node(egraph, "y");
-        auto add1 = make_node(egraph, "add", idx, idy);
+        auto add1 = make_node(egraph, "add", {idx, idy});
 
         auto idu  = make_node(egraph, "u");
         auto idv  = make_node(egraph, "v");
-        auto add2 = make_node(egraph, "add", idu, idv);
+        auto add2 = make_node(egraph, "add", {idu, idv});
 
         auto rule = rewrite_rule("commutativity", "(op_add ?x ?y)", "(op_add ?y ?x)");
         CHECK(count_matches(match(rule, egraph)) == 2);
@@ -90,8 +90,8 @@ namespace eqsat::test {
         auto ida  = make_node(egraph, "a:64");
         auto idb  = make_node(egraph, "b:64");
         auto idz  = make_node(egraph, "0:64");
-        auto add1 = make_node(egraph, "add", idz, ida);
-        /* auto add2 = */ make_node(egraph, "add", idb, add1);
+        auto add1 = make_node(egraph, "add", {idz, ida});
+        /* auto add2 = */ make_node(egraph, "add", {idb, add1});
 
         auto rule = rewrite_rule("addition", "(op_add ?x (op_add 0:64 ?y))", "(op_add ?x ?y)");
         CHECK(count_matches(match(rule, egraph)) == 1);
@@ -101,7 +101,7 @@ namespace eqsat::test {
         test_graph egraph;
         auto ida  = make_node(egraph, "a:64");
         auto idb  = make_node(egraph, "b:64");
-        /* auto add1 = */ make_node(egraph, "add", ida, idb);
+        /* auto add1 = */ make_node(egraph, "add", {ida, idb});
 
         auto rule = rewrite_rule("twice", "(op_add ?x ?x)", "(op_mul 2:64 ?x)");
         CHECK(count_matches(match(rule, egraph)) == 0);
@@ -119,8 +119,8 @@ namespace eqsat::test {
         auto ida  = make_node(egraph, "a:64");
         auto idb  = make_node(egraph, "b:64");
         auto idc  = make_node(egraph, "c:64");
-        auto add1 = make_node(egraph, "add", ida, idb);
-        /* auto add2 = */ make_node(egraph, "add", idc, add1);
+        auto add1 = make_node(egraph, "add", {ida, idb});
+        /* auto add2 = */ make_node(egraph, "add", {idc, add1});
 
         auto rule = rewrite_rule("twice", "(op_add ?x ?x)", "(op_mul 2:64 ?x)");
         CHECK(count_matches(match(rule, egraph)) == 0);
