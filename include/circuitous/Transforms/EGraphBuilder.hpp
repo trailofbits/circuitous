@@ -109,7 +109,7 @@ namespace circ
         node_template visit(Circuit *);
     };
 
-    using nodes_map = std::unordered_map< Operation*, circuit_enode::node_pointer >;
+    using nodes_map = std::unordered_map< Operation*, enode_handle >;
 
     struct egraph_builder_state {
         circuit_egraph egraph;
@@ -122,25 +122,24 @@ namespace circ
         using node_template_builder::dispatch;
 
         enode_handle add_nodes_recurse(Operation *op, egraph_builder_state &state) {
-            if (!state.nodes_map.contains(op)) {
-                auto node = make_node(op, state);
-                state.nodes_map[op] = node;
-                for (const auto &child : op->operands) {
-                    // TODO fix parents
-                    node->add_child( add_nodes_recurse(child, state) );
-                }
+            auto &nodes = state.nodes_map;
+            if (auto it = nodes.find(op); it != nodes.end()) {
+                return it->second;
             }
 
-            return state.egraph.find(state.nodes_map[op]);
+            std::vector< enode_handle > children;
+            for (const auto &child : op->operands) {
+                children.push_back(add_nodes_recurse(child, state));
+            }
+
+            auto node = state.egraph.insert(make_template(op), children);
+            nodes.emplace(op, node);
+            return node;
         }
 
         node_template make_template(Circuit *ci) { return opcode(ci); }
 
         node_template make_template(Operation *op) { return dispatch(op); }
-
-        circuit_enode::node_pointer make_node(auto *op, egraph_builder_state &state) {
-            return state.egraph.add_node(make_template(op));
-        }
 
         egraph_builder_state build(Circuit *circuit) {
             egraph_builder_state state;
