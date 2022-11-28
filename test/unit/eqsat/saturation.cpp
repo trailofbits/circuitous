@@ -52,11 +52,8 @@ namespace eqsat::test {
         CHECK_EQ(additions.nodes[1]->child(0), idb);
         CHECK_EQ(additions.nodes[1]->child(1), ida);
 
-        CHECK_EQ(result.eclass(ida).parents.size(), 1);
-        // CHECK_EQ(result.eclass(ida).parents[0], additions);
-        CHECK_EQ(result.eclass(idb).parents.size(), 1);
-        // CHECK_EQ(result.eclass(idb).parents[0], additions);
-        eqsat::to_dot(result, "initial.dot");
+        CHECK_EQ(result.eclass(ida).parents.size(), 2);
+        CHECK_EQ(result.eclass(idb).parents.size(), 2);
     }
     } // test suite: eqsat::pattern-rewrite
 } // namespace eqsat::test

@@ -26,7 +26,7 @@ namespace eqsat::test
 
         auto saturable = saturable_egraph(std::move(egraph));
 
-        saturable.merge( idx, idy );
+        auto midx = saturable.merge( idx, idy );
         saturable.rebuild();
 
         CHECK( saturable.find( idx ) == saturable.find( idy ) );
@@ -35,8 +35,8 @@ namespace eqsat::test
         CHECK( saturable.num_of_eclasses() == 2 );
         CHECK( saturable.eclass( idx ) == saturable.eclass( idy ) );
 
-        // CHECK(egraph.eclass(idx).parents.size() == 1);
-        // CHECK(egraph.eclass(midx).size() == 2);
+        CHECK( saturable.eclass( idx ).parents.size() == 1);
+        CHECK( saturable.eclass( midx ).size() == 2 );
     }
 
     TEST_CASE( "EGraph Merge Internal Nodes" )
@@ -64,8 +64,8 @@ namespace eqsat::test
         CHECK( saturable.num_of_eclasses() == 5 );
         CHECK( saturable.eclass( idp ) == saturable.eclass( idm ) );
 
-        // CHECK(saturable.eclass(idp).parents.size() == 1);
-        // CHECK(saturable.eclass(idp).size() == 2);
+        CHECK( saturable.eclass( idp ).parents.size() == 1 );
+        CHECK( saturable.eclass( idp ).size() == 2 );
     }
 
     TEST_CASE( "EGraph Deffer Multiple Merges" )
@@ -100,12 +100,12 @@ namespace eqsat::test
         CHECK( saturable.eclass( idx ) == saturable.eclass( idy ) );
         CHECK( saturable.eclass( idx ) == saturable.eclass( idz ) );
 
-        // CHECK( saturable.eclass( idp ).parents.size() == 1 );
-        // CHECK( saturable.eclass( idx ).parents.size() == 1 );
+        CHECK( saturable.eclass( idp ).parents.size() == 1 );
+        CHECK( saturable.eclass( idx ).parents.size() == 1 );
 
-        // CHECK( saturable.eclass( ids ).size() == 1 );
-        // CHECK( saturable.eclass( idp ).size() == 2 );
-        // CHECK( saturable.eclass( idx ).size() == 3 );
+        CHECK( saturable.eclass( ids ).size() == 1 );
+        CHECK( saturable.eclass( idp ).size() == 2 );
+        CHECK( saturable.eclass( idx ).size() == 3 );
     }
 
       TEST_CASE("EGraph Merge at Different layers")
@@ -139,12 +139,12 @@ namespace eqsat::test
         CHECK(saturable.eclass(idx) == saturable.eclass(idy));
         CHECK(saturable.eclass(idx) == saturable.eclass(idz));
 
-        // CHECK(saturable.eclass(idp).parents.size() == 1);
-        // CHECK(saturable.eclass(idx).parents.size() == 2);
+        CHECK(saturable.eclass(idp).parents.size() == 1);
+        CHECK(saturable.eclass(idx).parents.size() == 2);
 
-        // CHECK(saturable.eclass(ids).size() == 4);
-        // CHECK(saturable.eclass(idp).size() == 1);
-        // CHECK(saturable.eclass(idm).size() == 1);
+        CHECK(saturable.eclass(ids).size() == 4);
+        CHECK(saturable.eclass(idp).size() == 1);
+        CHECK(saturable.eclass(idm).size() == 1);
       }
 
     //   TEST_CASE("EGraph with bitwidths")

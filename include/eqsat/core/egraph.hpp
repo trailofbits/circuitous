@@ -142,6 +142,9 @@ namespace eqsat::graph
     //
     template< typename enode_pointer >
     struct eclass {
+
+        std::size_t size() const { return nodes.size(); }
+
         void merge(eclass &&other) {
             std::move(other.nodes.begin(), other.nodes.end(), std::back_inserter(nodes));
             std::move(other.parents.begin(), other.parents.end(), std::back_inserter(parents));
@@ -287,16 +290,17 @@ namespace eqsat::graph
         void repair(eclass_type &eclass) {
             // deduplicate the parents, noting that equal
             // parents get merged and put on the worklist
-            // std::unordered_set< node_handle, handle_hash > seen;
-            // std::vector< node_pointer > new_parents;
-            // for (auto *node : eclass.parents) {
-            //     if (auto id = _unions.find( _ids[node] ); !seen.count(id)) {
-            //     new_parents.push_back(node);
-            //     seen.insert(id);
-            //     }
-            // }
 
-            // eclass.parents = std::move(new_parents);
+            std::unordered_set< node_handle, handle_hash > seen;
+            std::vector< node_pointer > new_parents;
+            for (auto *node : eclass.parents) {
+                if (auto id = find(node); !seen.count(id)) {
+                    new_parents.push_back(node);
+                    seen.insert(id);
+                }
+            }
+
+            eclass.parents = std::move(new_parents);
 
             // obliterate empty classes
             remove_empty_eclasses();
