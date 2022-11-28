@@ -181,7 +181,7 @@ namespace eqsat::graph
     //
     // egraph
     //
-    template< typename enode, template< typename > typename builder >
+    template< typename enode >
     struct egraph {
         using node_type    = enode;
         using storage_type = typename node_type::storage_type;
@@ -194,8 +194,6 @@ namespace eqsat::graph
 
         using handle_hash  = gap::hash< node_handle >;
         using eclass_map   = std::unordered_map< node_handle, eclass_type, handle_hash >;
-
-        using builder_type = builder< egraph >;
 
         egraph() = default;
 
@@ -261,13 +259,6 @@ namespace eqsat::graph
             });
         }
 
-        node_handle insert(const constant_t &con) {
-            return insert(builder_type::make(con), {});
-        }
-
-        node_handle insert(const operation_t &op, std::span< node_handle > children) {
-            return insert(builder_type::make(op), children);
-        }
 
         node_handle insert(storage_type &&data, std::span< node_handle > children) {
             auto node = add_node(std::move(data));
@@ -358,6 +349,22 @@ namespace eqsat::graph
         // modified eclasses that needs to be rebuild
         std::vector< node_id_t > _pending;
 
+    };
+
+    template< gap::graph::graph_like graph, template< typename > typename builder >
+    struct egraph_pattern_buildable : graph {
+
+        using builder_type = builder< egraph_pattern_buildable >;
+
+        using graph::insert;
+
+        node_handle insert(const constant_t &con) {
+            return insert(builder_type::make(con), {});
+        }
+
+        node_handle insert(const operation_t &op, std::span< node_handle > children) {
+            return insert(builder_type::make(op), children);
+        }
     };
 
 } // namespace eqsat::graph

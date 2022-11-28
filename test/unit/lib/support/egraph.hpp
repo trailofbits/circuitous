@@ -58,7 +58,9 @@ namespace eqsat::test {
     using test_edge = eqsat::graph::edge< test_node >;
     static_assert( gap::graph::edge_like< test_edge > );
 
-    using test_graph = eqsat::graph::egraph< test_node, test_graph_from_pattern_builder >;
+    using test_graph = eqsat::graph::egraph_pattern_buildable<
+        eqsat::graph::egraph< test_node >, test_graph_from_pattern_builder
+    >;
     static_assert( gap::graph::graph_like< test_graph > );
 
     static inline auto make_node( test_graph &egraph, std::string_view name, std::vector< node_handle > children )
