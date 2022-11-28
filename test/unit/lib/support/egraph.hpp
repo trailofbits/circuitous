@@ -7,7 +7,6 @@
  */
 
 #include <eqsat/core/egraph.hpp>
-#include <eqsat/core/extend.hpp>
 
 #include <charconv>
 #include <string>
@@ -38,28 +37,10 @@ namespace eqsat::test {
         return extract_constant(node.data);
     }
 
-    using test_node = eqsat::graph::node< string_storage >;
-    static_assert( gap::graph::node_like< test_node > );
-
-    using test_edge = eqsat::graph::edge< test_node >;
-    static_assert( gap::graph::edge_like< test_edge > );
-
-    using test_graph = eqsat::graph::egraph< test_node >;
-    static_assert( gap::graph::graph_like< test_graph > );
-
-    template < typename... children_t >
-    auto make_node( test_graph &egraph, std::string_view name, children_t... children )
-        -> graph::node_handle
-    {
-        auto node = egraph.add_node( string_storage( name ) );
-        // TODO fix parents
-        ( node->add_child( children ), ... );
-        return egraph.find( node );
-    }
-
+    template< typename egraph >
     struct test_graph_from_pattern_builder {
 
-        using storage_type = typename test_graph::storage_type;
+        using storage_type = typename egraph::storage_type;
 
         static storage_type make(const eqsat::constant_t &con) {
             // TODO build storage
@@ -71,8 +52,26 @@ namespace eqsat::test {
         }
     };
 
-    using extendable_test_graph = eqsat::extendable_egraph<
-        test_graph, test_graph_from_pattern_builder
-    >;
+    using test_node = eqsat::graph::node< string_storage >;
+    static_assert( gap::graph::node_like< test_node > );
+
+    using test_edge = eqsat::graph::edge< test_node >;
+    static_assert( gap::graph::edge_like< test_edge > );
+
+    using test_graph = eqsat::graph::egraph< test_node, test_graph_from_pattern_builder >;
+    static_assert( gap::graph::graph_like< test_graph > );
+
+    static inline auto make_node( test_graph &egraph, std::string_view name, std::vector< node_handle > children )
+        -> graph::node_handle
+    {
+        auto node = egraph.insert( string_storage( name ), children );
+        return egraph.find( node );
+    }
+
+    static inline auto make_node( test_graph &egraph, std::string_view name )
+        -> graph::node_handle
+    {
+        return make_node(egraph, name, {});
+    }
 
 } // namespace eqsat::test
