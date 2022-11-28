@@ -105,8 +105,8 @@ namespace circ
     using circuit_edge = eqsat::graph::edge< circuit_enode >;
     static_assert(gap::graph::edge_like< circuit_edge >);
 
-    using circuit_egraph = eqsat::graph::egraph<
-        circuit_enode, circuit_graph_from_pattern_builder
+    using circuit_egraph = eqsat::graph::egraph_pattern_buildable<
+        eqsat::graph::egraph< circuit_enode >, circuit_graph_from_pattern_builder
     >;
     static_assert(gap::graph::graph_like< circuit_egraph >);
 
