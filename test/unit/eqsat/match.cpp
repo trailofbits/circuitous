@@ -9,7 +9,7 @@
 #include <doctest/doctest.h>
 
 #include <eqsat/pattern/rewrite_rule.hpp>
-#include <eqsat/algo/saturation_graph.hpp>
+#include <eqsat/algo/saturation.hpp>
 #include <eqsat/algo/ematch.hpp>
 #include <eqsat/algo/print.hpp>
 
