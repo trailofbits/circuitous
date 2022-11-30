@@ -45,6 +45,11 @@ namespace eqsat {
         // indexed_places places;
     };
 
+    template< typename stream >
+    stream& operator<<(stream& os, const rewrite_rule& r) {
+        return os << r.name << " : " << r.lhs << " -> " << r.rhs;
+    }
+
     using rewrite_rules = std::vector< rewrite_rule >;
 
 } // namespace eqsat

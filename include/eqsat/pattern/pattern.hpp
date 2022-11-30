@@ -292,7 +292,7 @@ namespace eqsat
 
     template< typename stream >
     stream& operator<<(stream& os, const match_pattern& m) {
-        return os << "match " << m.action;
+        return os << m.action;
     }
 
     // apply pattern:
@@ -309,6 +309,16 @@ namespace eqsat
 
     static inline const auto& labels(const union_expr& e) { return e.labels; }
 
+    template< typename stream >
+    stream& operator<<(stream& os, const union_expr& action) {
+        os << "(union ";
+        for (const auto& label : action.labels) {
+            os << label << ' ';
+        }
+        os << ')';
+        return os;
+    }
+
     // expression of form: (bond [labels])
     // serves to specify nodes to be bonded
     struct bond_expr {
@@ -317,11 +327,26 @@ namespace eqsat
 
     static inline const auto& labels(const bond_expr& e) { return e.labels; }
 
+    template< typename stream >
+    stream& operator<<(stream& os, const bond_expr& action) {
+        os << "(bond ";
+        for (const auto& label : action.labels) {
+            os << label << ' ';
+        }
+        os << ')';
+        return os;
+    }
+
     // Action is the last part of an apply pattern that specifies
     // how to apply the pattern.
     //
     // It is either simple expression or match expression.
     using apply_action = std::variant< union_expr, bond_expr, simple_expr >;
+
+    template< typename stream >
+    stream& operator<<(stream& os, const apply_action& action) {
+        return std::visit([&](const auto& a) -> stream& { return os << a; }, action);
+    }
 
     struct apply_pattern {
         apply_pattern(named_exprs list, apply_action action)
@@ -331,6 +356,11 @@ namespace eqsat
         apply_action action;
         named_exprs list;
     };
+
+    template< typename stream >
+    stream& operator<<(stream& os, const apply_pattern& m) {
+        return os << m.action;
+    }
 
     std::optional< atom_t > parse_atom(std::string_view str);
 
