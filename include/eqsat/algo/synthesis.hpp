@@ -9,6 +9,9 @@
 
 namespace eqsat {
 
+    using graph::node_handle;
+
+
     template< gap::graph::graph_like egraph >
     auto synthesize(
         const constant_t &constant,

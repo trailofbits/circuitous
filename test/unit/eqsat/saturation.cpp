@@ -9,7 +9,6 @@
 #include <doctest/doctest.h>
 
 #include <eqsat/pattern/rewrite_rule.hpp>
-#include <eqsat/algo/saturation_graph.hpp>
 #include <eqsat/algo/saturation.hpp>
 #include <eqsat/algo/ematch.hpp>
 #include <eqsat/algo/print.hpp>
@@ -39,9 +38,9 @@ namespace eqsat::test {
         auto rule = rewrite_rule("commutativity", "(op_add ?x ?y)", "(op_add ?y ?x)");
         CHECK(count_matches(match(rule, egraph)) == 1);
 
-        auto saturable = saturable_egraph(std::move(egraph));
-        auto result = match_and_apply(std::move(saturable), rule);
-        result.rebuild();
+        auto result = saturable_egraph(std::move(egraph))
+            | action::match_and_apply{rule}
+            | action::rebuild();
 
         auto additions = result.eclass(add);
         CHECK_EQ(additions.nodes.size(), 2);
@@ -54,6 +53,65 @@ namespace eqsat::test {
 
         CHECK_EQ(result.eclass(ida).parents.size(), 2);
         CHECK_EQ(result.eclass(idb).parents.size(), 2);
+    }
+
+    TEST_CASE("identity elimination") {
+        test_graph egraph;
+        auto ida = make_node(egraph, "x:64");
+        auto idz = make_node(egraph, "0:64");
+        auto add = make_node(egraph, "add", {ida, idz});
+
+        auto rule = rewrite_rule("identity", "(op_add ?x 0:64)", "(?x)");
+        CHECK(count_matches(match(rule, egraph)) == 1);
+
+        auto result = saturable_egraph(std::move(egraph))
+            | action::match_and_apply{rule}
+            | action::rebuild();
+
+        auto additions = result.eclass(add);
+        CHECK_EQ(additions.nodes.size(), 2);
+    }
+
+    TEST_CASE("nested identity elimination") {
+        test_graph egraph;
+        auto ida = make_node(egraph, "x:64");
+        auto idb = make_node(egraph, "y:64");
+        auto idz = make_node(egraph, "0:64");
+        auto add1 = make_node(egraph, "add", {idz, ida});
+        auto add2 = make_node(egraph, "add", {idb, add1});
+
+        auto rule = rewrite_rule("identity", "(op_add ?x (op_add 0:64 ?y))", "(op_add ?x ?y)");
+        CHECK(count_matches(match(rule, egraph)) == 1);
+
+        auto result = saturable_egraph(std::move(egraph))
+            | action::match_and_apply{rule}
+            | action::rebuild();
+
+        auto additions = result.eclass(add2);
+        CHECK_EQ(additions.nodes.size(), 2);
+    }
+
+    TEST_CASE("chain identity with commutativity") {
+        test_graph egraph;
+        auto ida = make_node(egraph, "x:64");
+        auto idb = make_node(egraph, "y:64");
+        auto idz = make_node(egraph, "0:64");
+        auto add1 = make_node(egraph, "add", {idz, ida});
+        /* auto add2 = */ make_node(egraph, "add", {idb, add1});
+
+        auto identity      = rewrite_rule("identity", "(op_add 0:64 ?x))", "(?x)");
+        auto commutativity = rewrite_rule("commutativity", "(op_add ?x ?y)", "(op_add ?y ?x)");
+        // CHECK(count_matches(match(commutativity, egraph)) == 2);
+        // CHECK(count_matches(match(identity, egraph)) == 1);
+
+        eqsat::to_dot(egraph, "before.dot");
+
+        // auto result = saturable_egraph(std::move(egraph))
+        //     | action::match_and_apply{commutativity}
+        //     | action::match_and_apply{identity}
+        //     | action::rebuild();
+
+        // eqsat::to_dot(result, "test.dot");
     }
     } // test suite: eqsat::pattern-rewrite
 } // namespace eqsat::test

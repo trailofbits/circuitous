@@ -7,7 +7,7 @@
  */
 
 #include <doctest/doctest.h>
-#include <eqsat/algo/saturation_graph.hpp>
+#include <eqsat/algo/saturation.hpp>
 #include <eqsat/core/egraph.hpp>
 
 #include <support/egraph.hpp>
