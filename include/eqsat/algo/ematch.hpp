@@ -68,8 +68,10 @@ namespace eqsat {
         , const places_t &places
         , const matched_places_t &matched_places
     ) {
-        if (auto con = extract_constant(node); con && (con.value() == c.ref())) {
-            co_yield { graph.find(&node), matched_places };
+        if (auto con = extract_constant(node)) {
+            if (con.value() == c.ref()) {
+                co_yield { graph.find(&node), matched_places };
+            }
         }
     }
 
@@ -85,7 +87,6 @@ namespace eqsat {
         , const places_t &places
         , const matched_places_t &matched_places
     ) {
-        spdlog::debug("[eqsat] match {} with {}", node_name(node), o.ref());
         if (node_name(node) == o.ref()) {
             co_yield { graph.find(&node), matched_places };
         }
@@ -145,6 +146,7 @@ namespace eqsat {
         , const places_t &places
         , const matched_places_t &matched_places
     ) {
+        spdlog::debug("[eqsat] matching atom {} : {}", atom, atom.bitwidth().value_or(0));
         co_yield std::visit([&] (const auto &a) -> match_generator {
             co_yield match(a, node, pattern, graph, places, matched_places);
         }, atom);
@@ -166,6 +168,7 @@ namespace eqsat {
         using eclass_type = typename egraph::eclass_type;
 
         auto match_child = [&] () -> match_generator {
+            spdlog::debug("[eqsat] matching child {}", pattern_children.front());
             eclass_type child_class = graph.eclass(node_children.front());
             co_yield match(pattern_children.front(), child_class, pattern, graph, places, matched_places);
         };
@@ -254,6 +257,7 @@ namespace eqsat {
         , const places_t &places
         , const matched_places_t &matched_places
     ) {
+        spdlog::debug("[eqsat] matching simple expr {}", expr);
         for (const auto &node : eclass.nodes) {
             co_yield match(expr, *node, pattern, graph, places, matched_places);
         }
@@ -306,7 +310,6 @@ namespace eqsat {
             }
         }
     }
-
 
     template< gap::graph::graph_like egraph >
     match_generator match(const rewrite_rule &rule, const egraph &graph) {
