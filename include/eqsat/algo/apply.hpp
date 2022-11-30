@@ -14,6 +14,9 @@
 namespace eqsat {
 
     template< gap::graph::graph_like egraph >
+    struct saturable_egraph;
+
+    template< gap::graph::graph_like egraph >
     node_handle apply(
         const simple_expr &expr,
         const apply_pattern &rule,
