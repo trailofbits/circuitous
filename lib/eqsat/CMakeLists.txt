@@ -9,7 +9,6 @@ add_headers( ../eqsat CIRCUITOUS_EQSAT_HEADERS
   core/egraph.hpp
 
   algo/ematch.hpp
-  algo/saturation_graph.hpp
   algo/substitution.hpp
 
   pattern/parser.hpp
