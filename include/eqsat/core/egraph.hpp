@@ -262,7 +262,6 @@ namespace eqsat::graph
             });
         }
 
-
         node_handle insert(storage_type &&data, std::span< node_handle > children) {
             auto node = add_node(std::move(data));
             for (auto ch : children) {

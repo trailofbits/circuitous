@@ -28,8 +28,26 @@ namespace eqsat::test {
     }
 
     static inline std::optional< gap::bigint > extract_constant( std::string_view str ) {
-        if (std::uint64_t value; std::from_chars(str.data(), str.data() + str.size(), value).ec == std::errc{})
-            return gap::bigint(64, value);
+        auto split = str.find_first_of(':');
+        if (split == std::string_view::npos) {
+            return std::nullopt;
+        }
+
+        auto v = str.substr(0, split);
+        auto b = str.substr(split + 1);
+
+        auto parse_value = [] (auto str) -> std::optional< gap::bigint > {
+            if (std::uint64_t value; std::from_chars(str.data(), str.data() + str.size(), value).ec == std::errc{}) {
+                return gap::bigint(64, value);
+            }
+
+            return std::nullopt;
+        };
+
+        if (auto value = parse_value(v), bitwidth = parse_value(b); value && bitwidth) {
+            return gap::bigint(bitwidth.value(), value.value());
+        }
+
         return std::nullopt;
     }
 
