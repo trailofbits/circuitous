@@ -85,6 +85,7 @@ namespace eqsat {
         , const places_t &places
         , const matched_places_t &matched_places
     ) {
+        spdlog::debug("[eqsat] match {} with {}", node_name(node), o.ref());
         if (node_name(node) == o.ref()) {
             co_yield { graph.find(&node), matched_places };
         }
@@ -299,6 +300,7 @@ namespace eqsat {
         for (const auto &[_, eclass] : graph.eclasses()) {
             for (auto m : match(pattern, eclass, graph, places)) {
                 if (m.matched_places.size() == places.size()) {
+                    spdlog::debug("[eqsat] matched {}", m);
                     co_yield m;
                 }
             }
@@ -308,6 +310,7 @@ namespace eqsat {
 
     template< gap::graph::graph_like egraph >
     match_generator match(const rewrite_rule &rule, const egraph &graph) {
+        spdlog::debug("[eqsat] matching rule {}", rule);
         co_yield match(rule.lhs, graph);
     }
 

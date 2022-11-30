@@ -79,6 +79,7 @@ namespace eqsat {
         const match_result &where,
         saturable_egraph< egraph > &graph
     ) {
+        spdlog::debug("[eqsat] applying rule {} at {}", rule, where);
         auto places = gather_places(rule.lhs);
         return apply(rule.rhs, places, where, graph);
     }
