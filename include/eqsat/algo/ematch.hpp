@@ -297,8 +297,9 @@ namespace eqsat {
             }, pattern.action);
         };
 
-        for (const auto &node : eclass.nodes) {
-            co_yield match_by_action(*node);
+        auto size = eclass.nodes.size();
+        for (size_t idx = 0; idx < size; ++idx) {
+            co_yield match_by_action(*eclass.nodes[idx]);
         }
     }
 
