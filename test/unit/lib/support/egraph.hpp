@@ -36,16 +36,16 @@ namespace eqsat::test {
         auto v = str.substr(0, split);
         auto b = str.substr(split + 1);
 
-        auto parse_value = [] (auto str) -> std::optional< gap::bigint > {
+        auto parse_bitwidth = [] (auto str) -> std::optional< std::uint64_t > {
             if (std::uint64_t value; std::from_chars(str.data(), str.data() + str.size(), value).ec == std::errc{}) {
-                return gap::bigint(64, value);
+                return value;
             }
 
             return std::nullopt;
         };
 
-        if (auto value = parse_value(v), bitwidth = parse_value(b); value && bitwidth) {
-            return gap::bigint(bitwidth.value(), value.value());
+        if (auto bitwidth = parse_bitwidth(b)) {
+            return gap::bigint(bitwidth.value(), v, 10);
         }
 
         return std::nullopt;
@@ -60,9 +60,12 @@ namespace eqsat::test {
 
         using storage_type = typename egraph::storage_type;
 
+        static std::string constant_storage(gap::bigint value) {
+            return std::to_string(value) + ":" + std::to_string(value.bits);
+        }
+
         static storage_type make(const eqsat::constant_t &con) {
-            // TODO build storage
-            throw std::runtime_error("not implemented constant synthesis");
+            return storage_type(constant_storage(con.ref()));
         }
 
         static storage_type make(const eqsat::operation_t &op) {
