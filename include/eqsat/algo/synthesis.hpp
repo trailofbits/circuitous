@@ -13,17 +13,19 @@ namespace eqsat {
 
 
     template< gap::graph::graph_like egraph >
-    auto synthesize(
+    auto synthesize_atom(
         const constant_t &constant,
         const apply_pattern &pattern,
+        const places_t &places,
         const match_result &where,
+        std::span< node_handle > children,
         egraph &graph
     ) -> node_handle {
         return graph.insert(constant);
     }
 
     template< gap::graph::graph_like egraph >
-    auto synthesize(
+    auto synthesize_atom(
         const operation_t &operation,
         const apply_pattern &pattern,
         const places_t &places,
@@ -35,7 +37,7 @@ namespace eqsat {
     }
 
     template< gap::graph::graph_like egraph >
-    auto synthesize(
+    auto synthesize_atom(
         const place_t &place,
         const apply_pattern &pattern,
         const places_t &places,
@@ -49,7 +51,7 @@ namespace eqsat {
     }
 
     template< gap::graph::graph_like egraph >
-    auto synthesize(
+    auto synthesize_atom(
         const label_t &label,
         const apply_pattern &pattern,
         const places_t &places,
@@ -70,7 +72,7 @@ namespace eqsat {
         egraph &graph
     ) -> node_handle {
         return std::visit([&] (const auto &a) {
-            return synthesize(a, pattern, places, where, children, graph);
+            return synthesize_atom(a, pattern, places, where, children, graph);
         }, atom);
     }
 
