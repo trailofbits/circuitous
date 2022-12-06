@@ -70,6 +70,7 @@ namespace eqsat {
     ) {
         if (auto con = extract_constant(node)) {
             if (con.value() == c.ref()) {
+                spdlog::debug("[eqsat] matched constant {} with {}", c, con.value());
                 co_yield { graph.find(&node), matched_places };
             }
         }
@@ -88,6 +89,7 @@ namespace eqsat {
         , const matched_places_t &matched_places
     ) {
         if (node_name(node) == o.ref()) {
+            spdlog::debug("[eqsat] matched op {} with {}", o, node_name(node));
             co_yield { graph.find(&node), matched_places };
         }
     }
@@ -111,6 +113,8 @@ namespace eqsat {
                 co_return;
             }
         }
+
+        spdlog::debug("[eqsat] matched place {} with {}", p, node_name(node));
 
         match_result result = { handle, matched_places };
         result.matched_places.emplace(id, maybe_node_handle(handle));
