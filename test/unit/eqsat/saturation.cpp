@@ -140,5 +140,51 @@ namespace eqsat::test {
         auto root = result.eclass(op);
         CHECK_EQ(root.nodes.size(), 2);
     }
+
+    TEST_CASE("operation synthesis") {
+        test_graph egraph;
+
+        auto idx = make_node(egraph, "x:64");
+        auto op  = make_node(egraph, "add", {idx, idx});
+
+        auto rule = rewrite_rule("addition to multiplication", "(op_add ?x:64 ?x:64)", "(op_mul ?x:64 2:64)");
+        CHECK(count_matches(match(rule, egraph)) == 1);
+
+        auto result = saturable_egraph(std::move(egraph))
+            | action::match_and_apply{rule}
+            | action::rebuild();
+
+        auto root = result.eclass(op);
+        CHECK_EQ(root.nodes.size(), 2);
+    }
+
+    TEST_CASE("named subexpression") {
+        test_graph egraph;
+
+        auto idx = make_node(egraph, "x:64");
+        auto idy = make_node(egraph, "x:64");
+        auto op  = make_node(egraph, "add", {idx, idy});
+
+        auto rule = rewrite_rule(
+            "commutativity",
+            "((let X (?x)) (let Y (?y)) (op_add $X $Y))",
+            "(op_add ?y ?x)"
+        );
+
+        CHECK(count_matches(match(rule, egraph)) == 1);
+
+        auto result = saturable_egraph(std::move(egraph))
+            | action::match_and_apply{rule}
+            | action::rebuild();
+
+        auto root = result.eclass(op);
+        CHECK_EQ(root.nodes.size(), 2);
+
+        CHECK_EQ(root.nodes[0]->child(0), idx);
+        CHECK_EQ(root.nodes[0]->child(1), idy);
+        CHECK_EQ(root.nodes[1]->child(0), idy);
+        CHECK_EQ(root.nodes[1]->child(1), idx);
+    }
+
     } // test suite: eqsat::pattern-rewrite
 } // namespace eqsat::test
