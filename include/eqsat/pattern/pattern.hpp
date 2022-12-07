@@ -167,6 +167,23 @@ namespace eqsat
         return std::visit([](const auto& m) -> const auto& { return m.labels; }, e);
     }
 
+    static inline std::string kind_name(const match_expr& expr) {
+        return std::visit( gap::overloaded {
+            [](const basic_match_expr&) { return "match"; },
+            [](const commutative_match_expr&) { return "commutative-match"; }
+        }, expr);
+    }
+
+    template< typename stream >
+    stream& operator<<(stream& os, const match_expr& expr) {
+        os << "( " << kind_name(expr) << " ";
+        for (const auto& label : labels(expr)) {
+            os << label << ' ';
+        }
+        os << ')';
+        return os;
+    }
+
     // expression is either atom or compound expression
     // without labeled parts and contexts
     struct simple_expr;
@@ -401,6 +418,10 @@ namespace eqsat
 
     using places_generator = gap::recursive_generator< place_t >;
 
+    places_generator places(const label_t &label, const match_pattern &pattern, auto &filter) {
+        co_yield places(get_expr_with_name(label, pattern), pattern, filter);
+    }
+
     places_generator places(const atom_t &atom, const match_pattern &pattern, auto &filter) {
         co_yield std::visit( gap::overloaded {
             [&](const place_t& p) -> places_generator {
@@ -409,7 +430,7 @@ namespace eqsat
                 }
             },
             [&] (const label_t& l) -> places_generator {
-                co_yield places(get_expr_with_name(l, pattern), pattern, filter);
+                co_yield places(l, pattern, filter);
             },
             [&] (const auto &) -> places_generator { co_return; /* noop */ }
         }, atom);
@@ -434,6 +455,12 @@ namespace eqsat
 
     places_generator places(const named_expr &expr, const match_pattern &pattern, auto &filter) {
         co_yield places(expr.expr, pattern, filter);
+    }
+
+    places_generator places(const match_expr &expr, const match_pattern &pattern, auto &filter) {
+        for (const auto &label : labels(expr)) {
+            co_yield places(label, pattern, filter);
+        }
     }
 
     places_generator places(const match_action &action, const match_pattern &pattern, auto &filter) {
