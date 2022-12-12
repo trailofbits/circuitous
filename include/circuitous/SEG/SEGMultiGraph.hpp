@@ -4,6 +4,9 @@
 #include <iostream>
 #include <map>
 #include <memory>
+#include <circuitous/Decoder/DecodeAST.hpp>
+
+
 
 namespace circ {
 
@@ -88,15 +91,18 @@ struct SEGNode
     bool isRoot = false;
     bool specializeble = true;
 
-    std::vector<Operation*> root_operations;
+    std::multimap<VerifyInstruction*, Operation*> roots;
+//    std::vector<Operation*> root_operations;
     std::string post_hash;
     std::string id;
     //TODO(seb): figure out if this can be done with overriding a hash function from elsewhere.
-    std::string get_hash(); // no idea if overriding hash here is a good idea yet.
+    std::string get_hash() const;  // no idea if overriding hash here is a good idea yet.
     std::string print_hash();
 
     int inline_cost = 0;
+    int subtree_count = 0; // count of all it's children and their children, used to calculate the size of pre-allocation needed
     bool fd = false;
+
 };
 
 template <typename T>
@@ -126,9 +132,30 @@ struct SEGGraph
 
     void remove_node(const node_pointer& node);
 
+    std::multimap<VerifyInstruction*, std::shared_ptr<SEGNode>> get_nodes_by_vi(VerifyInstruction* vi);
 
     SEGGraph copy();
 };
+
+
+struct segnode_hash_on_get_hash
+{
+    std::size_t operator()(const circ::SEGNode & node) const noexcept
+    {
+        auto ret_val = std::hash<std::string>{}(node.get_hash());
+        return ret_val;
+    }
+};
+
+
+struct segnode_comp_on_hash
+{
+    bool operator()( const circ::SEGNode & left, const circ::SEGNode & right ) const
+    {
+        return left.get_hash() == right.get_hash();
+    }
+};
+
 
 //template<gap::graph::graph_like NL>
 //void dfs_graph(NL* g)
@@ -166,10 +193,12 @@ class graph_constructor_visitor: UniqueVisitor<graph_constructor_visitor>
     bool isRoot = true;
     int node_counter = 0;
     std::string vi_start; // from root?
+    VerifyInstruction* vi;
 
 public:
     std::vector<std::shared_ptr<SEGNode>> result_set;
-    graph_constructor_visitor( const std::string &viStart ) : vi_start( viStart ) { }
+    graph_constructor_visitor( const std::string &viStart, VerifyInstruction *vi ) : vi_start( viStart ), vi( vi )
+    { }
 
 
     std::shared_ptr<SEGNode> visit(Operation * op)
@@ -180,7 +209,7 @@ public:
         if(isRoot){
             isRoot = false;
             new_node->isRoot = true;
-            new_node->root_operations.push_back(op);
+            new_node->roots.insert({vi, op});
         }
 
         node_counter++;
@@ -201,26 +230,18 @@ void dedup(g& graph)
     std::map<std::string, std::shared_ptr<SEGNode>> seen_hash;
     for(auto& to_hash : gap::graph::dfs<gap::graph::yield_node::on_close>(graph))
     {
-        std::cout << to_hash->id << ": " << to_hash->get_hash() << std::endl;
         auto pair_iter_inserted = seen_hash.try_emplace(to_hash->get_hash(), to_hash);
         if(pair_iter_inserted.second == false ){ // item already existed hash replace others now
             auto pre_existinging_hashed_node = (*pair_iter_inserted.first).second;
-//            std::cout << "found duplicate: " << to_hash->id << ", " << to_hash->get_hash() << " og: " << pre_existinging_hashed_node->id << " " << pre_existinging_hashed_node->get_hash() <<std::endl;
-
 
             bool foundEdge = false;
             // find parent of target that was already hashed and replace it
             for(auto &e : graph.edges())
             {
-                auto source_hash = e.source()->get_hash();
-                auto target_hash = e.target()->get_hash();
-
                 // we want to replace it, and we don't replace the one with the one want to replace with
                 if(e.target()->id == to_hash->id && e.target()->id != pre_existinging_hashed_node->id){
                     foundEdge = true;
-//                    std::cout << "found src target to be replaced (" << e.source()->id << ", " << e.target()->id << ") = " << pre_existinging_hashed_node->id << " removing: " << to_hash->id <<  std::endl;
                     e.source()->replace_all_nodes_by_id( pre_existinging_hashed_node, to_hash->id);
-
                     graph.remove_node(to_hash);
                     break;
                 }
@@ -234,10 +255,10 @@ void dedup(g& graph)
                 // two nodes which are both roots, and have same hashes can be merged
                 for(auto & to_merge_with : graph.nodes())
                 {
-                    if(to_merge_with->isRoot && to_hash->isRoot && to_hash->get_hash() == to_merge_with->get_hash())
+
+                    if(to_hash->id != to_merge_with->id && to_merge_with->isRoot && to_hash->isRoot && to_hash->get_hash() == to_merge_with->get_hash())
                     {
-//                        std::cout << "merging ops between" << to_merge_with->id << " and " << to_hash->id << std::endl;
-                        to_merge_with->root_operations.insert(to_merge_with->root_operations.end(), to_hash->root_operations.begin(), to_hash->root_operations.end() );
+                        to_merge_with->roots.merge(to_hash->roots);
                         graph.remove_node(to_hash);
                         break;
                     }
@@ -247,7 +268,69 @@ void dedup(g& graph)
     }
 }
 
+decoder::FunctionCall print_SEGNode_tree( SEGNode& node, std::string stack_name , Operation* op);
 
+struct nodeWrapper
+{
+    using node_pointer = std::shared_ptr< nodeWrapper >;
+    using child_type   = node_pointer;
+    circ::Operation* op;
+
+    nodeWrapper( Operation *op ) : op( op ) { }
+    gap::generator< child_type > children()
+    {
+        for(auto & n : op->operands())
+            co_yield std::make_shared<nodeWrapper>(nodeWrapper(n));
+    }
+
+    gap::generator< child_type > children() const
+    {
+        for(auto & n : op->operands())
+            co_yield std::make_shared<nodeWrapper>(nodeWrapper(n));
+    }
+};
+
+template< gap::graph::node_like node_t_ >
+struct edge_t {
+    using node_type    = node_t_;
+    using node_pointer = typename node_type::node_pointer;
+
+    using source_type  = node_pointer;
+    using target_type  = node_pointer;
+
+    source_type source() const { return _src; }
+    target_type target() const { return _dst; }
+
+    node_pointer _src, _dst;
+};
+
+
+
+struct tree_t {
+    using node_type = nodeWrapper;
+    using edge_type = edge_t< node_type >;
+
+    using node_pointer = std::shared_ptr<nodeWrapper>;
+
+    tree_t( const node_type &root ) : root( root ) { }
+
+    gap::generator< node_pointer > nodes() const {
+        for (auto& ch : root.children())
+            co_yield std::make_shared<node_type>(ch->op);
+    }
+
+    gap::generator< edge_type > edges() const {
+
+        for (auto node : nodes()) {
+            co_yield edge_type{node, node};
+//            for (auto child : node->children()) {
+//                co_yield edge_type{ node, std::shared_ptr<node_type>(child) };
+//            }
+        }
+    }
+
+    node_type root;
+};
 
 //
 //struct CombinedNode{
@@ -483,6 +566,13 @@ struct TopBottHash
     //
 };
 
+struct UniqueNameStorage
+{
+    decoder::Var get_unique_var_name();
+    std::vector<decoder::Var> names;
+    int counter =0 ;
+};
+
 // next advising
 // take most savings TopBotHash set
 /*
@@ -497,4 +587,30 @@ struct TopBottHash
  *
  */
 
+decoder::FunctionCall call_operation(std::vector<decoder::Expr> values, decoder::Var visitor_name = decoder::Var("visitor"));
+
+
+//auto segnode_hash_on_get_hash = [](const circ::SEGNode & node) {return std::hash<std::string>{}(node.get_hash()); };
+//auto segnode_comp_on_hash = [](const circ::SEGNode & left, const circ::SEGNode & right) {return left.post_hash == right.post_hash; };
+
+
+std::pair< decoder::Var, decoder::StatementBlock > expr_for_node(
+    std::unordered_map<circ::SEGNode, circ::decoder::FunctionDeclaration, segnode_hash_on_get_hash, segnode_comp_on_hash> &func_decls,
+    UniqueNameStorage &unique_names_storage,
+    const SEGNode &node,
+    decoder::Var stack );
+
 }
+
+
+
+//namespace std {
+//    template <> struct hash<circ::SEGNode>
+//    {
+//        size_t operator()(const circ::SEGNode & x) const
+//        {
+//            return std::hash<std::string>{}(x.id);
+//            /* your code here, e.g. "return hash<int>()(x.value);" */
+//        }
+//    };
+//}
