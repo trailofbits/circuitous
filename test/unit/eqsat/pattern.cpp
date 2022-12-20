@@ -153,6 +153,10 @@ namespace eqsat::test {
         ));
     }
 
+    TEST_CASE("Nested Apply Pattern") {
+        CHECK(parse_apply_pattern("((let X (?x)) (op_add ?y $X))"));
+    }
+
     TEST_CASE("Union") {
         CHECK(parse_apply_pattern("(union $A)"));
         CHECK(parse_apply_pattern("(union $A $B)"));
