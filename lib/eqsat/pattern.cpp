@@ -274,7 +274,8 @@ namespace eqsat
     parser< apply_pattern > auto apply_pattern_parser() {
         auto action = apply_action_parser();
         auto list   = option(named_exprs{}, named_exprs_parser());
-        return from_tuple< apply_pattern >(list & action)
+        return from_tuple< apply_pattern >(paren(combine(list, action)))
+            | construct< apply_pattern >(apply_action_parser())
             | report< apply_pattern >("apply pattern");
     }
 
