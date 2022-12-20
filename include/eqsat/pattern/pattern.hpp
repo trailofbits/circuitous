@@ -366,6 +366,9 @@ namespace eqsat
     }
 
     struct apply_pattern {
+        explicit apply_pattern(apply_action action)
+            : action(action) {}
+
         apply_pattern(named_exprs list, apply_action action)
             : action(action)
             , list(list) {}
