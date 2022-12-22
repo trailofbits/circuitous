@@ -16,8 +16,10 @@
 #include <variant>
 #include <vector>
 #include <iostream>
+#include <sstream>
 
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 namespace eqsat
 {
@@ -65,7 +67,7 @@ namespace eqsat
     }
 
     template< typename stream >
-    stream& operator<<(stream& os, const label_t& label) {
+    decltype(auto) operator<<(stream& os, const label_t& label) {
         return os << label_name(label);
     }
 
@@ -138,6 +140,12 @@ namespace eqsat
             os << ":" << std::to_string(bw.value());
         }
         return os;
+    }
+
+    static inline std::string to_string(const atom_t &atom) {
+        std::stringstream ss;
+        ss << atom;
+        return ss.str();
     }
 
     // match pattern:
@@ -305,7 +313,18 @@ namespace eqsat
         named_exprs list;
     };
 
-    named_expr get_expr_with_name(const label_t label, const match_pattern &pat);
+    template< typename pattern_type >
+    named_expr get_expr_with_name(const label_t label, const pattern_type &pat) {
+        auto it = std::find_if(std::begin(pat.list), std::end(pat.list), [&] (const named_expr &e) {
+            return e.name == label;
+        });
+
+        if (it == std::end(pat.list)) {
+            spdlog::error("label {} does not have expression definition", to_string(label));
+        }
+
+        return *it;
+    }
 
     template< typename stream >
     stream& operator<<(stream& os, const match_pattern& m) {
