@@ -9,6 +9,7 @@
 
 #include <gap/core/generator.hpp>
 #include <gap/core/dense_map.hpp>
+#include <gap/core/overloads.hpp>
 
 #include <spdlog/spdlog.h>
 #include <fmt/ranges.h>
@@ -32,11 +33,27 @@ namespace eqsat
         node_id_t::underlying_t _handle;
     };
 
+
+    //
+    // match result
+    //
     using matched_places_t = gap::dense_map< std::uint32_t, maybe_node_handle >;
-    struct match_result {
+
+    struct single_match_result {
         graph::node_handle root;
         matched_places_t matched_places;
     };
+
+    struct multi_match_result {
+        std::unordered_map< label_t, graph::node_handle > roots;
+        matched_places_t matched_places;
+    };
+
+    using match_result = std::variant< single_match_result, multi_match_result >;
+
+    static inline matched_places_t matched_places(const match_result &result) {
+        return std::visit([] (const auto &m) { return m.matched_places; }, result);
+    }
 
     template< typename stream >
     stream& operator<<(stream& os, const matched_places_t& places) {
@@ -47,11 +64,28 @@ namespace eqsat
     }
 
     template< typename stream >
-    stream& operator<<(stream& os, const match_result& m) {
-        return os << "match " << m.root.id.ref() << m.matched_places;
+    stream& operator<<(stream& os, const single_match_result& m) {
+        os << "match: " << m.root.id << '\n';
+        return os << '\n' << m.matched_places;
+    }
+
+    template< typename stream >
+    stream& operator<<(stream& os, const multi_match_result& m) {
+        os << "match:\n";
+        for (const auto &[lab, root] : m.roots) {
+            os << lab << " -> " << root.id.ref() << '\n';
+        }
+        return os << '\n' << m.matched_places;
+    }
+
+    template< typename stream >
+    stream& operator<<(stream& os, const match_result& _m) {
+        return std::visit([&] (const auto &m) -> stream& { return os << m; }, _m);
     }
 
     using match_generator = gap::recursive_generator< match_result >;
+
+    using single_match_generator = gap::recursive_generator< single_match_result >;
 
 } // namespace eqsat
 
@@ -60,18 +94,18 @@ namespace eqsat {
     // match constant node
     //
     template< gap::graph::graph_like egraph >
-    match_generator match(
+    single_match_generator match(
           const constant_t &c
         , const typename egraph::node_type &node
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
         if (auto con = extract_constant(node)) {
             if (con.value() == c.ref()) {
                 spdlog::debug("[eqsat] matched constant {} with {}", c, con.value());
-                co_yield { graph.find(&node), matched_places };
+                co_yield { graph.find(&node), matched };
             }
         }
     }
@@ -80,17 +114,17 @@ namespace eqsat {
     // match operation node
     //
     template< gap::graph::graph_like egraph >
-    match_generator match(
+    single_match_generator match(
           const operation_t &o
         , const typename egraph::node_type &node
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
         if (node_name(node) == o.ref()) {
             spdlog::debug("[eqsat] matched op {} with {}", o, node_name(node));
-            co_yield { graph.find(&node), matched_places };
+            co_yield { graph.find(&node), matched };
         }
     }
 
@@ -98,17 +132,17 @@ namespace eqsat {
     // match place node
     //
     template< gap::graph::graph_like egraph >
-    match_generator match(
+    single_match_generator match(
           const place_t &p
         , const typename egraph::node_type &node
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
         auto id = std::uint32_t(place_index(p, places));
         auto handle = graph.find(&node);
-        if (auto it = matched_places.find(id); it != matched_places.end()) {
+        if (auto it = matched.find(id); it != matched.end()) {
             if (it->second.handle() != handle) {
                 co_return;
             }
@@ -116,7 +150,7 @@ namespace eqsat {
 
         spdlog::debug("[eqsat] matched place {} with {}", p, node_name(node));
 
-        match_result result = { handle, matched_places };
+        single_match_result result = { handle, matched };
         result.matched_places.emplace(id, maybe_node_handle(handle));
         co_yield result;
     }
@@ -125,16 +159,16 @@ namespace eqsat {
     // match label node
     //
     template< gap::graph::graph_like egraph >
-    match_generator match(
+    single_match_generator match(
           const label_t &p
         , const typename egraph::node_type &node
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
         co_yield match(
-            get_expr_with_name(p, pattern).expr, node, pattern, graph, places, matched_places
+            get_expr_with_name(p, pattern).expr, node, pattern, graph, places, matched
         );
     }
 
@@ -142,17 +176,17 @@ namespace eqsat {
     // match atom node
     //
     template< gap::graph::graph_like egraph >
-    match_generator match(
+    single_match_generator match(
           const atom_t &atom
         , const typename egraph::node_type &node
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
         spdlog::debug("[eqsat] matching atom {} : {}", atom, atom.bitwidth().value_or(0));
-        co_yield std::visit([&] (const auto &a) -> match_generator {
-            co_yield match(a, node, pattern, graph, places, matched_places);
+        co_yield std::visit([&] (const auto &a) -> single_match_generator {
+            co_yield match(a, node, pattern, graph, places, matched);
         }, atom);
     }
 
@@ -161,20 +195,20 @@ namespace eqsat {
     }
 
     template< gap::graph::graph_like egraph >
-    match_generator match_children(
+    single_match_generator match_children(
           const auto &pattern_children
         , const auto &node_children
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
         using eclass_type = typename egraph::eclass_type;
 
-        auto match_child = [&] () -> match_generator {
+        auto match_child = [&] () -> single_match_generator {
             spdlog::debug("[eqsat] matching child {}", pattern_children.front());
             eclass_type child_class = graph.eclass(node_children.front());
-            co_yield match(pattern_children.front(), child_class, pattern, graph, places, matched_places);
+            co_yield match(pattern_children.front(), child_class, pattern, graph, places, matched);
         };
 
         if (pattern_children.size() == 1) {
@@ -182,22 +216,22 @@ namespace eqsat {
         } else {
             for (auto m : match_child()) {
                 co_yield match_children(
-                    tail(pattern_children), tail(node_children), pattern, graph, places, m.matched_places
+                    tail(pattern_children), tail(node_children), pattern, graph, places, matched_places(m)
                 );
             }
         }
     }
 
     template< gap::graph::graph_like egraph >
-    match_generator match(
+    single_match_generator match(
           const expr_list &list
         , const typename egraph::node_type &node
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
-        for (auto head : match(list.front(), node, pattern, graph, places, matched_places)) {
+        for (auto head : match(list.front(), node, pattern, graph, places, matched)) {
             auto pattern_children = tail(list);
 
             if (pattern_children.empty()) {
@@ -212,8 +246,8 @@ namespace eqsat {
                     node_children.push_back(std::move(ch));
                 }
 
-                for (auto m : match_children(pattern_children, node_children, pattern, graph, places, head.matched_places)) {
-                    co_yield { head.root, m.matched_places };
+                for (auto m : match_children(pattern_children, node_children, pattern, graph, places, matched_places(head))) {
+                    co_yield { head.root, matched_places(m) };
                 }
             }
         }
@@ -223,47 +257,47 @@ namespace eqsat {
     // match expr with context
     //
     template< gap::graph::graph_like egraph >
-    match_generator match(
+    single_match_generator match(
           const expr_with_context &expr
         , const typename egraph::node_type &node
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
         // TODO deal with context matching
-        co_yield match(expr.expr, node, pattern, graph, places, matched_places);
+        co_yield match(expr.expr, node, pattern, graph, places, matched);
     }
 
     //
     // match simple expr node
     //
     template< gap::graph::graph_like egraph >
-    match_generator match(
+    single_match_generator match(
           const simple_expr &expr
         , const typename egraph::node_type &node
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
-        co_yield std::visit([&] (const auto &a) -> match_generator {
-            co_yield match(a, node, pattern, graph, places, matched_places);
+        co_yield std::visit([&] (const auto &a) -> single_match_generator {
+            co_yield match(a, node, pattern, graph, places, matched);
         }, expr);
     }
 
     template< gap::graph::graph_like egraph >
-    match_generator match(
+    single_match_generator match(
           const simple_expr &expr
         , const typename egraph::eclass_type &eclass
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
         spdlog::debug("[eqsat] matching simple expr {}", expr);
         for (const auto &node : eclass.nodes) {
-            co_yield match(expr, *node, pattern, graph, places, matched_places);
+            co_yield match(expr, *node, pattern, graph, places, matched);
         }
     }
 
@@ -271,33 +305,33 @@ namespace eqsat {
     // match match expr node
     //
     template< gap::graph::graph_like egraph >
-    match_generator match(
+    single_match_generator match(
           const basic_match_expr &expr
         , const typename egraph::node_type &node
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
         // TODO: assert that labels differ
         // for (const auto &label : labels(expr)) {
-        //     auto partial = match(get_expr_with_name(label, pattern), node, pattern, graph, places, matched_places);
+        //     auto partial = match(get_expr_with_name(label, pattern), node, pattern, graph, places, matched);
         // }
 
         // 1. accumulate matches along all labels, forward matched places
-        // match(get_expr_with_name(label, pattern), pattern, graph, places, matched_places)
+        // match(get_expr_with_name(label, pattern), pattern, graph, places, matched)
         spdlog::error("not implemented simple match expr");
         __builtin_abort();
     }
 
     template< gap::graph::graph_like egraph >
-    match_generator match(
+    single_match_generator match(
           const commutative_match_expr &expr
         , const typename egraph::node_type &node
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
         // TODO: assert that labels differ
         spdlog::error("not implemented commutative match expr");
@@ -311,11 +345,13 @@ namespace eqsat {
         , const match_pattern &pattern
         , const egraph &graph
         , const places_t &places
-        , const matched_places_t &matched_places
+        , const matched_places_t &matched
     ) {
         // TODO: assert that labels differ
         co_yield std::visit([&] (const auto &e) -> match_generator {
-            co_yield match(e, node, pattern, graph, places, matched_places);
+            for (const auto &m : match(e, node, pattern, graph, places, matched) ) {
+                co_yield m;
+            }
         }, expr);
     }
 
@@ -328,8 +364,10 @@ namespace eqsat {
     ) {
         auto match_by_action = [&] (const auto &node) -> match_generator {
             co_yield std::visit([&] (const auto &a) -> match_generator {
-                matched_places_t matched_places;
-                co_yield match(a, node, pattern, graph, places, matched_places);
+                matched_places_t matched;
+                for (auto m : match(a, node, pattern, graph, places, matched) ) {
+                    co_yield m;
+                }
             }, pattern.action);
         };
 
@@ -344,7 +382,7 @@ namespace eqsat {
         auto places = gather_places(pattern);
         for (const auto &[_, eclass] : graph.eclasses()) {
             for (auto m : match(pattern, eclass, graph, places)) {
-                if (m.matched_places.size() == places.size()) {
+                if (matched_places(m).size() == places.size()) {
                     spdlog::debug("[eqsat] matched {}", m);
                     co_yield m;
                 }

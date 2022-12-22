@@ -21,7 +21,7 @@ namespace eqsat {
         const simple_expr &expr,
         const apply_pattern &rule,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         saturable_egraph< egraph > &graph
     ) {
         auto patch = synthesize_simple_expr(expr, rule, places, where, {}, graph);
