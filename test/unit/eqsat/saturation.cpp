@@ -36,7 +36,7 @@ namespace eqsat::test {
         auto add = make_node(egraph, "add", {ida, idb});
 
         auto rule = rewrite_rule("commutativity", "(op_add ?x ?y)", "(op_add ?y ?x)");
-        CHECK(count_matches(match(rule, egraph)) == 1);
+        CHECK_EQ(count_matches(match(rule, egraph)), 1);
 
         auto result = saturable_egraph(std::move(egraph))
             | action::match_and_apply{rule}
@@ -62,7 +62,7 @@ namespace eqsat::test {
         auto add = make_node(egraph, "add", {ida, idz});
 
         auto rule = rewrite_rule("identity", "(op_add ?x 0:64)", "(?x)");
-        CHECK(count_matches(match(rule, egraph)) == 1);
+        CHECK_EQ(count_matches(match(rule, egraph)), 1);
 
         auto result = saturable_egraph(std::move(egraph))
             | action::match_and_apply{rule}
@@ -81,7 +81,7 @@ namespace eqsat::test {
         auto add2 = make_node(egraph, "add", {idb, add1});
 
         auto rule = rewrite_rule("identity", "(op_add ?x (op_add 0:64 ?y))", "(op_add ?x ?y)");
-        CHECK(count_matches(match(rule, egraph)) == 1);
+        CHECK_EQ(count_matches(match(rule, egraph)), 1);
 
         auto result = saturable_egraph(std::move(egraph))
             | action::match_and_apply{rule}
@@ -100,8 +100,8 @@ namespace eqsat::test {
 
         auto identity      = rewrite_rule("identity", "(op_add 0:64 ?x)", "(?x)");
         auto commutativity = rewrite_rule("commutativity", "(op_add ?x ?y)", "(op_add ?y ?x)");
-        CHECK(count_matches(match(commutativity, egraph)) == 2);
-        CHECK(count_matches(match(identity, egraph)) == 0);
+        CHECK_EQ(count_matches(match(commutativity, egraph)), 2);
+        CHECK_EQ(count_matches(match(identity, egraph)), 0);
 
         auto result = saturable_egraph(std::move(egraph))
             | action::match_and_apply{commutativity}
@@ -131,7 +131,7 @@ namespace eqsat::test {
         auto op = make_node(egraph, "and", {ida, idb});
 
         auto identity = rewrite_rule("identity", "(op_and 1:1 1:1)", "(1:1)");
-        CHECK(count_matches(match(identity, egraph)) == 1);
+        CHECK_EQ(count_matches(match(identity, egraph)), 1);
 
         auto result = saturable_egraph(std::move(egraph))
             | action::match_and_apply{identity}
@@ -148,7 +148,7 @@ namespace eqsat::test {
         auto op  = make_node(egraph, "add", {idx, idx});
 
         auto rule = rewrite_rule("addition to multiplication", "(op_add ?x:64 ?x:64)", "(op_mul ?x:64 2:64)");
-        CHECK(count_matches(match(rule, egraph)) == 1);
+        CHECK_EQ(count_matches(match(rule, egraph)), 1);
 
         auto result = saturable_egraph(std::move(egraph))
             | action::match_and_apply{rule}
@@ -162,7 +162,7 @@ namespace eqsat::test {
         test_graph egraph;
 
         auto idx = make_node(egraph, "x:64");
-        auto idy = make_node(egraph, "x:64");
+        auto idy = make_node(egraph, "y:64");
         auto op  = make_node(egraph, "add", {idx, idy});
 
         auto rule = rewrite_rule(
@@ -171,7 +171,35 @@ namespace eqsat::test {
             "(op_add ?y ?x)"
         );
 
-        CHECK(count_matches(match(rule, egraph)) == 1);
+        CHECK_EQ(count_matches(match(rule, egraph)), 1);
+
+        auto result = saturable_egraph(std::move(egraph))
+            | action::match_and_apply{rule}
+            | action::rebuild();
+
+        auto root = result.eclass(op);
+        CHECK_EQ(root.nodes.size(), 2);
+
+        CHECK_EQ(root.nodes[0]->child(0), idx);
+        CHECK_EQ(root.nodes[0]->child(1), idy);
+        CHECK_EQ(root.nodes[1]->child(0), idy);
+        CHECK_EQ(root.nodes[1]->child(1), idx);
+    }
+
+    TEST_CASE("named subexpression rewrite") {
+        test_graph egraph;
+
+        auto idx = make_node(egraph, "x:64");
+        auto idy = make_node(egraph, "y:64");
+        auto op  = make_node(egraph, "add", {idx, idy});
+
+        auto rule = rewrite_rule(
+            "commutativity",
+            "(op_add ?x ?y)",
+            "((let X (?x)) (op_add ?y $X))"
+        );
+
+        CHECK_EQ(count_matches(match(rule, egraph)), 1);
 
         auto result = saturable_egraph(std::move(egraph))
             | action::match_and_apply{rule}
