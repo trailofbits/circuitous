@@ -39,7 +39,7 @@ namespace eqsat {
         const constant_t &constant,
         const apply_pattern &pattern,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         std::span< node_handle > children,
         egraph &graph
     ) -> node_handle {
@@ -51,7 +51,7 @@ namespace eqsat {
         const operation_t &operation,
         const apply_pattern &pattern,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         std::span< node_handle > children,
         egraph &graph
     ) -> node_handle {
@@ -63,7 +63,7 @@ namespace eqsat {
         const place_t &place,
         const apply_pattern &pattern,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         std::span< node_handle > children,
         egraph &graph
     ) -> node_handle {
@@ -77,7 +77,7 @@ namespace eqsat {
         const label_t &label,
         const apply_pattern &pattern,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         std::span< node_handle > children,
         egraph &graph
     ) -> node_handle {
@@ -91,7 +91,7 @@ namespace eqsat {
         const atom_t &atom,
         const apply_pattern &pattern,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         std::span< node_handle > children,
         egraph &graph
     ) -> node_handle {
@@ -105,7 +105,7 @@ namespace eqsat {
         const expr_list &list,
         const apply_pattern &pattern,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         std::span< node_handle > children,
         egraph &graph
     ) -> node_handle {
