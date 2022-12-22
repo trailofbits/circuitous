@@ -325,12 +325,6 @@ namespace eqsat
         return make_parse(apply_pattern_parser(), str);
     }
 
-    named_expr get_expr_with_name(const label_t label, const match_pattern &pat) {
-        return *std::find_if(std::begin(pat.list), std::end(pat.list), [&] (const named_expr &e) {
-            return e.name == label;
-        });
-    }
-
     const atom_t &root(const simple_expr &expr) {
         return std::visit( gap::overloaded {
             [] (const atom_t &atom) -> const atom_t& { return atom; },
