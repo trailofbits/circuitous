@@ -6,11 +6,33 @@
 
 #include <eqsat/pattern/rewrite_rule.hpp>
 #include <eqsat/core/egraph.hpp>
+#include <eqsat/pattern/pattern.hpp>
 
 namespace eqsat {
 
     using graph::node_handle;
 
+    template< gap::graph::graph_like egraph >
+    auto synthesize_simple_expr(
+        const simple_expr &expr,
+        const apply_pattern &pattern,
+        const places_t &places,
+        const match_result &where,
+        std::span< node_handle > children,
+        egraph &graph
+    ) -> node_handle;
+
+    template< gap::graph::graph_like egraph >
+    auto synthesize(
+        const expr_with_context &expr,
+        const apply_pattern &pattern,
+        const places_t &places,
+        const match_result &where,
+        std::span< node_handle > children,
+        egraph &graph
+    ) -> node_handle {
+        return synthesize_simple_expr(expr.expr, pattern, places, where, children, graph);
+    }
 
     template< gap::graph::graph_like egraph >
     auto synthesize_atom(
@@ -59,7 +81,9 @@ namespace eqsat {
         std::span< node_handle > children,
         egraph &graph
     ) -> node_handle {
-        throw std::runtime_error("not implemented label synthesis");
+        return synthesize(
+            get_expr_with_name(label, pattern).expr, pattern, places, where, children, graph
+        );
     }
 
     template< gap::graph::graph_like egraph >
