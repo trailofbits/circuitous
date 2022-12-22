@@ -272,6 +272,40 @@ namespace eqsat {
     //
     template< gap::graph::graph_like egraph >
     match_generator match(
+          const basic_match_expr &expr
+        , const typename egraph::node_type &node
+        , const match_pattern &pattern
+        , const egraph &graph
+        , const places_t &places
+        , const matched_places_t &matched_places
+    ) {
+        // TODO: assert that labels differ
+        // for (const auto &label : labels(expr)) {
+        //     auto partial = match(get_expr_with_name(label, pattern), node, pattern, graph, places, matched_places);
+        // }
+
+        // 1. accumulate matches along all labels, forward matched places
+        // match(get_expr_with_name(label, pattern), pattern, graph, places, matched_places)
+        spdlog::error("not implemented simple match expr");
+        __builtin_abort();
+    }
+
+    template< gap::graph::graph_like egraph >
+    match_generator match(
+          const commutative_match_expr &expr
+        , const typename egraph::node_type &node
+        , const match_pattern &pattern
+        , const egraph &graph
+        , const places_t &places
+        , const matched_places_t &matched_places
+    ) {
+        // TODO: assert that labels differ
+        spdlog::error("not implemented commutative match expr");
+        __builtin_abort();
+    }
+
+    template< gap::graph::graph_like egraph >
+    match_generator match(
           const match_expr &expr
         , const typename egraph::node_type &node
         , const match_pattern &pattern
@@ -279,8 +313,10 @@ namespace eqsat {
         , const places_t &places
         , const matched_places_t &matched_places
     ) {
-        spdlog::error("not implemented match expr");
-        __builtin_abort();
+        // TODO: assert that labels differ
+        co_yield std::visit([&] (const auto &e) -> match_generator {
+            co_yield match(e, node, pattern, graph, places, matched_places);
+        }, expr);
     }
 
     template< gap::graph::graph_like egraph >
