@@ -66,6 +66,7 @@ namespace circ::decoder {
     struct Return: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
     struct CastToUint64: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
     struct BitwiseNegate: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
+    struct Dereference: UnaryOp<Expr>{ using UnaryOp::UnaryOp; };
 
 
 
@@ -133,7 +134,7 @@ namespace circ::decoder {
 
     using op_t = std::variant<
             Expr, Int, Uint64, Id, //primitive types Expr, int, std::string
-            Var, VarDecl, Statement, Return, CastToUint64, IndexVar,// unary
+            Var, VarDecl, Statement, Return, CastToUint64, IndexVar, Dereference, // unary
             Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, BitwiseAnd, Assign, Shfl, Equal, And, // binary
             IfElse,
             FunctionDeclaration, FunctionCall, // function
