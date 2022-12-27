@@ -138,51 +138,6 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
     return parsed;
 }
 
-using seg_node_ptr = std::shared_ptr< circ::SEGNode >;
-
-template <typename S, typename T>
-gap::recursive_generator< std::pair< S, T > >
-tuple_generators( gap::recursive_generator< S > &s,
-                  gap::recursive_generator< T > &t )
-{
-    auto gen_s = s.begin();
-    auto gen_t = t.begin();
-
-    while(true){
-        auto is_end_s = gen_s == s.end();
-        auto is_end_t = gen_t == t.end();
-
-        if(is_end_s != is_end_t)
-            circ::unreachable() << "non-isomorphic generators left:" << is_end_s <<  " right " << is_end_t;
-
-        if(is_end_s || is_end_t)
-            break;
-
-        co_yield { *gen_s, *gen_t };
-
-        gen_s++;
-        gen_t++;
-    }
-}
-
-
-template< gap::graph::yield_node when, typename node_pointer >
-requires gap::graph::node_like< typename node_pointer::element_type >
-gap::recursive_generator< node_pointer > non_unique_dfs(node_pointer root) {
-
-    if constexpr (when == gap::graph::yield_node::on_open) {
-        co_yield root;
-    }
-
-    for (auto child : root->children()) {
-        co_yield non_unique_dfs< when >(child);
-    }
-
-    if constexpr (when == gap::graph::yield_node::on_close) {
-        co_yield root;
-    };
-}
-
 
 int main(int argc, char *argv[]) {
     auto maybe_parsed_cli = parse_and_validate_cli< cmd_opts_list >(argc, argv);
@@ -220,9 +175,7 @@ int main(int argc, char *argv[]) {
 
     VerifyCircuit("Verifying loaded circuit.", circuit.get(), "Circuit is valid.");
 
-    auto seg = circ::circ_to_segg(circuit.get());
-
-
+    auto seg = circ::circ_to_segg(std::move(circuit));
     std::cout << "Number of starting nodes: "  << seg->_nodes.size() << std::endl;
     circ::dedup(*seg.get());
     std::cout << "dedup nodes: "  << seg->_nodes.size() << std::endl;
@@ -237,68 +190,13 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    // calc inline cost and declare fd if possible
-    for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(*seg.get()))
-    {
-        node->inline_cost
-            = std::accumulate( node->_nodes.begin(), node->_nodes.end(), 1,
-                               []( int current, std::shared_ptr< circ::SEGNode > n ) {
-                                    if(n->fd == false)
-                                        return current + n->inline_cost;
-                                    else
-                                        return current + 1;
-                               } );
-        if(node->inline_cost >= 2 || node->isRoot)
-            node->fd = true;
-    }
-
-    // count nodes in subtree for every node
-    for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(*seg.get()))
-    {
-        node->subtree_count
-            = std::accumulate( node->_nodes.begin(), node->_nodes.end(), 1,
-                               []( int current, std::shared_ptr< circ::SEGNode > n )
-                               { return current + n->subtree_count; } );
-    }
-
-
-
-
     circ::decoder::ExpressionPrinter ep(std::cout);
-    std::unordered_map<circ::SEGNode, circ::decoder::FunctionDeclaration, circ::segnode_hash_on_get_hash, circ::segnode_comp_on_hash> func_decls;
-    circ::UniqueNameStorage name_storage;
-    circ::decoder::Var stack("stack");
-
-    // get maximum number of nodes used for a single VI. This determines how large the stack should be
-    std::vector<int> vals;
-    for(auto vi : circuit->attr<circ::VerifyInstruction>())
-    {
-        auto root_nodes_for_vi = seg->get_nodes_by_vi(vi);
-        int a = std::accumulate(root_nodes_for_vi.begin(), root_nodes_for_vi.end(), 0,
-                                 [](auto left, auto &p) {
-                                     return left + p.second->subtree_count;
-                                 });
-        vals.push_back(a);
-
-    }
-    auto max_size = *std::max_element(vals.begin(), vals.end());
-
     auto max_size_var = circ::decoder::Var("MAX_SIZE_INSTR");
-    ep.print(circ::decoder::Assign(circ::decoder::VarDecl(max_size_var), circ::decoder::Int(max_size)));
-    // this does too much somehow
-    for(auto vi : circuit->attr<circ::VerifyInstruction>())
-    {
-        std::cout << std::endl << "For vi: " << vi->id() << std::endl;
-        int counter = 0;
-        for(auto & [op, node ] : seg->get_nodes_by_vi(vi) )
-        {
-
-            circ::expr_for_node( func_decls, name_storage, *node, stack,  &counter, max_size_var );
-            std::cout << op->name() << "(" << node->inline_cost <<  (node->fd ? "*" : "") << "): " << node->print_hash() << std::endl;
-        }
-    }
-
-    std::cout << "size of func_decls " << func_decls.size() << std::endl << std::endl;
+    seg->prepare();
+    auto m = seg->get_maximum_vi_size();
+    ep.print(circ::decoder::Statement(circ::decoder::Assign(max_size_var, circ::decoder::Int(m))));
+    seg->print_semantics_emitter(ep);
+    seg->print_decoder(ep);
 
     /*
      * Emission is two phased:
@@ -314,43 +212,8 @@ int main(int argc, char *argv[]) {
      */
     // Print semantics emission functions
     // func decls orders based on hash buckets, need to traverse the graph to keep proper shape of the call graph
-    for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(*seg.get())) {
-        auto func = func_decls.find(*node);
-        if(func != func_decls.end())
-        {
-            auto fd= *func;
-            std::cout << "// called externally: " << fd.first.isRoot << " hash: " << fd.first.get_hash() << std::endl;
-            ep.print(fd.second);
-            std::cout << std::endl;
-        }
-    }
 
 
-    // print decoder
-    for(circ::VerifyInstruction* vi : circuit->attr<circ::VerifyInstruction>())
-    {
-        circ::decoder::FunctionDeclarationBuilder fdb;
-        int stack_counter = 0;
-        for(auto [vis, node] : seg->get_nodes_by_vi(vi))
-        {
-            auto stack_counter_for_call = stack_counter;
-            auto start_op = vis;
-            auto start_op_ptr = std::make_shared< circ::nodeWrapper >( start_op );
-            auto op_gen = non_unique_dfs< gap::graph::yield_node::on_open >( start_op_ptr );
-            auto node_gen = non_unique_dfs< gap::graph::yield_node::on_open >( node );
-
-            for ( auto &[ op, nod ] : tuple_generators( op_gen, node_gen ) )
-            {
-                auto lhs = circ::decoder::Id("stack[" + std::to_string(stack_counter) + "]");
-                fdb.body_insert(circ::decoder::Assign( lhs , circ::decoder::Id(op->op->name()) ));
-                stack_counter++;
-            }
-            auto sem_entry = func_decls.find(*node);
-            fdb.body_insert(circ::decoder::FunctionCall(sem_entry->second.function_name,{circ::decoder::Id("stack"), circ::decoder::Int(stack_counter_for_call)}));
-        }
-
-        ep.print(fdb.make());
-    }
 
 //    if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >()){
 //        if ( *dec_out != "cout" ) {
@@ -366,6 +229,7 @@ int main(int argc, char *argv[]) {
 //    else{
 //        circ::unreachable() << "Decoder out was not specified";
 //    }
+
 
 
     return 0;
