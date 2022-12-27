@@ -34,7 +34,7 @@ namespace circ::decoder {
             if ( i != ops.size() - 1 ) {
                 switch (style) {
                     case ExprStyle::FuncArgs: raw(", "); break;
-                    case ExprStyle::FuncBody: endl() ; break;
+                    case ExprStyle::FuncBody: raw(";").endl() ; break;
                 }
             }
         }
@@ -57,6 +57,7 @@ namespace circ::decoder {
                 [&](const Var &arg) { raw(arg.name); },
                 [&](const VarDecl &arg) { raw(arg.value().type, " ", arg.value().name); },
                 [&](const IndexVar &arg) { expr(arg.lhs()).expr(arg.rhs(), GuardStyle::Square); },
+                [&](const Dereference &arg) { raw("(*").expr(arg.value()).raw(")"); }, // TODO(sebas): guard styles don't take results of raw as a direct argument
                 [&](const Statement &arg) {
                     expr( arg.value()).raw(";").endl();
                 },
