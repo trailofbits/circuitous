@@ -3,6 +3,7 @@
 #include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/IR/Visitors.hpp>
+#include <circuitous/IR/Shapes.hpp>
 #include <circuitous/Diff/Diff.hpp>
 
 namespace circ::print

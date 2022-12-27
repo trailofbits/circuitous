@@ -101,7 +101,7 @@ namespace circ
     struct Node
     {
       protected:
-        std::vector< T * > _operands;
+        std::vector< T * >  _operands;
         // For each user we also need to keep track of how many times value
         // is used by it.
         std::vector< std::tuple< T *, std::size_t > > _users;

@@ -2,7 +2,7 @@
  * Copyright (c) 2022 Trail of Bits, Inc.
  */
 #include <circuitous/IR/Verify.hpp>
-#include <circuitous/IR/SMT.hpp>
+//#include <circuitous/IR/SMT.hpp>
 #include <circuitous/Transforms.hpp>
 #include <circuitous/IR/Cost.hpp>
 
@@ -24,6 +24,9 @@ CIRCUITOUS_RELAX_WARNINGS
 #include <gflags/gflags.h>
 #include <glog/logging.h>
 CIRCUITOUS_UNRELAX_WARNINGS
+
+#include "circuitous/IR/Serialize.hpp"
+#include "circuitous/SEG/SEGMultiGraph.hpp"
 
 #include <circuitous/Printers.hpp>
 #include <iostream>
@@ -96,9 +99,10 @@ circ::CircuitPtr get_input_circuit(auto &cli)
         return make_circuit(as_string_view(*bytes));
 
     if (auto ir_file = cli.template get< cli::IRIn >())
-        return circ::Circuit::deserialize(*ir_file);
-    if (auto smt_file = cli.template get< cli::SMTIn >())
-        return circ::smt::deserialize(*smt_file);
+        return circ::deserialize(*ir_file);
+
+//    if (auto smt_file = cli.template get< cli::SMTIn >())
+//        return circ::smt::deserialize(*smt_file);
 
     if (auto cif = cli.template get< cli::CiffIn >())
         return make_circuit(circ::CIFFReader().read(*cif).take_bytes());
@@ -195,16 +199,20 @@ int main(int argc, char *argv[]) {
         if (auto input_colors = parsed_cli.template get< cli::DotHighlight >()) {
             highlights = std::move(*input_colors);
         }
-        circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
-                             std::unordered_map< circ::Operation *, std::string >{}, highlights);
+//        circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
+//                             std::unordered_map< circ::Operation *, std::string >{}, highlights);
     }
 
 
-    if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >()){
-        if ( *dec_out != "cout" ) {
-            auto o = std::ofstream ( *dec_out );
+    if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >())
+    {
+        if ( *dec_out != "cout" )
+        {
+            auto o = std::ofstream( *dec_out );
             auto decGen = circ::decoder::DecoderPrinter( circuit, o );
             decGen.print_file();
+        }
+    }
     auto seg = circ::circ_to_segg(std::move(circuit));
     std::cout << "Number of starting nodes: "  << seg->_nodes.size() << std::endl;
     circ::dedup(*seg.get());
@@ -259,7 +267,7 @@ int main(int argc, char *argv[]) {
 //    else{
 //        circ::unreachable() << "Decoder out was not specified";
 //    }
-    circ::semantics::print_semantics(circuit.get());
+//    circ::semantics::print_semantics(circuit.get());
 
 
     return 0;

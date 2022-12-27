@@ -193,17 +193,19 @@ namespace circ
           print::PrettyPrinter pp;
           if ( isa< RegConstraint >( op ) )
           {
-              if ( isa< InputRegister >( op->operands[ 0 ] )
-                   && isa< OutputRegister >( op->operands[ 1 ] ) )
+              if ( isa< InputRegister >( op->operand( 0 ) )
+                   && isa< OutputRegister >( op->operand( 1 ) ) )
               {
-                  auto inReg = dynamic_cast< InputRegister * >( op->operands[ 0 ] );
-                  auto outReg = dynamic_cast< OutputRegister * >( op->operands[ 1 ] );
+                  auto inReg = dynamic_cast< InputRegister * >( op->operand( 0 ) );
+                  auto outReg = dynamic_cast< OutputRegister * >( op->operand( 1 ) );
                   if ( inReg->reg_name == outReg->reg_name )
                   {
-                      inReg->remove_use( op );
-                      outReg->remove_use( op );
-                      while ( op->users.size() )
-                          op->remove_use( op->users[ 0 ] );
+                      //TODO(sebas): validate that this works
+                      op->destroy();
+//                      inReg->remove_use( op );
+//                      outReg->remove_use( op );
+//                      while ( op->users.size() )
+//                          op->remove_use( op->users( 0 ) );
                       return run();
                   }
               }
@@ -220,8 +222,9 @@ namespace circ
 
       void visit(Operation* op){
           op->traverse(*this);
-          if(isa<Or>(op) && op->operands.size() == 1){
-              op->replace_all_uses_with(op->operands[0]);
+          //TODO(sebas): operands should have size?
+          if(isa<Or>(op) && op->operands_size() == 1){
+              op->replace_all_uses_with( op->operand( 0 ) );
           }
       }
 

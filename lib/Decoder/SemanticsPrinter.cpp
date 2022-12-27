@@ -75,24 +75,25 @@ namespace circ::decoder::semantics
             // TODO these T's should come from struct definition
             // We assume all operations can be reduced to two binaries
             // Maybe these T's should be auto?
-            if ( op->operands.size() >= 2 )
+            if ( op->operands_size() >= 2 )
             {
                 fdb.arg_insert( VarDecl( Var( "lhs", "T" ) ) );
                 fdb.arg_insert( VarDecl( Var( "rhs", "T" ) ) );
             }
-            if ( op->operands.size() == 1 )
+            if ( op->operands_size() == 1 )
                 fdb.arg_insert( VarDecl( "value", "T" ) );
 
             op_to_method.insert( { key, fdb.make() } );
         }
 
-        std::optional< FunctionDeclaration > get_by_operation( Operation *op )
-        {
-            auto key = op->name();
-            if ( op_to_method.contains( key ) )
-                return std::optional< FunctionDeclaration >( op_to_method[ key ] );
-            return std::nullopt;
-        }
+        //TODO(sebas): fix this
+//        std::optional< FunctionDeclaration > get_by_operation( Operation *op )
+//        {
+//            auto key = op->name();
+//            if ( op_to_method.contains( key ) )
+//                return std::optional< FunctionDeclaration >( op_to_method[ key ] );
+//            return std::nullopt;
+//        }
 
         std::map< std::string, FunctionDeclaration > op_to_method;
     };
@@ -104,7 +105,8 @@ namespace circ::decoder::semantics
 
 
         std::string visit(Select *op){
-            auto x = std::vector<Operation*>(op->operands.begin() + 1, op->operands.end());
+            //TODO(sebas): FIX this gap
+//            auto x = std::vector<Operation*>(op->operands.begin() + 1, op->operands.end());
             print::PrettyPrinter pp;
 
             return "select:: " + pp.Print( select_index(op), 0 ) + " -> " + pp.Hash( select_values(op));
@@ -117,17 +119,17 @@ namespace circ::decoder::semantics
 
         std::string visit(Extract* op)
         {
-            check(op->operands.size() == 1 ) << "extract has more than one operand";
-            return Visitor<test_vis>::dispatch(op->operands[0]) + "[" + std::to_string(op->low_bit_inc) + ".." + std::to_string(op->high_bit_exc) + "]";
+            check(op->operands_size() == 1 ) << "extract has more than one operand";
+            return Visitor<test_vis>::dispatch(op->operand(0)) + "[" + std::to_string(op->low_bit_inc) + ".." + std::to_string(op->high_bit_exc) + "]";
         }
 
         std::string visit(Concat* op)
         {
             std::stringstream ss;
-            for(std::size_t i = 0; i < op->operands.size(); i++){
-                auto  x= op->operands[i];
+            for(std::size_t i = 0; i < op->operands_size(); i++){
+                auto  x= op->operand(i);
                 ss << Visitor<test_vis>::dispatch(x);
-                if(i != op->operands.size() -1)
+                if(i != op->operands_size() -1)
                     ss << " ++ ";
             }
             return ss.str();
@@ -164,9 +166,9 @@ namespace circ::decoder::semantics
         print::PrettyPrinter pp;
         test_vis vs(vi);
         if ( isa< RegConstraint >( op ) )
-            return vs.visit(op->operands[ 1 ]);
+            return vs.visit(op->operand( 1 ));
         if ( isa< WriteConstraint >( op ) )
-            return pp.Print(op->operands[ 2 ], 0);
+            return pp.Print(op->operand( 2 ), 0);
         return "unsupported: " + pp.Print( op, 0 );
     }
 
@@ -175,9 +177,9 @@ namespace circ::decoder::semantics
         test_vis vs( vi );
         print::PrettyPrinter pp;
         if ( isa< RegConstraint >( op ) )
-            return vs.visit( op->operands[ 0 ] );
+            return vs.visit( op->operand( 0 ) );
         if ( isa< WriteConstraint >( op ) )
-            return pp.Print( op->operands[ 4 ], 0 );
+            return pp.Print( op->operand( 4 ), 0 );
         return "unsupported: " + pp.Print( op, 0 );
     }
 
@@ -216,18 +218,18 @@ namespace circ::decoder::semantics
 
         //TODO module must be context?
 //        circIR_to_llvmIR_visitor to_semIR( &st, op, "irb", Var("llvm_context") );
-        for(auto& constraint : down_collector.collected)
-        {
-            if ( isa< RegConstraint >( constraint ) )
-            {
-                fdb.body_insert( Assign( to_semIR.visit( constraint->operands[ 1 ] ),
-                                             to_semIR.visit( constraint->operands[ 0 ] ) ) );
-            }
-            if ( isa< WriteConstraint >( constraint ) )
-                circ::unreachable() << "memory not yet supported";
-
-
-        }
+//        for(auto& constraint : down_collector.collected)
+//        {
+//            if ( isa< RegConstraint >( constraint ) )
+//            {
+//                fdb.body_insert( Assign( to_semIR.visit( constraint->operands[ 1 ] ),
+//                                             to_semIR.visit( constraint->operands[ 0 ] ) ) );
+//            }
+//            if ( isa< WriteConstraint >( constraint ) )
+//                circ::unreachable() << "memory not yet supported";
+//
+//
+//        }
         fdb.body_insert(Return(llvm_func));
         return fdb.make();
     }
@@ -240,9 +242,9 @@ namespace circ::decoder::semantics
         SubtreeCollector<AdviceConstraint> ACCollector;
         ACCollector.Run(VI);
         auto advices_in_vi = ACCollector.collected;
-        for (auto user : advice->users)
+        for (auto user : advice->users())
         {
-            if(isa<AdviceConstraint>(user) && user->operands.size() == 2 && std::find(advices_in_vi.begin(), advices_in_vi.end(), user) != advices_in_vi.end())
+            if(isa<AdviceConstraint>(user) && user->operands_size() == 2 && std::find(advices_in_vi.begin(), advices_in_vi.end(), user) != advices_in_vi.end())
             {
                 if(found_constraints)
                     circ::unreachable() << "advice has multiple constraints";
@@ -253,7 +255,7 @@ namespace circ::decoder::semantics
         if(!found_constraints)
             circ::unreachable() << "advice without constraint";
 
-        return ac->operands[0] == advice ? ac->operands[1] : ac->operands[0]; // return other value
+        return ac->operand(0) == advice ? ac->operand(1) : ac->operand(0); // return other value
     }
     Expr emit_llvm_context()
     {

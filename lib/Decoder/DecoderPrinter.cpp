@@ -63,7 +63,7 @@ namespace circ::decoder {
             ep.print(func);
 
 
-        ExpressionPrinter ep(os);
+//        ExpressionPrinter ep(os);
         for (auto &ctx: extracted_ctxs) {
             ep.print( semantics::get_function_for_VI( ctx.vi , st , 0));
             ep.print( create_context_decoder_function( ctx ));
@@ -393,10 +393,10 @@ std::size_t hash_select( Select *op )
 
 std::vector< Operation * > select_values( Select *op )
 {
-    return std::vector< Operation * >( op->operands.begin() + 1, op->operands.end() );
+    return std::vector< Operation * >( op->operands().begin()++, op->operands().end() );
 }
 
-Operation *select_index( Select *op ) { return op->operands[0]; }
+Operation *select_index( Select *op ) { return op->operand(0); }
 
 std::size_t SelectStorage::hash_select_targets( Select *sel )
 {
@@ -418,7 +418,7 @@ void SelectStorage::register_select( Select *sel )
     for(std::size_t i = 0; i < select_values( sel ).size(); i++ )
     {
         // TODO replace with to string visitor
-        auto res = pp.Print( sel->operands[ i ], 0 );
+        auto res = pp.Print( sel->operand( i ), 0 );
         //TODO turn ifelse into if
         auto if_expr =  If( Equal( select_index, Int( static_cast< int64_t >( i ) ) ), Return( Id( res ) ));
         fdb.body_insert( if_expr );

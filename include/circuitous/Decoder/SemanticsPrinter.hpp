@@ -9,6 +9,7 @@
 #include <string>
 #include <variant>
 #include <vector>
+#include <map>
 namespace circ::decoder::semantics
 {
 
@@ -101,7 +102,7 @@ namespace circ::decoder::semantics
             operations.push_back( make_enum( "UnaryOperation", 1 ) );
             operations.push_back( make_enum( "BinaryOperation", 2 ) );
             operations.push_back( make_enum( "TertiaryOperation", 3 ) );
-            return get_enums();
+            return operations;
         }
 
         Enum make_enum(const std::string &name, int arity)
@@ -123,20 +124,20 @@ namespace circ::decoder::semantics
 
     };
 
-    struct FunctionVisitor : Visitor<FunctionVisitor>
-    {
-        using hash_t = std::string;
-        std::pair<FunctionCall, hash_t> visit(Operation *op){
-            std::stringstream ss;
-            ss << std::to_string(op->size);
-            for(auto o : op->operands)
-                ss << dispatch(o).second;
-
-            FunctionCall call = FunctionCall(hash, )
-        }
-
-
-    };
+//    struct FunctionVisitor : Visitor<FunctionVisitor>
+//    {
+//        using hash_t = std::string;
+//        std::pair<FunctionCall, hash_t> visit(Operation *op){
+////            std::stringstream ss;
+////            ss << std::to_string(op->size);
+////            for(auto o : op->operands())
+////                ss << dispatch(o).second;
+//
+////            FunctionCall call = FunctionCall(hash, )
+//        }
+//
+//
+//    };
 
     /*
      * The first pass of semantics emission is to go and find all possible specializations
@@ -158,17 +159,17 @@ namespace circ::decoder::semantics
         {
             // TODO(Sebas) check for if this solely depends on decode
 
-            if(op->operands.size() < 2)
+            if(op->operands_size() < 2)
                 return;
 
-            auto first_type = op->operands[1];
+            auto first_type = op->operand(1);
             if( is_one_of<InputInstructionBits, Advice, Memory>(first_type) || !is_one_of<leaf_values_ts>(first_type))
                 return;
 
             // are all operands of the same type, probably a redundant check
-            for(std::size_t i = 1; i < op->operands.size(); i++)
+            for(std::size_t i = 1; i < op->operands_size(); i++)
             {
-                if(first_type->op_code != op->operands[i]->op_code)
+                if(first_type->op_code != op->operand(i)->op_code)
                     return;
             }
 
@@ -176,11 +177,11 @@ namespace circ::decoder::semantics
 
             // find viable enum if it exists
             // this would be perfect for the c++23 optional and_then :/
-            for(std::size_t i = 1; i < op->operands.size(); i++)
+            for(std::size_t i = 1; i < op->operands_size(); i++)
             {
                 for (auto& e : enums )
                 {
-                    if(e.get_by_op(op->operands[i]).has_value())
+                    if(e.get_by_op(op->operand(i)).has_value())
                     {
                         enum_to_add_to = e;
                     }
@@ -196,8 +197,8 @@ namespace circ::decoder::semantics
             }
 
             // add values which aren't present to the enum
-            for(std::size_t i = 1; i < op->operands.size(); i++) {
-                auto new_op = op->operands[i];
+            for(std::size_t i = 1; i < op->operands_size(); i++) {
+                auto new_op = op->operand(i);
                 if(!enum_to_add_to.value().get_by_op(new_op).has_value())
                     // TODO(Sebas) make this an enum friendly name
                     enum_to_add_to.value().Register(new_op->name(), new_op);
@@ -260,7 +261,7 @@ namespace circ::decoder::semantics
             return FunctionCall("irb." + method_name, args);
         }
         FunctionCall call_visit(std::string method_name, Operation* op){
-            return FunctionCall("impl.visit_" + method_name, { dispatch( op->operands[ 0 ] ), dispatch( op->operands[ 1 ] ) } );
+            return FunctionCall("impl.visit_" + method_name, { dispatch( op->operand( 0 ) ), dispatch( op->operand( 1 ) ) } );
         }
 
         FunctionCall getIntN(uint n){
@@ -296,7 +297,7 @@ namespace circ::decoder::semantics
 
         Expr visit( RegConstraint *op )
         {
-            return Equal( dispatch( op->operands[ 0 ] ), dispatch( op->operands[ 1 ] ) );
+            return Equal( dispatch( op->operand( 0 ) ), dispatch( op->operand( 1 ) ) );
         }
 
         // TODO Remove this ?
@@ -347,11 +348,11 @@ namespace circ::decoder::semantics
              * shift right by start offset
              * trunc to new size // does this not zero out old stuff?
              */
-            check(op->operands.size() == 1 ) << "Extract has invalid operands, expected 1, was: " << op->operands.size();
+            check(op->operands_size() == 1 ) << "Extract has invalid operands, expected 1, was: " << op->operands_size();
 
             auto new_size = getIntN( op->high_bit_exc - op->low_bit_inc );
             auto shifted_const = call_irb(
-                "CreateLshr", { dispatch( op->operands[ 0 ] ), Int( op->low_bit_inc ) } );
+                "CreateLshr", { dispatch( op->operand( 0 ) ), Int( op->low_bit_inc ) } );
             return call_irb( "CreateTrunc", { shifted_const, new_size } );
         }
 
@@ -368,35 +369,36 @@ namespace circ::decoder::semantics
          * For N terms we have: result = (n_0 << sizeof(n_1...n_N) + (n_1 << sizeof(n_2 ... n_N) + ,,,)
          */
         Expr visit(Concat *op) {
-            if (op->operands.size() == 1)
-                return dispatch(op->operands[0]);
-
-//            circ::check(op->operands.size() == 2)
-//                << "Concat does not have 2  children, instead has: "
-//                << op->operands.size();
-
-            auto smallest_term = op->operands[op->operands.size() - 1];
-            auto current_size = smallest_term->size;
-            Expr prev_concat_term
-                = call_irb("CreateAdd", { dispatch(smallest_term), Int(0)});
-
-            for(auto it = op->operands.rbegin() + 1; it != op->operands.rend(); it++)
-            {
-                auto new_op = *it;
-                auto lhs = call_irb( "CreateShl", { dispatch( new_op ),
-                                                    Int( current_size ) } );
-                current_size = current_size + new_op->size;
-                prev_concat_term = call_irb("CreateAdd", {lhs, prev_concat_term });
-            }
-
-            return prev_concat_term;
+//            if (op->operands.size() == 1)
+//                return dispatch(op->operands[0]);
+//
+////            circ::check(op->operands.size() == 2)
+////                << "Concat does not have 2  children, instead has: "
+////                << op->operands.size();
+//
+//            auto smallest_term = op->operand(op->operands_size() - 1);
+//            auto current_size = smallest_term->size;
+//            Expr prev_concat_term
+//                = call_irb("CreateAdd", { dispatch(smallest_term), Int(0)});
+//
+//            for(auto it = op->operands.rbegin() + 1; it != op->operands.rend(); it++)
+//            {
+//                auto new_op = *it;
+//                auto lhs = call_irb( "CreateShl", { dispatch( new_op ),
+//                                                    Int( current_size ) } );
+//                current_size = current_size + new_op->size;
+//                prev_concat_term = call_irb("CreateAdd", {lhs, prev_concat_term });
+//            }
+            //TODO(sebas) fix this
+            return Id("fix this func");
+//            return prev_concat_term;
 
         }
-        Expr visit(Select *op) { return st->get_specialization(op, dispatch(op->operands[0])); }
+        Expr visit(Select *op) { return st->get_specialization(op, dispatch(op->operand(0))); }
         Expr visit(Circuit * c) { unreachable() << "Unexpected case encountered in visit."; }
         template <typename bin_op> requires std::is_convertible_v<bin_op, Expr>
         Expr binops(Operation* op){
-            return std::move(bin_op(dispatch(op->operands[0]), dispatch(op->operands[1])));
+            return std::move(bin_op(dispatch(op->operand(0)), dispatch(op->operand(1))));
         }
     };
 }
