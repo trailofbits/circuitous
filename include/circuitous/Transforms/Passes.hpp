@@ -201,7 +201,10 @@ namespace circ
                   if ( inReg->reg_name == outReg->reg_name )
                   {
                       //TODO(sebas): validate that this works
+
                       op->destroy();
+                      for(auto u : op->users())
+                          u->remove_all_operands(op);
 //                      inReg->remove_use( op );
 //                      outReg->remove_use( op );
 //                      while ( op->users.size() )
@@ -241,8 +244,8 @@ namespace circ
           { "dummy-pass", DummyPass::get() },
           { "trivial-concat-removal", TrivialConcatRemovalPass::get() },
           { "remove-trivial-or", TrivialOrRemoval::get() },
-          { "overflow-flag-fix", RemillOFPatch::get() },
           { "remove-identity", RemoveIdentityPass::get() },
+          { "overflow-flag-fix", RemillOFPatch::get() },
           { "merge-transitive-advices", MergeAdviceConstraints::get() }
       };
 

@@ -188,9 +188,11 @@ int main(int argc, char *argv[]) {
 
 
     circ::DefaultOptimizer opt;
-    opt.add_pass("remove-transitive-advice");
+    opt.add_pass("trivial-concat-removal");
     opt.add_pass("remove-identity");
     opt.add_pass("remove-trivial-or");
+    opt.add_pass("overflow-flag-fix");
+    opt.add_pass("merge-transitive-advices");
     circuit = opt.run(std::move(circuit));
 
 
@@ -213,28 +215,18 @@ int main(int argc, char *argv[]) {
             decGen.print_file();
         }
     }
-    auto seg = circ::circ_to_segg(std::move(circuit));
-    std::cout << "Number of starting nodes: "  << seg->_nodes.size() << std::endl;
-    circ::dedup(*seg.get());
-    std::cout << "dedup nodes: "  << seg->_nodes.size() << std::endl;
-
-    std::map<std::string, circ::Operation*> speciliazes;
-    for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(*seg.get()))
-    {
-        if(node->isRoot)
-        {
-            for(auto & op : node->roots)
-                circ::specialize(speciliazes, node, op.second );
-        }
-    }
-
-    circ::decoder::ExpressionPrinter ep(std::cout);
-    auto max_size_var = circ::decoder::Var("MAX_SIZE_INSTR");
-    seg->prepare();
-    auto m = seg->get_maximum_vi_size();
-    ep.print(circ::decoder::Statement(circ::decoder::Assign(max_size_var, circ::decoder::Int(m))));
-    seg->print_semantics_emitter(ep);
-    seg->print_decoder(ep);
+//    auto seg = circ::circ_to_segg(std::move(circuit));
+//    std::cout << "Number of starting nodes: "  << seg->_nodes.size() << std::endl;
+//    circ::dedup(*seg.get());
+//    std::cout << "dedup nodes: "  << seg->_nodes.size() << std::endl;
+//
+//    circ::decoder::ExpressionPrinter ep(std::cout);
+//    auto max_size_var = circ::decoder::Var("MAX_SIZE_INSTR");
+//    seg->prepare();
+//    auto m = seg->get_maximum_vi_size();
+//    ep.print(circ::decoder::Statement(circ::decoder::Assign(max_size_var, circ::decoder::Int(m))));
+//    seg->print_semantics_emitter(ep);
+//    seg->print_decoder(ep);
 
     /*
      * Emission is two phased:
