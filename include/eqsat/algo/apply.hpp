@@ -33,7 +33,7 @@ namespace eqsat {
         const union_expr &un,
         const apply_pattern &rule,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         saturable_egraph< egraph > &graph
     ) {
         throw std::runtime_error("not implemented");
@@ -44,7 +44,7 @@ namespace eqsat {
         const bond_expr &bond,
         const apply_pattern &rule,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         saturable_egraph< egraph > &graph
     ) {
         throw std::runtime_error("not implemented");
@@ -55,7 +55,7 @@ namespace eqsat {
         const apply_action &action,
         const apply_pattern &rule,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         saturable_egraph< egraph > &graph
     ) {
         return std::visit([&] (const auto &a) {
@@ -67,7 +67,7 @@ namespace eqsat {
     node_handle apply(
         const apply_pattern &pattern,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         saturable_egraph< egraph > &graph
     ) {
         return apply(pattern.action, pattern, places, where, graph);
@@ -76,7 +76,7 @@ namespace eqsat {
     template< gap::graph::graph_like egraph >
     node_handle apply(
         const rewrite_rule &rule,
-        const match_result &where,
+        const single_match_result &where,
         saturable_egraph< egraph > &graph
     ) {
         spdlog::debug("[eqsat] applying rule {} at {}", rule, where);

@@ -17,7 +17,7 @@ namespace eqsat {
         const simple_expr &expr,
         const apply_pattern &pattern,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         std::span< node_handle > children,
         egraph &graph
     ) -> node_handle;
@@ -27,7 +27,7 @@ namespace eqsat {
         const expr_with_context &expr,
         const apply_pattern &pattern,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         std::span< node_handle > children,
         egraph &graph
     ) -> node_handle {
@@ -120,6 +120,7 @@ namespace eqsat {
             );
         }
 
+
         return synthesize_simple_expr(list.front(), pattern, places, where, list_children, graph);
     }
 
@@ -128,7 +129,7 @@ namespace eqsat {
         const simple_expr &expr,
         const apply_pattern &pattern,
         const places_t &places,
-        const match_result &where,
+        const single_match_result &where,
         std::span< node_handle > children,
         egraph &graph
     ) -> node_handle {
