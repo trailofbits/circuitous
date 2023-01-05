@@ -17,61 +17,36 @@ namespace eqsat {
     struct saturable_egraph;
 
     template< gap::graph::graph_like egraph >
-    node_handle apply(
-        const simple_expr &expr,
-        const apply_pattern &rule,
-        const places_t &places,
-        const single_match_result &where,
-        saturable_egraph< egraph > &graph
-    ) {
-        auto patch = synthesize_simple_expr(expr, rule, places, where, {}, graph);
-        return graph.merge(where.root, graph.find(patch));
-    }
+    struct applier {
 
-    template< gap::graph::graph_like egraph >
-    node_handle apply(
-        const union_expr &un,
-        const apply_pattern &rule,
-        const places_t &places,
-        const single_match_result &where,
-        saturable_egraph< egraph > &graph
-    ) {
-        throw std::runtime_error("not implemented");
-    }
+        node_handle apply(const simple_expr &expr) {
+            auto patch = synthesize_simple_expr(expr, rule.rhs, places, where, {}, graph);
+            return graph.merge(where.root, graph.find(patch));
+        }
 
-    template< gap::graph::graph_like egraph >
-    node_handle apply(
-        const bond_expr &bond,
-        const apply_pattern &rule,
-        const places_t &places,
-        const single_match_result &where,
-        saturable_egraph< egraph > &graph
-    ) {
-        throw std::runtime_error("not implemented");
-    }
+        node_handle apply(const union_expr &un) {
+            throw std::runtime_error("not implemented");
+        }
 
-    template< gap::graph::graph_like egraph >
-    node_handle apply(
-        const apply_action &action,
-        const apply_pattern &rule,
-        const places_t &places,
-        const single_match_result &where,
-        saturable_egraph< egraph > &graph
-    ) {
-        return std::visit([&] (const auto &a) {
-            return apply(a, rule, places, where, graph);
-        }, action);
-    }
+        node_handle apply(const bond_expr &bond) {
+            throw std::runtime_error("not implemented");
+        }
 
-    template< gap::graph::graph_like egraph >
-    node_handle apply(
-        const apply_pattern &pattern,
-        const places_t &places,
-        const single_match_result &where,
-        saturable_egraph< egraph > &graph
-    ) {
-        return apply(pattern.action, pattern, places, where, graph);
-    }
+        node_handle apply(const apply_action &action) {
+            return std::visit([&] (const auto &a) { return apply(a); }, action);
+        }
+
+        node_handle apply() { return apply(rule.rhs.action); }
+
+        applier(const rewrite_rule &rule, const single_match_result &where, saturable_egraph< egraph > &graph)
+            : rule(rule), places(gather_places(rule.lhs)), where(where), graph(graph)
+        {}
+
+        const rewrite_rule &rule;
+        places_t places;
+        const single_match_result &where;
+        saturable_egraph< egraph > &graph;
+    };
 
     template< gap::graph::graph_like egraph >
     node_handle apply(
@@ -80,8 +55,8 @@ namespace eqsat {
         saturable_egraph< egraph > &graph
     ) {
         spdlog::debug("[eqsat] applying rule {} at {}", rule, where);
-        auto places = gather_places(rule.lhs);
-        return apply(rule.rhs, places, where, graph);
+        return applier(rule, where, graph).apply();
     }
+
 
 } // namespace eqsat
