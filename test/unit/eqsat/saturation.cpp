@@ -214,5 +214,23 @@ namespace eqsat::test {
         CHECK_EQ(root.nodes[1]->child(1), idx);
     }
 
+    // TEST_CASE("multimatch union") {
+    //     test_graph egraph;
+
+    //     auto idx = make_node(egraph, "x:64");
+    //     /* auto add = */ make_node(egraph, "add", {idx, idx});
+
+    //     auto con = make_node(egraph, "2:64");
+    //     /* auto mul = */ make_node(egraph, "mul", {idx, con});
+
+    //     auto rule = rewrite_rule(
+    //         "mul-add-equality",
+    //         "((let A (op_add ?x ?x)) (let B (op_mul ?x 2:64)) (match $A $B))",
+    //         "(union $A $B)"
+    //     );
+
+    //     CHECK_EQ(count_matches(match(rule, egraph)), 1);
+    // }
+
     } // test suite: eqsat::pattern-rewrite
 } // namespace eqsat::test
