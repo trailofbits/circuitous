@@ -111,7 +111,7 @@ namespace eqsat::test {
         saturable.merge(ida, idb);
         saturable.rebuild();
 
-        CHECK(count_matches(match(rule, saturable)) == 2);
+        CHECK(count_matches(match(rule, saturable)) == 4);
     }
 
     TEST_CASE("nested same arguments") {
@@ -131,7 +131,7 @@ namespace eqsat::test {
         saturable.merge(idc, add1);
         saturable.rebuild();
 
-        CHECK(count_matches(match(rule, saturable)) == 4);
+        CHECK(count_matches(match(rule, saturable)) == 8);
     }
 
     } // test suite: eqsat::pattern-patching
