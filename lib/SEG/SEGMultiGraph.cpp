@@ -64,9 +64,39 @@ std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit )
 
         for(auto & path: ltt_paths.collected)
         {
-            graph_constructor_visitor convertor("vi_" + std::to_string(vi_counter) + "_path" + std::to_string(path_counter) + "_node", vi);
-            convertor.visit(path);
-            nodes.insert(nodes.end(), convertor.result_set.begin(), convertor.result_set.end());
+
+            std::cout << "reg constraint " << isa<RegConstraint>(path) << std::endl;
+            auto prefix = "vi_" + std::to_string(vi_counter) + "_path" + std::to_string(path_counter) + "_node";
+            UnfinishedProjection up(prefix, vi, path);
+            up.fully_extend();
+
+//            if(path->id() == 92)
+//            graph_constructor_visitor convertor(prefix, vi);
+//            convertor.visit(path);
+//            up.projection.get()->children
+//            auto start_op_ptr = std::make_shared< circ::nodeWrapper >( up.projection.get()->node );
+
+//            std::cout << "root_path selects " << up.select_choices.size() << " node roots# " << up.projection->node->valid_for_contexts.size() <<std::endl;
+//            for(auto root: up.projection->node->valid_for_contexts )
+//                std::cout << "node root selects " << root.select_choices.size() << std::endl;
+//            std::cout << "in copies: " << up.created_projections.size() << std::endl;
+//            for(auto copy : up.created_projections)
+//                for(auto root: copy->projection->node->valid_for_contexts )
+//                    std::cout << "node root selects " << root.select_choices.size() << std::endl;
+
+            auto node_gen = gap::graph::dfs< gap::graph::yield_node::on_open >( up.projection.get()->node );
+            for(auto node : node_gen)
+                nodes.push_back(node);
+
+            for(auto copy : up.created_projections)
+            {
+//                std::cout << "copy selects " << up.select_choices.size() <<std::endl;
+
+                auto node_gen_proj = gap::graph::dfs< gap::graph::yield_node::on_open >( copy->projection->node );
+                for(auto node : node_gen_proj)
+                    nodes.push_back(node);
+            }
+//                nodes.insert(nodes.end(), convertor.result_set.begin(), convertor.result_set.end());
             path_counter++;
         }
         vi_counter++;
@@ -263,21 +293,58 @@ void SEGGraph::remove_node( const SEGGraph::node_pointer& node )
     std::erase_if( _nodes, ids_match);
 }
 
-std::vector< std::pair< Operation *, std::shared_ptr< SEGNode > >>
+std::vector< std::pair< InstructionProjection, std::shared_ptr< SEGNode > >>
 SEGGraph::get_nodes_by_vi( VerifyInstruction *vi )
 {
+    //TODO(sebas): add support for gu instead of just vi
     //TODO(sebas): build this once instead of building this per call
-    std::vector< std::pair< Operation *, std::shared_ptr< SEGNode > >> m;
+    std::vector< std::pair< InstructionProjection , std::shared_ptr< SEGNode > >> m;
     for(auto& n : nodes())
-        if(n->isRoot && n->roots.contains(vi))
+    {
+        // convert this to find_if
+        for(auto root : n->valid_for_contexts )
         {
-            auto range = n->roots.equal_range(vi);
-            for (auto i = range.first; i != range.second; ++i)//
-                m.push_back( { (*i).second, n } );
+            if(root.vi == vi && n->isRoot) // this root shares the correct vi, so we should copy it
+            {
+                //TODO(sebas): just add root.first here?
+//                GenerationUnit g;
+//                g.root_operation = root.first.root_operation;
+//                g.vi = root.first.vi;
+//                g.choices = root.first.choices;
+                std::pair< InstructionProjection , std::shared_ptr< SEGNode > > new_add = { root, n } ;
+                m.push_back( new_add );
+//                std::cout << "added with choices " << new_add.first.select_choices.size() << std::endl;
+            }
         }
-
+    }
+//    std::cout << "m size" << m.size() << std::endl;
+    circ::check(m.size() != 0) << "shit is empty? wut";
     return m;
 }
+
+//
+//std::vector< std::pair< GenerationUnit, std::shared_ptr< SEGNode > >>
+//SEGGraph::get_nodes_by_gu( const GenerationUnit& gu )
+//{
+//    //TODO(sebas): add support for gu instead of just vi
+//    //TODO(sebas): build this once instead of building this per call
+//    std::vector< std::pair< GenerationUnit, std::shared_ptr< SEGNode > >> m;
+//
+//    for(auto& n : nodes())
+//        if(n->isRoot && n->roots.contains(gu))
+//        {
+//            auto range = n->roots.equal_range(gu);
+//            for (auto other = range.first; other != range.second; ++other)//
+//            {
+//                GenerationUnit g;
+//                g.vi = (*other).first.vi;
+//                g.choices = (*other).first.choices;
+//                m.push_back( { g, n } );
+//            };
+//        }
+//
+//    return m;
+//}
 
 void SEGGraph:: calculate_costs()
 {
@@ -335,20 +402,58 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
         fdb.name("decoder_for_vi" + std::to_string(vi->id()))
             .retType("void");
         int stack_counter = 0;
-        for(auto [vis, node] : this->get_nodes_by_vi(vi))
+        for(auto [instr_proj, node] : this->get_nodes_by_vi(vi))
         {
+
             auto stack_counter_for_call = stack_counter;
-            auto start_op = vis;
+            auto start_op = instr_proj.root_in_vi;
             auto start_op_ptr = std::make_shared< circ::nodeWrapper >( start_op );
-            auto op_gen = non_unique_dfs< gap::graph::yield_node::on_open >( start_op_ptr );
+            auto op_gen = non_unique_dfs_with_choices< gap::graph::yield_node::on_open >( start_op_ptr, instr_proj.select_choices );
+            auto op_gen_pure = non_unique_dfs< gap::graph::yield_node::on_open >( start_op_ptr );
+
             auto node_gen = non_unique_dfs< gap::graph::yield_node::on_open >( node );
 
-            for ( auto &[ op, nod ] : tuple_generators( op_gen, node_gen ) )
+            auto choices_made = instr_proj.select_choices.size();
+            if(choices_made > 0)
+                std::cout << "if(";
+            for(auto& choice : instr_proj.select_choices)
+                std::cout << "val == " << choice.chosen_idx << " && ";
+            if(choices_made> 0)
+                std::cout << "){";
+
+//            std::cout << "--start" << std::endl;
+//            std::cout << "op generator pure" << std::endl;
+//            for(auto opg : op_gen_pure)
+//                std::cout << opg->op->name() << std::endl;
+
+
+            std::cout << "op generator select, size choices " << choices_made << std::endl;
+            for(auto opg : op_gen)
+            {
+                std::cout << opg->op->name() << std::endl;
+            }
+
+
+//            std::cout << "node generator" << std::endl;
+//            for(auto n : node_gen)
+//            {
+//                std::cout << "hash: " << n->get_hash() << std::endl;
+//            }
+
+            std::cout << "done--" << std::endl;
+            auto op_gen2 = non_unique_dfs_with_choices< gap::graph::yield_node::on_open >( start_op_ptr, instr_proj.select_choices );
+            auto node_gen2 = non_unique_dfs< gap::graph::yield_node::on_open >( node );
+
+            for ( auto &[ op, nod ] : tuple_generators( op_gen2, node_gen2 ) )
             {
                 auto lhs = circ::decoder::Id("stack[" + std::to_string(stack_counter) + "]");
                 fdb.body_insert(circ::decoder::Assign( lhs , circ::decoder::Id(op->op->name())) );
                 stack_counter++;
             }
+
+            if(choices_made > 0)
+                std::cout << "}" << std::endl;
+
             auto sem_entry = func_decls.find(*node);
             if (sem_entry == func_decls.end())
                 circ::unreachable() << "Trying to emit for a function which wasn't registered";
