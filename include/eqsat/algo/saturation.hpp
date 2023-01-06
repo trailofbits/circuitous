@@ -80,9 +80,14 @@ namespace eqsat
 
         void match_and_apply(const rewrite_rule &rule) {
             auto &graph = *this;
-            auto matches = match(rule, graph);
-            for (const auto &m : matches) {
-                std::visit( [&] (const auto &match) { apply(rule, match, graph); }, m );
+
+            std::vector< match_result > results;
+            for (const auto &m : match(rule, graph)) {
+                results.push_back(m);
+            }
+
+            for (const auto &m : results) {
+                apply(rule, m, graph);
             }
         }
 
