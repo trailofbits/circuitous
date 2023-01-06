@@ -454,26 +454,32 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
                 auto lhs
                     = circ::decoder::Id( "stack[" + std::to_string( stack_counter ) + "]" );
                 auto choice
-                    = circ::decoder::Uint64( instr_proj.select_choices.begin()->chosen_idx );
+                    = circ::decoder::Int(
+                    static_cast< int64_t >( instr_proj.select_choices.begin()->chosen_idx ) );
                 auto eq = circ::decoder::Equal( indx, choice );
 
                 auto sem_entry = func_decls.find(*node);
                 if (sem_entry == func_decls.end())
                     circ::unreachable() << "Trying to emit for a function which wasn't registered";
 
-                block.push_back(circ::decoder::FunctionCall(sem_entry->second.function_name,{circ::decoder::Id("stack"), circ::decoder::Int(stack_counter_for_call)}));
+                auto funcCall = circ::decoder::FunctionCall(sem_entry->second.function_name,{circ::decoder::Id("stack"), circ::decoder::Int(stack_counter_for_call)});
+                block.push_back(circ::decoder::Statement(funcCall));
 
                 circ::decoder::If ifs( eq, block );
                 fdb.body_insert(ifs);
             }
             else
             {
-                fdb.body_insert( block );
                 auto sem_entry = func_decls.find(*node);
                 if (sem_entry == func_decls.end())
                     circ::unreachable() << "Trying to emit for a function which wasn't registered";
 
-                fdb.body_insert(circ::decoder::FunctionCall(sem_entry->second.function_name,{circ::decoder::Id("stack"), circ::decoder::Int(stack_counter_for_call)}));
+                auto funcCall = circ::decoder::FunctionCall(sem_entry->second.function_name,{circ::decoder::Id("stack"), circ::decoder::Int(stack_counter_for_call)});
+                block.push_back(circ::decoder::Statement(funcCall));
+
+                fdb.body_insert( block );
+
+//                fdb.body_insert(circ::decoder::FunctionCall(sem_entry->second.function_name,{circ::decoder::Id("stack"), circ::decoder::Int(stack_counter_for_call)}));
             }
         }
 

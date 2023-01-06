@@ -35,7 +35,8 @@ namespace circ::decoder {
             if ( i != ops.size() - 1 ) {
                 switch (style) {
                     case ExprStyle::FuncArgs: raw(", "); break;
-                    case ExprStyle::FuncBody: raw(";").endl() ; break;
+                    // no ; required in funcbody as for example if statements don't end with them
+                    case ExprStyle::FuncBody: endl() ; break;
                     case ExprStyle::EnumBody: raw(", ").endl(); break;
                 }
             }
