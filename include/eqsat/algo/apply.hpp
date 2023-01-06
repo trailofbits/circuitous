@@ -21,15 +21,16 @@ namespace eqsat {
 
         node_handle apply(const simple_expr &expr) {
             auto patch = synthesize(expr, rule.rhs, places, where, graph);
-            return graph.merge(where.root, graph.find(patch));
+            auto root = std::get< single_match_result >(where).root;
+            return graph.merge(root, graph.find(patch));
         }
 
         node_handle apply(const union_expr &un) {
-            throw std::runtime_error("not implemented");
+            throw std::runtime_error("not implemented union expr");
         }
 
         node_handle apply(const bond_expr &bond) {
-            throw std::runtime_error("not implemented");
+            throw std::runtime_error("not implemented bond expr");
         }
 
         node_handle apply(const apply_action &action) {
@@ -38,25 +39,24 @@ namespace eqsat {
 
         node_handle apply() { return apply(rule.rhs.action); }
 
-        applier(const rewrite_rule &rule, const single_match_result &where, saturable_egraph< egraph > &graph)
+        applier(const rewrite_rule &rule, const match_result &where, saturable_egraph< egraph > &graph)
             : rule(rule), places(gather_places(rule.lhs)), where(where), graph(graph)
         {}
 
         const rewrite_rule &rule;
         places_t places;
-        const single_match_result &where;
+        const match_result &where;
         saturable_egraph< egraph > &graph;
     };
 
     template< gap::graph::graph_like egraph >
     node_handle apply(
         const rewrite_rule &rule,
-        const single_match_result &where,
+        const match_result &where,
         saturable_egraph< egraph > &graph
     ) {
         spdlog::debug("[eqsat] applying rule {} at {}", rule, where);
         return applier(rule, where, graph).apply();
     }
-
 
 } // namespace eqsat
