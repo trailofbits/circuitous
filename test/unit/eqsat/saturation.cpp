@@ -110,7 +110,7 @@ namespace eqsat::test {
 
         auto root1 = result.eclass(add2);
 
-        CHECK_EQ(root1.nodes.size(), 4);
+        CHECK_EQ(root1.nodes.size(), 5);
         CHECK_EQ(result.eclass(add2), result.eclass(add1));
 
         result = saturable_egraph(std::move(result))
@@ -214,22 +214,318 @@ namespace eqsat::test {
         CHECK_EQ(root.nodes[1]->child(1), idx);
     }
 
-    // TEST_CASE("multimatch union") {
-    //     test_graph egraph;
+    TEST_CASE("multimatch union") {
+        test_graph egraph;
 
-    //     auto idx = make_node(egraph, "x:64");
-    //     /* auto add = */ make_node(egraph, "add", {idx, idx});
+        auto idx = make_node(egraph, "x:64");
+        auto add = make_node(egraph, "add", {idx, idx});
 
-    //     auto con = make_node(egraph, "2:64");
-    //     /* auto mul = */ make_node(egraph, "mul", {idx, con});
+        auto con = make_node(egraph, "2:64");
+        auto mul = make_node(egraph, "mul", {idx, con});
 
-    //     auto rule = rewrite_rule(
-    //         "mul-add-equality",
-    //         "((let A (op_add ?x ?x)) (let B (op_mul ?x 2:64)) (match $A $B))",
-    //         "(union $A $B)"
-    //     );
+        auto rule = rewrite_rule(
+            "mul-add-equality",
+            "((let A (op_add ?x ?x)) (let B (op_mul ?x 2:64)) (match $A $B))",
+            "(union $A $B)"
+        );
 
-    //     CHECK_EQ(count_matches(match(rule, egraph)), 1);
+        CHECK_EQ(count_matches(match(rule, egraph)), 1);
+
+        auto result = saturable_egraph(std::move(egraph))
+            | action::match_and_apply{rule}
+            | action::rebuild();
+
+        CHECK_EQ(result.eclass(add).size(), 2);
+        CHECK_EQ(result.eclass(add), result.eclass(mul));
+    }
+
+    // TEST_CASE("Constrained Contexts Rewrite")
+    // {
+    //   TestGraph egraph;
+    //   TestGraphBuilder builder(&egraph);
+
+    //   auto x = egraph.make_leaf("x");
+    //   auto add = egraph.make_node("add", {x, x});
+
+    //   auto con = egraph.make_leaf("2");
+    //   auto mul1 = egraph.make_node("mul", {x, con});
+    //   auto mul2 = egraph.make_node("mul", {x, con});
+
+    //   egraph.make_node("CTX1", {add, mul1});
+    //   egraph.make_node("CTX2", {mul2});
+
+    //   auto addctx = contexts(egraph, add);
+
+    //   auto any_of = [] (const auto &contexts, std::string_view target) {
+    //     return std::any_of(contexts.begin(), contexts.end(), [&] (const auto &ctx) {
+    //       return name(ctx) == target;
+    //     });
+    //   };
+
+    //   CHECK(addctx.size() == 1);
+    //   CHECK(any_of(addctx, "CTX1"));
+
+    //   auto conctx = contexts(egraph, con);
+    //   CHECK(conctx.size() == 2);
+    //   CHECK(any_of(conctx, "CTX1"));
+    //   CHECK(any_of(conctx, "CTX2"));
+
+    //   auto xctx = contexts(egraph, x);
+    //   CHECK(xctx.size() == 2);
+    //   CHECK(any_of(xctx, "CTX1"));
+    //   CHECK(any_of(xctx, "CTX2"));
+
+    //   CHECK(contexts(egraph, add) == contexts(egraph, mul1));
+
+    //   auto rule = TestRule(
+    //     "mul-add-equality",
+    //     "((let A (op_add ?x ?x):C1) (let B (op_mul ?x 2):C2) (disjoint C1 C2) (match $A $B))",
+    //     "(union $A $B)"
+    //   );
+
+    //   auto matches = rule.match(egraph);
+    //   CHECK(matches.size() == 1);
+
+    //   rule.apply(egraph, builder);
+    //   egraph.rebuild();
+
+    //   CHECK(egraph.eclass(add).size() == 2);
+    //   CHECK(egraph.eclass(add) == egraph.eclass(mul2));
+    // }
+
+    // TEST_CASE("Disjoint Match")
+    // {
+    //   TestGraph egraph;
+    //   TestGraphBuilder builder(&egraph);
+
+    //   auto a = egraph.make_leaf("a");
+    //   auto b = egraph.make_leaf("b");
+    //   egraph.make_node("mul", {a, b});
+
+    //   auto rule = TestRule(
+    //     "unify-multiplication",
+    //     "((let A (op_mul ?a ?b)) (let B (op_mul ?c ?d)) (match $A $B))",
+    //     "(union $A $B)"
+    //   );
+
+    //   auto matches = rule.match(egraph);
+    //   CHECK(matches.size() == 0);
+
+    //   rule.apply(egraph, builder);
+    //   egraph.rebuild();
+    // }
+
+    // TEST_CASE("Commutative Match")
+    // {
+    //   TestGraph egraph;
+    //   TestGraphBuilder builder(&egraph);
+
+    //   auto a = egraph.make_leaf("a");
+    //   auto b = egraph.make_leaf("b");
+    //   auto m1 = egraph.make_node("mul", {a, b});
+
+    //   auto c = egraph.make_leaf("c");
+    //   auto d = egraph.make_leaf("d");
+    //   auto m2 = egraph.make_node("mul", {c, d});
+
+    //   auto rule = TestRule(
+    //     "mul-add-equality",
+    //     "((let A (op_mul ?a ?b)) (let B (op_mul ?c ?d)) (commutative-match $A $B))",
+    //     "(union $A $B)"
+    //   );
+
+    //   auto matches = rule.match(egraph);
+    //   CHECK(matches.size() == 1);
+
+    //   rule.apply(egraph, builder);
+    //   egraph.rebuild();
+
+    //   CHECK(egraph.eclass(m1) == egraph.eclass(m2));
+    // }
+
+    // TEST_CASE("Bond nodes")
+    // {
+    //   TestGraph egraph;
+    //   TestGraphBuilder builder(&egraph);
+
+    //   auto a = egraph.make_leaf("a");
+    //   auto b = egraph.make_leaf("b");
+    //   auto c = egraph.make_leaf("c");
+    //   auto d = egraph.make_leaf("d");
+
+    //   auto mul1 = egraph.make_node("mul", {a, b});
+    //   auto mul2 = egraph.make_node("mul", {c, d});
+
+    //   egraph.make_node("CTX1", {mul1});
+    //   egraph.make_node("CTX2", {mul2});
+
+    //   auto rule = TestRule(
+    //     "bond-multiplications",
+    //     "((let A (op_mul ?a ?b):C1) (let B (op_mul ?c ?d):C2) (disjoint C1 C2) (commutative-match $A $B))",
+    //     "(bond $A $B)"
+    //   );
+
+    //   auto matches = rule.match(egraph);
+    //   CHECK(matches.size() == 1);
+
+    //   rule.apply(egraph, builder);
+    //   egraph.rebuild();
+
+    //   CHECK(egraph.bonded({mul1, mul2}));
+
+    //   auto bond = egraph.bonded({mul1, mul2}).value();
+
+    //   auto bondctx = contexts(egraph, bond);
+    //   CHECK(bondctx == contexts(egraph, mul1));
+    //   CHECK(bondctx == contexts(egraph, mul2));
+    // }
+
+    // TEST_CASE("Variadic Match")
+    // {
+    //   TestGraph egraph;
+    //   TestGraphBuilder builder(&egraph);
+
+    //   auto a = egraph.make_leaf("a");
+    //   auto b = egraph.make_leaf("b");
+    //   auto c = egraph.make_leaf("c");
+    //   auto d = egraph.make_leaf("d");
+    //   auto e = egraph.make_leaf("e");
+    //   auto f = egraph.make_leaf("f");
+
+    //   auto mul1 = egraph.make_node("mul", {a, b});
+    //   auto mul2 = egraph.make_node("mul", {c, d});
+    //   auto mul3 = egraph.make_node("mul", {e, f});
+
+    //   egraph.make_node("CTX1", {mul1});
+    //   egraph.make_node("CTX2", {mul2});
+    //   egraph.make_node("CTX3", {mul3});
+
+    //   auto rule = TestRule(
+    //     "variadic-bond-multiplications",
+    //     "((let M (op_mul)) (commutative-match $M...))",
+    //     "(bond $M...)"
+    //   );
+
+    //   auto matches = rule.match(egraph);
+    //   CHECK_EQ(matches.size(), 1);
+
+    //   rule.apply(egraph, builder);
+    //   egraph.rebuild();
+
+    //   CHECK(egraph.bonded({mul1, mul2, mul3}));
+
+    //   auto bond = egraph.bonded({mul1, mul2, mul3}).value();
+    //   auto bondctx = contexts(egraph, bond);
+    //   CHECK(bondctx == contexts(egraph, mul1));
+    //   CHECK(bondctx == contexts(egraph, mul2));
+    //   CHECK(bondctx == contexts(egraph, mul3));
+    // }
+
+    // TEST_CASE("Variadic Contexts") {
+    //   TestGraph egraph;
+    //   TestGraphBuilder builder(&egraph);
+
+    //   auto a = egraph.make_leaf("a");
+    //   auto b = egraph.make_leaf("b");
+    //   auto c = egraph.make_leaf("c");
+    //   auto d = egraph.make_leaf("d");
+    //   auto e = egraph.make_leaf("e");
+    //   auto f = egraph.make_leaf("f");
+    //   auto g = egraph.make_leaf("g");
+    //   auto h = egraph.make_leaf("h");
+
+    //   auto mul1 = egraph.make_node("mul", {a, b});
+    //   auto mul2 = egraph.make_node("mul", {c, d});
+    //   auto mul3 = egraph.make_node("mul", {e, f});
+
+    //   egraph.make_node("CTX1", {mul1});
+    //   egraph.make_node("CTX2", {mul2});
+    //   egraph.make_node("CTX3", {mul3});
+
+    //   auto rule = TestRule(
+    //       "variadic-bond-operations",
+    //       "((let M (op_mul):C) (disjoint C...) (commutative-match $M...))",
+    //       "(bond $M...)");
+    //   CHECK_EQ(rule.match(egraph).size(), 1);
+
+    //   auto mul4 = egraph.make_node("mul", {g, h});
+    //   egraph.make_node("CTX4", {mul3, mul4});
+    //   CHECK_EQ(rule.match(egraph).size(), 1);
+    //   rule.apply(egraph, builder);
+    //   egraph.rebuild();
+    //   egraph.dump("egraph-after.dot");
+    // }
+
+    // TEST_CASE("Variadic Unify")
+    // {
+    //   TestGraph egraph;
+    //   TestGraphBuilder builder(&egraph);
+
+    //   auto a = egraph.make_leaf("a");
+    //   auto b = egraph.make_leaf("b");
+    //   auto c = egraph.make_leaf("c");
+    //   auto d = egraph.make_leaf("d");
+    //   auto e = egraph.make_leaf("e");
+    //   auto f = egraph.make_leaf("f");
+    //   auto g = egraph.make_leaf("e");
+    //   auto h = egraph.make_leaf("f");
+
+    //   auto mul1 = egraph.make_node("mul", {a, b});
+    //   auto mul2 = egraph.make_node("mul", {c, d});
+    //   auto add1 = egraph.make_node("add", {e, f});
+    //   auto add2 = egraph.make_node("add", {g, h});
+
+    //   egraph.make_node("CTX1", {mul1});
+    //   egraph.make_node("CTX2", {mul2});
+    //   egraph.make_node("CTX3", {add1});
+    //   egraph.make_node("CTX4", {add2});
+
+    //   auto rule = TestRule(
+    //     "variadic-bond-operations",
+    //     "((let M (op_mul)) (let A (op_add)) (commutative-match $M... $A...))",
+    //     "(union $M... $A...)"
+    //   );
+
+    //   auto matches = rule.match(egraph);
+    //   CHECK_EQ(matches.size(), 1);
+
+    //   rule.apply(egraph, builder);
+    //   egraph.rebuild();
+
+    //   CHECK(egraph.eclass(mul1) == egraph.eclass(mul2));
+    //   CHECK(egraph.eclass(mul2) == egraph.eclass(add1));
+    //   CHECK(egraph.eclass(add1) == egraph.eclass(add2));
+    // }
+
+    // TEST_CASE("Advice Lowering")
+    // {
+    //   TestGraph egraph;
+    //   TestGraphBuilder builder(&egraph);
+
+    //   auto a = egraph.make_leaf("a");
+    //   auto b = egraph.make_leaf("b");
+    //   auto c = egraph.make_leaf("c");
+    //   auto d = egraph.make_leaf("d");
+
+    //   auto mul1 = egraph.make_node("mul", {a, b});
+    //   auto mul2 = egraph.make_node("mul", {c, d});
+
+    //   egraph.make_node("CTX1", {mul1});
+    //   egraph.make_node("CTX2", {mul2});
+
+    //   auto rule = TestRule( "advice-and-bond",
+    //     "((let Muls (op_mul):C) (disjoint C...) (commutative-match $Muls...))",
+    //     "((let Bond (bond $Muls...)) (let Adviced (op_mul op_Advice op_Advice)) (union $Bond $Adviced))"
+    //   );
+
+    //   auto matches = rule.match(egraph);
+    //   CHECK(matches.size() == 1);
+
+    //   rule.apply(egraph, builder);
+    //   egraph.rebuild();
+
+    //   CHECK(egraph.bonded({mul1, mul2}));
+    //   lower_advices(egraph, builder);
     // }
 
     } // test suite: eqsat::pattern-rewrite
