@@ -35,7 +35,7 @@ namespace eqsat {
 
 
         auto synthesize_atom(const place_t &place) -> node_handle {
-            return match.matched_places.find(
+            return matched_places(match).find(
                 std::uint32_t(place_index(place, places))
             )->second.handle();
         }
@@ -75,7 +75,7 @@ namespace eqsat {
         synthesizer(
               const apply_pattern &pat
             , const places_t &plc
-            , const single_match_result &m
+            , const match_result &m
             , egraph &g
         )
             : pattern(pat), places(plc), match(m), graph(g)
@@ -83,7 +83,7 @@ namespace eqsat {
 
         const apply_pattern &pattern;
         const places_t &places;
-        const single_match_result &match;
+        const match_result &match;
         egraph &graph;
     };
 
@@ -92,7 +92,7 @@ namespace eqsat {
         const simple_expr &expr,
         const apply_pattern &pattern,
         const places_t &places,
-        const single_match_result &match,
+        const match_result &match,
         egraph &graph
     ) -> node_handle {
         return synthesizer(pattern, places, match, graph).synthesize(expr);

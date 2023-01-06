@@ -82,12 +82,7 @@ namespace eqsat
             auto &graph = *this;
             auto matches = match(rule, graph);
             for (const auto &m : matches) {
-                std::visit( gap::overloaded {
-                    [&] (const single_match_result &smatch) { apply(rule, smatch, graph); },
-                    [&] (const multi_match_result &mmatch) {
-                        throw std::runtime_error("not implemented multi_match_result");
-                    }
-                }, m);
+                std::visit( [&] (const auto &match) { apply(rule, match, graph); }, m );
             }
         }
 
