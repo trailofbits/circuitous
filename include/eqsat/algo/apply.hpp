@@ -20,7 +20,7 @@ namespace eqsat {
     struct applier {
 
         node_handle apply(const simple_expr &expr) {
-            auto patch = synthesize_simple_expr(expr, rule.rhs, places, where, {}, graph);
+            auto patch = synthesize(expr, rule.rhs, places, where, graph);
             return graph.merge(where.root, graph.find(patch));
         }
 
