@@ -64,8 +64,6 @@ std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit )
 
         for(auto & path: ltt_paths.collected)
         {
-
-            std::cout << "reg constraint " << isa<RegConstraint>(path) << std::endl;
             auto prefix = "vi_" + std::to_string(vi_counter) + "_path" + std::to_string(path_counter) + "_node";
             UnfinishedProjection up(prefix, vi, path);
             up.fully_extend();
@@ -269,7 +267,31 @@ expr_for_node( std::unordered_map< circ::SEGNode, circ::decoder::FunctionDeclara
     return {prev_func_call_var.value(), setup};
 }
 
+Operation *get_op_attached_to_advice_in_vi( Advice *advice, VerifyInstruction *vi, AdviceDirection dir )
+{
+    advice_value_visitor vis(advice);
+    vi->traverse(vis);
+    check(vis.result != nullptr) << "could not find value";
+    check(vis.result != advice) << "returned advice to itself";
 
+    if(isa<Advice>(vis.result))
+    {
+//        auto advice = static_cast<Advice*>(vis.result);
+//        if(dir == AdviceDirection::Starting)
+//        {
+//            if(vis.result_is_left_side)
+//                return get_op_attached_to_advice_in_vi(advice, vi, AdviceDirection::Left);
+//            else
+//                return get_op_attached_to_advice_in_vi(advice, vi, AdviceDirection::Right);
+//        }
+//        if(dir == AdviceDirection::Left)
+
+
+
+    }
+    check(isa<Advice>(vis.result) == false) << "transitive advice found";
+    return vis.result;
+}
 
 std::vector< std::shared_ptr<SEGNode> > SEGGraph::nodes() const
 {
@@ -410,55 +432,49 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
             auto start_op_ptr = std::make_shared< circ::nodeWrapper >( start_op );
             auto op_gen = non_unique_dfs_with_choices< gap::graph::yield_node::on_open >( start_op_ptr, instr_proj.select_choices );
             auto op_gen_pure = non_unique_dfs< gap::graph::yield_node::on_open >( start_op_ptr );
-
             auto node_gen = non_unique_dfs< gap::graph::yield_node::on_open >( node );
 
-            auto choices_made = instr_proj.select_choices.size();
-            if(choices_made > 0)
-                std::cout << "if(";
-            for(auto& choice : instr_proj.select_choices)
-                std::cout << "val == " << choice.chosen_idx << " && ";
-            if(choices_made> 0)
-                std::cout << "){";
 
-//            std::cout << "--start" << std::endl;
-//            std::cout << "op generator pure" << std::endl;
-//            for(auto opg : op_gen_pure)
-//                std::cout << opg->op->name() << std::endl;
-
-
-            std::cout << "op generator select, size choices " << choices_made << std::endl;
-            for(auto opg : op_gen)
+            circ::decoder::StatementBlock block;
+            for ( auto &[ op, nod ] : tuple_generators( op_gen, node_gen ) )
             {
-                std::cout << opg->op->name() << std::endl;
-            }
 
-
-//            std::cout << "node generator" << std::endl;
-//            for(auto n : node_gen)
-//            {
-//                std::cout << "hash: " << n->get_hash() << std::endl;
-//            }
-
-            std::cout << "done--" << std::endl;
-            auto op_gen2 = non_unique_dfs_with_choices< gap::graph::yield_node::on_open >( start_op_ptr, instr_proj.select_choices );
-            auto node_gen2 = non_unique_dfs< gap::graph::yield_node::on_open >( node );
-
-            for ( auto &[ op, nod ] : tuple_generators( op_gen2, node_gen2 ) )
-            {
-                auto lhs = circ::decoder::Id("stack[" + std::to_string(stack_counter) + "]");
-                fdb.body_insert(circ::decoder::Assign( lhs , circ::decoder::Id(op->op->name())) );
+                auto lhs
+                    = circ::decoder::Id( "stack[" + std::to_string( stack_counter ) + "]" );
+                block.push_back(
+                    circ::decoder::Statement(
+                        circ::decoder::Assign( lhs, circ::decoder::Id( op->op->name() ) ) )
+                    );
                 stack_counter++;
             }
 
-            if(choices_made > 0)
-                std::cout << "}" << std::endl;
+            if(instr_proj.select_choices.size() > 0)
+            {
+                auto indx = circ::decoder::Var("val");
+                auto lhs
+                    = circ::decoder::Id( "stack[" + std::to_string( stack_counter ) + "]" );
+                auto choice
+                    = circ::decoder::Uint64( instr_proj.select_choices.begin()->chosen_idx );
+                auto eq = circ::decoder::Equal( indx, choice );
 
-            auto sem_entry = func_decls.find(*node);
-            if (sem_entry == func_decls.end())
-                circ::unreachable() << "Trying to emit for a function which wasn't registered";
+                auto sem_entry = func_decls.find(*node);
+                if (sem_entry == func_decls.end())
+                    circ::unreachable() << "Trying to emit for a function which wasn't registered";
 
-            fdb.body_insert(circ::decoder::FunctionCall(sem_entry->second.function_name,{circ::decoder::Id("stack"), circ::decoder::Int(stack_counter_for_call)}));
+                block.push_back(circ::decoder::FunctionCall(sem_entry->second.function_name,{circ::decoder::Id("stack"), circ::decoder::Int(stack_counter_for_call)}));
+
+                circ::decoder::If ifs( eq, block );
+                fdb.body_insert(ifs);
+            }
+            else
+            {
+                fdb.body_insert( block );
+                auto sem_entry = func_decls.find(*node);
+                if (sem_entry == func_decls.end())
+                    circ::unreachable() << "Trying to emit for a function which wasn't registered";
+
+                fdb.body_insert(circ::decoder::FunctionCall(sem_entry->second.function_name,{circ::decoder::Id("stack"), circ::decoder::Int(stack_counter_for_call)}));
+            }
         }
 
         ep.print(fdb.make());

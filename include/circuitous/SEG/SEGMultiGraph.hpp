@@ -291,22 +291,13 @@ gap::recursive_generator< std::shared_ptr<nodeWrapper> > non_unique_dfs_with_cho
     else
     {
         auto choice = std::find_if(choices.begin(), choices.end(), [&](const SelectChoice& choice) { return choice.sel == root->op; });
-
-        std::cout << "making select choice in set of " << choices.size() << std::endl;
-        check(choice != choices.end()) << "no choices was made for select, allowed in a later build but not now";
         if(choice != choices.end())
         {
             std::size_t idx = (*choice).chosen_idx;
-//            auto child = root->child(idx);
-
-            std::cout << "made one for idx " << idx << std::endl;
             for (auto child : root->child(idx)) {
                 co_yield non_unique_dfs_with_choices< when >(child, choices);
             }
-//            co_yield non_unique_dfs_with_choices< when >(child, choices);
         }
-        std::cout << "end "  << std::endl;
-
     }
 
 
@@ -428,6 +419,44 @@ private:
  * Unfinsihed projection of VI
  */
 
+struct advice_value_visitor : Visitor<advice_value_visitor>
+{
+    Advice* target;
+    Operation* result = nullptr;
+    bool result_is_left_side = false;
+
+    explicit advice_value_visitor( Advice *target ) : target( target ) { }
+    void visit(AdviceConstraint* ac)
+    {
+        check(ac->operands_size() == 2) << "advice constraint does not contain 2 children";
+        check(ac->operand(0) != ac->operand(1)) << "advice constraint points to same child twice, left id:" << ac->operand(0)->id() << " id right:" << ac->operand(1)->id() ;
+        if(ac->operand(0) == target)
+        {
+            result_is_left_side = false;
+            result = ac->operand( 1 );
+        }
+
+        if(ac->operand(1) == target)
+        {
+            result_is_left_side = true;
+            result = ac->operand( 0 );
+        }
+    }
+
+    void visit(Operation* op)
+    {
+        op->traverse(*this);
+    }
+};
+
+enum class AdviceDirection
+{
+    Starting,
+    Left,
+    Right
+};
+
+Operation* get_op_attached_to_advice_in_vi(Advice* advice, VerifyInstruction* vi, AdviceDirection dir = AdviceDirection::Starting);
 
 
 struct Select_choice_maker_visitor
@@ -441,8 +470,8 @@ struct Select_choice_maker_visitor
  */
 struct UnfinishedProjection : InstructionProjection
 {
-    std::vector<std::shared_ptr<Tree>> to_continue_from; // all those nodes who's operation is a leaf
-    std::vector<std::shared_ptr<Tree>> selects_to_continue_from; // all those nodes who's operation is a leaf
+    std::unordered_set<std::shared_ptr<Tree>> to_continue_from; // all those nodes who's operation is a leaf
+    std::unordered_set<std::shared_ptr<Tree>> selects_to_continue_from; // all those nodes who's operation is a leaf
 
     std::map<std::size_t, std::shared_ptr<Tree>> seen_nodes;
     std::string segnode_prefix = "";
@@ -473,9 +502,9 @@ struct UnfinishedProjection : InstructionProjection
         projection->original = root;
 
         if( isa<Select>(projection->original) )
-            selects_to_continue_from.push_back(projection);
+            selects_to_continue_from.insert(projection);
         else
-            to_continue_from.push_back(projection);
+            to_continue_from.insert(projection);
 
         init_root_tree();
     }
@@ -492,6 +521,7 @@ struct UnfinishedProjection : InstructionProjection
                 copy->fully_extend();
                 check(copy->select_choices.size() > 0) << "lol";
             }
+
             created_projections.insert(created_projections.end(), copies.begin(), copies.end());
             for(auto & c : created_projections)
                 check(c->select_choices.size() > 0) << "lol" << c->select_choices.size();
@@ -508,8 +538,9 @@ struct UnfinishedProjection : InstructionProjection
     {
         while(!to_continue_from.empty()) // ??? ??? ??
         {
-            extend_except_select( to_continue_from.back() );
-            to_continue_from.pop_back();
+            auto first_item = to_continue_from.begin();
+            extend_except_select( *first_item );
+            to_continue_from.erase(first_item);
         }
     }
 
@@ -521,7 +552,8 @@ struct UnfinishedProjection : InstructionProjection
             return copies;
 
 
-        auto node = selects_to_continue_from.back();
+        auto first_it = selects_to_continue_from.begin();
+        auto node = *first_it;
         if( is_decode_select(node->original) )
         {
             Select* sel = static_cast<Select*>( node->original );
@@ -548,7 +580,6 @@ struct UnfinishedProjection : InstructionProjection
                 copies.push_back(std::make_shared<UnfinishedProjection>(*copy));
             }
             // update last inplace
-            std::cout << "insert choice" << std::endl;
             select_choices.insert(SelectChoice{sel, 1});
             node->original = sel->operand(1);
             node->node = std::make_shared<SEGNode>(segnode_prefix + "copy_prefix_select");
@@ -562,7 +593,7 @@ struct UnfinishedProjection : InstructionProjection
 //                check(indirect->select_choices.size() == 1 ) << "not 1??";
 //            }
         }
-        selects_to_continue_from.pop_back();
+        selects_to_continue_from.erase(first_it);
         return copies;
     }
 
@@ -570,16 +601,15 @@ struct UnfinishedProjection : InstructionProjection
     {
         if( is_decode_select(tree->original) )
         {
-            std::cout << "seeing select" << std::endl;
             auto s = std::find_if(selects_to_continue_from.begin(), selects_to_continue_from.end(),
                                    [&](std::shared_ptr<Tree> t) { return t->original == tree->original; });
             if(s == selects_to_continue_from.end())
             {
-                std::cout << "adding select" << std::endl;
-                selects_to_continue_from.push_back( tree );
+                selects_to_continue_from.insert( tree );
             }
             return;
         }
+
 
         if(tree->original->operands_size() == 0)
             return;
@@ -589,7 +619,6 @@ struct UnfinishedProjection : InstructionProjection
 
         for(auto op_child : tree->original->operands() )
         {
-//            std::cout << "child:" << pretty_print(op_child) << std::endl;
             if(seen_nodes.contains(op_child->id()))
             {
                 tree->node->add_child(seen_nodes[op_child->id()]->node);
@@ -597,13 +626,22 @@ struct UnfinishedProjection : InstructionProjection
             }
             else
             {
+                // assumes no transitive advices
+//                if( isa<Advice>(op_child))
+//                {
+//                    auto advice = static_cast<Advice*>(op_child);
+//                    auto advice_value = get_op_attached_to_advice_in_vi(advice, vi);
+//
+//                    op_child = advice_value;
+//                }
+
                 auto new_seg_node = std::make_shared<SEGNode>(segnode_prefix + "_" + std::to_string(op_child->id()));
                 auto new_child = std::make_shared<Tree>();
                 new_child->original = op_child;
                 new_child->node = new_seg_node;
                 tree->node->add_child(new_seg_node);
                 tree->add_child(new_child);
-                to_continue_from.push_back(new_child);
+                to_continue_from.insert(new_child);
                 seen_nodes.insert( { op_child->id(), new_child } );
             }
         }
@@ -631,13 +669,13 @@ struct UnfinishedProjection : InstructionProjection
         if( std::find_if( to_continue_from.begin(), to_continue_from.end(),
                            [&](const std::shared_ptr<Tree>& t) { return projection->node->id == t.get()->node->id; }
                            ) != to_continue_from.end())
-            copy.to_continue_from.push_back(copy.projection);
+            copy.to_continue_from.insert(copy.projection);
 
 
         if( std::find_if( selects_to_continue_from.begin(), selects_to_continue_from.end(),
                            [&](const std::shared_ptr<Tree>& t) { return projection->node->id == t.get()->node->id; }
                            ) != selects_to_continue_from.end())
-            copy.selects_to_continue_from.push_back(copy.projection);
+            copy.selects_to_continue_from.insert(copy.projection);
 
         return std::make_unique<UnfinishedProjection>( copy );
     };
@@ -678,14 +716,14 @@ private:
                            [ & ]( const std::shared_ptr< Tree > t )
                            { return copy_from.node->id == t->node->id; } )
              != to_continue_from.end() )
-            copy_to.to_continue_from.push_back(new_tree);
+            copy_to.to_continue_from.insert(new_tree);
 
         // if we should extend the node in the current project, then we should do that in the new projection as well
         if ( std::find_if( selects_to_continue_from.begin(), selects_to_continue_from.end(),
                            [ & ]( const std::shared_ptr< Tree > t )
                            { return copy_from.node->id == t->node->id; } )
              != selects_to_continue_from.end() )
-            copy_to.selects_to_continue_from.push_back(new_tree);
+            copy_to.selects_to_continue_from.insert(new_tree);
 
 
         /*
