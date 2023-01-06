@@ -26,7 +26,14 @@ namespace eqsat {
         }
 
         node_handle apply(const union_expr &un) {
-            throw std::runtime_error("not implemented union expr");
+            const auto &match = std::get< multi_match_result >(where);
+            auto root = match.roots.begin()->second;
+
+            for (const auto &[_, other] : match.roots) {
+                graph.merge(root, other);
+            }
+
+            return root;
         }
 
         node_handle apply(const bond_expr &bond) {
