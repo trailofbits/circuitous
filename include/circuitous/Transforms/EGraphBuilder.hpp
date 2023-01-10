@@ -128,7 +128,7 @@ namespace circ
             }
 
             std::vector< enode_handle > children;
-            for (const auto &child : op->operands) {
+            for (const auto &child : op->operands()) {
                 children.push_back(add_nodes_recurse(child, state));
             }
 
