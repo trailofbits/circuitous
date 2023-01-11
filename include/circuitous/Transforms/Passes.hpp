@@ -124,8 +124,23 @@ namespace circ
                     continue;
                 }
 
-                ac->advice()->replace_all_uses_with( ac->runtime_value() );
+                auto lhs = ac->operand( 0 );
+                auto rhs = ac->operand( 1 );
+
+                /*
+                 * It is important to clear usages of the AC before we replace the uses
+                 * since otherwise advice_1 will gain two uses of the AC.
+                 * Which at the time of writing can cause trouble when deleting.
+                 */
                 ac->destroy();
+                ac->remove_all_operands(lhs);
+                ac->remove_all_operands(rhs);
+                while(ac->users_size() > 0)
+                {
+                    auto first_user = *ac->users().begin();
+                    first_user->remove_all_operands( ac );
+                }
+                rhs->replace_all_uses_with( lhs );
             }
             return std::move( circuit );
         }
