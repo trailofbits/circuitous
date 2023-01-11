@@ -402,6 +402,48 @@ int SEGGraph::get_maximum_vi_size()
 }
 
 using seg_projection = std::pair< InstructionProjection, std::shared_ptr< SEGNode > >;
+struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
+{
+    decoder::StatementBlock block;
+    VerifyInstruction *vi;
+    decoder::Id stack_counter;
+    explicit ToExpressionVisitor( VerifyInstruction *vi, const decoder::Id &stackCounter ) :
+        vi(vi), stack_counter( stackCounter )
+    {
+    }
+
+    void visit( Advice *advice )
+    {
+        auto attached_op = get_op_attached_to_advice_in_vi( advice, vi );
+        dispatch(attached_op);
+    }
+
+    void visit( Operation *op )
+    {
+        if(isa<Select>(op))
+            std::cout << "but how? " << std::endl;
+        auto lhs = decoder::Id( "stack[" + stack_counter + "++]" );
+        block.push_back(
+            decoder::Statement( decoder::Assign( lhs, decoder::Id( op->name() ) ) ) );
+        op->traverse( *this );
+    }
+
+    void visit( Select *op )
+    {
+        for ( std::size_t choice = 1; choice < op->operands_size(); choice++ )
+        {
+            auto indx = decoder::Var( "select_id_" + std::to_string( op->id() ) );
+            auto c_val = decoder::Int( static_cast< int64_t >( choice -1 ) );
+            auto eq = decoder::Equal( indx, c_val );
+
+            ToExpressionVisitor choice_child_vis( vi, stack_counter );
+            choice_child_vis.visit( op->operand( choice ) );
+            decoder::If ifs( eq, choice_child_vis.block );
+            block.push_back( ifs );
+        }
+    }
+};
+
 void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
 {
     // print decoder
@@ -471,25 +513,46 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
                 for(auto x : s)
                     target_count = target_count * (1 << x->bits);
 
+                //TODO(sebas): and all segnodes need to be the same
                 bool independent = proj_groups.count(key) == target_count;
                 if(independent)
-                    std::cout << "independent :D" << std::endl;
-                else
-                    std::cout << "wtf indep: " << proj_groups.size() << " tc " << target_count << std::endl;
-
-
-                for(auto it = equal_range.first; it != equal_range.second; it++)
                 {
-
-
-                    // TODO(sebas): we should ideally have an uninitialized expr, so we can replace its value later.
-                    decoder::Expr expr = decoder::Id("");
-                    auto [root, p] = *it;
+                    auto p = (*proj_groups.find(key)).second;
                     auto instr_proj = p.first;
                     auto node = p.second;
-                    expr = get_expression_for_projection( vi, start_counter, instr_proj, node );
 
-                    fdb.body_insert(expr);
+                    std::cout << "independent :D" << std::endl;
+                    ToExpressionVisitor vis(vi, "stack_counter");
+                    vis.visit(key);
+                    fdb.body_insert(vis.block);
+
+                    auto sem_entry = func_decls.find( *node );
+                    if ( sem_entry == func_decls.end() )
+                        circ::unreachable() << "Trying to emit for a function which wasn't registered";
+
+                    auto funcCall = decoder::FunctionCall( sem_entry->second.function_name,
+                                                           { decoder::Id( "stack" ), stack_counter } );
+                    fdb.body_insert( decoder::Statement( funcCall ) );
+
+                }
+                else
+                {
+                    std::cout << "wtf indep: " << proj_groups.size() << " tc " << target_count
+                              << std::endl;
+
+                    for ( auto it = equal_range.first; it != equal_range.second; it++ )
+                    {
+                        // TODO(sebas): we should ideally have an uninitialized expr, so we can
+                        // replace its value later.
+                        decoder::Expr expr = decoder::Id( "" );
+                        auto [ root, p ] = *it;
+                        auto instr_proj = p.first;
+                        auto node = p.second;
+                        expr = get_expression_for_projection( vi, start_counter, instr_proj,
+                                                              node );
+
+                        fdb.body_insert( expr );
+                    }
                 }
             }
         }
@@ -499,72 +562,98 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
         ep.print(fdb.make());
     }
 }
+
 decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
                                                         decoder::Id stack_counter,
                                                         InstructionProjection &instr_proj,
-                                                        std::shared_ptr< SEGNode > &node )
+                                                        std::shared_ptr< SEGNode > &node,
+                                                       bool independent)
 {
     auto stack_counter_for_call = stack_counter;
     auto start_op = instr_proj.root_in_vi;
-    auto start_op_ptr = std::__1::make_shared< nodeWrapper >( start_op );
-    auto op_gen = non_unique_dfs_with_choices< gap::graph::yield_node::on_open >( start_op_ptr, instr_proj.select_choices, vi );
+    auto start_op_ptr = std::make_shared< nodeWrapper >( start_op );
+    auto op_gen = non_unique_dfs_with_choices< gap::graph::yield_node::on_open >(
+        start_op_ptr, instr_proj.select_choices, vi );
     auto node_gen = non_unique_dfs< gap::graph::yield_node::on_open >( node );
 
-    decoder::StatementBlock block;
-    for ( auto &[ op, nod ] : tuple_generators( op_gen, node_gen ) )
-    {
+    bool has_choices = instr_proj.select_choices.size() > 0;
 
-        auto lhs
-            = decoder::Id( "stack[" + stack_counter + "++]" );
-        block.push_back(
-            decoder::Statement(
-                decoder::Assign( lhs, decoder::Id( op->op->name() ) ) )
-        );
-//        stack_counter++;
+    decoder::StatementBlock block;
+    if ( !has_choices )
+    {
+        for ( auto &[ op, nod ] : tuple_generators( op_gen, node_gen ) )
+        {
+            auto lhs = decoder::Id( "stack[" + stack_counter + "++]" );
+            block.push_back(
+                decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
+            //        stack_counter++;
+        }
+        auto sem_entry = func_decls.find( *node );
+        if ( sem_entry == func_decls.end() )
+            circ::unreachable() << "Trying to emit for a function which wasn't registered";
+
+        auto funcCall = decoder::FunctionCall( sem_entry->second.function_name,
+                                               { decoder::Id( "stack" ), stack_counter } );
+        block.push_back( decoder::Statement( funcCall ) );
+        return block;
     }
 
-    if(instr_proj.select_choices.size() > 0)
-    {
+    //    if(independent)
+    //    {
+    //        for(auto op : non_unique_dfs< gap::graph::yield_node::on_open >( start_op_ptr ))
+    //        {
+    //            //TODO(sebas): change this to decode time select
+    //
+    //            auto lhs = decoder::Id( "stack[" + stack_counter + "++]" );
+    //            block.push_back(
+    //                decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
+    //
+    //            for(auto child : op->op->operands())
+    //                if( isa<Select>(child) )
+    //                {
+    //
+    //                }
+    //        }
+    //    }
+
+//    if ( !independent || independent )
+//    {
         decoder::StatementBlock b;
 
-        for(auto c : instr_proj.select_choices)
+        for ( auto c : instr_proj.select_choices )
         {
-            auto indx = decoder::Var("select_id_" +std::to_string(c.sel->id()) );
-            auto choice = decoder::Int(static_cast< int64_t >( c.chosen_idx ) );
+            auto indx = decoder::Var( "select_id_" + std::to_string( c.sel->id() ) );
+            auto choice = decoder::Int( static_cast< int64_t >( c.chosen_idx ) );
             auto eq = decoder::Equal( indx, choice );
-            if(!b.empty())
+            if ( !b.empty() )
             {
                 auto first = b.back();
                 b.pop_back();
                 b.push_back( decoder::And( first, eq ) );
             }
             else
-                b.push_back(eq);
+                b.push_back( eq );
         }
 
-        auto lhs
-            = decoder::Id( "stack[" + stack_counter + "++]" );
-
-        auto sem_entry = func_decls.find(*node);
-        if (sem_entry == func_decls.end())
+        for ( auto op : op_gen  )
+        {
+            auto lhs = decoder::Id( "stack[" + stack_counter + "++]" );
+            block.push_back(
+                decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
+            //        stack_counter++;
+        }
+        //        auto bc = get_expression_for_projection(vi, )
+        auto sem_entry = func_decls.find( *node );
+        if ( sem_entry == func_decls.end() )
             circ::unreachable() << "Trying to emit for a function which wasn't registered";
 
-        auto funcCall = decoder::FunctionCall(sem_entry->second.function_name,{ decoder::Id("stack"), stack_counter});
-        block.push_back( decoder::Statement(funcCall));
+        auto funcCall = decoder::FunctionCall( sem_entry->second.function_name,
+                                               { decoder::Id( "stack" ), stack_counter } );
+        block.push_back( decoder::Statement( funcCall ) );
 
         decoder::If ifs( b, block );
         return ifs;
-    }
-    else
-    {
-        auto sem_entry = func_decls.find(*node);
-        if (sem_entry == func_decls.end())
-            circ::unreachable() << "Trying to emit for a function which wasn't registered";
-
-        auto funcCall = decoder::FunctionCall(sem_entry->second.function_name,{ decoder::Id("stack"), stack_counter});
-        block.push_back( decoder::Statement(funcCall));
-        return block;
-    }
+//    }
 }
 
 decoder::Var UniqueNameStorage::get_unique_var_name()

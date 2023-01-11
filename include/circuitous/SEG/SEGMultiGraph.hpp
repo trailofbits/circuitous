@@ -401,7 +401,8 @@ private:
     decoder::Var stack = decoder::Var( "stack" );
     decoder::Expr get_expression_for_projection( VerifyInstruction *vi, decoder::Id stack_counter,
                                                   InstructionProjection &instr_proj,
-                                                  std::shared_ptr< SEGNode > &node );
+                                                  std::shared_ptr< SEGNode > &node,
+                                                 bool independent = false);
 };
 
 /*
