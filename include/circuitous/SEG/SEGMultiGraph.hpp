@@ -8,6 +8,9 @@
 
 namespace circ {
 
+    Operation* get_op_attached_to_advice_in_vi(Advice* advice, VerifyInstruction* vi);
+
+
     template< gap::graph::yield_node when, typename node_pointer >
         requires gap::graph::node_like< typename node_pointer::element_type >
     gap::recursive_generator< node_pointer > non_unique_dfs(node_pointer root) {
@@ -261,7 +264,16 @@ struct nodeWrapper
 
 template< gap::graph::yield_node when >
     requires gap::graph::node_like< nodeWrapper >
-gap::recursive_generator< std::shared_ptr<nodeWrapper> > non_unique_dfs_with_choices( std::shared_ptr<nodeWrapper> root, const choice_set & choices) {
+gap::recursive_generator< std::shared_ptr<nodeWrapper> > non_unique_dfs_with_choices( std::shared_ptr<nodeWrapper> root, const choice_set & choices, VerifyInstruction* vi) {
+
+    if( isa<Advice>(root->op))
+    {
+        auto advice = static_cast<Advice*>(root->op);
+        auto advice_value = get_op_attached_to_advice_in_vi(advice, vi);
+//        std::cout << "advicing out node: " << advice_value->name() << std::endl;
+        root = std::make_shared<nodeWrapper>(advice_value);
+//        root->op = advice_value;
+    }
 
 //    auto yield_node = [&](const nodeWrapper& node)
 //    {
@@ -285,7 +297,7 @@ gap::recursive_generator< std::shared_ptr<nodeWrapper> > non_unique_dfs_with_cho
     if(!isa<Select>(root->op))
     {
         for (auto child : root->children()) {
-            co_yield non_unique_dfs_with_choices< when >(child, choices);
+            co_yield non_unique_dfs_with_choices< when >(child, choices, vi);
         }
     }
     else
@@ -295,7 +307,7 @@ gap::recursive_generator< std::shared_ptr<nodeWrapper> > non_unique_dfs_with_cho
         {
             std::size_t idx = (*choice).chosen_idx;
             for (auto child : root->child(idx)) {
-                co_yield non_unique_dfs_with_choices< when >(child, choices);
+                co_yield non_unique_dfs_with_choices< when >(child, choices, vi);
             }
         }
     }
@@ -387,6 +399,9 @@ private:
         func_decls;
     UniqueNameStorage name_storage;
     decoder::Var stack = decoder::Var( "stack" );
+    decoder::Expr get_expression_for_projection( VerifyInstruction *vi, decoder::Id stack_counter,
+                                                  InstructionProjection &instr_proj,
+                                                  std::shared_ptr< SEGNode > &node );
 };
 
 /*
@@ -449,14 +464,7 @@ struct advice_value_visitor : Visitor<advice_value_visitor>
     }
 };
 
-enum class AdviceDirection
-{
-    Starting,
-    Left,
-    Right
-};
 
-Operation* get_op_attached_to_advice_in_vi(Advice* advice, VerifyInstruction* vi, AdviceDirection dir = AdviceDirection::Starting);
 
 
 struct Select_choice_maker_visitor
@@ -515,12 +523,21 @@ struct UnfinishedProjection : InstructionProjection
         {
             finish_up_to_decode_select();
             auto copies = project_select();
+//            check(copies.size() >= 15 || copies.size() == 0) << "not enough copies, had: " << copies.size();
             for(auto & copy : copies)
             {
                 assert(select_choices.size() > 0);
                 copy->fully_extend();
+
+                // This should succeed with arbitrary nesting, but should verify this.
+                if(!copy->created_projections.empty())
+                {
+//                    std::cout << "got extra copies size: " << copy->created_projections.size() << std::endl;
+                    created_projections.insert(created_projections.end(), copy->created_projections.begin(), copy->created_projections.end());
+                }
                 check(copy->select_choices.size() > 0) << "lol";
             }
+
 
             created_projections.insert(created_projections.end(), copies.begin(), copies.end());
             for(auto & c : created_projections)
@@ -544,7 +561,7 @@ struct UnfinishedProjection : InstructionProjection
         }
     }
 
-    //TODO(sebas): make optional?
+    //TODO(sebas): make output std::optional?
     std::vector<std::shared_ptr<UnfinishedProjection>> project_select()
     {
         std::vector<std::shared_ptr<UnfinishedProjection>> copies;
@@ -572,26 +589,31 @@ struct UnfinishedProjection : InstructionProjection
                 circ::check(to_update != copy->selects_to_continue_from.end()) << "select could not be found in copied tree";
                 to_update->get()->original = sel->operand(i);
                 to_update->get()->node = std::make_shared<SEGNode>(segnode_prefix + "copy_prefix_select");
-                // does not get removed just updated so we should be good here?
+                /*
+                 * the value of to_update might can be changed into a select or a non-select node
+                 * we need to update this.
+                 * if it's a select it remains in the correct spot, so only update if it's not
+                 */
+                if( !is_decode_select(to_update->get()->original) )
+                {
+                    std::shared_ptr<Tree> t = std::make_shared<Tree>(*to_update->get());
+                    check(t->node->id == (*to_update)->node->id) << "not updated properly";
+                    auto old_id = t->node->id;
+                    copy->to_continue_from.insert(t);
+                    copy->selects_to_continue_from.erase(to_update);
+                    check(t->node->id == old_id) << "not updated properly";
+                }
+
 
                 copy->select_choices.insert(SelectChoice{sel, i});
-//                check(copy->projection->node == (*copy->projection->node->valid_for_contexts.begin())->projection->node) << "not equal??";
-//                copy->select_choices->insert(SelectChoice{sel, i});
+                copy->fully_extend();
                 copies.push_back(std::make_shared<UnfinishedProjection>(*copy));
             }
             // update last inplace
             select_choices.insert(SelectChoice{sel, 1});
             node->original = sel->operand(1);
             node->node = std::make_shared<SEGNode>(segnode_prefix + "copy_prefix_select");
-//            for(auto copy : copies)
-//            {
-//                auto direct_node = this->projection->node;
-//                auto indirect = (*this->projection->node->valid_for_contexts.begin());
-//                auto indirect_node = indirect->projection->node;
-//                check(direct_node == indirect_node) << "not equal??";
-//                check(this->select_choices.size() == 1 ) << "not direct 1??";
-//                check(indirect->select_choices.size() == 1 ) << "not 1??";
-//            }
+
         }
         selects_to_continue_from.erase(first_it);
         return copies;
@@ -619,6 +641,15 @@ struct UnfinishedProjection : InstructionProjection
 
         for(auto op_child : tree->original->operands() )
         {
+            // assumes no transitive advices
+            if( isa<Advice>(op_child))
+            {
+                auto advice = static_cast<Advice*>(op_child);
+                auto advice_value = get_op_attached_to_advice_in_vi(advice, vi);
+//                std::cout << "advicing out node: " << advice_value->name() << std::endl;
+                op_child = advice_value;
+            }
+
             if(seen_nodes.contains(op_child->id()))
             {
                 tree->node->add_child(seen_nodes[op_child->id()]->node);
@@ -626,14 +657,7 @@ struct UnfinishedProjection : InstructionProjection
             }
             else
             {
-                // assumes no transitive advices
-//                if( isa<Advice>(op_child))
-//                {
-//                    auto advice = static_cast<Advice*>(op_child);
-//                    auto advice_value = get_op_attached_to_advice_in_vi(advice, vi);
-//
-//                    op_child = advice_value;
-//                }
+
 
                 auto new_seg_node = std::make_shared<SEGNode>(segnode_prefix + "_" + std::to_string(op_child->id()));
                 auto new_child = std::make_shared<Tree>();
