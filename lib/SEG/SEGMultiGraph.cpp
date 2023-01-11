@@ -453,7 +453,9 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
         fdb.name("decoder_for_vi" + std::to_string(vi->id()))
             .retType("void");
         decoder::Var stack_counter("stack_counter");
-        fdb.body_insert(decoder::Assign(decoder::VarDecl("stack_counter"), decoder::Int(0)));
+        decoder::Var stack_begin_counter("stack_counter_begin");
+        fdb.body_insert_statement(decoder::Assign(decoder::VarDecl(stack_counter), decoder::Int(0)));
+        fdb.body_insert_statement(decoder::Assign(decoder::VarDecl(stack_begin_counter), decoder::Int(0)));
         auto paths = this->get_nodes_by_vi(vi);
 
 
@@ -468,18 +470,17 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
         for(auto key : proj_keys)
         {
             auto equal_range = proj_groups.equal_range(key);
-            auto start_counter = stack_counter.name;
+            auto start_counter = stack_counter;
+            fdb.body_insert_statement(decoder::Assign(stack_begin_counter, stack_counter));
             if( proj_groups.count(key) == 1)
             {
-                std::cout << "singel key" << std::endl;
                 auto p = (*proj_groups.find(key)).second;
                 auto instr_proj = p.first;
                 auto node = p.second;
-                auto expr = get_expression_for_projection( vi, start_counter, instr_proj, node );
+                auto expr = get_expression_for_projection( vi, start_counter, stack_begin_counter, instr_proj, node );
                 fdb.body_insert(expr);
             }
             else{
-                std::cout << "multi key" << std::endl;
                 /*
                  * Check for if the select choices are made independent, because if so we can
                  * emit code in for each choice separately.
@@ -521,7 +522,6 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
                     auto instr_proj = p.first;
                     auto node = p.second;
 
-                    std::cout << "independent :D" << std::endl;
                     ToExpressionVisitor vis(vi, "stack_counter");
                     vis.visit(key);
                     fdb.body_insert(vis.block);
@@ -537,9 +537,6 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
                 }
                 else
                 {
-                    std::cout << "wtf indep: " << proj_groups.size() << " tc " << target_count
-                              << std::endl;
-
                     for ( auto it = equal_range.first; it != equal_range.second; it++ )
                     {
                         // TODO(sebas): we should ideally have an uninitialized expr, so we can
@@ -548,7 +545,7 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
                         auto [ root, p ] = *it;
                         auto instr_proj = p.first;
                         auto node = p.second;
-                        expr = get_expression_for_projection( vi, start_counter, instr_proj,
+                        expr = get_expression_for_projection( vi, start_counter, stack_begin_counter, instr_proj,
                                                               node );
 
                         fdb.body_insert( expr );
@@ -564,12 +561,13 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
 }
 
 decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
-                                                        decoder::Id stack_counter,
-                                                        InstructionProjection &instr_proj,
+                                                        decoder::Var stack_counter,
+                                                       decoder::Var stack_begin_counter,
+                                                       InstructionProjection &instr_proj,
                                                         std::shared_ptr< SEGNode > &node,
                                                        bool independent)
 {
-    auto stack_counter_for_call = stack_counter;
+    auto stack_counter_for_call = stack_counter.name;
     auto start_op = instr_proj.root_in_vi;
     auto start_op_ptr = std::make_shared< nodeWrapper >( start_op );
     auto op_gen = non_unique_dfs_with_choices< gap::graph::yield_node::on_open >(
@@ -583,7 +581,7 @@ decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
     {
         for ( auto &[ op, nod ] : tuple_generators( op_gen, node_gen ) )
         {
-            auto lhs = decoder::Id( "stack[" + stack_counter + "++]" );
+            auto lhs = decoder::Id( "stack[" + stack_counter_for_call + "++]" );
             block.push_back(
                 decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
             //        stack_counter++;
@@ -593,7 +591,7 @@ decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
             circ::unreachable() << "Trying to emit for a function which wasn't registered";
 
         auto funcCall = decoder::FunctionCall( sem_entry->second.function_name,
-                                               { decoder::Id( "stack" ), stack_counter } );
+                                               { stack_begin_counter } );
         block.push_back( decoder::Statement( funcCall ) );
         return block;
     }
@@ -637,7 +635,7 @@ decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
 
         for ( auto op : op_gen  )
         {
-            auto lhs = decoder::Id( "stack[" + stack_counter + "++]" );
+            auto lhs = decoder::Id( "stack[" + stack_counter_for_call + "++]" );
             block.push_back(
                 decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
             //        stack_counter++;
@@ -648,7 +646,7 @@ decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
             circ::unreachable() << "Trying to emit for a function which wasn't registered";
 
         auto funcCall = decoder::FunctionCall( sem_entry->second.function_name,
-                                               { decoder::Id( "stack" ), stack_counter } );
+                                               { stack_begin_counter } );
         block.push_back( decoder::Statement( funcCall ) );
 
         decoder::If ifs( b, block );

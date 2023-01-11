@@ -399,10 +399,10 @@ private:
         func_decls;
     UniqueNameStorage name_storage;
     decoder::Var stack = decoder::Var( "stack" );
-    decoder::Expr get_expression_for_projection( VerifyInstruction *vi, decoder::Id stack_counter,
+    decoder::Expr get_expression_for_projection( VerifyInstruction *vi, decoder::Var stack_counter,
+                                                 decoder::Var stack_counter_begin,
                                                   InstructionProjection &instr_proj,
-                                                  std::shared_ptr< SEGNode > &node,
-                                                 bool independent = false);
+                                                  std::shared_ptr< SEGNode > &node);
 };
 
 /*
