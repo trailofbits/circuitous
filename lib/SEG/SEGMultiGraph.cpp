@@ -4,8 +4,6 @@
 
 namespace circ{
 
-
-
 std::vector< std::shared_ptr<circ::SEGNode> > circ::SEGNode::children()
 {
     return _nodes;
@@ -24,13 +22,6 @@ std::string SEGNode::get_hash() const
 
 SEGNode::SEGNode( const std::string &id ) : id( id ) { }
 std::vector< std::shared_ptr<SEGNode> > SEGNode::parents() { return _parents; }
-
-
-void SEGNode::add_parent( SEGNode::node_pointer parent )
-{
-    this->_parents.push_back(parent);
-    parent->_nodes.push_back(std::make_shared<SEGNode>(*this));
-}
 
 
 void SEGNode::add_child( SEGNode::node_pointer child )
@@ -70,33 +61,16 @@ std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit )
             UnfinishedProjection up(prefix, vi, path);
             up.fully_extend();
 
-//            if(path->id() == 92)
-//            graph_constructor_visitor convertor(prefix, vi);
-//            convertor.visit(path);
-//            up.projection.get()->children
-//            auto start_op_ptr = std::make_shared< circ::nodeWrapper >( up.projection.get()->node );
-
-//            std::cout << "root_path selects " << up.select_choices.size() << " node roots# " << up.projection->node->valid_for_contexts.size() <<std::endl;
-//            for(auto root: up.projection->node->valid_for_contexts )
-//                std::cout << "node root selects " << root.select_choices.size() << std::endl;
-//            std::cout << "in copies: " << up.created_projections.size() << std::endl;
-//            for(auto copy : up.created_projections)
-//                for(auto root: copy->projection->node->valid_for_contexts )
-//                    std::cout << "node root selects " << root.select_choices.size() << std::endl;
-
             auto node_gen = gap::graph::dfs< gap::graph::yield_node::on_open >( up.projection.get()->node );
             for(auto node : node_gen)
                 nodes.push_back(node);
 
             for(auto copy : up.created_projections)
             {
-//                std::cout << "copy selects " << up.select_choices.size() <<std::endl;
-
                 auto node_gen_proj = gap::graph::dfs< gap::graph::yield_node::on_open >( copy->projection->node );
                 for(auto node : node_gen_proj)
                     nodes.push_back(node);
             }
-//                nodes.insert(nodes.end(), convertor.result_set.begin(), convertor.result_set.end());
             path_counter++;
         }
         vi_counter++;
@@ -211,7 +185,6 @@ expr_for_node( std::unordered_map< circ::SEGNode, circ::decoder::FunctionDeclara
     local_vars.push_back(pop_var.value()); // requires to be first in the list when calling the visitor
     for(auto &c : node._nodes)
     {
-//        (*initial_stack_offset)++;
         auto [ lval, set ] = expr_for_node( func_decls,
                                             unique_names_storage, *c, stack,
                                             initial_stack_offset, max_size_stack );
@@ -304,55 +277,21 @@ void SEGGraph::remove_node( const SEGGraph::node_pointer& node )
 std::vector< std::pair< InstructionProjection, std::shared_ptr< SEGNode > >>
 SEGGraph::get_nodes_by_vi( VerifyInstruction *vi )
 {
-    //TODO(sebas): add support for gu instead of just vi
     //TODO(sebas): build this once instead of building this per call
     std::vector< std::pair< InstructionProjection , std::shared_ptr< SEGNode > >> m;
     for(auto& n : nodes())
     {
-        // convert this to find_if
+        //TODO(sebas): convert this to find_if
         for(auto root : n->valid_for_contexts )
         {
             if(root.vi == vi && n->isRoot) // this root shares the correct vi, so we should copy it
-            {
-                //TODO(sebas): just add root.first here?
-//                GenerationUnit g;
-//                g.root_operation = root.first.root_operation;
-//                g.vi = root.first.vi;
-//                g.choices = root.first.choices;
-                std::pair< InstructionProjection , std::shared_ptr< SEGNode > > new_add = { root, n } ;
-                m.push_back( new_add );
-//                std::cout << "added with choices " << new_add.first.select_choices.size() << std::endl;
-            }
+                m.push_back( { root, n }  );
         }
     }
-//    std::cout << "m size" << m.size() << std::endl;
+
     circ::check(m.size() != 0) << "shit is empty? wut";
     return m;
 }
-
-//
-//std::vector< std::pair< GenerationUnit, std::shared_ptr< SEGNode > >>
-//SEGGraph::get_nodes_by_gu( const GenerationUnit& gu )
-//{
-//    //TODO(sebas): add support for gu instead of just vi
-//    //TODO(sebas): build this once instead of building this per call
-//    std::vector< std::pair< GenerationUnit, std::shared_ptr< SEGNode > >> m;
-//
-//    for(auto& n : nodes())
-//        if(n->isRoot && n->roots.contains(gu))
-//        {
-//            auto range = n->roots.equal_range(gu);
-//            for (auto other = range.first; other != range.second; ++other)//
-//            {
-//                GenerationUnit g;
-//                g.vi = (*other).first.vi;
-//                g.choices = (*other).first.choices;
-//                m.push_back( { g, n } );
-//            };
-//        }
-//
-//    return m;
-//}
 
 void SEGGraph:: calculate_costs()
 {
@@ -384,7 +323,6 @@ void SEGGraph:: calculate_costs()
 
 int SEGGraph::get_maximum_vi_size()
 {
-
     // get maximum number of nodes used for a single VI. This determines how large the stack should be
     std::vector<int> vals;
     for(auto vi : circuit->attr<circ::VerifyInstruction>())
@@ -554,18 +492,15 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
             }
         }
 
-
-
         ep.print(fdb.make());
     }
 }
 
 decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
-                                                        decoder::Var stack_counter,
+                                                       decoder::Var stack_counter,
                                                        decoder::Var stack_begin_counter,
                                                        InstructionProjection &instr_proj,
-                                                        std::shared_ptr< SEGNode > &node,
-                                                       bool independent)
+                                                       std::shared_ptr< SEGNode > &node )
 {
     auto stack_counter_for_call = stack_counter.name;
     auto start_op = instr_proj.root_in_vi;
@@ -584,74 +519,50 @@ decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
             auto lhs = decoder::Id( "stack[" + stack_counter_for_call + "++]" );
             block.push_back(
                 decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
-            //        stack_counter++;
         }
         auto sem_entry = func_decls.find( *node );
         if ( sem_entry == func_decls.end() )
             circ::unreachable() << "Trying to emit for a function which wasn't registered";
 
-        auto funcCall = decoder::FunctionCall( sem_entry->second.function_name,
-                                               { stack_begin_counter } );
+        auto funcCall
+            = decoder::FunctionCall( sem_entry->second.function_name, { stack_begin_counter } );
         block.push_back( decoder::Statement( funcCall ) );
         return block;
     }
 
-    //    if(independent)
-    //    {
-    //        for(auto op : non_unique_dfs< gap::graph::yield_node::on_open >( start_op_ptr ))
-    //        {
-    //            //TODO(sebas): change this to decode time select
-    //
-    //            auto lhs = decoder::Id( "stack[" + stack_counter + "++]" );
-    //            block.push_back(
-    //                decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
-    //
-    //            for(auto child : op->op->operands())
-    //                if( isa<Select>(child) )
-    //                {
-    //
-    //                }
-    //        }
-    //    }
+    decoder::StatementBlock b;
 
-//    if ( !independent || independent )
-//    {
-        decoder::StatementBlock b;
-
-        for ( auto c : instr_proj.select_choices )
+    for ( auto c : instr_proj.select_choices )
+    {
+        auto indx = decoder::Var( "select_id_" + std::to_string( c.sel->id() ) );
+        auto choice = decoder::Int( static_cast< int64_t >( c.chosen_idx ) );
+        auto eq = decoder::Equal( indx, choice );
+        if ( !b.empty() )
         {
-            auto indx = decoder::Var( "select_id_" + std::to_string( c.sel->id() ) );
-            auto choice = decoder::Int( static_cast< int64_t >( c.chosen_idx ) );
-            auto eq = decoder::Equal( indx, choice );
-            if ( !b.empty() )
-            {
-                auto first = b.back();
-                b.pop_back();
-                b.push_back( decoder::And( first, eq ) );
-            }
-            else
-                b.push_back( eq );
+            auto first = b.back();
+            b.pop_back();
+            b.push_back( decoder::And( first, eq ) );
         }
+        else
+            b.push_back( eq );
+    }
 
-        for ( auto op : op_gen  )
-        {
-            auto lhs = decoder::Id( "stack[" + stack_counter_for_call + "++]" );
-            block.push_back(
-                decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
-            //        stack_counter++;
-        }
-        //        auto bc = get_expression_for_projection(vi, )
-        auto sem_entry = func_decls.find( *node );
-        if ( sem_entry == func_decls.end() )
-            circ::unreachable() << "Trying to emit for a function which wasn't registered";
+    for ( auto op : op_gen )
+    {
+        auto lhs = decoder::Id( "stack[" + stack_counter_for_call + "++]" );
+        block.push_back(
+            decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
+    }
+    auto sem_entry = func_decls.find( *node );
+    if ( sem_entry == func_decls.end() )
+        circ::unreachable() << "Trying to emit for a function which wasn't registered";
 
-        auto funcCall = decoder::FunctionCall( sem_entry->second.function_name,
-                                               { stack_begin_counter } );
-        block.push_back( decoder::Statement( funcCall ) );
+    auto funcCall
+        = decoder::FunctionCall( sem_entry->second.function_name, { stack_begin_counter } );
+    block.push_back( decoder::Statement( funcCall ) );
 
-        decoder::If ifs( b, block );
-        return ifs;
-//    }
+    decoder::If ifs( b, block );
+    return ifs;
 }
 
 decoder::Var UniqueNameStorage::get_unique_var_name()
