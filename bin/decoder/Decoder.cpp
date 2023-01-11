@@ -109,6 +109,66 @@ circ::CircuitPtr get_input_circuit(auto &cli)
     return {};
 }
 
+void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
+{
+    using namespace circ;
+    using namespace circ::print;
+    using namespace circ::inspect;
+
+    if ( auto ir_out = cli.template get< cli::IROut >() )
+        serialize(*ir_out, circuit.get());
+
+    if ( auto json_out = cli.template get< cli::JsonOut >() )
+        print_circuit( *json_out, print_json, circuit.get() );
+
+    if ( auto dot_out = cli.template get< cli::DotOut >() )
+    {
+        if ( auto input_colors = cli.template get< cli::DotHighlight >() )
+        {
+            auto hl = HighlightColorer( std::move( *input_colors ) );
+            DotPrinter< decltype( hl ) > dp( hl );
+            return print_circuit( *dot_out, dp, circuit.get() );
+        }
+
+        if ( cli.template present< cli::DotSemantics >() )
+        {
+            circ::DotPrinter< SemanticsColorer > dp;
+            return circ::print_circuit( *dot_out, dp, circuit.get() );
+        }
+
+        if ( auto coloring = cli.template get< cli::DotDiff >() )
+        {
+            auto print_diff = [ & ]< inspect::SubPathCol T >()
+            {
+                return circ::print_circuit( *dot_out, DotPrinter< DiffColorer< T > >(),
+                                            circuit.get() );
+            };
+
+            if ( coloring == "ibtdr" )
+                return print_diff.template operator()< InstrBitsToDRSubPathCollector >();
+
+            if ( coloring == "full" )
+                return print_diff.template operator()< LeafToVISubPathCollector >();
+
+            // the following color schemes are based on semantic tainting
+            SemanticsColorer sc;
+            sc.color_circuit( circuit.get() );
+            if ( coloring == "ctt" )
+                print_diff.template operator()< ConfigToTargetSubPathCollector >();
+
+            if ( coloring == "ltt" )
+                print_diff.template operator()< LeafToTargetSubPathCollector >();
+
+            return sc.remove_coloring( circuit.get() );
+        }
+
+        circ::DotPrinter< EmptyColorer > dp;
+        return circ::print_circuit( *dot_out, dp, circuit.get() );
+    }
+
+    if (auto verilog_out = cli.template get< cli::VerilogOut >())
+        circ::print_circuit(*verilog_out, circ::VerilogPrinter("circuit"), circuit.get());
+}
 
 template< typename OptsList >
 auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::ParsedCmd >
@@ -195,16 +255,7 @@ int main(int argc, char *argv[]) {
     opt.add_pass("merge-transitive-advices");
     circuit = opt.run(std::move(circuit));
 
-
-    if (auto dot_out = parsed_cli.template get< cli::DotOut >()) {
-        std::vector< std::string > highlights;
-        if (auto input_colors = parsed_cli.template get< cli::DotHighlight >()) {
-            highlights = std::move(*input_colors);
-        }
-//        circ::print_circuit(*dot_out, circ::print_dot, circuit.get(),
-//                             std::unordered_map< circ::Operation *, std::string >{}, highlights);
-    }
-
+    store_outputs(parsed_cli, circuit);
 
     if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >())
     {
@@ -215,18 +266,19 @@ int main(int argc, char *argv[]) {
             decGen.print_file();
         }
     }
-//    auto seg = circ::circ_to_segg(std::move(circuit));
-//    std::cout << "Number of starting nodes: "  << seg->_nodes.size() << std::endl;
-//    circ::dedup(*seg.get());
-//    std::cout << "dedup nodes: "  << seg->_nodes.size() << std::endl;
+
+    auto seg = circ::circ_to_segg(std::move(circuit));
+    std::cout << "Number of starting nodes: "  << seg->_nodes.size() << std::endl;
+    circ::dedup(*seg.get());
+    std::cout << "dedup nodes: "  << seg->_nodes.size() << std::endl;
 //
-//    circ::decoder::ExpressionPrinter ep(std::cout);
-//    auto max_size_var = circ::decoder::Var("MAX_SIZE_INSTR");
-//    seg->prepare();
-//    auto m = seg->get_maximum_vi_size();
-//    ep.print(circ::decoder::Statement(circ::decoder::Assign(max_size_var, circ::decoder::Int(m))));
-//    seg->print_semantics_emitter(ep);
-//    seg->print_decoder(ep);
+    circ::decoder::ExpressionPrinter ep(std::cout);
+    auto max_size_var = circ::decoder::Var("MAX_SIZE_INSTR");
+    seg->prepare();
+    auto m = seg->get_maximum_vi_size();
+    ep.print(circ::decoder::Statement(circ::decoder::Assign(max_size_var, circ::decoder::Int(m))));
+    seg->print_semantics_emitter(ep);
+    seg->print_decoder(ep);
 
     /*
      * Emission is two phased:
