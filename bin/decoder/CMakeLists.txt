@@ -11,5 +11,6 @@ add_circuitous_executable( decoder
     circuitous::transforms
     circuitous::decoder
     circuitous::seg
+    circuitous::diff
 )
 
