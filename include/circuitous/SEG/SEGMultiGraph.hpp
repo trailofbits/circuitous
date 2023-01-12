@@ -33,7 +33,7 @@ namespace circ
 
     struct UniqueNameStorage
     {
-        decoder::Var get_unique_var_name();
+        decoder::Var get_unique_var_name(decoder::Id type_name = "auto");
         std::vector< decoder::Var > names;
         int counter = 0;
     };
@@ -779,7 +779,6 @@ namespace circ
     std::pair< decoder::Var, decoder::StatementBlock > expr_for_node(
         std::unordered_map< SEGNode, decoder::FunctionDeclaration, segnode_hash_on_get_hash,
                             segnode_comp_on_hash > &func_decls,
-        UniqueNameStorage &unique_names_storage, const SEGNode &node, decoder::Var stack,
-        int *initial_stack_offset, decoder::Var max_size_stack );
+        UniqueNameStorage &unique_names_storage, const SEGNode &node, std::vector<decoder::Var> arg_names );
 
 }

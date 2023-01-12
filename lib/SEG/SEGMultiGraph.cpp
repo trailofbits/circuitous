@@ -127,10 +127,12 @@ void SEGGraph::prepare()
     // this does too much somehow
     for(auto vi : circuit->attr<circ::VerifyInstruction>())
     {
-        int counter = 0;
         for(auto & [op, node ] : this->get_nodes_by_vi(vi) )
         {
-            circ::expr_for_node( func_decls, name_storage, *node, stack,  &counter, max_size_var );
+            std::vector<decoder::Var> argument_names;
+            for(int i = 0 ; i < node->subtree_count; i++ )
+                argument_names.push_back( name_storage.get_unique_var_name("const VisInputType &") );
+            circ::expr_for_node( func_decls, name_storage, *node, argument_names );
         }
     }
 
@@ -159,7 +161,7 @@ decoder::FunctionCall print_SEGNode_tree( SEGNode &node, std::string stack_name,
 }
 
 /*
- * This function converts a SEGNode into a c++.
+ * This function converts a SEGNode into c++.
  *
  * For a given SEGNode n it will return two things:
  *      the variable name of an lvalue containing the result of the execution of n together with it's subtrees
@@ -174,31 +176,26 @@ std::pair< decoder::Var, decoder::StatementBlock >
 expr_for_node( std::unordered_map< circ::SEGNode, circ::decoder::FunctionDeclaration,
                                    circ::segnode_hash_on_get_hash, circ::segnode_comp_on_hash >
                    &func_decls,
-               UniqueNameStorage &unique_names_storage, const SEGNode &node, decoder::Var stack,
-               int* initial_stack_offset, decoder::Var max_size_stack )
+               UniqueNameStorage &unique_names_storage, const SEGNode &node, std::vector<decoder::Var> arg_names )
 {
     std::vector<decoder::Expr> args;
     std::vector<decoder::Expr> local_vars;
     decoder::StatementBlock setup;
 
-    decoder::VarDecl pop_var(unique_names_storage.get_unique_var_name());
-    local_vars.push_back(pop_var.value()); // requires to be first in the list when calling the visitor
+    decoder::Var operation = arg_names[0];
+    auto last_index = 0;
+    local_vars.push_back(operation); // requires to be first in the list when calling the visitor
     for(auto &c : node._nodes)
     {
+        auto start = arg_names.begin() + last_index + 1;
+        auto end = start + c->subtree_count;
+        auto child_arg_names = std::vector< decoder::Var >( start, end );
+        last_index = last_index + c->subtree_count;
         auto [ lval, set ] = expr_for_node( func_decls,
-                                            unique_names_storage, *c, stack,
-                                            initial_stack_offset, max_size_stack );
+                                            unique_names_storage, *c, child_arg_names );
         local_vars.push_back(lval);
         setup.push_back(set);
     }
-    auto stack_offset_var = decoder::Var("stack_offset", "int*");
-    auto stack_offset_deref = decoder::Dereference(stack_offset_var);
-    (*initial_stack_offset)++;
-    auto pop_call = decoder::IndexVar(stack, stack_offset_deref);
-    auto pop_assign = decoder::Statement(decoder::Assign(pop_var, pop_call));
-    setup.push_back(pop_assign);
-    setup.push_back(decoder::Statement(
-        decoder::Assign(stack_offset_deref, decoder::Plus(stack_offset_deref, decoder::Int(1)))));
 
     decoder::VarDecl visitor_call_var(unique_names_storage.get_unique_var_name());
     auto visitor_call = decoder::FunctionCall("visitor.call", local_vars);
@@ -218,9 +215,9 @@ expr_for_node( std::unordered_map< circ::SEGNode, circ::decoder::FunctionDeclara
         decoder::FunctionDeclarationBuilder fdb;
         fdb.retType("VisRetType")
             .name(unique_names_storage.get_unique_var_name().name)
-            .arg_insert(decoder::VarDecl(decoder::Var("visitor", "const VisitorType& ")))
-            .arg_insert(decoder::VarDecl(decoder::Var("stack", "const std::array<" + max_size_stack.name + "> &")))
-           .arg_insert(decoder::VarDecl(stack_offset_var));
+            .arg_insert(decoder::VarDecl(decoder::Var("visitor", "const VisitorType& ")));
+        for(auto arg_name : arg_names)
+            fdb.arg_insert(decoder::VarDecl(arg_name));
         fdb.body_insert(setup);
         fdb.body_insert(decoder::Return(visitor_call_var.value()));
         func_decls.insert( { node, fdb.make() } );
@@ -233,13 +230,15 @@ expr_for_node( std::unordered_map< circ::SEGNode, circ::decoder::FunctionDeclara
     setup.clear();
 
     auto prev_declared_func = func_decls.find( node );
-    decoder::VarDecl prev_func_call_var(unique_names_storage.get_unique_var_name());
+    decoder::VarDecl prev_func_call_var( unique_names_storage.get_unique_var_name() );
+    std::vector< decoder::Expr > call_args = { decoder::Id( "visitor" ) };
+    call_args.insert( call_args.end(), arg_names.begin(), arg_names.end() );
     auto prev_func_call
-        = decoder::FunctionCall( prev_declared_func->second.function_name,
-                                 { decoder::Id( "visitor" ), stack, stack_offset_var } );
-    auto prev_func_assign = decoder::Statement(decoder::Assign(prev_func_call_var, prev_func_call));
-    setup.push_back(prev_func_assign);
-    return {prev_func_call_var.value(), setup};
+        = decoder::FunctionCall( prev_declared_func->second.function_name, call_args );
+    auto prev_func_assign
+        = decoder::Statement( decoder::Assign( prev_func_call_var, prev_func_call ) );
+    setup.push_back( prev_func_assign );
+    return { prev_func_call_var.value(), setup };
 }
 
 Operation *get_op_attached_to_advice_in_vi( Advice *advice, VerifyInstruction *vi)
@@ -565,10 +564,10 @@ decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
     return ifs;
 }
 
-decoder::Var UniqueNameStorage::get_unique_var_name()
+decoder::Var UniqueNameStorage::get_unique_var_name(decoder::Id type_name)
 {
     counter ++;
-    return decoder::Var( "generated_name_" + std::to_string(counter));
+    return decoder::Var( "generated_name_" + std::to_string(counter), type_name);
 }
 
 }
