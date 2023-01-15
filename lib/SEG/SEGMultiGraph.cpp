@@ -129,9 +129,7 @@ void SEGGraph::prepare()
     {
         for(auto & [op, node ] : this->get_nodes_by_vi(vi) )
         {
-            std::vector<decoder::Var> argument_names;
-            for(int i = 0 ; i < node->subtree_count; i++ )
-                argument_names.push_back( name_storage.get_unique_var_name("const VisInputType &") );
+            auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
             circ::expr_for_node( func_decls, name_storage, *node, argument_names );
         }
     }
@@ -343,9 +341,12 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 {
     decoder::StatementBlock block;
     VerifyInstruction *vi;
-    decoder::Id stack_counter;
-    explicit ToExpressionVisitor( VerifyInstruction *vi, const decoder::Id &stackCounter ) :
-        vi(vi), stack_counter( stackCounter )
+    std::vector<decoder::Var> arguments;
+    std::size_t arg_index;
+    std::size_t taken_args = 0;
+
+    explicit ToExpressionVisitor( VerifyInstruction *vi, std::vector<decoder::Var> &arguments, std::size_t argument_index = 0 ) :
+        vi(vi), arguments( arguments ), arg_index(argument_index)
     {
     }
 
@@ -357,30 +358,52 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 
     void visit( Operation *op )
     {
-        if(isa<Select>(op))
-            std::cout << "but how? " << std::endl;
-        auto lhs = decoder::Id( "stack[" + stack_counter + "++]" );
+        auto lhs = arguments[arg_index++];
+        taken_args++;
         block.push_back(
             decoder::Statement( decoder::Assign( lhs, decoder::Id( op->name() ) ) ) );
+        arguments.push_back(lhs);
         op->traverse( *this );
     }
 
     void visit( Select *op )
     {
+        std::size_t first_taken_args = 0;
+        bool is_first = true;
         for ( std::size_t choice = 1; choice < op->operands_size(); choice++ )
         {
             auto indx = decoder::Var( "select_id_" + std::to_string( op->id() ) );
             auto c_val = decoder::Int( static_cast< int64_t >( choice -1 ) );
             auto eq = decoder::Equal( indx, c_val );
 
-            ToExpressionVisitor choice_child_vis( vi, stack_counter );
+            ToExpressionVisitor choice_child_vis( vi, arguments, arg_index  );
             choice_child_vis.visit( op->operand( choice ) );
+            if(is_first)
+            {
+                first_taken_args = choice_child_vis.taken_args;
+                is_first = false;
+            }
+            else
+            {
+                check(first_taken_args == choice_child_vis.taken_args) << "non-isomorphic selects are not allowed for independent emission";
+            }
             decoder::If ifs( eq, choice_child_vis.block );
             block.push_back( ifs );
         }
+        arg_index = arg_index + first_taken_args;
     }
 };
 
+/*
+ * Generates one function per verify instruction that accepts instruction bytes.
+ *
+ * Preconditions:
+ *      prepare has been called
+ *
+ * Postconditions:
+ *      prints out the decoder functions into expression printer,
+ *      probably you want to have called print_semantics beforehand
+ */
 void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
 {
     // print decoder
@@ -389,13 +412,15 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
         circ::decoder::FunctionDeclarationBuilder fdb;
         fdb.name("decoder_for_vi" + std::to_string(vi->id()))
             .retType("void");
-        decoder::Var stack_counter("stack_counter");
-        decoder::Var stack_begin_counter("stack_counter_begin");
-        fdb.body_insert_statement(decoder::Assign(decoder::VarDecl(stack_counter), decoder::Int(0)));
-        fdb.body_insert_statement(decoder::Assign(decoder::VarDecl(stack_begin_counter), decoder::Int(0)));
         auto paths = this->get_nodes_by_vi(vi);
 
 
+        /*
+         * There are multiple operations which are considered we would need to emit semantics for
+         * However some of them might require a decode-time choice.
+         * We keep track of the roots in both a set and multimap as multimap
+         * does not expose a nice interface to just loop over the keys
+         */
         std::multimap< Operation* , seg_projection> proj_groups;
         std::set< Operation* > proj_keys;
         for(auto p : this->get_nodes_by_vi(vi))
@@ -407,14 +432,12 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
         for(auto key : proj_keys)
         {
             auto equal_range = proj_groups.equal_range(key);
-            auto start_counter = stack_counter;
-            fdb.body_insert_statement(decoder::Assign(stack_begin_counter, stack_counter));
             if( proj_groups.count(key) == 1)
             {
                 auto p = (*proj_groups.find(key)).second;
                 auto instr_proj = p.first;
                 auto node = p.second;
-                auto expr = get_expression_for_projection( vi, start_counter, stack_begin_counter, instr_proj, node );
+                auto expr = get_expression_for_projection( vi, instr_proj, node );
                 fdb.body_insert(expr);
             }
             else{
@@ -459,7 +482,8 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
                     auto instr_proj = p.first;
                     auto node = p.second;
 
-                    ToExpressionVisitor vis(vi, "stack_counter");
+                    auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
+                    ToExpressionVisitor vis( vi, argument_names );
                     vis.visit(key);
                     fdb.body_insert(vis.block);
 
@@ -467,10 +491,11 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
                     if ( sem_entry == func_decls.end() )
                         circ::unreachable() << "Trying to emit for a function which wasn't registered";
 
-                    auto funcCall = decoder::FunctionCall( sem_entry->second.function_name,
-                                                           { decoder::Id( "stack" ), stack_counter } );
+                    std::vector<decoder::Expr> func_args;
+                    func_args.push_back(decoder::Id("visitor"));
+                    func_args.insert(func_args.end(), argument_names.begin(), argument_names.end());
+                    auto funcCall = decoder::FunctionCall( sem_entry->second.function_name, func_args );
                     fdb.body_insert( decoder::Statement( funcCall ) );
-
                 }
                 else
                 {
@@ -482,8 +507,7 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
                         auto [ root, p ] = *it;
                         auto instr_proj = p.first;
                         auto node = p.second;
-                        expr = get_expression_for_projection( vi, start_counter, stack_begin_counter, instr_proj,
-                                                              node );
+                        expr = get_expression_for_projection( vi, instr_proj,node );
 
                         fdb.body_insert( expr );
                     }
@@ -496,12 +520,9 @@ void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
 }
 
 decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
-                                                       decoder::Var stack_counter,
-                                                       decoder::Var stack_begin_counter,
                                                        InstructionProjection &instr_proj,
                                                        std::shared_ptr< SEGNode > &node )
 {
-    auto stack_counter_for_call = stack_counter.name;
     auto start_op = instr_proj.root_in_vi;
     auto start_op_ptr = std::make_shared< nodeWrapper >( start_op );
     auto op_gen = non_unique_dfs_with_choices< gap::graph::yield_node::on_open >(
@@ -511,20 +532,25 @@ decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
     bool has_choices = instr_proj.select_choices.size() > 0;
 
     decoder::StatementBlock block;
+    std::vector<decoder::Expr> arguments;
+    arguments.push_back(decoder::Id("visitor"));
     if ( !has_choices )
     {
-        for ( auto &[ op, nod ] : tuple_generators( op_gen, node_gen ) )
-        {
-            auto lhs = decoder::Id( "stack[" + stack_counter_for_call + "++]" );
-            block.push_back(
-                decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
-        }
         auto sem_entry = func_decls.find( *node );
         if ( sem_entry == func_decls.end() )
             circ::unreachable() << "Trying to emit for a function which wasn't registered";
 
+        for ( auto &[ op, nod ] : tuple_generators( op_gen, node_gen ) )
+        {
+            auto lhs = name_storage.get_unique_var_name();
+            block.push_back(
+                decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
+            arguments.push_back(lhs);
+        }
+
+        check(arguments.size() == sem_entry->second.args.size()) << "calls function with incorrect number of arguments. given arguments" << arguments.size() << " expected: " << sem_entry->second.args.size();
         auto funcCall
-            = decoder::FunctionCall( sem_entry->second.function_name, { stack_begin_counter } );
+            = decoder::FunctionCall( sem_entry->second.function_name, arguments );
         block.push_back( decoder::Statement( funcCall ) );
         return block;
     }
@@ -548,16 +574,19 @@ decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
 
     for ( auto op : op_gen )
     {
-        auto lhs = decoder::Id( "stack[" + stack_counter_for_call + "++]" );
+        auto lhs = name_storage.get_unique_var_name();
         block.push_back(
             decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
+        arguments.push_back(lhs);
     }
+
     auto sem_entry = func_decls.find( *node );
     if ( sem_entry == func_decls.end() )
         circ::unreachable() << "Trying to emit for a function which wasn't registered";
 
+    check(arguments.size() == sem_entry->second.args.size()) << "calls function with incorrect number of arguments";
     auto funcCall
-        = decoder::FunctionCall( sem_entry->second.function_name, { stack_begin_counter } );
+        = decoder::FunctionCall( sem_entry->second.function_name, arguments );
     block.push_back( decoder::Statement( funcCall ) );
 
     decoder::If ifs( b, block );
@@ -568,6 +597,18 @@ decoder::Var UniqueNameStorage::get_unique_var_name(decoder::Id type_name)
 {
     counter ++;
     return decoder::Var( "generated_name_" + std::to_string(counter), type_name);
+}
+
+std::vector<decoder::Var> UniqueNameStorage::get_n_var_names(int amount_of_names, decoder::Id type_name )
+{
+    std::vector<decoder::Var> vars;
+    for(auto i = 0; i < amount_of_names; i++)
+    {
+        counter ++;
+        vars.push_back(
+            decoder::Var( "generated_name_" + std::to_string( counter ), type_name ) );
+    }
+    return vars;
 }
 
 }

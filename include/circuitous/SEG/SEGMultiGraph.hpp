@@ -34,6 +34,7 @@ namespace circ
     struct UniqueNameStorage
     {
         decoder::Var get_unique_var_name(decoder::Id type_name = "auto");
+        std::vector<decoder::Var> get_n_var_names(int amount_of_names, decoder::Id type_name = "auto");
         std::vector< decoder::Var > names;
         int counter = 0;
     };
@@ -340,8 +341,6 @@ namespace circ
         UniqueNameStorage name_storage;
         decoder::Var stack = decoder::Var( "stack" );
         decoder::Expr get_expression_for_projection( VerifyInstruction *vi,
-                                                     decoder::Var stack_counter,
-                                                     decoder::Var stack_counter_begin,
                                                      InstructionProjection &instr_proj,
                                                      std::shared_ptr< SEGNode > &node );
     };
