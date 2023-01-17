@@ -176,9 +176,10 @@ namespace eqsat {
         auto match(const atom_t &a, const node_type &n, const matched_places_t &matched)
             -> single_match_generator
         {
+            const atom_base &base = a;
             co_yield std::visit([&] (const auto &atom) -> single_match_generator {
                 co_yield match(atom, n, matched);
-            }, a);
+            }, base);
         }
 
         auto match_children(const auto &pattern_children, const auto &node_children, const matched_places_t &matched)
@@ -241,15 +242,15 @@ namespace eqsat {
         auto match(const simple_expr &e, const node_type &n, const matched_places_t &matched)
             -> single_match_generator
         {
+            const simple_expr_base &base = e;
             co_yield std::visit([&] (const auto &a) -> single_match_generator {
                 co_yield match(a, n, matched);
-            }, e);
+            }, base);
         }
 
         auto match(const simple_expr &e, const eclass_type &eclass, const matched_places_t &matched)
             -> single_match_generator
         {
-            spdlog::debug("[eqsat] matching simple expr {}", e);
             for (const auto &n : eclass.nodes) {
                 co_yield match(e, *n, matched);
             }
@@ -335,9 +336,7 @@ namespace eqsat {
 
         matcher(const rewrite_rule &rule, const egraph &graph)
             : matcher(rule.lhs, graph)
-        {
-            spdlog::debug("[eqsat] matching rule {}", rule);
-        }
+        {}
 
         const match_pattern &pattern;
         const egraph &graph;
