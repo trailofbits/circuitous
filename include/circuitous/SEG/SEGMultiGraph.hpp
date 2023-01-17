@@ -310,7 +310,6 @@ namespace circ
         using edge_type = SEGEdge< node_pointer >;
         using CircuitPtr = Circuit::circuit_ptr_t;
 
-        explicit SEGGraph( CircuitPtr &circuit);
         explicit SEGGraph( CircuitPtr &circuit, std::ostream& os );
         std::vector< node_pointer > nodes() const;
         gap::generator< edge_type > edges() const;
@@ -327,8 +326,8 @@ namespace circ
         SEGGraph copy();
 
         void prepare();
-        void print_semantics_emitter( decoder::ExpressionPrinter &ep );
-        void print_decoder( decoder::ExpressionPrinter &ep );
+        void print_semantics_emitter( );
+        void print_decoder( );
         void print_instruction_identifier( );
         int get_maximum_vi_size();
 
@@ -338,6 +337,7 @@ namespace circ
 
         CircuitPtr circuit;
         std::ostream& os;
+        decoder::ExpressionPrinter ep;
         std::unordered_map< SEGNode, decoder::FunctionDeclaration, segnode_hash_on_get_hash,
                             segnode_comp_on_hash >
             func_decls;

@@ -103,10 +103,13 @@ void specialize( std::map< std::string, Operation * > &specs, std::shared_ptr< S
         c++;
     }
 }
-SEGGraph::SEGGraph( Circuit::circuit_ptr_t &circuit ) : circuit( std::move(circuit) ), os(std::cout) { }
-SEGGraph::SEGGraph( Circuit::circuit_ptr_t &circuit, std::ostream& os ) : circuit( std::move(circuit) ), os(os) { }
 
-void SEGGraph::print_semantics_emitter(decoder::ExpressionPrinter& ep)
+SEGGraph::SEGGraph( Circuit::circuit_ptr_t &circuit, std::ostream &os ) :
+    circuit( std::move( circuit ) ), os( os ), ep( decoder::ExpressionPrinter( os ) )
+{
+}
+
+void SEGGraph::print_semantics_emitter()
 {
     for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(*this)) {
         auto func = func_decls.find(*node);
@@ -406,7 +409,7 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
  *      prints out the decoder functions into expression printer,
  *      probably you want to have called print_semantics beforehand
  */
-void SEGGraph::print_decoder( decoder::ExpressionPrinter &ep )
+void SEGGraph::print_decoder( )
 {
     // print decoder
     for(circ::VerifyInstruction* vi : circuit->attr<circ::VerifyInstruction>())
@@ -597,7 +600,7 @@ decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
 
 void SEGGraph::print_instruction_identifier()
 {
-    decoder::DecoderPrinter decoderPrinter( circuit, o  s );
+    decoder::DecoderPrinter decoderPrinter( circuit, os );
     decoderPrinter.print_file();
 }
 
