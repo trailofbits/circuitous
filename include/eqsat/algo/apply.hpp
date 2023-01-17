@@ -62,7 +62,6 @@ namespace eqsat {
         const match_result &where,
         saturable_egraph< egraph > &graph
     ) {
-        spdlog::debug("[eqsat] applying rule {} at {}", rule, where);
         return applier(rule, where, graph).apply();
     }
 

@@ -45,7 +45,8 @@ namespace eqsat {
         }
 
         auto synthesize(const atom_t &atom) -> node_handle {
-            return std::visit([&] (const auto &a) { return synthesize_atom(a); }, atom);
+            const atom_base &base = atom;
+            return std::visit([&] (const auto &a) { return synthesize_atom(a); }, base);
         }
 
         auto synthesize(const expr_list &list) -> node_handle {
@@ -69,7 +70,8 @@ namespace eqsat {
         }
 
         auto synthesize(const simple_expr &expr) -> node_handle {
-            return std::visit([&] (const auto &e) { return synthesize(e); }, expr);
+            const simple_expr_base &base = expr;
+            return std::visit([&] (const auto &e) { return synthesize(e); }, base);
         }
 
         synthesizer(
