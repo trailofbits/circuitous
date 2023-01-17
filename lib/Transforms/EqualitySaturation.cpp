@@ -29,8 +29,6 @@ namespace circ
             circuit_saturable_egraph(std::move(graph)), rules
         );
 
-        eqsat::to_dot(saturated, "initial.dot");
-
         auto optimal = make_optimal_circuit_graph(std::move(saturated));
         spdlog::debug("[eqsat] stop equality saturation");
         return nullptr; // TODO circuit from optimal

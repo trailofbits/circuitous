@@ -326,10 +326,11 @@ namespace eqsat
     }
 
     const atom_t &root(const simple_expr &expr) {
+        const simple_expr_base &base = expr;
         return std::visit( gap::overloaded {
             [] (const atom_t &atom) -> const atom_t& { return atom; },
             [] (const expr_list &list) -> const atom_t& { return std::get<atom_t>(list.front()); }
-        }, expr);
+        }, base);
     }
 
     const atom_t& root(const expr_with_context& expr) { return root(expr.expr); }
@@ -342,12 +343,13 @@ namespace eqsat
     }
 
     expr_list children(const simple_expr &expr) {
+        const simple_expr_base &base = expr;
         return std::visit( gap::overloaded {
             [] (const atom_t &) -> expr_list { return {}; },
             [] (const expr_list &vec) -> expr_list {
                 return { std::next(vec.begin()), vec.end() };
             }
-        }, expr);
+        }, base);
     }
 
     expr_list children(const expr_with_context &expr) { return children(expr.expr); }
