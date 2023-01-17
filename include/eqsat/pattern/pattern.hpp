@@ -129,12 +129,13 @@ namespace eqsat
 
     template< typename stream >
     stream& operator<<(stream& os, const atom_t& atom) {
+        const atom_base& base = atom;
         std::visit( gap::overloaded{
             [&](const constant_t& c) { os << c; },
             [&](const operation_t& o) { os << o; },
             [&](const place_t& p) { os << p; },
             [&](const label_t& l) { os << l; },
-        }, atom);
+        }, base);
 
         if (auto bw = atom.bitwidth()) {
             os << ":" << std::to_string(bw.value());
@@ -196,8 +197,9 @@ namespace eqsat
     // without labeled parts and contexts
     struct simple_expr;
     using expr_list = std::vector< simple_expr >;
+    using simple_expr_base = std::variant< atom_t, expr_list >;
 
-    struct simple_expr : std::variant< atom_t, expr_list > {
+    struct simple_expr : simple_expr_base {
         using variant::variant;
     };
 
@@ -445,6 +447,7 @@ namespace eqsat
     }
 
     places_generator places(const atom_t &atom, const match_pattern &pattern, auto &filter) {
+        const atom_base &base = atom;
         co_yield std::visit( gap::overloaded {
             [&](const place_t& p) -> places_generator {
                 if (!filter(p)) {
@@ -455,10 +458,11 @@ namespace eqsat
                 co_yield places(l, pattern, filter);
             },
             [&] (const auto &) -> places_generator { co_return; /* noop */ }
-        }, atom);
+        }, base);
     }
 
     places_generator places(const simple_expr &expr, const match_pattern &pattern, auto &filter) {
+        const simple_expr_base &base = expr;
         co_yield std::visit( gap::overloaded {
             [&] (const atom_t &a) -> places_generator {
                 co_yield places(a, pattern, filter);
@@ -468,7 +472,7 @@ namespace eqsat
                     co_yield places(elem, pattern, filter);
                 }
             }
-        }, expr);
+        }, base);
     }
 
     places_generator places(const expr_with_context &expr, const match_pattern &pattern, auto &filter) {
