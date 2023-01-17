@@ -1,3 +1,5 @@
+#include "circuitous/Decoder/DecoderPrinter.hpp"
+
 #include <circuitous/SEG/SEGMultiGraph.hpp>
 #include <memory>
 #include <sstream>
@@ -40,7 +42,7 @@ void SEGNode::replace_all_nodes_by_id(std::shared_ptr<SEGNode> new_target, std::
 }
 
 
-std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit )
+std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit, std::ostream& os )
 {
     circ::inspect::LeafToVISubPathCollector subPathCollector;
     std::vector<std::shared_ptr<SEGNode>> nodes;
@@ -75,7 +77,7 @@ std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit )
         }
         vi_counter++;
     }
-    auto g = std::make_unique<SEGGraph>(circuit);
+    auto g = std::make_unique<SEGGraph>(circuit, os);
     g->_nodes = nodes;
     return g;
 }
@@ -101,8 +103,8 @@ void specialize( std::map< std::string, Operation * > &specs, std::shared_ptr< S
         c++;
     }
 }
-
-SEGGraph::SEGGraph( Circuit::circuit_ptr_t &circuit ) : circuit( std::move(circuit) ) { }
+SEGGraph::SEGGraph( Circuit::circuit_ptr_t &circuit ) : circuit( std::move(circuit) ), os(std::cout) { }
+SEGGraph::SEGGraph( Circuit::circuit_ptr_t &circuit, std::ostream& os ) : circuit( std::move(circuit) ), os(os) { }
 
 void SEGGraph::print_semantics_emitter(decoder::ExpressionPrinter& ep)
 {
@@ -591,6 +593,12 @@ decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
 
     decoder::If ifs( b, block );
     return ifs;
+}
+
+void SEGGraph::print_instruction_identifier()
+{
+    decoder::DecoderPrinter decoderPrinter( circuit, o  s );
+    decoderPrinter.print_file();
 }
 
 decoder::Var UniqueNameStorage::get_unique_var_name(decoder::Id type_name)

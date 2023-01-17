@@ -310,7 +310,8 @@ namespace circ
         using edge_type = SEGEdge< node_pointer >;
         using CircuitPtr = Circuit::circuit_ptr_t;
 
-        explicit SEGGraph( CircuitPtr &circuit );
+        explicit SEGGraph( CircuitPtr &circuit);
+        explicit SEGGraph( CircuitPtr &circuit, std::ostream& os );
         std::vector< node_pointer > nodes() const;
         gap::generator< edge_type > edges() const;
 
@@ -328,6 +329,7 @@ namespace circ
         void prepare();
         void print_semantics_emitter( decoder::ExpressionPrinter &ep );
         void print_decoder( decoder::ExpressionPrinter &ep );
+        void print_instruction_identifier( );
         int get_maximum_vi_size();
 
     private:
@@ -335,6 +337,7 @@ namespace circ
         void calculate_costs();
 
         CircuitPtr circuit;
+        std::ostream& os;
         std::unordered_map< SEGNode, decoder::FunctionDeclaration, segnode_hash_on_get_hash,
                             segnode_comp_on_hash >
             func_decls;
@@ -709,7 +712,7 @@ namespace circ
     void specialize( std::map< std::string, Operation * > &specs,
                      std::shared_ptr< SEGNode > node, Operation *op );
 
-    std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit );
+    std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit, std::ostream& o );
 
     template < gap::graph::graph_like g >
     void absorb_node_into_an_existing_root( g &graph, const SEGGraph::node_pointer &to_hash );
