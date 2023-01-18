@@ -323,7 +323,6 @@ namespace circ
         //    get_nodes_by_vi(VerifyInstruction* vi); std::vector<std::pair<GenerationUnit,
         //    std::shared_ptr<SEGNode>>> get_nodes_by_gu(const GenerationUnit& gu);
 
-        SEGGraph copy();
 
         void prepare();
         void print_semantics_emitter( );
@@ -334,6 +333,8 @@ namespace circ
     private:
         // calculate costs of the nodes for emission
         void calculate_costs();
+        void generate_function_definitions();
+        void extract_all_seg_nodes_from_circuit();
 
         CircuitPtr circuit;
         std::ostream& os;

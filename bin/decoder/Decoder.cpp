@@ -267,19 +267,31 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    auto seg = circ::circ_to_segg(std::move(circuit));
-    std::cout << "Number of starting nodes: "  << seg->_nodes.size() << std::endl;
-    circ::dedup(*seg.get());
-    std::cout << "dedup nodes: "  << seg->_nodes.size() << std::endl;
-//
-    circ::decoder::ExpressionPrinter ep(std::cout);
-    auto max_size_var = circ::decoder::Var("MAX_SIZE_INSTR");
-    seg->prepare();
-    auto m = seg->get_maximum_vi_size();
-    ep.print(circ::decoder::Statement(circ::decoder::Assign(max_size_var, circ::decoder::Int(m))));
-    seg->print_semantics_emitter(ep);
-    seg->print_decoder(ep);
 
+    std::unique_ptr<circ::SEGGraph> seg;
+    if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >()){
+        if ( *dec_out != "cout" ) {
+            auto o = std::ofstream ( *dec_out );
+            seg = std::make_unique<circ::SEGGraph>(circuit, o);
+        }
+        else {
+            seg = std::make_unique<circ::SEGGraph>(circuit, std::cout);
+        }
+    }
+    else{
+        circ::unreachable() << "Decoder out was not specified";
+    }
+
+
+    circ::decoder::ExpressionPrinter ep(std::cout);
+    seg->prepare();
+
+    auto m = seg->get_maximum_vi_size();
+    auto max_size_var = circ::decoder::Var("MAX_SIZE_INSTR");
+    ep.print(circ::decoder::Statement(circ::decoder::Assign(max_size_var, circ::decoder::Int(m))));
+    seg->print_semantics_emitter();
+    seg->print_decoder();
+    seg->print_instruction_identifier();
     /*
      * Emission is two phased:
      *      Phase 1: emit the functions representing the semantics emitter which will get used by the decoder
@@ -296,22 +308,6 @@ int main(int argc, char *argv[]) {
     // func decls orders based on hash buckets, need to traverse the graph to keep proper shape of the call graph
 
 
-
-//    if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >()){
-//        if ( *dec_out != "cout" ) {
-//            auto o = std::ofstream ( *dec_out );
-//            auto decGen = circ::decoder::DecoderPrinter( circuit, o );
-//            decGen.print_file();
-//        }
-//        else {
-//            auto decGen = circ::decoder::DecoderPrinter( circuit );
-//            decGen.print_file();
-//        }
-//    }
-//    else{
-//        circ::unreachable() << "Decoder out was not specified";
-//    }
-//    circ::semantics::print_semantics(circuit.get());
 
 
     return 0;

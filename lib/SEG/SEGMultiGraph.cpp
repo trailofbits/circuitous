@@ -42,46 +42,6 @@ void SEGNode::replace_all_nodes_by_id(std::shared_ptr<SEGNode> new_target, std::
 }
 
 
-std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit, std::ostream& os )
-{
-    circ::inspect::LeafToVISubPathCollector subPathCollector;
-    std::vector<std::shared_ptr<SEGNode>> nodes;
-    int vi_counter = 0;
-
-    for(VerifyInstruction* vi : circuit->attr< circ::VerifyInstruction >())
-    {
-        circ::pretty_print(vi);
-        auto ltt_paths = collect::DownTree<constraint_opts_ts>();
-        ltt_paths.Run(vi);
-        int path_counter = 0;
-
-        for(auto & path: ltt_paths.collected)
-        {
-            if(isa<AdviceConstraint>(path)) // these constraints are useless by themselves as others will obtain their values
-                continue;
-            auto prefix = "vi_" + std::to_string(vi_counter) + "_path" + std::to_string(path_counter) + "_node";
-            UnfinishedProjection up(prefix, vi, path);
-            up.fully_extend();
-
-            auto node_gen = gap::graph::dfs< gap::graph::yield_node::on_open >( up.projection.get()->node );
-            for(auto node : node_gen)
-                nodes.push_back(node);
-
-            for(auto copy : up.created_projections)
-            {
-                auto node_gen_proj = gap::graph::dfs< gap::graph::yield_node::on_open >( copy->projection->node );
-                for(auto node : node_gen_proj)
-                    nodes.push_back(node);
-            }
-            path_counter++;
-        }
-        vi_counter++;
-    }
-    auto g = std::make_unique<SEGGraph>(circuit, os);
-    g->_nodes = nodes;
-    return g;
-}
-
 void specialize( std::map< std::string, Operation * > &specs, std::shared_ptr< SEGNode > node,
                  Operation *op )
 {
@@ -127,18 +87,10 @@ void SEGGraph::print_semantics_emitter()
 
 void SEGGraph::prepare()
 {
+    extract_all_seg_nodes_from_circuit();
+    circ::dedup(*this);
     calculate_costs();
-    auto max_size_var = circ::decoder::Var("MAX_SIZE_INSTR");
-    // this does too much somehow
-    for(auto vi : circuit->attr<circ::VerifyInstruction>())
-    {
-        for(auto & [op, node ] : this->get_nodes_by_vi(vi) )
-        {
-            auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
-            circ::expr_for_node( func_decls, name_storage, *node, argument_names );
-        }
-    }
-
+    generate_function_definitions();
 }
 
 decoder::FunctionCall print_SEGNode_tree( SEGNode &node, std::string stack_name, Operation *op )
@@ -602,6 +554,61 @@ void SEGGraph::print_instruction_identifier()
 {
     decoder::DecoderPrinter decoderPrinter( circuit, os );
     decoderPrinter.print_file();
+}
+
+void SEGGraph::generate_function_definitions()
+{
+    // this does too much somehow
+    for(auto vi : circuit->attr<circ::VerifyInstruction>())
+    {
+        for(auto & [op, node ] : this->get_nodes_by_vi(vi) )
+        {
+            auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
+            circ::expr_for_node( func_decls, name_storage, *node, argument_names );
+        }
+    }
+}
+
+void SEGGraph::extract_all_seg_nodes_from_circuit()
+{
+    circ::inspect::LeafToVISubPathCollector subPathCollector;
+    std::vector< std::shared_ptr< SEGNode > > nodes;
+    int vi_counter = 0;
+
+    for ( VerifyInstruction *vi : circuit->attr< circ::VerifyInstruction >() )
+    {
+        auto ltt_paths = collect::DownTree< constraint_opts_ts >();
+        ltt_paths.Run( vi );
+        int path_counter = 0;
+
+        for ( auto &path : ltt_paths.collected )
+        {
+            if ( isa< AdviceConstraint >(
+                     path ) ) // these constraints are useless by themselves as others will
+                              // obtain their values
+                continue;
+            auto prefix = "vi_" + std::to_string( vi_counter ) + "_path"
+                          + std::to_string( path_counter ) + "_node";
+            UnfinishedProjection up( prefix, vi, path );
+            up.fully_extend();
+
+            auto node_gen = gap::graph::dfs< gap::graph::yield_node::on_open >(
+                up.projection.get()->node );
+            for ( auto node : node_gen )
+                nodes.push_back( node );
+
+            for ( auto copy : up.created_projections )
+            {
+                auto node_gen_proj = gap::graph::dfs< gap::graph::yield_node::on_open >(
+                    copy->projection->node );
+                for ( auto node : node_gen_proj )
+                    nodes.push_back( node );
+            }
+            path_counter++;
+        }
+        vi_counter++;
+    }
+    _nodes = nodes;
 }
 
 decoder::Var UniqueNameStorage::get_unique_var_name(decoder::Id type_name)
