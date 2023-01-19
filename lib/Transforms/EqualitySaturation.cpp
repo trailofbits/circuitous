@@ -4,6 +4,7 @@
 
 #include <circuitous/Transforms/EGraph.hpp>
 #include <circuitous/Transforms/EGraphBuilder.hpp>
+#include <circuitous/Transforms/CircuitBuilder.hpp>
 #include <circuitous/Transforms/EqSatCost.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
 #include <eqsat/algo/saturation.hpp>
@@ -31,7 +32,9 @@ namespace circ
 
         auto optimal = make_optimal_circuit_graph(std::move(saturated));
         spdlog::debug("[eqsat] stop equality saturation");
-        return nullptr; // TODO circuit from optimal
+
+        auto root = nodes_map.at(circuit.get());
+        return extract_circuit_from_egraph(optimal).extract(root, circuit->ptr_size);
     }
 
 } // namespace circ
