@@ -114,10 +114,9 @@ namespace circ
 
     std::optional< gap::bigint > extract_constant(const node_template &op);
 
-    // std::string to_string(const node_template &op);
+    std::string to_string(const node_template &op);
 
-    // maybe_bitwidth bitwidth(const node_template &op);
-
-    // std::string name(const circuit_enode *enode);
+    using maybe_bitwidth = std::optional< bitwidth_t >;
+    maybe_bitwidth bitwidth(const node_template &op);
 
 } // namespace circ
