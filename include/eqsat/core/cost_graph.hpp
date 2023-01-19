@@ -34,8 +34,8 @@ namespace eqsat {
 
         using base_graph::nodes;
 
-        cost_t cost(const node_pointer node) const {
-            return cost_function(node);
+        cost_t cost(node_pointer node) const {
+            return const_cast< cost_graph* >(this)->cost_function(node);
         }
 
         memoized_cost_function cost_function;
@@ -44,6 +44,7 @@ namespace eqsat {
     template< gap::graph::graph_like base_graph, typename cost_function_t >
     struct optimal_graph_view : cost_graph< base_graph, cost_function_t > {
         using cost_graph = cost_graph< base_graph, cost_function_t >;
+        using node_pointer = typename cost_graph::node_pointer;
 
         optimal_graph_view(optimal_graph_view &&other) = default;
         optimal_graph_view& operator=(optimal_graph_view &&other) = default;
@@ -55,13 +56,33 @@ namespace eqsat {
             )
         {}
 
-        using optimal_node =  typename cost_graph::node_pointer;
+        using cost_graph::eclass;
+        using cost_graph::cost;
 
-        // gap::generator< optimal_node > nodes() const {
-        //     for (auto node : base_graph::nodes()) {
+        struct optimal_node {
+            gap::generator< optimal_node > children() const {
+                for (auto ch : node->children()) {
+                    co_yield graph.node(ch);
+                }
+            }
 
-        //     }
-        // }
+            const optimal_graph_view &graph;
+            node_pointer node;
+        };
+
+        optimal_node node(graph::node_handle handle) const {
+            auto minimal = std::numeric_limits< cost_t >::max();
+            node_pointer minimal_node = nullptr;
+
+            for (auto node : eclass(handle).nodes) {
+                if (auto c = cost(node); c < minimal) {
+                    minimal = c;
+                    minimal_node = node;
+                }
+            }
+
+            return { *this, minimal_node };
+        }
     };
 
 } // namespace eqsat
