@@ -33,8 +33,9 @@ namespace circ
 
     struct UniqueNameStorage
     {
-        decoder::Var get_unique_var_name(decoder::Id type_name = "auto");
-        std::vector<decoder::Var> get_n_var_names(int amount_of_names, decoder::Id type_name = "auto");
+        decoder::Var get_unique_var_name( decoder::Id type_name = "auto" );
+        std::vector< decoder::Var > get_n_var_names( int amount_of_names,
+                                                     decoder::Id type_name = "auto" );
         std::vector< decoder::Var > names;
         int counter = 0;
     };
@@ -310,7 +311,7 @@ namespace circ
         using edge_type = SEGEdge< node_pointer >;
         using CircuitPtr = Circuit::circuit_ptr_t;
 
-        explicit SEGGraph( CircuitPtr &circuit, std::ostream& os );
+        explicit SEGGraph( Circuit *circ ) : circuit( circ ) { }
         std::vector< node_pointer > nodes() const;
         gap::generator< edge_type > edges() const;
 
@@ -323,32 +324,47 @@ namespace circ
         //    get_nodes_by_vi(VerifyInstruction* vi); std::vector<std::pair<GenerationUnit,
         //    std::shared_ptr<SEGNode>>> get_nodes_by_gu(const GenerationUnit& gu);
 
-
         void prepare();
-        void print_semantics_emitter( );
-        void print_decoder( );
-        void print_instruction_identifier( );
         int get_maximum_vi_size();
 
     private:
         // calculate costs of the nodes for emission
         void calculate_costs();
-        void generate_function_definitions();
         void extract_all_seg_nodes_from_circuit();
 
-        CircuitPtr circuit;
-        std::ostream& os;
-        decoder::ExpressionPrinter ep;
+        Circuit *circuit;
+    };
+
+    struct SEGGraphPrinter
+    {
+        explicit SEGGraphPrinter( Circuit *circ, std::ostream &os ) :
+            circuit( circ ), seg_graph(circ) , os( os ), ep( os )
+        {
+            seg_graph.prepare();
+            generate_function_definitions();
+        };
+
+        void print_semantics_emitter();
+        decoder::FunctionDeclaration print_decoder( VerifyInstruction *vi );
+        void print_instruction_identifier();
+
         std::unordered_map< SEGNode, decoder::FunctionDeclaration, segnode_hash_on_get_hash,
                             segnode_comp_on_hash >
             func_decls;
+
+    private:
+        Circuit *circuit;
+        SEGGraph seg_graph;
+        std::ostream &os;
+        decoder::ExpressionPrinter ep;
+
         UniqueNameStorage name_storage;
         decoder::Var stack = decoder::Var( "stack" );
         decoder::Expr get_expression_for_projection( VerifyInstruction *vi,
                                                      InstructionProjection &instr_proj,
                                                      std::shared_ptr< SEGNode > &node );
+        void generate_function_definitions();
     };
-
     /*
      * For a projection we need to save every possible combination of choices which might be
      * made in a single subtree for an emitted node. If we take all possible choices over a VI
@@ -713,7 +729,7 @@ namespace circ
     void specialize( std::map< std::string, Operation * > &specs,
                      std::shared_ptr< SEGNode > node, Operation *op );
 
-    std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit, std::ostream& o );
+    std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit, std::ostream &o );
 
     template < gap::graph::graph_like g >
     void absorb_node_into_an_existing_root( g &graph, const SEGGraph::node_pointer &to_hash );
@@ -782,6 +798,7 @@ namespace circ
     std::pair< decoder::Var, decoder::StatementBlock > expr_for_node(
         std::unordered_map< SEGNode, decoder::FunctionDeclaration, segnode_hash_on_get_hash,
                             segnode_comp_on_hash > &func_decls,
-        UniqueNameStorage &unique_names_storage, const SEGNode &node, std::vector<decoder::Var> arg_names );
+        UniqueNameStorage &unique_names_storage, const SEGNode &node,
+        std::vector< decoder::Var > arg_names );
 
 }

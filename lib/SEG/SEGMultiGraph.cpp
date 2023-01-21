@@ -64,14 +64,10 @@ void specialize( std::map< std::string, Operation * > &specs, std::shared_ptr< S
     }
 }
 
-SEGGraph::SEGGraph( Circuit::circuit_ptr_t &circuit, std::ostream &os ) :
-    circuit( std::move( circuit ) ), os( os ), ep( decoder::ExpressionPrinter( os ) )
-{
-}
 
-void SEGGraph::print_semantics_emitter()
+void SEGGraphPrinter::print_semantics_emitter()
 {
-    for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(*this)) {
+    for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(seg_graph)) {
         auto func = func_decls.find(*node);
         if(func != func_decls.end())
         {
@@ -90,7 +86,6 @@ void SEGGraph::prepare()
     extract_all_seg_nodes_from_circuit();
     circ::dedup(*this);
     calculate_costs();
-    generate_function_definitions();
 }
 
 decoder::FunctionCall print_SEGNode_tree( SEGNode &node, std::string stack_name, Operation *op )
@@ -361,122 +356,116 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
  *      prints out the decoder functions into expression printer,
  *      probably you want to have called print_semantics beforehand
  */
-void SEGGraph::print_decoder( )
+decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *vi )
 {
-    // print decoder
-    for(circ::VerifyInstruction* vi : circuit->attr<circ::VerifyInstruction>())
+    circ::decoder::FunctionDeclarationBuilder fdb;
+    fdb.name("decoder_for_vi" + std::to_string(vi->id()))
+        .retType("void");
+
+
+    /*
+     * There are multiple operations which are considered we would need to emit semantics for
+     * However some of them might require a decode-time choice.
+     * We keep track of the roots in both a set and multimap as multimap
+     * does not expose a nice interface to just loop over the keys
+     */
+    std::multimap< Operation* , seg_projection> proj_groups;
+    std::set< Operation* > proj_keys;
+    for(auto p : seg_graph.get_nodes_by_vi(vi))
     {
-        circ::decoder::FunctionDeclarationBuilder fdb;
-        fdb.name("decoder_for_vi" + std::to_string(vi->id()))
-            .retType("void");
-        auto paths = this->get_nodes_by_vi(vi);
+        proj_groups.insert( { p.first.root_in_vi, p } );
+        proj_keys.insert({p.first.root_in_vi});
+    }
 
-
-        /*
-         * There are multiple operations which are considered we would need to emit semantics for
-         * However some of them might require a decode-time choice.
-         * We keep track of the roots in both a set and multimap as multimap
-         * does not expose a nice interface to just loop over the keys
-         */
-        std::multimap< Operation* , seg_projection> proj_groups;
-        std::set< Operation* > proj_keys;
-        for(auto p : this->get_nodes_by_vi(vi))
+    for(auto key : proj_keys)
+    {
+        auto equal_range = proj_groups.equal_range(key);
+        if( proj_groups.count(key) == 1)
         {
-            proj_groups.insert( { p.first.root_in_vi, p } );
-            proj_keys.insert({p.first.root_in_vi});
+            auto p = (*proj_groups.find(key)).second;
+            auto instr_proj = p.first;
+            auto node = p.second;
+            auto expr = get_expression_for_projection( vi, instr_proj, node );
+            fdb.body_insert(expr);
         }
+        else{
+            /*
+             * Check for if the select choices are made independent, because if so we can
+             * emit code in for each choice separately.
+             * i.e transform
+             * if(cond_1 == 1 && cond_2 == 1)
+             * .... <insert combinatiorial version of (cond_1 == x && cond_2 == y)
+             * to
+             * if (cond_1 == 1 )
+             * ...
+             * if( cond2 == 2 )
+             * ...
+             *
+             * if( cond2 == 1)
+             * ...
+             * if( cond2 == 1
+             * ...
+             *
+             * Our current approach is to check for if for all selects which have a choice
+             * if they make a choice for every possible combination of select choices made.
+             * The easiest way to do so is just count how many options we have for this emitted node.
+             */
 
-        for(auto key : proj_keys)
-        {
-            auto equal_range = proj_groups.equal_range(key);
-            if( proj_groups.count(key) == 1)
+            std::set<Select*> s;
+            for(auto it = equal_range.first; it != equal_range.second; it++)
+            {
+                for(auto x :it->second.first.select_choices)
+                    s.insert(x.sel);
+            }
+
+            std::size_t target_count = 1;
+            for(auto x : s)
+                target_count = target_count * (1 << x->bits);
+
+            //TODO(sebas): and all segnodes need to be the same
+            bool independent = proj_groups.count(key) == target_count;
+            if(independent)
             {
                 auto p = (*proj_groups.find(key)).second;
                 auto instr_proj = p.first;
                 auto node = p.second;
-                auto expr = get_expression_for_projection( vi, instr_proj, node );
-                fdb.body_insert(expr);
+
+                auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
+                ToExpressionVisitor vis( vi, argument_names );
+                vis.visit(key);
+                fdb.body_insert(vis.block);
+
+                auto sem_entry = func_decls.find( *node );
+                if ( sem_entry == func_decls.end() )
+                    circ::unreachable() << "Trying to emit for a function which wasn't registered";
+
+                std::vector<decoder::Expr> func_args;
+                func_args.push_back(decoder::Id("visitor"));
+                func_args.insert(func_args.end(), argument_names.begin(), argument_names.end());
+                auto funcCall = decoder::FunctionCall( sem_entry->second.function_name, func_args );
+                fdb.body_insert( decoder::Statement( funcCall ) );
             }
-            else{
-                /*
-                 * Check for if the select choices are made independent, because if so we can
-                 * emit code in for each choice separately.
-                 * i.e transform
-                 * if(cond_1 == 1 && cond_2 == 1)
-                 * .... <insert combinatiorial version of (cond_1 == x && cond_2 == y)
-                 * to
-                 * if (cond_1 == 1 )
-                 * ...
-                 * if( cond2 == 2 )
-                 * ...
-                 *
-                 * if( cond2 == 1)
-                 * ...
-                 * if( cond2 == 1
-                 * ...
-                 *
-                 * Our current approach is to check for if for all selects which have a choice
-                 * if they make a choice for every possible combination of select choices made.
-                 * The easiest way to do so is just count how many options we have for this emitted node.
-                 */
-
-                std::set<Select*> s;
-                for(auto it = equal_range.first; it != equal_range.second; it++)
+            else
+            {
+                for ( auto it = equal_range.first; it != equal_range.second; it++ )
                 {
-                    for(auto x :it->second.first.select_choices)
-                        s.insert(x.sel);
-                }
-
-                std::size_t target_count = 1;
-                for(auto x : s)
-                    target_count = target_count * (1 << x->bits);
-
-                //TODO(sebas): and all segnodes need to be the same
-                bool independent = proj_groups.count(key) == target_count;
-                if(independent)
-                {
-                    auto p = (*proj_groups.find(key)).second;
+                    // TODO(sebas): we should ideally have an uninitialized expr, so we can
+                    // replace its value later.
+                    decoder::Expr expr = decoder::Id( "" );
+                    auto [ root, p ] = *it;
                     auto instr_proj = p.first;
                     auto node = p.second;
+                    expr = get_expression_for_projection( vi, instr_proj,node );
 
-                    auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
-                    ToExpressionVisitor vis( vi, argument_names );
-                    vis.visit(key);
-                    fdb.body_insert(vis.block);
-
-                    auto sem_entry = func_decls.find( *node );
-                    if ( sem_entry == func_decls.end() )
-                        circ::unreachable() << "Trying to emit for a function which wasn't registered";
-
-                    std::vector<decoder::Expr> func_args;
-                    func_args.push_back(decoder::Id("visitor"));
-                    func_args.insert(func_args.end(), argument_names.begin(), argument_names.end());
-                    auto funcCall = decoder::FunctionCall( sem_entry->second.function_name, func_args );
-                    fdb.body_insert( decoder::Statement( funcCall ) );
-                }
-                else
-                {
-                    for ( auto it = equal_range.first; it != equal_range.second; it++ )
-                    {
-                        // TODO(sebas): we should ideally have an uninitialized expr, so we can
-                        // replace its value later.
-                        decoder::Expr expr = decoder::Id( "" );
-                        auto [ root, p ] = *it;
-                        auto instr_proj = p.first;
-                        auto node = p.second;
-                        expr = get_expression_for_projection( vi, instr_proj,node );
-
-                        fdb.body_insert( expr );
-                    }
+                    fdb.body_insert( expr );
                 }
             }
         }
-
-        ep.print(fdb.make());
     }
+    return fdb.make();
 }
 
-decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
+decoder::Expr SEGGraphPrinter::get_expression_for_projection( VerifyInstruction *vi,
                                                        InstructionProjection &instr_proj,
                                                        std::shared_ptr< SEGNode > &node )
 {
@@ -550,18 +539,18 @@ decoder::Expr SEGGraph::get_expression_for_projection( VerifyInstruction *vi,
     return ifs;
 }
 
-void SEGGraph::print_instruction_identifier()
+void SEGGraphPrinter::print_instruction_identifier()
 {
     decoder::DecoderPrinter decoderPrinter( circuit, os );
     decoderPrinter.print_file();
 }
 
-void SEGGraph::generate_function_definitions()
+void SEGGraphPrinter::generate_function_definitions()
 {
     // this does too much somehow
     for(auto vi : circuit->attr<circ::VerifyInstruction>())
     {
-        for(auto & [op, node ] : this->get_nodes_by_vi(vi) )
+        for(auto & [op, node ] : seg_graph.get_nodes_by_vi(vi) )
         {
             auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
             circ::expr_for_node( func_decls, name_storage, *node, argument_names );

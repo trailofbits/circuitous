@@ -6,6 +6,8 @@
 #include <vector>
 #include <string>
 #include "DecodeAST.hpp"
+#include <circuitous/SEG/SEGMultiGraph.hpp>
+
 template <int L> concept SupportedEncodingSize =  L <= 64;
 
 namespace circ::decoder {
@@ -127,12 +129,11 @@ namespace circ::decoder {
      */
     class DecoderPrinter {
     public:
-        DecoderPrinter(const circ::CircuitPtr &circ) : circuit( circ ), os( std::cout ), ep(os) {
+        DecoderPrinter(Circuit* circ) : circuit( circ ), os( std::cout ), seg_graph_printer( circ, os ), ep(os) {
             extract_ctx();
         }
-        DecoderPrinter(const circ::CircuitPtr &circ, std::ostream &os) : circuit( circ ),
-                                                                         os( os ),
-                                                                         ep(os)
+        DecoderPrinter( Circuit *circ, std::ostream &os ) :
+            circuit( circ ), os( os ), seg_graph_printer( circ, os ), ep( os )
         {
             extract_ctx();
         }
@@ -146,8 +147,9 @@ namespace circ::decoder {
         inline static const std::array<Var,2> inner_func_args = {inner_func_arg1, inner_func_arg2};
 
 
-        const circ::CircuitPtr &circuit;
+        Circuit* circuit;
         std::ostream &os;
+        SEGGraphPrinter seg_graph_printer;
         std::vector< ExtractedCtx > extracted_ctxs;
 
         int max_depth = 0; // used to measure performance of selection tree generation
@@ -180,7 +182,7 @@ namespace circ::decoder {
         using decode_func_args =  std::vector<decode_context_function_arg>;
         static decode_func_args get_decode_context_function_args(const ExtractedCtx& ctx);
         Expr create_context_decoder_function(const ExtractedCtx &ctx);
-        static Expr get_decode_context_function_body(const decode_func_args& args, int encoding_size);
+        Expr get_decode_context_function_body(const decode_func_args& args, VerifyInstruction* vi, int encoding_size);
         Expr generate_decoder_selection_tree(const std::vector< ExtractedCtx * > &to_split,
                                              std::vector< std::pair< std::size_t, int>> already_chosen_bits,
                                              int depth);

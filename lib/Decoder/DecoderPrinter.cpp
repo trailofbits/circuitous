@@ -22,7 +22,7 @@ namespace circ::decoder {
         }
 
         auto args = get_decode_context_function_args( ctx );
-        fdb.body({ get_decode_context_function_body( args, ctx.encoding_size_in_bytes )});
+        fdb.body({ get_decode_context_function_body( args, ctx.vi, ctx.encoding_size_in_bytes )});
         return fdb.make();
     }
 
@@ -58,7 +58,6 @@ namespace circ::decoder {
         print_file_headers();
         print_globals();
 
-
         for(auto& func : st.get_functions_for_select())
             ep.print(func);
 
@@ -68,6 +67,7 @@ namespace circ::decoder {
             ep.print( semantics::get_function_for_VI( ctx.vi , st , 0));
             ep.print( create_context_decoder_function( ctx ));
         }
+
         ep.print( create_top_level_function());
         os << std::endl;
     }
@@ -169,6 +169,7 @@ namespace circ::decoder {
     }
 
     Expr DecoderPrinter::get_decode_context_function_body(const decode_func_args &args,
+                                                           VerifyInstruction* vi,
                                                           int encoding_size) {
         StatementBlock block;
         for(auto& arg: args){
@@ -181,12 +182,21 @@ namespace circ::decoder {
                 compare_exprs.push_back( get_comparison( arg ));
         }
 
+        Expr valid_encoding_check = Id();
         if ( compare_exprs.size() == 1 )
-            block.emplace_back( Return( Mul( compare_exprs[ 0 ], Int( encoding_size ))));
+            valid_encoding_check = compare_exprs[ 0 ];
+        else if ( compare_exprs.size() == 2 )
+            valid_encoding_check = And( compare_exprs[ 0 ], compare_exprs[ 1 ] );
         else
-            block.emplace_back( Return( Mul( (And( compare_exprs[ 0 ], compare_exprs[ 1 ] )),
-                                             Int( encoding_size ))));
+            circ::unreachable() << "All instruction bytes should have been packed into at most 2 uint64's";
 
+        If is_valid_encoding_check(
+            valid_encoding_check, Statement(FunctionCall( "throw std::exception",
+                                              { Id( "Provided encoding is invalid" ) } )) );
+        block.emplace_back( valid_encoding_check );
+
+
+        block.emplace_back( seg_graph_printer.print_decoder( vi ).body );
         return block;
     }
 
@@ -393,7 +403,17 @@ std::size_t hash_select( Select *op )
 
 std::vector< Operation * > select_values( Select *op )
 {
-    return std::vector< Operation * >( op->operands().begin()++, op->operands().end() );
+    std::vector< Operation * > results;
+    auto first = false;
+    //TODO(sebas): idiomize this
+    for (auto o : op->operands() )
+    {
+        if(!first)
+            first = true;
+        else
+            results.push_back(o);
+    }
+    return results;
 }
 
 Operation *select_index( Select *op ) { return op->operand(0); }
