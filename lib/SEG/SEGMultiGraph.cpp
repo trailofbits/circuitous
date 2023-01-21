@@ -412,18 +412,27 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
              */
 
             std::set<Select*> s;
+            bool all_use_same_seg_node = true;
+            std::shared_ptr<SEGNode> comparison = nullptr;
             for(auto it = equal_range.first; it != equal_range.second; it++)
             {
                 for(auto x :it->second.first.select_choices)
                     s.insert(x.sel);
+
+                if(comparison == nullptr)
+                    comparison = it->second.second;
+                else
+                {
+                    if(comparison->get_hash() != it->second.second->get_hash())
+                        all_use_same_seg_node = false;
+                }
             }
 
             std::size_t target_count = 1;
             for(auto x : s)
                 target_count = target_count * (1 << x->bits);
 
-            //TODO(sebas): and all segnodes need to be the same
-            bool independent = proj_groups.count(key) == target_count;
+            bool independent = proj_groups.count(key) == target_count && all_use_same_seg_node;
             if(independent)
             {
                 auto p = (*proj_groups.find(key)).second;
