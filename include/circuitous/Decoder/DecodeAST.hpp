@@ -150,8 +150,12 @@ namespace circ::decoder {
         FunctionCall(const Id &functionName, std::vector< Expr > args)
                                     : function_name( functionName ), args( args ) {} ;
 
+        FunctionCall(const Id &functionName, std::vector< Expr > args, std::vector< Expr > template_parameters)
+            : function_name( functionName ), args( args ), template_parameters(template_parameters) {} ;
+
         Id function_name;
         std::vector< Expr > args;
+        std::vector< Expr > template_parameters;
     };
 
     struct Enum;
@@ -246,14 +250,16 @@ namespace circ::decoder {
     enum class ExprStyle : uint32_t {
         FuncArgs,
         FuncBody,
-        EnumBody
+        EnumBody,
+        TemplateParams
     };
 
     enum class GuardStyle : uint32_t{
         None,
         Parens,
         Curly,
-        Square
+        Square,
+        Angled
     };
 
     struct Guard{

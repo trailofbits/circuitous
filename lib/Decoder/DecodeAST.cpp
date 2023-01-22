@@ -26,6 +26,7 @@ namespace circ::decoder {
                 case ExprStyle::FuncArgs: return make_guard( GuardStyle::Parens );
                 case ExprStyle::FuncBody: return make_guard( GuardStyle::Curly );
                 case ExprStyle::EnumBody: return make_guard( GuardStyle::Curly );
+                case ExprStyle::TemplateParams: return make_guard( GuardStyle::Angled );
             }
         }();
 
@@ -38,6 +39,7 @@ namespace circ::decoder {
                     // no ; required in funcbody as for example if statements don't end with them
                     case ExprStyle::FuncBody: endl() ; break;
                     case ExprStyle::EnumBody: raw(", ").endl(); break;
+                    case ExprStyle::TemplateParams: raw(", "); break;
                 }
             }
         }
@@ -107,7 +109,12 @@ namespace circ::decoder {
                     .expr( arg.elseBody(), GuardStyle::Curly).endl();
                 },
                 [&](const FunctionCall &arg) {
-                    raw( arg.function_name ).expr_array( arg.args, ExprStyle::FuncArgs);
+                    if(arg.template_parameters.empty())
+                        raw( arg.function_name ).expr_array( arg.args, ExprStyle::FuncArgs);
+                    else
+                        raw( arg.function_name )
+                            .expr_array( arg.template_parameters, ExprStyle::TemplateParams )
+                            .expr_array( arg.args, ExprStyle::FuncArgs );
                 },
                 [&](const FunctionDeclaration &arg) {
                     raw( arg.retType, " ", arg.function_name )
@@ -136,6 +143,7 @@ namespace circ::decoder {
             case GuardStyle::Square :return {"[", "]", os};
             case GuardStyle::Parens :return {"  (", ") ", os};
             case GuardStyle::Curly :return {"{", "}", os, true};
+            case GuardStyle::Angled : return {"<", ">", os};
             default: circ::unreachable() << "invalid guard style";
         }
     }
