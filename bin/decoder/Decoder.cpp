@@ -265,25 +265,14 @@ int main(int argc, char *argv[]) {
             auto decGen = circ::decoder::DecoderPrinter( circuit.get(), o );
             decGen.print_file();
         }
-    }
-
-
-    std::unique_ptr<circ::SEGGraphPrinter> seg;
-    if (auto dec_out = parsed_cli.template get< cli:: DecoderOut >()){
-        if ( *dec_out != "cout" ) {
-            auto o = std::ofstream ( *dec_out );
-            seg = std::make_unique<circ::SEGGraphPrinter>(circuit.get(), o);
+        else
+        {
+            auto decGen = circ::decoder::DecoderPrinter( circuit.get(), std::cout );
+            decGen.print_file();
         }
-        else {
-            seg = std::make_unique<circ::SEGGraphPrinter>(circuit.get(), std::cout);
-        }
-    }
-    else{
-        circ::unreachable() << "Decoder out was not specified";
+
     }
 
-    seg->print_semantics_emitter();
-    seg->print_instruction_identifier();
 
 //    circ::decoder::ExpressionPrinter ep(std::cout);
 

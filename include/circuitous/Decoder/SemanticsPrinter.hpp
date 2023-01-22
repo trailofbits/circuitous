@@ -70,7 +70,7 @@ namespace circ::decoder::semantics
     static const Var llvm_context("llvm_context", "llvm::LLVMContext");
     static const Var llvm_module("llvm_context", "std::unique_ptr<llvm::Module>");
 
-    Expr emit_llvm_context();
+//    Expr emit_llvm_context();
 
 
 
@@ -233,16 +233,7 @@ namespace circ::decoder::semantics
     };
 
 
-    struct select_vis : UniqueVisitor<select_vis>
-    {
-        SelectStorage* st;
-        select_vis( SelectStorage *st ) : st( st ) { }
-        void visit(Operation* op){ op->traverse(*this); }
-        void visit(Select* op)
-        {
-            st->register_select(op);
-        }
-    };
+
 
 
     struct operation_to_vistor_setup_visitor;

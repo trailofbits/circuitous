@@ -291,14 +291,15 @@ int SEGGraph::get_maximum_vi_size()
 using seg_projection = std::pair< InstructionProjection, std::shared_ptr< SEGNode > >;
 struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 {
-    decoder::StatementBlock block;
+    decoder::StatementBlock output_expressions;
     VerifyInstruction *vi;
     std::vector<decoder::Var> arguments;
+    SelectStorage* select_storage;
     std::size_t arg_index;
     std::size_t taken_args = 0;
 
-    explicit ToExpressionVisitor( VerifyInstruction *vi, std::vector<decoder::Var> &arguments, std::size_t argument_index = 0 ) :
-        vi(vi), arguments( arguments ), arg_index(argument_index)
+    explicit ToExpressionVisitor( VerifyInstruction *vi, std::vector<decoder::Var> &arguments, SelectStorage* select_storage,  std::size_t argument_index = 0 ) :
+        vi(vi), arguments( arguments ), select_storage(select_storage), arg_index(argument_index)
     {
     }
 
@@ -312,7 +313,7 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
     {
         auto lhs = arguments[arg_index++];
         taken_args++;
-        block.push_back(
+        output_expressions.push_back(
             decoder::Statement( decoder::Assign( lhs, decoder::Id( op->name() ) ) ) );
         arguments.push_back(lhs);
         op->traverse( *this );
@@ -320,29 +321,45 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 
     void visit( Select *op )
     {
-        std::size_t first_taken_args = 0;
-        bool is_first = true;
-        for ( std::size_t choice = 1; choice < op->operands_size(); choice++ )
-        {
-            auto indx = decoder::Var( "select_id_" + std::to_string( op->id() ) );
-            auto c_val = decoder::Int( static_cast< int64_t >( choice -1 ) );
-            auto eq = decoder::Equal( indx, c_val );
+        auto can_use_select_helper_function = true;
+        for(std::size_t i = 1; i < op->operands_size(); i++)
+            can_use_select_helper_function = can_use_select_helper_function && op->operand(i)->operands_size() == 0;
 
-            ToExpressionVisitor choice_child_vis( vi, arguments, arg_index  );
-            choice_child_vis.visit( op->operand( choice ) );
-            if(is_first)
-            {
-                first_taken_args = choice_child_vis.taken_args;
-                is_first = false;
-            }
-            else
-            {
-                check(first_taken_args == choice_child_vis.taken_args) << "non-isomorphic selects are not allowed for independent emission";
-            }
-            decoder::If ifs( eq, choice_child_vis.block );
-            block.push_back( ifs );
+        if(can_use_select_helper_function)
+        {
+            auto helper_call = select_storage->get_specialization(op, decoder::Id("TODO, extract correct indices"));
+            auto lhs = arguments[arg_index++];
+            taken_args++;
+            output_expressions.push_back(
+                decoder::Statement( decoder::Assign( lhs, helper_call) ) );
+            arguments.push_back(lhs);
         }
-        arg_index = arg_index + first_taken_args;
+        else
+        {
+            std::size_t first_taken_args = 0;
+            bool is_first = true;
+            for ( std::size_t choice = 1; choice < op->operands_size(); choice++ )
+            {
+                auto indx = decoder::Var( "select_id_" + std::to_string( op->id() ) );
+                auto c_val = decoder::Int( static_cast< int64_t >( choice -1 ) );
+                auto eq = decoder::Equal( indx, c_val );
+
+                ToExpressionVisitor choice_child_vis( vi, arguments, select_storage, arg_index  );
+                choice_child_vis.visit( op->operand( choice ) );
+                if(is_first)
+                {
+                    first_taken_args = choice_child_vis.taken_args;
+                    is_first = false;
+                }
+                else
+                {
+                    check(first_taken_args == choice_child_vis.taken_args) << "non-isomorphic selects are not allowed for independent emission";
+                }
+                decoder::If ifs( eq, choice_child_vis.output_expressions );
+                output_expressions.push_back( ifs );
+            }
+            arg_index = arg_index + first_taken_args;
+        }
     }
 };
 
@@ -440,9 +457,9 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
                 auto node = p.second;
 
                 auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
-                ToExpressionVisitor vis( vi, argument_names );
+                ToExpressionVisitor vis( vi, argument_names, &select_storage );
                 vis.visit(key);
-                fdb.body_insert(vis.block);
+                fdb.body_insert(vis.output_expressions );
 
                 auto sem_entry = func_decls.find( *node );
                 if ( sem_entry == func_decls.end() )
@@ -566,6 +583,11 @@ void SEGGraphPrinter::generate_function_definitions()
         }
     }
 }
+void SEGGraphPrinter::print_select_storage_helper_functions()
+{
+    for(auto fdb : select_storage.get_functions_for_select())
+        ep.print(fdb);
+}
 
 void SEGGraph::extract_all_seg_nodes_from_circuit()
 {
@@ -625,6 +647,78 @@ std::vector<decoder::Var> UniqueNameStorage::get_n_var_names(int amount_of_names
             decoder::Var( "generated_name_" + std::to_string( counter ), type_name ) );
     }
     return vars;
+}
+
+
+Operation *select_index( Select *op ) { return op->operand(0); }
+
+std::size_t SelectStorage::hash_select_targets( Select *sel )
+{
+    print::PrettyPrinter pp;
+    return std::hash< std::string > {}( pp.Hash( select_values( sel ) ) );
+}
+
+void SelectStorage::register_select( Select *sel )
+{
+    decoder::FunctionDeclarationBuilder fdb;
+    print::PrettyPrinter pp;
+    auto values_hash = hash_select(sel);
+
+    fdb.name("select_" + std::to_string(values_hash));
+    //TODO get type of
+    fdb.retType(decoder::Id("VisitorInputType"));
+    decoder::Var select_index = decoder::Var("index", "int:" + std::to_string(sel->bits));
+    fdb.arg_insert(decoder::VarDecl(select_index));
+    for(std::size_t i = 0; i < select_values( sel ).size(); i++ )
+    {
+        // TODO replace with to string visitor
+        auto res = pp.Print( sel->operand( i ), 0 );
+        //TODO turn if else into if
+        auto if_expr = decoder::If(
+            decoder::Equal( select_index, decoder::Int( static_cast< int64_t >( i ) ) ),
+            decoder::Return( decoder::Id( res ) ) );
+        fdb.body_insert( if_expr );
+    }
+
+    selects.insert( std::make_pair( values_hash, fdb.make() ) );
+}
+
+std::vector< decoder::FunctionDeclaration > SelectStorage::get_functions_for_select()
+{
+    std::vector< decoder::FunctionDeclaration > funcs;
+
+    for(auto & k : selects)
+        funcs.push_back(k.second);
+
+    return funcs;
+}
+
+decoder::FunctionCall SelectStorage::get_specialization( circ::Select *sel, decoder::Expr index )
+{
+    auto func = selects.at( hash_select(sel));
+    return decoder::FunctionCall( func.function_name, { index } );
+}
+
+std::size_t hash_select( Select *op )
+{
+    print::PrettyPrinter pp;
+    return std::hash<std::string>{}( pp.Hash(select_values(op)) );
+}
+
+std::vector< Operation * > select_values( Select *op )
+{
+    std::vector< Operation * > results;
+    auto first = false;
+    //TODO(sebas): idiomize this
+    for (auto o : op->operands() )
+    {
+        if(!first)
+            first = true;
+        else
+            results.push_back(o);
+    }
+    return results;
+    //    return std::vector<Operation*>(op->operands.begin() + 1, op->operands.end());
 }
 
 }

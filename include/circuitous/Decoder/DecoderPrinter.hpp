@@ -20,20 +20,6 @@ namespace circ::decoder {
     uint64_t negate(uint64_t value);
     InputType ctoit(const char c); //char to input type
 
-    struct SelectStorage{
-        void register_select (Select* sel);
-        decoder::FunctionCall get_specialization (circ::Select* sel, Expr index);
-        std::vector<decoder::FunctionDeclaration> get_functions_for_select();
-
-    private:
-        std::unordered_map<std::size_t, decoder::FunctionDeclaration> selects;
-        std::size_t hash_select_targets(Select* sel);
-    };
-
-    std::size_t hash_select(Select* op);
-    Operation* select_index(Select* op);
-    std::vector<Operation*> select_values(Select* op);
-
 
     /*
      * Data structure representing a group of bits that can also be an ignore/don't care bit
@@ -154,7 +140,6 @@ namespace circ::decoder {
 
         int max_depth = 0; // used to measure performance of selection tree generation
 
-        SelectStorage st;
         ExpressionPrinter ep;
 
 

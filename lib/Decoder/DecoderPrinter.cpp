@@ -58,13 +58,10 @@ namespace circ::decoder {
         print_file_headers();
         print_globals();
 
-        for(auto& func : st.get_functions_for_select())
-            ep.print(func);
-
-
-//        ExpressionPrinter ep(os);
-        for (auto &ctx: extracted_ctxs) {
-            ep.print( semantics::get_function_for_VI( ctx.vi , st , 0));
+        seg_graph_printer.print_semantics_emitter();
+        seg_graph_printer.print_select_storage_helper_functions();
+        for (auto &ctx: extracted_ctxs)
+        {
             ep.print( create_context_decoder_function( ctx ));
         }
 
@@ -94,9 +91,6 @@ namespace circ::decoder {
                     std::move( dec ),
                     static_cast<VerifyInstruction*>(vi)
                 );
-
-            semantics::select_vis sel(&this->st);
-            sel.visit(vi);
         }
     }
 
@@ -191,12 +185,11 @@ namespace circ::decoder {
             circ::unreachable() << "All instruction bytes should have been packed into at most 2 uint64's";
 
         If is_valid_encoding_check(
-            valid_encoding_check, Statement(FunctionCall( "throw std::exception",
-                                              { Id( "Provided encoding is invalid" ) } )) );
-        block.emplace_back( valid_encoding_check );
+            valid_encoding_check, Return ( Int(-1)));
 
-
+        block.emplace_back( is_valid_encoding_check );
         block.emplace_back( seg_graph_printer.print_decoder( vi ).body );
+        block.emplace_back( Return(Int(encoding_size)));
         return block;
     }
 
@@ -424,76 +417,5 @@ std::size_t SelectStorage::hash_select_targets( Select *sel )
     return std::hash< std::string > {}( pp.Hash( select_values( sel ) ) );
 }
 
-void SelectStorage::register_select( Select *sel )
-{
-    FunctionDeclarationBuilder fdb;
-    print::PrettyPrinter pp;
-    auto values_hash = hash_select(sel);
-
-    fdb.name("select_" + std::to_string(values_hash));
-    //TODO get type of
-    fdb.retType(Id("Register"));
-    Var select_index = Var("index", "int:" + std::to_string(sel->bits));
-    fdb.arg_insert(VarDecl(select_index));
-    for(std::size_t i = 0; i < select_values( sel ).size(); i++ )
-    {
-        // TODO replace with to string visitor
-        auto res = pp.Print( sel->operand( i ), 0 );
-        //TODO turn ifelse into if
-        auto if_expr =  If( Equal( select_index, Int( static_cast< int64_t >( i ) ) ), Return( Id( res ) ));
-        fdb.body_insert( if_expr );
-        //                ss << "selector == " << std::to_string(i) <<  << "\n";
-    }
-
-    selects.insert( std::make_pair( values_hash, fdb.make() ) );
-}
-
-std::vector< decoder::FunctionDeclaration > SelectStorage::get_functions_for_select()
-{
-    std::vector< decoder::FunctionDeclaration > funcs;
-    print::PrettyPrinter pp;
-    std::stringstream sl;
-
-
-    // This needs to be only done once per key
-    // Still need to verify that all keys have same size, maybe during registration
-    // Need to safe the functions somewhere, maybe during registration?
-    for(auto & k : selects)
-    {
-        //            FunctionDeclarationBuilder fdb;
-        //            fdb.name("select_" + std::to_string(k.first));
-        //            //TODO get type of
-        //            fdb.retType(Id("Register"));
-        //            Var select_index = Var("index", "int:" + std::to_string(k.second->bits));
-        //            fdb.arg_insert(VarDecl(select_index));
-        //            for(std::size_t i = 0; i < select_values(k.second ).size(); i++ )
-        //            {
-        //                // TODO replace with to string visitor
-        //                auto res = pp.Print( k.second->operands[ i ], 0 );
-        //                //TODO turn ifelse into if
-        //                auto if_expr =  IfElse( Equal( select_index, Uint64(i) ), Return( Id( res ) ), Id("<Else>") );
-        //                fdb.body_insert( Statement( ) );
-        ////                ss << "selector == " << std::to_string(i) <<  << "\n";
-        //            }
-        funcs.push_back(k.second);
-
-        //            std::stringstream ss;
-        //            ss << "Register select_" << std::to_string(k.first) << "(selector:" << std::to_string(select_values(k.second).size()) << ") {\n";
-        //            for(std::size_t i = 0; i < select_values(k.second).size(); i++){
-        //                ss << "selector == " << std::to_string(i) << pp.Print(k.second->operands[i],0) << "\n";
-        //            }
-        //            ss << "}\n";
-        //            sl << ss.str();
-    }
-    //        return sl.str();
-
-
-    return funcs;
-}
-decoder::FunctionCall SelectStorage::get_specialization( circ::Select *sel, Expr index )
-{
-    auto func = selects.at( hash_select(sel));
-    return decoder::FunctionCall( func.function_name, { index } );
-}
 
 }  // namespace circ::disassm

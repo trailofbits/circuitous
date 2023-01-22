@@ -1,5 +1,7 @@
 #pragma once
+
 #include <circuitous/Decoder/DecodeAST.hpp>
+#include <circuitous/Decoder/DecoderPrinter.hpp>
 #include <circuitous/Diff/Diff.hpp>
 #include <gap/core/graph.hpp>
 #include <iostream>
@@ -8,6 +10,32 @@
 
 namespace circ
 {
+
+    struct SelectStorage
+    {
+        void register_select (Select* sel);
+        decoder::FunctionCall get_specialization (circ::Select* sel, decoder::Expr index);
+        std::vector<decoder::FunctionDeclaration> get_functions_for_select();
+
+    private:
+        std::unordered_map<std::size_t, decoder::FunctionDeclaration> selects;
+        std::size_t hash_select_targets(Select* sel);
+    };
+
+    std::size_t hash_select(Select* op);
+    Operation* select_index(Select* op);
+    std::vector<Operation*> select_values(Select* op);
+
+    struct select_vis : UniqueVisitor<select_vis>
+    {
+        SelectStorage* st;
+        select_vis( SelectStorage *st ) : st( st ) { }
+        void visit(Operation* op){ op->traverse(*this); }
+        void visit(Select* op)
+        {
+            st->register_select(op);
+        }
+    };
 
     Operation *get_op_attached_to_advice_in_vi( Advice *advice, VerifyInstruction *vi );
 
@@ -341,10 +369,13 @@ namespace circ
             circuit( circ ), seg_graph(circ) , os( os ), ep( os )
         {
             seg_graph.prepare();
+            select_vis sel(&this->select_storage);
+            sel.visit(circ);
             generate_function_definitions();
         };
 
         void print_semantics_emitter();
+        void print_select_storage_helper_functions();
         decoder::FunctionDeclaration print_decoder( VerifyInstruction *vi );
         void print_instruction_identifier();
 
@@ -358,6 +389,7 @@ namespace circ
         std::ostream &os;
         decoder::ExpressionPrinter ep;
 
+        SelectStorage select_storage;
         UniqueNameStorage name_storage;
         decoder::Var stack = decoder::Var( "stack" );
         decoder::Expr get_expression_for_projection( VerifyInstruction *vi,
