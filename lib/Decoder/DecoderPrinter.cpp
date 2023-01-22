@@ -1,6 +1,5 @@
 #include <circuitous/Decoder/DecoderPrinter.hpp>
 #include <circuitous/Printers.hpp>
-#include <circuitous/Decoder/SemanticsPrinter.hpp>
 #include <circuitous/IR/Shapes.hpp>
 #include <circuitous/IR/Visitors.hpp>
 #include <cstdlib>
@@ -359,8 +358,8 @@ void DecoderPrinter::print_file_headers() {
 
 void DecoderPrinter::print_globals()
 {
-    ep.print(Statement(VarDecl(semantics::llvm_context)));
-    ep.print(Statement(VarDecl(semantics::llvm_module)));
+//    ep.print(Statement(VarDecl(semantics::llvm_context)));
+//    ep.print(Statement(VarDecl(semantics::llvm_module)));
 }
 
 

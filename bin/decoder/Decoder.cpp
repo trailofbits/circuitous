@@ -17,7 +17,6 @@
 
 #include <circuitous/Lifter/CircuitSmithy.hpp>
 
-#include <circuitous/Decoder/SemanticsPrinter.hpp>
 #include <circuitous/Decoder/DecoderPrinter.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS

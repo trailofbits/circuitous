@@ -9,7 +9,6 @@ add_circuitous_library( decoder
 SOURCES
         DecoderPrinter.cpp
         DecodeAST.cpp
-        SemanticsPrinter.cpp
 HEADERS
     ${CIRCUITOUS_DISASSEMBLER_HEADERS}
 )
