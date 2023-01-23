@@ -288,7 +288,7 @@ int SEGGraph::get_maximum_vi_size()
     return *std::max_element(vals.begin(), vals.end());
 }
 
-using seg_projection = std::pair< InstructionProjection, std::shared_ptr< SEGNode > >;
+
 struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 {
     decoder::StatementBlock output_expressions;
@@ -406,7 +406,6 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
 
     for(auto key : proj_keys)
     {
-        auto equal_range = proj_groups.equal_range(key);
         if( proj_groups.count(key) == 1)
         {
             auto p = (*proj_groups.find(key)).second;
@@ -438,29 +437,7 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
              * The easiest way to do so is just count how many options we have for this emitted node.
              */
 
-            std::set<Select*> s;
-            bool all_use_same_seg_node = true;
-            std::shared_ptr<SEGNode> comparison = nullptr;
-            for(auto it = equal_range.first; it != equal_range.second; it++)
-            {
-                for(auto x :it->second.first.select_choices)
-                    s.insert(x.sel);
-
-                if(comparison == nullptr)
-                    comparison = it->second.second;
-                else
-                {
-                    if(comparison->get_hash() != it->second.second->get_hash())
-                        all_use_same_seg_node = false;
-                }
-            }
-
-            std::size_t target_count = 1;
-            for(auto x : s)
-                target_count = target_count * (1 << x->bits);
-
-            bool independent = proj_groups.count(key) == target_count && all_use_same_seg_node;
-            if(independent)
+            if( can_emit_independently(proj_groups, key))
             {
                 auto p = (*proj_groups.find(key)).second;
                 auto instr_proj = p.first;
@@ -472,18 +449,16 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
                 vis.visit(key);
                 fdb.body_insert(vis.output_expressions );
 
-                auto sem_entry = func_decls.find( *node );
-                if ( sem_entry == func_decls.end() )
-                    circ::unreachable() << "Trying to emit for a function which wasn't registered";
-
+                auto func_decl = get_func_decl( node );
                 std::vector<decoder::Expr> func_args;
                 func_args.push_back(decoder::Id("visitor"));
                 func_args.insert(func_args.end(), argument_names.begin(), argument_names.end());
-                auto funcCall = decoder::FunctionCall( sem_entry->second.function_name, func_args );
+                auto funcCall = decoder::FunctionCall( func_decl.function_name, func_args );
                 fdb.body_insert( decoder::Statement( funcCall ) );
             }
             else
             {
+                auto equal_range = proj_groups.equal_range(key);
                 for ( auto it = equal_range.first; it != equal_range.second; it++ )
                 {
                     // TODO(sebas): we should ideally have an uninitialized expr, so we can
@@ -520,10 +495,7 @@ decoder::Expr SEGGraphPrinter::get_expression_for_projection( VerifyInstruction 
     arguments.push_back(decoder::Id("visitor"));
     if ( !has_choices )
     {
-        auto sem_entry = func_decls.find( *node );
-        if ( sem_entry == func_decls.end() )
-            circ::unreachable() << "Trying to emit for a function which wasn't registered";
-
+        auto func_decl = get_func_decl(node);
         for ( auto &[ op, nod ] : tuple_generators( op_gen, node_gen ) )
         {
             auto lhs = name_storage.get_unique_var_name();
@@ -532,9 +504,10 @@ decoder::Expr SEGGraphPrinter::get_expression_for_projection( VerifyInstruction 
             arguments.push_back(lhs);
         }
 
-        check(arguments.size() == sem_entry->second.args.size()) << "calls function with incorrect number of arguments. given arguments" << arguments.size() << " expected: " << sem_entry->second.args.size();
-        auto funcCall
-            = decoder::FunctionCall( sem_entry->second.function_name, arguments );
+        check( arguments.size() == func_decl.args.size() )
+            << "calls function with incorrect number of arguments. given arguments"
+            << arguments.size() << " expected: " << func_decl.args.size();
+        auto funcCall = decoder::FunctionCall( func_decl.function_name, arguments );
         block.push_back( decoder::Statement( funcCall ) );
         return block;
     }
@@ -544,7 +517,6 @@ decoder::Expr SEGGraphPrinter::get_expression_for_projection( VerifyInstruction 
     for ( auto c : instr_proj.select_choices )
     {
         auto indx = decode_time_expression_creator->visit(c.sel->selector());
-//        auto indx = decoder::Var( "select_id_" + std::to_string( c.sel->id() ) );
         auto choice = decoder::Int( static_cast< int64_t >( c.chosen_idx ) );
         auto eq = decoder::Equal( indx, choice );
         if ( !b.empty() )
@@ -565,13 +537,10 @@ decoder::Expr SEGGraphPrinter::get_expression_for_projection( VerifyInstruction 
         arguments.push_back(lhs);
     }
 
-    auto sem_entry = func_decls.find( *node );
-    if ( sem_entry == func_decls.end() )
-        circ::unreachable() << "Trying to emit for a function which wasn't registered";
-
-    check(arguments.size() == sem_entry->second.args.size()) << "calls function with incorrect number of arguments";
-    auto funcCall
-        = decoder::FunctionCall( sem_entry->second.function_name, arguments );
+    auto func_decl = get_func_decl( node );
+    check( arguments.size() == func_decl.args.size() )
+        << "calls function with incorrect number of arguments";
+    auto funcCall = decoder::FunctionCall( func_decl.function_name, arguments );
     block.push_back( decoder::Statement( funcCall ) );
 
     decoder::If ifs( b, block );
@@ -629,6 +598,41 @@ void SEGGraphPrinter::print_select_storage_helper_functions()
 {
     for(auto fdb : select_storage.get_functions_for_select())
         ep.print(fdb);
+}
+bool SEGGraphPrinter::can_emit_independently(const std::multimap< Operation* , seg_projection>& proj_groups, Operation* key)
+{
+    std::set<Select*> s;
+    bool all_use_same_seg_node = true;
+    std::shared_ptr<SEGNode> comparison = nullptr;
+    auto equal_range = proj_groups.equal_range(key);
+    for(auto it = equal_range.first; it != equal_range.second; it++)
+    {
+        for(auto x :it->second.first.select_choices)
+            s.insert(x.sel);
+
+        if(comparison == nullptr)
+            comparison = it->second.second;
+        else
+        {
+            if(comparison->get_hash() != it->second.second->get_hash())
+                all_use_same_seg_node = false;
+        }
+    }
+
+    std::size_t target_count = 1;
+    for(auto x : s)
+        target_count = target_count * (1 << x->bits);
+
+    return proj_groups.count(key) == target_count && all_use_same_seg_node;
+}
+
+decoder::FunctionDeclaration
+SEGGraphPrinter::get_func_decl( std::shared_ptr< SEGNode > node )
+{
+    auto sem_entry = func_decls.find( *node );
+    if ( sem_entry == func_decls.end() )
+        circ::unreachable() << "Trying to emit for a function which wasn't registered";
+    return sem_entry->second;
 }
 
 void SEGGraph::extract_all_seg_nodes_from_circuit()

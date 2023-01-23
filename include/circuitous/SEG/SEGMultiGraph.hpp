@@ -425,6 +425,8 @@ namespace circ
         Circuit *circuit;
     };
 
+    using seg_projection = std::pair< InstructionProjection, std::shared_ptr< SEGNode > >;
+
     struct SEGGraphPrinter
     {
         explicit SEGGraphPrinter( Circuit *circ, std::ostream &os ) :
@@ -460,6 +462,9 @@ namespace circ
             std::shared_ptr< SEGNode > &node,
             SimpleDecodeTimeCircToExpressionVisitor *decode_time_expression_creator );
         void generate_function_definitions();
+        bool can_emit_independently(const std::multimap< Operation* , seg_projection>& proj_groups, Operation* key);
+
+        decoder::FunctionDeclaration get_func_decl(std::shared_ptr<SEGNode> node);
     };
     /*
      * For a projection we need to save every possible combination of choices which might be
