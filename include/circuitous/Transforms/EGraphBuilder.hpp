@@ -106,7 +106,8 @@ namespace circ
         node_template visit(And *op);
         node_template visit(Xor *op);
 
-        node_template visit(Circuit *);
+        node_template visit(Switch *);
+        node_template visit(Option *);
     };
 
     using nodes_map = std::unordered_map< Operation*, enode_handle >;
@@ -120,8 +121,9 @@ namespace circ
     {
         using node_template_builder::opcode;
         using node_template_builder::dispatch;
+        using operation = Operation *;
 
-        enode_handle add_nodes_recurse(Operation *op, egraph_builder_state &state) {
+        enode_handle add_nodes_recurse(operation op, egraph_builder_state &state) {
             auto &nodes = state.nodes_map;
             if (auto it = nodes.find(op); it != nodes.end()) {
                 return it->second;
@@ -137,13 +139,11 @@ namespace circ
             return node;
         }
 
-        node_template make_template(Circuit *ci) { return opcode(ci); }
+        node_template make_template(operation op) { return dispatch(op); }
 
-        node_template make_template(Operation *op) { return dispatch(op); }
-
-        egraph_builder_state build(Circuit *circuit) {
+        egraph_builder_state build(circuit_ref_t circuit) {
             egraph_builder_state state;
-            add_nodes_recurse(circuit, state);
+            add_nodes_recurse(circuit->root, state);
             return state;
         }
     };

@@ -92,7 +92,7 @@ namespace
         {
             auto pass = opt.template emplace_pass< circ::EqualitySaturationPass >( "eqsat" );
             if ( auto patterns = cli.template get< cli::Patterns >() )
-                pass->add_rules( circ::eqsat::parse_rules( patterns.value() ) );
+                pass->add_rules( eqsat::parse_rules( patterns.value() ) );
         }
 
         if ( cli.template present< cli::Simplify >() )
@@ -183,7 +183,7 @@ using cmd_opts_list = circ::tl::merge<
     optimization_options
 >;
 
-circ::CircuitPtr get_input_circuit(auto &cli)
+circ::circuit_owner_t get_input_circuit(auto &cli)
 {
     auto make_circuit = [&](auto buf) {
         circ::log_info() << "Going to make circuit";
@@ -202,7 +202,7 @@ circ::CircuitPtr get_input_circuit(auto &cli)
     return {};
 }
 
-void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
+void store_outputs(const auto &cli, const circ::circuit_owner_t &circuit)
 {
     using namespace circ;
     using namespace circ::print;
@@ -313,7 +313,7 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
     return parsed;
 }
 
-void reload_test(const circ::CircuitPtr &circuit)
+void reload_test(const circ::circuit_owner_t &circuit)
 {
     circ::serialize("reload_test.circir", circuit.get());
     auto reload = circ::deserialize("reload_test.circir");
