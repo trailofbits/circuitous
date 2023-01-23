@@ -125,11 +125,14 @@ namespace circ::decoder {
         }
 
         void print_file();
-    private:
-        static constexpr const auto bytes_input_variable = "input";
-        static constexpr const auto circuit_decode_function_name = "circuit_decode";
+
+
         inline static const Var inner_func_arg1 = Var( "first8bytes", "uint64_t");
         inline static const Var inner_func_arg2 = Var( "second8bytes", "uint64_t");
+
+    private:
+        static constexpr const auto circuit_decode_function_name = "circuit_decode";
+        static constexpr const auto bytes_input_variable = "input";
         inline static const std::array<Var,2> inner_func_args = {inner_func_arg1, inner_func_arg2};
 
 

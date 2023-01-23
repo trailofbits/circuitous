@@ -295,11 +295,17 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
     VerifyInstruction *vi;
     std::vector<decoder::Var> arguments;
     SelectStorage* select_storage;
+    SimpleDecodeTimeCircToExpressionVisitor* decode_time_resolver;
     std::size_t arg_index;
     std::size_t taken_args = 0;
 
-    explicit ToExpressionVisitor( VerifyInstruction *vi, std::vector<decoder::Var> &arguments, SelectStorage* select_storage,  std::size_t argument_index = 0 ) :
-        vi(vi), arguments( arguments ), select_storage(select_storage), arg_index(argument_index)
+    explicit ToExpressionVisitor( VerifyInstruction *vi, std::vector< decoder::Var > &arguments,
+                                  SelectStorage *select_storage,
+                                  SimpleDecodeTimeCircToExpressionVisitor *decode_time_resolver,
+                                  std::size_t argument_index = 0 ) :
+        vi( vi ),
+        arguments( arguments ), select_storage( select_storage ),
+        decode_time_resolver( decode_time_resolver ), arg_index( argument_index )
     {
     }
 
@@ -327,7 +333,8 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 
         if(can_use_select_helper_function)
         {
-            auto helper_call = select_storage->get_specialization(op, decoder::Id("TODO, extract correct indices"));
+            auto indx = decode_time_resolver->visit(op->selector());
+            auto helper_call = select_storage->get_specialization(op, indx);
             auto lhs = arguments[arg_index++];
             taken_args++;
             output_expressions.push_back(
@@ -344,7 +351,7 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
                 auto c_val = decoder::Int( static_cast< int64_t >( choice -1 ) );
                 auto eq = decoder::Equal( indx, c_val );
 
-                ToExpressionVisitor choice_child_vis( vi, arguments, select_storage, arg_index  );
+                ToExpressionVisitor choice_child_vis( vi, arguments, select_storage, decode_time_resolver, arg_index );
                 choice_child_vis.visit( op->operand( choice ) );
                 if(is_first)
                 {
@@ -379,6 +386,9 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
     fdb.name("decoder_for_vi" + std::to_string(vi->id()))
         .retType("void");
 
+    SimpleDecodeTimeCircToExpressionVisitor decode_time_expression_creator(
+        vi, decoder::DecoderPrinter::inner_func_arg1, decoder::DecoderPrinter::inner_func_arg2,
+        extract_helper_function );
 
     /*
      * There are multiple operations which are considered we would need to emit semantics for
@@ -402,7 +412,7 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
             auto p = (*proj_groups.find(key)).second;
             auto instr_proj = p.first;
             auto node = p.second;
-            auto expr = get_expression_for_projection( vi, instr_proj, node );
+            auto expr = get_expression_for_projection( vi, instr_proj, node, &decode_time_expression_creator );
             fdb.body_insert(expr);
         }
         else{
@@ -457,7 +467,8 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
                 auto node = p.second;
 
                 auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
-                ToExpressionVisitor vis( vi, argument_names, &select_storage );
+                ToExpressionVisitor vis( vi, argument_names, &select_storage,
+                                         &decode_time_expression_creator );
                 vis.visit(key);
                 fdb.body_insert(vis.output_expressions );
 
@@ -481,7 +492,7 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
                     auto [ root, p ] = *it;
                     auto instr_proj = p.first;
                     auto node = p.second;
-                    expr = get_expression_for_projection( vi, instr_proj,node );
+                    expr = get_expression_for_projection( vi, instr_proj,node, &decode_time_expression_creator);
 
                     fdb.body_insert( expr );
                 }
@@ -493,7 +504,8 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
 
 decoder::Expr SEGGraphPrinter::get_expression_for_projection( VerifyInstruction *vi,
                                                        InstructionProjection &instr_proj,
-                                                       std::shared_ptr< SEGNode > &node )
+                                                       std::shared_ptr< SEGNode > &node,
+    SimpleDecodeTimeCircToExpressionVisitor *decode_time_expression_creator )
 {
     auto start_op = instr_proj.root_in_vi;
     auto start_op_ptr = std::make_shared< nodeWrapper >( start_op );
@@ -531,7 +543,8 @@ decoder::Expr SEGGraphPrinter::get_expression_for_projection( VerifyInstruction 
 
     for ( auto c : instr_proj.select_choices )
     {
-        auto indx = decoder::Var( "select_id_" + std::to_string( c.sel->id() ) );
+        auto indx = decode_time_expression_creator->visit(c.sel->selector());
+//        auto indx = decoder::Var( "select_id_" + std::to_string( c.sel->id() ) );
         auto choice = decoder::Int( static_cast< int64_t >( c.chosen_idx ) );
         auto eq = decoder::Equal( indx, choice );
         if ( !b.empty() )
@@ -565,10 +578,39 @@ decoder::Expr SEGGraphPrinter::get_expression_for_projection( VerifyInstruction 
     return ifs;
 }
 
-void SEGGraphPrinter::print_instruction_identifier()
+void SEGGraphPrinter::print_helper_functions()
 {
-    decoder::DecoderPrinter decoderPrinter( circuit, os );
-    decoderPrinter.print_file();
+    os << "// Extract a value from `a:b`.\n"
+          "template <uint64_t kOffsetBits, uint64_t kSizeBits>\n"
+          "static uint64_t LoadFromPair(uint64_t a, uint64_t b) {\n"
+          "  static_assert((kOffsetBits + kSizeBits) <= 128u);\n"
+          "\n"
+          "  static constexpr uint64_t kBitMask =\n"
+          "      kSizeBits == 64 ? ~0ull : (1ull << kSizeBits) - 1ull;\n"
+          "\n"
+          "  // Extracting from `b`.\n"
+          "  if constexpr (kOffsetBits >= 64u) {\n"
+          "    return LoadFromPair<kOffsetBits - 64u, kSizeBits>(b, 0);\n"
+          "\n"
+          "  // Extracting from `a`.\n"
+          "  } else if constexpr ((kOffsetBits + kSizeBits) <= 64u) {\n"
+          "    return (a >> kOffsetBits) & kBitMask;\n"
+          "\n"
+          "  // Extract `b:a`, i.e. high bits from `a` to form the low bits of our\n"
+          "  // extracted value, combined with the low bits from `b` to form the high\n"
+          "  // bits of our extracted value.\n"
+          "  } else {\n"
+          "    static constexpr uint64_t kNumABits = 64u - kOffsetBits;\n"
+          "    static constexpr uint64_t kNumBBits = kOffsetBits + kSizeBits - 64u;\n"
+          "    static constexpr uint64_t kLowBitMask = (1ull << kNumABits) - 1ull;\n"
+          "    static constexpr uint64_t kHighBitMask = (1ull << kNumBBits) - 1ull;\n"
+          "\n"
+          "    const uint64_t low_bits = (a >> kOffsetBits) & kLowBitMask;\n"
+          "    const uint64_t high_bits = b & kHighBitMask;\n"
+          "    const uint64_t val = low_bits | (high_bits << kNumABits);\n"
+          "    return val;\n"
+          "  }\n"
+          "}" << std::endl;
 }
 
 void SEGGraphPrinter::generate_function_definitions()

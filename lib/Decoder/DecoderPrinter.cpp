@@ -57,6 +57,7 @@ namespace circ::decoder {
         print_file_headers();
         print_globals();
 
+        seg_graph_printer.print_helper_functions();
         seg_graph_printer.print_semantics_emitter();
         seg_graph_printer.print_select_storage_helper_functions();
         for (auto &ctx: extracted_ctxs)

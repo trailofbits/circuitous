@@ -10,7 +10,6 @@
 
 namespace circ
 {
-
     struct SelectStorage
     {
         void register_select (Select* sel);
@@ -38,6 +37,69 @@ namespace circ
     };
 
     Operation *get_op_attached_to_advice_in_vi( Advice *advice, VerifyInstruction *vi );
+
+
+    struct SimpleDecodeTimeCircToExpressionVisitor : Visitor<SimpleDecodeTimeCircToExpressionVisitor>
+    {
+        bool looping_on_operation = false;
+        explicit SimpleDecodeTimeCircToExpressionVisitor(
+            VerifyInstruction *vi, const decoder::Var &first8Bytes,
+            const decoder::Var &second8Bytes,
+            const std::string &extractHelper ) :
+            vi( vi ),
+            first_8_bytes( first8Bytes ), second_8_bytes( second8Bytes ),
+            extract_helper( extractHelper )
+        {
+        }
+
+        decoder::Expr visit( Advice *advice )
+        {
+            looping_on_operation = false;
+            return dispatch(get_op_attached_to_advice_in_vi( advice, vi ));
+        }
+
+        decoder::Expr visit( Concat *concat )
+        {
+            looping_on_operation = false;
+            check( concat->operands_size() > 0 ) << "concat cannot be a leaf";
+            auto first_child = concat->operand(concat->operands_size() - 1);
+            decoder::Expr tmp = dispatch(first_child);
+            auto size_offset = first_child->size;
+            for(long i = static_cast< long >( concat->operands_size() - 2 ); i >= 0; i--)
+            {
+                auto child = concat->operand( static_cast< size_t >( i ) );
+                auto new_val = dispatch(child);
+                tmp = decoder::Plus( tmp, decoder::Shfl( new_val, decoder::Int(size_offset) ) );
+                size_offset = concat->operand( static_cast< size_t >( i ) )->size;
+            }
+            return tmp;
+        }
+
+        decoder::Expr visit( Extract* extract)
+        {
+            looping_on_operation = false;
+            check(extract->operands_size() == 1) << "extracting from multiple nodes is not supported";
+            check( isa<InputInstructionBits>( extract->operand(0) ) ) << "Requires to extract from input bytes for now";
+            auto low = decoder::Int(extract->low_bit_inc);
+            auto high = decoder::Int(extract->high_bit_exc);
+            return decoder::FunctionCall(extract_helper, { first_8_bytes, second_8_bytes}, { low, high } );
+        }
+
+        decoder::Expr visit( Operation *op )
+        {
+            if ( !looping_on_operation )
+            {
+                looping_on_operation = true;
+                return Visitor< SimpleDecodeTimeCircToExpressionVisitor >::dispatch( op );
+            }
+            circ::unreachable() << "Not supported: " << op->name();
+        }
+
+        VerifyInstruction *vi;
+        const decoder::Var first_8_bytes;
+        const decoder::Var second_8_bytes;
+        const std::string extract_helper;
+    };
 
     template < gap::graph::yield_node when, typename node_pointer >
         requires gap::graph::node_like< typename node_pointer::element_type >
@@ -377,7 +439,8 @@ namespace circ
         void print_semantics_emitter();
         void print_select_storage_helper_functions();
         decoder::FunctionDeclaration print_decoder( VerifyInstruction *vi );
-        void print_instruction_identifier();
+        void print_helper_functions();
+        static constexpr const auto extract_helper_function = "extraction_helper";
 
         std::unordered_map< SEGNode, decoder::FunctionDeclaration, segnode_hash_on_get_hash,
                             segnode_comp_on_hash >
@@ -392,9 +455,10 @@ namespace circ
         SelectStorage select_storage;
         UniqueNameStorage name_storage;
         decoder::Var stack = decoder::Var( "stack" );
-        decoder::Expr get_expression_for_projection( VerifyInstruction *vi,
-                                                     InstructionProjection &instr_proj,
-                                                     std::shared_ptr< SEGNode > &node );
+        decoder::Expr get_expression_for_projection(
+            VerifyInstruction *vi, InstructionProjection &instr_proj,
+            std::shared_ptr< SEGNode > &node,
+            SimpleDecodeTimeCircToExpressionVisitor *decode_time_expression_creator );
         void generate_function_definitions();
     };
     /*
