@@ -131,14 +131,15 @@ namespace circ::eqsat {
 
     Id add_node_recurse(auto *op, CircuitEGraph &egraph)
     {
-      if (nodes.count(op))
-        return egraph.find(nodes[op]);
-      ENode node(make_template(op));
-      for (const auto &child : op->operands())
-        node.children().push_back( add_node_recurse(child, egraph) );
-      auto [id, enode] = egraph.add(std::move(node));
-      nodes[op] = enode;
-      return id;
+    // FIXME:
+    //   if (nodes.count(op))
+    //     return egraph.find(nodes[op]);
+    //   ENode node(make_template(op));
+    //   for (const auto &child : op->operands())
+    //     node.children().push_back( add_node_recurse(child, egraph) );
+    //   auto [id, enode] = egraph.add(std::move(node));
+    //   nodes[op] = enode;
+      return {};
     }
 
     std::pair< CircuitEGraph, Nodes > build(Circuit *circuit)
@@ -150,12 +151,12 @@ namespace circ::eqsat {
 
     OpTemplate make_template(Circuit *ci)
     {
-      return template_builder.opcode(ci);
+      return {}; // FIXME: template_builder.opcode(ci);
     }
 
     OpTemplate make_template(Operation *op)
     {
-      return template_builder.dispatch(op);
+      return {}; // FIXME: template_builder.dispatch(op);
     }
 
     Nodes nodes;
@@ -691,8 +692,9 @@ namespace circ::eqsat {
       auto node = graph.node(root);
       check(name(node) == "circuit");
 
-      for (const auto &child : graph.children(node))
-        circuit->add_operand( extract(child, circuit.get()) );
+      // FIXME:
+      // for (const auto &child : graph.children(node))
+      //  circuit->add_operand( extract(child, circuit.get()) );
       return circuit;
     }
 
@@ -744,14 +746,16 @@ namespace circ::eqsat {
 
   CircuitPtr postprocess(CircuitPtr &&circuit) {
     Verifier::advice_users_t collected;
-    Verifier::CollectAdviceUsers(circuit.get(), collected);
+    // // FIXME:
+    // Verifier::CollectAdviceUsers(circuit.get(), collected);
 
     std::vector<std::pair<Operation *, Operation *>> remove;
     for (auto &[advice, users] : collected) {
       if (auto aconstraint = getSingleAdviceContraint(advice, users)) {
-        for (auto ctx : get_contexts(aconstraint)) {
-          remove.emplace_back(aconstraint, ctx);
-        }
+        // FIXME:
+        // for (auto ctx : GetContexts(aconstraint)) {
+        //   remove.emplace_back(aconstraint, ctx);
+        // }
       }
     }
 
@@ -781,7 +785,7 @@ namespace circ::eqsat {
     auto optimal = costgraph.optimal();
 
     eqsat::CircuitExtractor ext(optimal);
-    return postprocess(ext.run(runner.node(circ.get()), circ->ptr_size));
+    return {}; // FIXME: postprocess(ext.run(runner.node(circ.get()), circ->ptr_size));
   }
 
   using RuleSets = std::span<RuleSet>;

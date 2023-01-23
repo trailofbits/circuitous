@@ -9,6 +9,8 @@
 
 #include <circuitous/Transforms/PassBase.hpp>
 #include <circuitous/Transforms/ConjureALU.hpp>
+#include <circuitous/Transforms/EqualitySaturation.hpp>
+
 #include <optional>
 #include <span>
 #include <string>
