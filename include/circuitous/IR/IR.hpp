@@ -179,9 +179,9 @@ namespace circ
     // TODO(lukas): Move to some class that inherits from gap::generator? Together with
     //              freeze possibly define more generic framework in a range-like fashion.
     template< circ_ir_op Op, gap::ranges::range From >
-        requires ( circ_ir_ptr< typename From::value_type > )
+        requires ( circ_ir_ptr< gap::ranges::range_value_t< From > > )
     auto filter( From from )
-        -> gap::generator< util::copy_const_t< typename From::value_type, Op * > >
+        -> gap::generator< util::copy_const_t< gap::ranges::range_value_t< From >, Op * > >
     {
         for ( auto op : from )
             if ( auto casted = dyn_cast< Op >( op ) )

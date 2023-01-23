@@ -261,7 +261,7 @@ namespace circ
     };
 
     template< typename T, gap::ranges::range R >
-    requires ( std::is_same_v< typename T::value_type, typename R::value_type > )
+    requires ( std::is_same_v< typename T::value_type, gap::ranges::range_value_t< R > > )
     T freeze( R &&range )
     {
         T out;
@@ -271,9 +271,9 @@ namespace circ
     }
 
     template< template< typename ... > class T, gap::ranges::range R >
-    T< typename R::value_type > freeze( R &&range )
+    auto freeze( R &&range )
     {
-        T< typename R::value_type > out;
+        T< gap::ranges::range_value_t< R > > out;
         for ( auto op : range )
             out.insert( out.end(), op );
         return out;
