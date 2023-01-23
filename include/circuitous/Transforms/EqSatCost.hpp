@@ -13,7 +13,7 @@ namespace circ
     struct circuit_cost_function {
 
         eqsat::cost_t operator()(const circuit_egraph::node_pointer node) const {
-            // TODO(Heno) implement cost function
+            // TODO: implement cost function
 
             if (node_name(*node) == "Mul") {
                 return 1000;  // * bitwidth(node).value();

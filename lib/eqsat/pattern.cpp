@@ -134,7 +134,7 @@ namespace eqsat
         if (std::holds_alternative< atom_t >(e)) {
             std::vector< simple_expr > vec{};
             vec.push_back(std::move(e));
-            return { vec };
+            return { std::move( vec ) };
         }
         return e;
     }
@@ -147,7 +147,7 @@ namespace eqsat
             auto push = [](simple_expr a, simple_expr b) -> simple_expr {
                 auto vec = std::get< expr_list >(wrap(a));
                 vec.push_back(b);
-                return { vec };
+                return { std::move( vec ) };
             };
 
             return parenthesized(
