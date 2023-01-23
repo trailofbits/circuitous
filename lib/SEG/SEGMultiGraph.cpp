@@ -123,7 +123,7 @@ decoder::FunctionCall print_SEGNode_tree( SEGNode &node, std::string stack_name,
  */
 //TODO(Sebas): change this to a register function and add an api that returns void
 std::pair< decoder::Var, decoder::StatementBlock >
-expr_for_node( std::unordered_map< circ::SEGNode, circ::decoder::FunctionDeclaration,
+expression_for_seg_node( std::unordered_map< circ::SEGNode, circ::decoder::FunctionDeclaration,
                                    circ::segnode_hash_on_get_hash, circ::segnode_comp_on_hash >
                    &func_decls,
                UniqueNameStorage &unique_names_storage, const SEGNode &node, std::vector<decoder::Var> arg_names )
@@ -141,8 +141,7 @@ expr_for_node( std::unordered_map< circ::SEGNode, circ::decoder::FunctionDeclara
         auto end = start + c->subtree_count;
         auto child_arg_names = std::vector< decoder::Var >( start, end );
         last_index = last_index + c->subtree_count;
-        auto [ lval, set ] = expr_for_node( func_decls,
-                                            unique_names_storage, *c, child_arg_names );
+        auto [ lval, set ] = expression_for_seg_node( func_decls, unique_names_storage, *c, child_arg_names );
         local_vars.push_back(lval);
         setup.push_back(set);
     }
@@ -161,7 +160,6 @@ expr_for_node( std::unordered_map< circ::SEGNode, circ::decoder::FunctionDeclara
     // has node fd intro
     if(!func_decls.contains(node))
     {
-
         decoder::FunctionDeclarationBuilder fdb;
         fdb.retType("VisRetType")
             .name(unique_names_storage.get_unique_var_name().name)
@@ -291,14 +289,6 @@ int SEGGraph::get_maximum_vi_size()
 
 struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 {
-    decoder::StatementBlock output_expressions;
-    VerifyInstruction *vi;
-    std::vector<decoder::Var> arguments;
-    SelectStorage* select_storage;
-    SimpleDecodeTimeCircToExpressionVisitor* decode_time_resolver;
-    std::size_t arg_index;
-    std::size_t taken_args = 0;
-
     explicit ToExpressionVisitor( VerifyInstruction *vi, std::vector< decoder::Var > &arguments,
                                   SelectStorage *select_storage,
                                   SimpleDecodeTimeCircToExpressionVisitor *decode_time_resolver,
@@ -317,16 +307,16 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 
     void visit( Operation *op )
     {
-        auto lhs = arguments[arg_index++];
-        taken_args++;
-        output_expressions.push_back(
-            decoder::Statement( decoder::Assign( lhs, decoder::Id( op->name() ) ) ) );
-        arguments.push_back(lhs);
+        add_assignment_to_next_argument(op->name());
         op->traverse( *this );
     }
 
     void visit( Select *op )
     {
+        /*
+         * Currently select helpers is only allowed for selects which have only leafs.
+         * Mainly due to simplicity of its implementation.
+         */
         auto can_use_select_helper_function = true;
         for(std::size_t i = 1; i < op->operands_size(); i++)
             can_use_select_helper_function = can_use_select_helper_function && op->operand(i)->operands_size() == 0;
@@ -335,11 +325,7 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
         {
             auto indx = decode_time_resolver->visit(op->selector());
             auto helper_call = select_storage->get_specialization(op, indx);
-            auto lhs = arguments[arg_index++];
-            taken_args++;
-            output_expressions.push_back(
-                decoder::Statement( decoder::Assign( lhs, helper_call) ) );
-            arguments.push_back(lhs);
+            add_assignment_to_next_argument(helper_call);
         }
         else
         {
@@ -348,25 +334,45 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
             for ( std::size_t choice = 1; choice < op->operands_size(); choice++ )
             {
                 auto indx = decoder::Var( "select_id_" + std::to_string( op->id() ) );
-                auto c_val = decoder::Int( static_cast< int64_t >( choice -1 ) );
+                auto c_val = decoder::Int( static_cast< int64_t >( choice - 1 ) );
                 auto eq = decoder::Equal( indx, c_val );
 
-                ToExpressionVisitor choice_child_vis( vi, arguments, select_storage, decode_time_resolver, arg_index );
+                ToExpressionVisitor choice_child_vis( vi, arguments, select_storage,
+                                                      decode_time_resolver, arg_index );
                 choice_child_vis.visit( op->operand( choice ) );
-                if(is_first)
+                if ( is_first )
                 {
                     first_taken_args = choice_child_vis.taken_args;
                     is_first = false;
                 }
                 else
                 {
-                    check(first_taken_args == choice_child_vis.taken_args) << "non-isomorphic selects are not allowed for independent emission";
+                    check( first_taken_args == choice_child_vis.taken_args )
+                        << "non-isomorphic selects are not allowed for independent emission";
                 }
                 decoder::If ifs( eq, choice_child_vis.output_expressions );
                 output_expressions.push_back( ifs );
             }
             arg_index = arg_index + first_taken_args;
         }
+    }
+
+private:
+    decoder::StatementBlock output_expressions;
+    VerifyInstruction *vi;
+    std::vector<decoder::Var> arguments;
+    SelectStorage* select_storage;
+    SimpleDecodeTimeCircToExpressionVisitor* decode_time_resolver;
+    std::size_t arg_index;
+    std::size_t taken_args = 0;
+
+
+    void add_assignment_to_next_argument(decoder::Expr value)
+    {
+        auto lhs = arguments[ arg_index++ ];
+        taken_args++;
+        output_expressions.push_back( decoder::Statement( decoder::Assign( lhs, value ) ) );
+        arguments.push_back( lhs );
     }
 };
 
@@ -387,8 +393,8 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
         .retType("void");
 
     SimpleDecodeTimeCircToExpressionVisitor decode_time_expression_creator(
-        vi, decoder::DecoderPrinter::inner_func_arg1, decoder::DecoderPrinter::inner_func_arg2,
-        extract_helper_function );
+        vi, decoder::DecoderPrinter::inner_func_arg1,
+        decoder::DecoderPrinter::inner_func_arg2, extract_helper_function );
 
     /*
      * There are multiple operations which are considered we would need to emit semantics for
@@ -404,84 +410,94 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
         proj_keys.insert({p.first.root_in_vi});
     }
 
-    for(auto key : proj_keys)
+    for ( auto key : proj_keys )
     {
-        if( proj_groups.count(key) == 1)
+        if ( proj_groups.count( key ) > 1 )
         {
-            auto p = (*proj_groups.find(key)).second;
-            auto instr_proj = p.first;
-            auto node = p.second;
-            auto expr = get_expression_for_projection( vi, instr_proj, node, &decode_time_expression_creator );
-            fdb.body_insert(expr);
-        }
-        else{
-            /*
-             * Check for if the select choices are made independent, because if so we can
-             * emit code in for each choice separately.
-             * i.e transform
-             * if(cond_1 == 1 && cond_2 == 1)
-             * .... <insert combinatiorial version of (cond_1 == x && cond_2 == y)
-             * to
-             * if (cond_1 == 1 )
-             * ...
-             * if( cond2 == 2 )
-             * ...
-             *
-             * if( cond2 == 1)
-             * ...
-             * if( cond2 == 1
-             * ...
-             *
-             * Our current approach is to check for if for all selects which have a choice
-             * if they make a choice for every possible combination of select choices made.
-             * The easiest way to do so is just count how many options we have for this emitted node.
-             */
-
-            if( can_emit_independently(proj_groups, key))
+            if ( can_emit_independently( proj_groups, key ) )
             {
-                auto p = (*proj_groups.find(key)).second;
-                auto instr_proj = p.first;
-                auto node = p.second;
-
-                auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
-                ToExpressionVisitor vis( vi, argument_names, &select_storage,
-                                         &decode_time_expression_creator );
-                vis.visit(key);
-                fdb.body_insert(vis.output_expressions );
-
-                auto func_decl = get_func_decl( node );
-                std::vector<decoder::Expr> func_args;
-                func_args.push_back(decoder::Id("visitor"));
-                func_args.insert(func_args.end(), argument_names.begin(), argument_names.end());
-                auto funcCall = decoder::FunctionCall( func_decl.function_name, func_args );
-                fdb.body_insert( decoder::Statement( funcCall ) );
+                get_expression_for_projection_with_indepenent_choices(
+                    vi, fdb, decode_time_expression_creator, proj_groups, key );
             }
             else
             {
-                auto equal_range = proj_groups.equal_range(key);
-                for ( auto it = equal_range.first; it != equal_range.second; it++ )
+                auto projections_for_same_root = proj_groups.equal_range( key );
+                for ( auto proj_it = projections_for_same_root.first;
+                      proj_it != projections_for_same_root.second; proj_it++ )
                 {
-                    // TODO(sebas): we should ideally have an uninitialized expr, so we can
-                    // replace its value later.
-                    decoder::Expr expr = decoder::Id( "" );
-                    auto [ root, p ] = *it;
-                    auto instr_proj = p.first;
-                    auto node = p.second;
-                    expr = get_expression_for_projection( vi, instr_proj,node, &decode_time_expression_creator);
-
-                    fdb.body_insert( expr );
+                    auto t = ( *proj_it ).second;
+                    fdb.body_insert( get_expression_for_projection(
+                        vi, ( *proj_groups.find( key ) ).second, &decode_time_expression_creator ) );
                 }
             }
+        }
+        else
+        {
+            fdb.body_insert( get_expression_for_projection(
+                vi, ( *proj_groups.find( key ) ).second, &decode_time_expression_creator ) );
         }
     }
     return fdb.make();
 }
 
-decoder::Expr SEGGraphPrinter::get_expression_for_projection( VerifyInstruction *vi,
-                                                       InstructionProjection &instr_proj,
-                                                       std::shared_ptr< SEGNode > &node,
+decoder::Expr SEGGraphPrinter::get_expression_for_projection_with_indepenent_choices(
+    VerifyInstruction *vi, decoder::FunctionDeclarationBuilder &fdb,
+    SimpleDecodeTimeCircToExpressionVisitor &decode_time_expression_creator,
+    std::multimap< Operation *, seg_projection > &proj_groups, Operation *key )
+{
+    auto p = (*proj_groups.find(key)).second;
+    auto instr_proj = p.first;
+    auto node = p.second;
+    std::__1::vector<decoder::Expr> func_args;
+
+    auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &");
+    func_args.push_back(decoder::Id("visitor"));
+    func_args.insert(func_args.end(), argument_names.begin(), argument_names.end());
+
+    ToExpressionVisitor vis( vi, argument_names, &select_storage,
+                             &decode_time_expression_creator );
+    vis.visit( key );
+    fdb.body_insert( vis.output_expressions );
+
+    auto func_decl = get_func_decl( node );
+    auto funcCall = decoder::FunctionCall( func_decl.function_name, func_args );
+    return decoder::Statement( funcCall );
+}
+
+/*
+ * Converts an assignment/projection of circIR into an Expression.
+ * As there might have been select choices made during decode time inside the subtree of the circIR root for this projection.
+ *
+ *
+ * Input: an Operation* acting as a root
+ *  A set of select choices which could be possibly made
+ *  A VerifyInstruction* denoting the context
+ *  A SEGNode for which we can retrieve which function to call into
+ *
+ *  Output:
+ *  If there have been choices made during decode time:
+ *  if( <expression checking for choice_1> )
+ *     ... entire sub_tree for choice 1
+ *  if( <expression checking for choice_2> )
+ *      ... entire sub_tree for choice 2
+ *  if( <expression checking for choice_<last>> )
+ *      ... entire sub_tree for choice <last>
+ *
+ *  If no choices have been made
+ *  <just emit expressions>
+ *
+ *  This should be called if the decode select choices cannot be made independent.
+ *  As this is made as a fall-back for instances which have decode-select choices
+ *  which would result in non-isomorphic trees. The variable names are always freshly created.
+ *  Resulting in a lot more variable names created then probably needed.
+ */
+decoder::Expr SEGGraphPrinter::get_expression_for_projection(
+    VerifyInstruction *vi,
+    const std::pair< InstructionProjection, std::shared_ptr< SEGNode > >& instr_node_pair,
     SimpleDecodeTimeCircToExpressionVisitor *decode_time_expression_creator )
 {
+    auto instr_proj = instr_node_pair.first;
+    auto node = instr_node_pair.second;
     auto start_op = instr_proj.root_in_vi;
     auto start_op_ptr = std::make_shared< nodeWrapper >( start_op );
     auto op_gen = non_unique_dfs_with_choices< gap::graph::yield_node::on_open >(
@@ -590,7 +606,7 @@ void SEGGraphPrinter::generate_function_definitions()
         for(auto & [op, node ] : seg_graph.get_nodes_by_vi(vi) )
         {
             auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
-            circ::expr_for_node( func_decls, name_storage, *node, argument_names );
+            circ::expression_for_seg_node( func_decls, name_storage, *node, argument_names );
         }
     }
 }
@@ -599,6 +615,28 @@ void SEGGraphPrinter::print_select_storage_helper_functions()
     for(auto fdb : select_storage.get_functions_for_select())
         ep.print(fdb);
 }
+
+/*
+ * Check for if the select choices are made independent, because if so we can
+ * emit code in for each choice separately.
+ * i.e transform
+ * if(cond_1 == 1 && cond_2 == 1)
+ * .... <insert combinatiorial version of (cond_1 == x && cond_2 == y)
+ * to
+ * if (cond_1 == 1 )
+ * ...
+ * if( cond2 == 2 )
+ * ...
+ *
+ * if( cond2 == 1)
+ * ...
+ * if( cond2 == 1
+ * ...
+ *
+ * Our current approach is to check for if for all selects which have a choice
+ * if they make a choice for every possible combination of select choices made.
+ * The easiest way to do so is just count how many options we have for this emitted node.
+ */
 bool SEGGraphPrinter::can_emit_independently(const std::multimap< Operation* , seg_projection>& proj_groups, Operation* key)
 {
     std::set<Select*> s;
@@ -649,32 +687,37 @@ void SEGGraph::extract_all_seg_nodes_from_circuit()
 
         for ( auto &path : ltt_paths.collected )
         {
-            if ( isa< AdviceConstraint >(
-                     path ) ) // these constraints are useless by themselves as others will
-                              // obtain their values
+            // these constraints are useless by themselves as others will use them instead
+            if ( isa< AdviceConstraint >( path ) )
                 continue;
+
             auto prefix = "vi_" + std::to_string( vi_counter ) + "_path"
                           + std::to_string( path_counter ) + "_node";
             UnfinishedProjection up( prefix, vi, path );
             up.fully_extend();
-
-            auto node_gen = gap::graph::dfs< gap::graph::yield_node::on_open >(
-                up.projection.get()->node );
-            for ( auto node : node_gen )
-                nodes.push_back( node );
-
-            for ( auto copy : up.created_projections )
-            {
-                auto node_gen_proj = gap::graph::dfs< gap::graph::yield_node::on_open >(
-                    copy->projection->node );
-                for ( auto node : node_gen_proj )
-                    nodes.push_back( node );
-            }
+            save_nodes_from_projection(nodes, up);
             path_counter++;
         }
         vi_counter++;
     }
     _nodes = nodes;
+}
+
+void SEGGraph::save_nodes_from_projection( std::vector< std::shared_ptr< SEGNode > > &nodes,
+                                           UnfinishedProjection &up ) const
+{
+    auto node_gen = gap::graph::dfs< gap::graph::yield_node::on_open >(
+        up.projection.get()->node );
+    for ( auto node : node_gen )
+        nodes.push_back( node );
+
+    for ( auto copy : up.created_projections )
+    {
+        auto node_gen_proj = gap::graph::dfs< gap::graph::yield_node::on_open >(
+            copy->projection->node );
+        for ( auto node : node_gen_proj )
+            nodes.push_back( node );
+    }
 }
 
 decoder::Var UniqueNameStorage::get_unique_var_name(decoder::Id type_name)

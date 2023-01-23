@@ -423,6 +423,8 @@ namespace circ
         void extract_all_seg_nodes_from_circuit();
 
         Circuit *circuit;
+        void save_nodes_from_projection( std::vector< SEGNode > &nodes,
+                                         circ::UnfinishedProjection &up ) const;
     };
 
     using seg_projection = std::pair< InstructionProjection, std::shared_ptr< SEGNode > >;
@@ -458,13 +460,19 @@ namespace circ
         UniqueNameStorage name_storage;
         decoder::Var stack = decoder::Var( "stack" );
         decoder::Expr get_expression_for_projection(
-            VerifyInstruction *vi, InstructionProjection &instr_proj,
-            std::shared_ptr< SEGNode > &node,
+            VerifyInstruction *vi,
+            const std::pair< InstructionProjection, std::shared_ptr< SEGNode > >
+                &instr_node_pair,
             SimpleDecodeTimeCircToExpressionVisitor *decode_time_expression_creator );
         void generate_function_definitions();
         bool can_emit_independently(const std::multimap< Operation* , seg_projection>& proj_groups, Operation* key);
 
         decoder::FunctionDeclaration get_func_decl(std::shared_ptr<SEGNode> node);
+        decoder::Expr get_expression_for_projection_with_indepenent_choices(
+            VerifyInstruction *vi, decoder::FunctionDeclarationBuilder &fdb,
+            SimpleDecodeTimeCircToExpressionVisitor &decode_time_expression_creator,
+            std::multimap< Operation *, seg_projection > &proj_groups, Operation *key );
+
     };
     /*
      * For a projection we need to save every possible combination of choices which might be
@@ -896,7 +904,7 @@ namespace circ
     decoder::FunctionCall print_SEGNode_tree( SEGNode &node, std::string stack_name,
                                               Operation *op );
 
-    std::pair< decoder::Var, decoder::StatementBlock > expr_for_node(
+    std::pair< decoder::Var, decoder::StatementBlock > expression_for_seg_node(
         std::unordered_map< SEGNode, decoder::FunctionDeclaration, segnode_hash_on_get_hash,
                             segnode_comp_on_hash > &func_decls,
         UniqueNameStorage &unique_names_storage, const SEGNode &node,
