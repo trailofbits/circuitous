@@ -31,7 +31,7 @@ namespace circ
 
   struct EqualitySaturationPass : PassBase
   {
-    CircuitPtr run(CircuitPtr &&circuit) override
+    circuit_owner_t run(circuit_owner_t &&circuit) override
     {
       return run_equality_saturation(std::move(circuit), rulesets);
     }
@@ -57,7 +57,7 @@ namespace circ
 
   struct MergeAdvicesPass : PassBase
   {
-    CircuitPtr run(CircuitPtr &&circuit) override
+    circuit_owner_t run(circuit_owner_t &&circuit) override
     {
       MergeAdvices(circuit.get());
       return std::move(circuit);

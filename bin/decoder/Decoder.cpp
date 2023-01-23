@@ -75,7 +75,7 @@ using cmd_opts_list = circ::tl::merge<
     other_options
 >;
 
-circ::CircuitPtr get_input_circuit(auto &cli)
+circ::circuit_owner_t get_input_circuit(auto &cli)
 {
     auto make_circuit = [&](auto buf) {
         circ::log_info() << "Going to make circuit";

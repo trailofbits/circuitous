@@ -28,17 +28,10 @@ namespace circ {
             : circuit(nullptr), graph(graph)
         {}
 
-        CircuitPtr extract(enode_handle root_handle, std::uint32_t ptr_size) {
+        circuit_owner_t extract(enode_handle root_handle, std::uint32_t ptr_size) {
             spdlog::debug("[eqsat] start extraction");
             circuit = std::make_unique< Circuit >(ptr_size);
-
-            auto root = graph.node(root_handle);
-            check(node_name(*(root.node)) == "circuit");
-
-            for (const auto &child : root.children()) {
-                circuit->add_operand(extract(child));
-            }
-
+            circuit->root = extract(graph.node(root_handle));
             spdlog::debug("[eqsat] end extraction");
             return std::move(circuit);
         }
@@ -84,6 +77,9 @@ namespace circ {
         }
 
         operation make_operation(const op_code_node &op) {
+            if (op.op_code_name == "advice_constraint") {
+                spdlog::warn("create advice_constraint");
+            }
             return llvm::StringSwitch< operation >(op.op_code_name)
                 .Case("register_constraint",  circuit->create< RegConstraint >())
                 .Case("advice_constraint",    circuit->create< AdviceConstraint >())
@@ -193,7 +189,7 @@ namespace circ {
             unreachable() << "unhadled opcode " << to_string(node);
         }
 
-        CircuitPtr circuit;
+        circuit_owner_t circuit;
         std::unordered_map< node_pointer, operation > cached;
         const optimal_graph &graph;
     };

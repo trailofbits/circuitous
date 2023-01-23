@@ -8,13 +8,11 @@
 
 namespace circ
 {
-    using CircuitPtr = std::unique_ptr< Circuit >;
-
     struct PassBase
     {
         virtual ~PassBase() = default;
 
-        virtual CircuitPtr run(CircuitPtr &&) = 0;
+        virtual circuit_owner_t run(circuit_owner_t &&) = 0;
     };
 
     using Pass = std::shared_ptr< PassBase >;

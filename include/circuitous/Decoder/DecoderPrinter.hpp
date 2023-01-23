@@ -110,10 +110,10 @@ namespace circ::decoder {
      */
     class DecoderPrinter {
     public:
-        DecoderPrinter(const circ::CircuitPtr &circ) : circuit( circ ), os( std::cout ) {
+        DecoderPrinter(const circ::circuit_owner_t &circ) : circuit( circ ), os( std::cout ) {
             extract_ctx();
         }
-        DecoderPrinter(const circ::CircuitPtr &circ, std::ostream &os) : circuit( circ ),
+        DecoderPrinter(const circ::circuit_owner_t &circ, std::ostream &os) : circuit( circ ),
                                                                          os( os ) {
             extract_ctx();
         }
@@ -126,7 +126,7 @@ namespace circ::decoder {
         inline static const Var inner_func_arg2 = Var( "second8bytes", "uint64_t");
         inline static const std::array<Var,2> inner_func_args = {inner_func_arg1, inner_func_arg2};
 
-        const circ::CircuitPtr &circuit;
+        const circ::circuit_owner_t &circuit;
         std::ostream &os;
         std::vector< ExtractedCtx > extracted_ctxs;
         int max_depth = 0; // used to measure performance of selection tree generation

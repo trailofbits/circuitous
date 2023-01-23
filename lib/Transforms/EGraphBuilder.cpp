@@ -190,7 +190,7 @@ namespace circ
     node_template node_template_builder::visit(And *op) { return sized(op); }
     node_template node_template_builder::visit(Xor *op) { return sized(op); }
 
-    node_template node_template_builder::visit(Circuit *op) { return opcode(op); }
-
+    node_template node_template_builder::visit(Switch *op) { return sized(op); }
+    node_template node_template_builder::visit(Option *op) { return sized(op); }
 
 } // namespace circ

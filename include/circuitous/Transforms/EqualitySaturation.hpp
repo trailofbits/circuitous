@@ -12,6 +12,6 @@
 
 namespace circ
 {
-    CircuitPtr run_equality_saturation(CircuitPtr &&, std::span< eqsat::rule_set > rules);
+    circuit_owner_t run_equality_saturation(circuit_owner_t &&, std::span< eqsat::rule_set > rules);
 
 } // namespace circ
