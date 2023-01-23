@@ -28,7 +28,7 @@ env:
 jobs:
   build_linux:
     runs-on: ubuntu-22.04
-    timeout-minutes: 15
+    timeout-minutes: 45
     container:
       image: "xheno/circuitous-ubuntu-22.04-dev:latest"
 
