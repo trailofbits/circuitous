@@ -323,7 +323,7 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 
         if(can_use_select_helper_function)
         {
-            auto indx = decode_time_resolver->visit(op->selector());
+            auto indx = decode_time_resolver->dispatch(op->selector());
             auto helper_call = select_storage->get_specialization(op, indx);
             add_assignment_to_next_argument(helper_call);
         }

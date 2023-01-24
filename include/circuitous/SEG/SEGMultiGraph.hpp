@@ -42,10 +42,10 @@ namespace circ
     struct SimpleDecodeTimeCircToExpressionVisitor : Visitor<SimpleDecodeTimeCircToExpressionVisitor>
     {
         bool looping_on_operation = false;
-        explicit SimpleDecodeTimeCircToExpressionVisitor(
-            VerifyInstruction *vi, const decoder::Var &first8Bytes,
-            const decoder::Var &second8Bytes,
-            const std::string &extractHelper ) :
+        explicit SimpleDecodeTimeCircToExpressionVisitor( VerifyInstruction *vi,
+                                                          const decoder::Var &first8Bytes,
+                                                          const decoder::Var &second8Bytes,
+                                                          const std::string &extractHelper ) :
             vi( vi ),
             first_8_bytes( first8Bytes ), second_8_bytes( second8Bytes ),
             extract_helper( extractHelper )
@@ -54,13 +54,11 @@ namespace circ
 
         decoder::Expr visit( Advice *advice )
         {
-            looping_on_operation = false;
             return dispatch(get_op_attached_to_advice_in_vi( advice, vi ));
         }
 
         decoder::Expr visit( Concat *concat )
         {
-            looping_on_operation = false;
             check( concat->operands_size() > 0 ) << "concat cannot be a leaf";
             auto first_child = concat->operand(concat->operands_size() - 1);
             decoder::Expr tmp = dispatch(first_child);
@@ -77,7 +75,6 @@ namespace circ
 
         decoder::Expr visit( Extract* extract)
         {
-            looping_on_operation = false;
             check(extract->operands_size() == 1) << "extracting from multiple nodes is not supported";
             check( isa<InputInstructionBits>( extract->operand(0) ) ) << "Requires to extract from input bytes for now";
             auto low = decoder::Int(extract->low_bit_inc);
@@ -87,11 +84,6 @@ namespace circ
 
         decoder::Expr visit( Operation *op )
         {
-            if ( !looping_on_operation )
-            {
-                looping_on_operation = true;
-                return Visitor< SimpleDecodeTimeCircToExpressionVisitor >::dispatch( op );
-            }
             circ::unreachable() << "Not supported: " << op->name();
         }
 
