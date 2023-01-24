@@ -8,8 +8,11 @@
 #include <circuitous/IR/Verify.hpp>
 
 #include <circuitous/Transforms/PassBase.hpp>
+#include <circuitous/Transforms/ConjureALU.hpp>
 #include <circuitous/Transforms/EqualitySaturation.hpp>
+
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -124,23 +127,8 @@ namespace circ
                     continue;
                 }
 
-                auto lhs = ac->operand( 0 );
-                auto rhs = ac->operand( 1 );
-
-                /*
-                 * It is important to clear usages of the AC before we replace the uses
-                 * since otherwise advice_1 will gain two uses of the AC.
-                 * Which at the time of writing can cause trouble when deleting.
-                 */
+                ac->advice()->replace_all_uses_with( ac->runtime_value() );
                 ac->destroy();
-                ac->remove_all_operands(lhs);
-                ac->remove_all_operands(rhs);
-                while(ac->users_size() > 0)
-                {
-                    auto first_user = *ac->users().begin();
-                    first_user->remove_all_operands( ac );
-                }
-                rhs->replace_all_uses_with( lhs );
             }
             return std::move( circuit );
         }
@@ -188,8 +176,8 @@ namespace circ
 
     using CollapseOpsPass = CollapseUnary< collapsable >;
 
-  struct RemoveIdentityPass : PassBase, Visitor<RemoveIdentityPass>
-  {
+    struct RemoveIdentityPass : PassBase, Visitor<RemoveIdentityPass>
+    {
       CircuitPtr circ;
       CircuitPtr run(CircuitPtr &&circuit) override
       {
@@ -200,12 +188,11 @@ namespace circ
 
       void run()
       {
-        visit(circ.get());
+        visit(circ.get()->root);
       }
 
       void visit( Operation *op )
       {
-          print::PrettyPrinter pp;
           if ( isa< RegConstraint >( op ) )
           {
               if ( isa< InputRegister >( op->operand( 0 ) )
@@ -215,15 +202,10 @@ namespace circ
                   auto outReg = dynamic_cast< OutputRegister * >( op->operand( 1 ) );
                   if ( inReg->reg_name == outReg->reg_name )
                   {
-                      //TODO(sebas): validate that this works
-
                       op->destroy();
                       for(auto u : op->users())
                           u->remove_all_operands(op);
-//                      inReg->remove_use( op );
-//                      outReg->remove_use( op );
-//                      while ( op->users.size() )
-//                          op->remove_use( op->users( 0 ) );
+
                       return run();
                   }
               }
@@ -232,62 +214,42 @@ namespace circ
 
       }
       static Pass get() { return std::make_shared< RemoveIdentityPass >(); }
-  };
-
-  struct TrivialOrRemoval : PassBase, Visitor<TrivialOrRemoval>
-  {
-      CircuitPtr run(CircuitPtr &&circuit) override { visit(circuit.get()); return std::move(circuit); }
-
-      void visit(Operation* op){
-          op->traverse(*this);
-          //TODO(sebas): operands should have size?
-          if(isa<Or>(op) && op->operands_size() == 1){
-              op->replace_all_uses_with( op->operand( 0 ) );
-          }
-      }
-
-      static Pass get() { return std::make_shared< TrivialOrRemoval >(); }
-  };
-
-  struct PassesBase
-  {
-      // list of recognized passes
-      static inline std::map< std::string, Pass > known_passes
-      {
-          { "eqsat", EqualitySaturationPass::get() },
-          { "merge-advices", MergeAdvicesPass::get() },
-          { "dummy-pass", DummyPass::get() },
-          { "trivial-concat-removal", TrivialConcatRemovalPass::get() },
-          { "remove-trivial-or", TrivialOrRemoval::get() },
-          { "remove-identity", RemoveIdentityPass::get() },
-          { "overflow-flag-fix", RemillOFPatch::get() },
-          { "merge-transitive-advices", MergeAdviceConstraints::get() }
-      };
-
-      NamedPass &add_pass( const std::string &name )
-      {
-          auto pass = known_passes.at( name );
-          log_info() << "Adding pass: " << name;
-          return passes.emplace_back( name, pass );
-      }
-
-        circuit_owner_t run_pass( const Pass &pass, circuit_owner_t &&circuit )
-        {
-            auto result = pass->run( std::move( circuit ) );
-            result->remove_unused();
-            return result;
-        }
-
-        circuit_owner_t run_pass( const NamedPass &npass, circuit_owner_t &&circuit )
-        {
-            const auto &[ _, pass ] = npass;
-            return run_pass( pass, std::move( circuit ) );
-        }
-
-        std::string report() const { return "no report recorded"; }
-
-        std::vector< NamedPass > passes;
     };
+
+      struct PassesBase
+      {
+          NamedPass &add_pass( const std::string &name, Pass pass )
+          {
+              log_info() << "Adding pass: " << name;
+              return passes.emplace_back( name, std::move( pass ) );
+          }
+
+          template < typename P, typename... Args >
+          std::shared_ptr< P > emplace_pass( const std::string &name, Args &&...args )
+          {
+              log_info() << "Creating pass" << name;
+              auto pass = std::make_shared< P >( std::forward< Args >( args )... );
+              add_pass( name, pass );
+              return pass;
+          }
+
+          circuit_owner_t run_pass( const Pass &pass, circuit_owner_t &&circuit )
+          {
+              auto result = pass->run( std::move( circuit ) );
+              result->remove_unused();
+              return result;
+          }
+
+          circuit_owner_t run_pass( const NamedPass &npass, circuit_owner_t &&circuit )
+          {
+              const auto &[ _, pass ] = npass;
+              return run_pass( pass, std::move( circuit ) );
+          }
+
+          std::string report() const { return "no report recorded"; }
+
+          std::vector< NamedPass > passes;
+      };
 
     template< typename Next >
     struct WithHistory : Next

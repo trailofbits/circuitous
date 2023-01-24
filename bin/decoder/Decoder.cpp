@@ -247,11 +247,11 @@ int main(int argc, char *argv[]) {
 
 
     circ::DefaultOptimizer opt;
-    opt.add_pass("trivial-concat-removal");
-    opt.add_pass("remove-identity");
-    opt.add_pass("remove-trivial-or");
-    opt.add_pass("overflow-flag-fix");
-    opt.add_pass("merge-transitive-advices");
+    opt.template emplace_pass< circ::RemillOFPatch >( "overflow-flag-fix" );
+    opt.template emplace_pass< circ::RemoveIdentityPass >( "merge-identity-constraints" );
+    opt.template emplace_pass< circ::MergeAdviceConstraints >( "merge-transitive-advices" );
+    opt.template emplace_pass< circ::CollapseOpsPass >( "collapse-unary" );
+
     circuit = opt.run(std::move(circuit));
 
     store_outputs(parsed_cli, circuit);

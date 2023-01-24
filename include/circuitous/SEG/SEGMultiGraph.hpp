@@ -394,14 +394,14 @@ namespace circ
         target_type target() { return _target; }
     };
 
+    struct UnfinishedProjection;
     struct SEGGraph
     {
         using node_type = SEGNode;
         using node_pointer = node_type::node_pointer;
         using edge_type = SEGEdge< node_pointer >;
-        using CircuitPtr = Circuit::circuit_ptr_t;
 
-        explicit SEGGraph( Circuit *circ ) : circuit( circ ) { }
+        explicit SEGGraph( circuit_ref_t circ ) : circuit( circ ) { }
         std::vector< node_pointer > nodes() const;
         gap::generator< edge_type > edges() const;
 
@@ -422,21 +422,21 @@ namespace circ
         void calculate_costs();
         void extract_all_seg_nodes_from_circuit();
 
-        Circuit *circuit;
-        void save_nodes_from_projection( std::vector< SEGNode > &nodes,
-                                         circ::UnfinishedProjection &up ) const;
+        circuit_ref_t circuit;
+        void save_nodes_from_projection( std::vector< std::shared_ptr< SEGNode > > &nodes,
+                                         UnfinishedProjection &up ) const;
     };
 
     using seg_projection = std::pair< InstructionProjection, std::shared_ptr< SEGNode > >;
 
     struct SEGGraphPrinter
     {
-        explicit SEGGraphPrinter( Circuit *circ, std::ostream &os ) :
+        explicit SEGGraphPrinter( circuit_ref_t circ, std::ostream &os ) :
             circuit( circ ), seg_graph(circ) , os( os ), ep( os )
         {
             seg_graph.prepare();
             select_vis sel(&this->select_storage);
-            sel.visit(circ);
+            sel.visit(circ->root);
             generate_function_definitions();
         };
 
@@ -451,7 +451,7 @@ namespace circ
             func_decls;
 
     private:
-        Circuit *circuit;
+        circuit_ref_t circuit;
         SEGGraph seg_graph;
         std::ostream &os;
         decoder::ExpressionPrinter ep;
@@ -838,7 +838,7 @@ namespace circ
     void specialize( std::map< std::string, Operation * > &specs,
                      std::shared_ptr< SEGNode > node, Operation *op );
 
-    std::unique_ptr< SEGGraph > circ_to_segg( CircuitPtr circuit, std::ostream &o );
+    std::unique_ptr< SEGGraph > circ_to_segg( circuit_owner_t circuit, std::ostream &o );
 
     template < gap::graph::graph_like g >
     void absorb_node_into_an_existing_root( g &graph, const SEGGraph::node_pointer &to_hash );

@@ -357,8 +357,9 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
         }
     }
 
-private:
     decoder::StatementBlock output_expressions;
+
+private:
     VerifyInstruction *vi;
     std::vector<decoder::Var> arguments;
     SelectStorage* select_storage;
@@ -681,8 +682,7 @@ void SEGGraph::extract_all_seg_nodes_from_circuit()
 
     for ( VerifyInstruction *vi : circuit->attr< circ::VerifyInstruction >() )
     {
-        auto ltt_paths = collect::DownTree< constraint_opts_ts >();
-        ltt_paths.Run( vi );
+        auto ltt_paths = collect::DownTree< constraint_opts_ts >().run( vi );
         int path_counter = 0;
 
         for ( auto &path : ltt_paths.collected )
@@ -807,9 +807,6 @@ std::vector< Operation * > select_values( Select *op )
             results.push_back(o);
     }
     return results;
-    //    return std::vector<Operation*>(op->operands.begin() + 1, op->operands.end());
 }
 
 }
-
-

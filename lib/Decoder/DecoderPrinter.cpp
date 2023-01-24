@@ -411,11 +411,5 @@ std::vector< Operation * > select_values( Select *op )
 
 Operation *select_index( Select *op ) { return op->operand(0); }
 
-std::size_t SelectStorage::hash_select_targets( Select *sel )
-{
-    print::PrettyPrinter pp;
-    return std::hash< std::string > {}( pp.Hash( select_values( sel ) ) );
-}
-
 
 }  // namespace circ::disassm

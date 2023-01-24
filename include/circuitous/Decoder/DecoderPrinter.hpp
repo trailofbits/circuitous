@@ -115,17 +115,18 @@ namespace circ::decoder {
      */
     class DecoderPrinter {
     public:
-        DecoderPrinter(Circuit* circ) : circuit( circ ), os( std::cout ), seg_graph_printer( circ, os ), ep(os) {
+        DecoderPrinter( circuit_ref_t circuit ) :
+            circuit( circuit ), os( std::cout ), seg_graph_printer( circuit, os ), ep( os )
+        {
             extract_ctx();
         }
-        DecoderPrinter( Circuit *circ, std::ostream &os ) :
-            circuit( circ ), os( os ), seg_graph_printer( circ, os ), ep( os )
+        DecoderPrinter( circuit_ref_t circuit, std::ostream &os ) :
+            circuit( circuit ), os( os ), seg_graph_printer( circuit, os ), ep( os )
         {
             extract_ctx();
         }
 
         void print_file();
-
 
         inline static const Var inner_func_arg1 = Var( "first8bytes", "uint64_t");
         inline static const Var inner_func_arg2 = Var( "second8bytes", "uint64_t");
@@ -136,7 +137,7 @@ namespace circ::decoder {
         inline static const std::array<Var,2> inner_func_args = {inner_func_arg1, inner_func_arg2};
 
 
-        Circuit* circuit;
+        circuit_ref_t circuit;
         std::ostream &os;
         SEGGraphPrinter seg_graph_printer;
         std::vector< ExtractedCtx > extracted_ctxs;
