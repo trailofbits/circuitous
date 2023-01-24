@@ -198,7 +198,8 @@ namespace circ::decoder {
 
     struct Struct
     {
-        Struct( const int templateSize ) : template_size( templateSize ), templatized( templateSize == 0)
+        Struct( const int templateSize, const std::vector< Expr >& derivedFrom = {} ) : template_size( templateSize ), templatized( templateSize == 0),
+            derived_from( derivedFrom )
         {
             for(int i = 0; i < templateSize; i++){
                 template_typenames.push_back(Id("T" + std::to_string(i)));
@@ -211,10 +212,14 @@ namespace circ::decoder {
         std::vector<Id> template_typenames;
 
         void insert_method(FunctionDeclaration method);
+        std::vector<Expr> derived_from; // should be structs, but our printers crash if this is a struct
+        std::vector<Var> variables;
         std::vector<FunctionDeclaration> methods;
     };
 
-    struct StructDecl: UnaryOp<Struct>{ using UnaryOp::UnaryOp; };
+    struct StructDecl: UnaryOp<Struct>{ using UnaryOp::UnaryOp;
+        StructDecl() { }
+    };
 
     struct Empty { };
 
@@ -251,7 +256,11 @@ namespace circ::decoder {
         FuncArgs,
         FuncBody,
         EnumBody,
-        TemplateParams
+        TemplateParams,
+        StructDecl,
+        StructMethods,
+        StructVars,
+        StructDerivations,
     };
 
     enum class GuardStyle : uint32_t{
@@ -259,7 +268,9 @@ namespace circ::decoder {
         Parens,
         Curly,
         Square,
-        Angled
+        Angled,
+        CurlyWithSemiColon,
+        SingleColon
     };
 
     struct Guard{
@@ -297,10 +308,16 @@ namespace circ::decoder {
         self_t &expr(const Expr &e, const GuardStyle gs);
 
         template < typename T >
-        self_t &expr_array(const std::vector< T > &ops, const ExprStyle style);
+        self_t &expr_array(const std::vector< T > &ops, ExprStyle style);
         self_t &endl();
         self_t &binary_op(const BinaryOp <Expr> &binOp, const std::string &op,
                           GuardStyle gs = GuardStyle::Parens);
+
+        self_t &wrap(GuardStyle gs);
+        self_t &unwrap();
+        std::stack<Guard> guards;
+
+        Guard guard_for_expr(ExprStyle style);
     };
 }
 

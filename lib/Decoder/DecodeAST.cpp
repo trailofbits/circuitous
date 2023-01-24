@@ -20,15 +20,7 @@ namespace circ::decoder {
     template < typename T >
     ExpressionPrinter&
     ExpressionPrinter::expr_array(const std::vector< T > &ops, const ExprStyle style) {
-        auto g = [&]()
-        {
-            switch (style) {
-                case ExprStyle::FuncArgs: return make_guard( GuardStyle::Parens );
-                case ExprStyle::FuncBody: return make_guard( GuardStyle::Curly );
-                case ExprStyle::EnumBody: return make_guard( GuardStyle::Curly );
-                case ExprStyle::TemplateParams: return make_guard( GuardStyle::Angled );
-            }
-        }();
+        auto g = guard_for_expr(style);
 
         for (std::size_t i = 0; i < ops.size(); i++) {
             print( ops[ i ] );
@@ -40,6 +32,10 @@ namespace circ::decoder {
                     case ExprStyle::FuncBody: endl() ; break;
                     case ExprStyle::EnumBody: raw(", ").endl(); break;
                     case ExprStyle::TemplateParams: raw(", "); break;
+                    case ExprStyle::StructDecl: endl(); break;
+                    case ExprStyle::StructMethods: endl(); break;
+                    case ExprStyle::StructVars: endl(); break;
+                    case ExprStyle::StructDerivations: raw(", "); break;
                 }
             }
         }
@@ -121,6 +117,16 @@ namespace circ::decoder {
                     .expr_array( arg.args, ExprStyle::FuncArgs).endl()
                     .expr_array( arg.body, ExprStyle::FuncBody).endl().endl();
                 },
+                [&](const Struct &arg) {
+                    raw( "struct " ).expr(arg.name).expr_array(arg.derived_from, ExprStyle::StructDerivations)
+                        .wrap(GuardStyle::CurlyWithSemiColon)
+                        .expr_array(arg.derived_from, ExprStyle::FuncBody)
+                        .expr_array(arg.derived_from, ExprStyle::FuncBody)
+                        .unwrap();
+//                        .expr_array( arg.methods, ExprStyle::StructVars);
+//                        .expr_array( arg.args, ExprStyle::FuncArgs).endl()
+//                        .expr_array( arg.body, ExprStyle::FuncBody).endl().endl();
+                },
         }, *e.op );
         return *this;
     }
@@ -144,6 +150,7 @@ namespace circ::decoder {
             case GuardStyle::Parens :return {"  (", ") ", os};
             case GuardStyle::Curly :return {"{", "}", os, true};
             case GuardStyle::Angled : return {"<", ">", os};
+            case GuardStyle::SingleColon : return {":", "", os, true};
             default: circ::unreachable() << "invalid guard style";
         }
     }
@@ -152,5 +159,32 @@ namespace circ::decoder {
         auto g = make_guard(gs); // needs to be bound to a variable to force proper scoping
         expr(e);
         return *this;
+    }
+
+    ExpressionPrinter::self_t &ExpressionPrinter::unwrap()
+    {
+        guards.pop();
+        return *this;
+    }
+
+    ExpressionPrinter::self_t &ExpressionPrinter::wrap(GuardStyle style)
+    {
+        guards.push( make_guard(style) );
+        return *this;
+    }
+
+    Guard ExpressionPrinter::guard_for_expr( ExprStyle style )
+    {
+        switch ( style )
+        {
+            case ExprStyle::FuncArgs: return make_guard( GuardStyle::Parens );
+            case ExprStyle::FuncBody: return make_guard( GuardStyle::Curly );
+            case ExprStyle::EnumBody: return make_guard( GuardStyle::Curly );
+            case ExprStyle::TemplateParams: return make_guard( GuardStyle::Angled );
+            case ExprStyle::StructDecl: return make_guard( GuardStyle::CurlyWithSemiColon );
+            case ExprStyle::StructMethods: return make_guard( GuardStyle::None );
+            case ExprStyle::StructVars: return make_guard( GuardStyle::None );
+            case ExprStyle::StructDerivations: return make_guard( GuardStyle::SingleColon );
+        }
     }
 };
