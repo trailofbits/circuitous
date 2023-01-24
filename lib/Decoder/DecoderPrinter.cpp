@@ -69,28 +69,33 @@ namespace circ::decoder {
         os << std::endl;
     }
 
-    void DecoderPrinter::extract_ctx() {
-        for (auto &vi: get_contexts( circuit->root )) {
+    void DecoderPrinter::extract_ctx()
+    {
+        auto contexts = collect::TreeCollector< collect::Down, VerifyInstruction >()
+                            .run( circuit->root )
+                            .freeze_as< VerifyInstruction >();
+        for ( auto &vi : contexts )
+        {
             auto decNodes = collect::DownTree< DecodeCondition >()
-                .run( vi )
-                .freeze_as< DecodeCondition, std::unordered_multiset< DecodeCondition * > >();
+                                .run( vi )
+                                .freeze_as< DecodeCondition,
+                                            std::unordered_multiset< DecodeCondition * > >();
             auto encoding_length = get_encoding_length( decNodes );
 
-            std::vector<ExtractedDecodeCondition> dec;
-            for(auto decCond : decNodes){
-                auto lhs = dynamic_cast<circ::Constant *>((*decCond).operand( 0 ));
-                auto rhs = dynamic_cast<circ::Extract *>((*decCond).operand( 1 ));
-                check(lhs && rhs) <<  "decoder condition malformed";
+            std::vector< ExtractedDecodeCondition > dec;
+            for ( auto decCond : decNodes )
+            {
+                auto lhs = dynamic_cast< circ::Constant * >( ( *decCond ).operand( 0 ) );
+                auto rhs = dynamic_cast< circ::Extract * >( ( *decCond ).operand( 1 ) );
+                check( lhs && rhs ) << "decoder condition malformed";
 
-                dec.emplace_back(rhs->low_bit_inc, rhs->high_bit_exc, lhs->bits);
+                dec.emplace_back( rhs->low_bit_inc, rhs->high_bit_exc, lhs->bits );
             }
 
             extracted_ctxs.emplace_back(
-                    "generated_decoder_prefix_" + std::to_string( vi->id()),
-                    static_cast<uint8_t>(encoding_length),
-                    std::move( dec ),
-                    static_cast<VerifyInstruction*>(vi)
-                );
+                "generated_decoder_prefix_" + std::to_string( vi->id() ),
+                static_cast< uint8_t >( encoding_length ), std::move( dec ),
+                static_cast< VerifyInstruction * >( vi ) );
         }
     }
 
