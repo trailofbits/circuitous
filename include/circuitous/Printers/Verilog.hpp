@@ -484,7 +484,7 @@ namespace circ::print::verilog
         {
             auto trg_size = op->size - 1;
             std::stringstream ss;
-            ss << get(op->operand(0)) << "[" << trg_size << ":0)";
+            ss << get(op->operand(0)) << "[" << trg_size << ":0]";
             return make_wire(op, ss.str());
         }
 
