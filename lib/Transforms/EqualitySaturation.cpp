@@ -11,9 +11,6 @@
 #include <eqsat/algo/print.hpp>
 #include <eqsat/core/egraph.hpp>
 
-
-
-
 namespace circ
 {
     egraph_builder_state make_circuit_egraph(const circuit_owner_t &circuit) {
