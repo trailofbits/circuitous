@@ -23,3 +23,11 @@ add_circuitous_library( ir
   HEADERS
     ${CIRCUITOUS_IR_HEADERS}
 )
+
+find_package( spdlog REQUIRED )
+
+target_link_libraries( circuitous_ir
+  PRIVATE
+    spdlog::spdlog
+    fmt::fmt
+)
