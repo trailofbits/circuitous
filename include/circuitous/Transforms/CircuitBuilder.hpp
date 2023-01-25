@@ -77,9 +77,6 @@ namespace circ {
         }
 
         operation make_operation(const op_code_node &op) {
-            if (op.op_code_name == "advice_constraint") {
-                spdlog::warn("create advice_constraint");
-            }
             return llvm::StringSwitch< operation >(op.op_code_name)
                 .Case("register_constraint",  circuit->create< RegConstraint >())
                 .Case("advice_constraint",    circuit->create< AdviceConstraint >())
@@ -148,6 +145,9 @@ namespace circ {
                 .Case("count_lead_zeroes",     circuit->create< CountLeadingZeroes >( size ))
                 .Case("count_trailing_zeroes", circuit->create< CountTrailingZeroes >( size ))
                 .Case("not",                   circuit->create< Not >( size ))
+
+                .Case("Switch", circuit->create< Switch >( size ))
+                .Case("Option", circuit->create< Option >( size ))
 
                 .Default( nullptr );
         }
