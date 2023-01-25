@@ -80,7 +80,6 @@ void SEGGraphPrinter::print_semantics_emitter()
 
 }
 
-
 void SEGGraph::prepare()
 {
     extract_all_seg_nodes_from_circuit();
@@ -289,7 +288,7 @@ int SEGGraph::get_maximum_vi_size()
 
 struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 {
-    explicit ToExpressionVisitor( VerifyInstruction *vi, std::vector< decoder::Var > &arguments,
+    explicit ToExpressionVisitor( VerifyInstruction *vi, std::vector< decoder::Expr > &arguments,
                                   SelectStorage *select_storage,
                                   SimpleDecodeTimeCircToExpressionVisitor *decode_time_resolver,
                                   std::size_t argument_index = 0 ) :
@@ -361,7 +360,7 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 
 private:
     VerifyInstruction *vi;
-    std::vector<decoder::Var> arguments;
+    std::vector<decoder::Expr> arguments;
     SelectStorage* select_storage;
     SimpleDecodeTimeCircToExpressionVisitor* decode_time_resolver;
     std::size_t arg_index;
@@ -389,80 +388,40 @@ private:
  */
 decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *vi )
 {
+    /*
+     * lets go, move all of the body inside dig
+     */
+    auto decoder_name = "decoder_for_vi" + std::to_string( vi->id() );
     circ::decoder::FunctionDeclarationBuilder fdb;
-    fdb.name("decoder_for_vi" + std::to_string(vi->id()))
+    fdb.name(decoder_name)
         .retType("void");
 
-    SimpleDecodeTimeCircToExpressionVisitor decode_time_expression_creator(
-        vi, decoder::DecoderPrinter::inner_func_arg1,
-        decoder::DecoderPrinter::inner_func_arg2, extract_helper_function );
-
-    /*
-     * There are multiple operations which are considered we would need to emit semantics for
-     * However some of them might require a decode-time choice.
-     * We keep track of the roots in both a set and multimap as multimap
-     * does not expose a nice interface to just loop over the keys
-     */
-    std::multimap< Operation* , seg_projection> proj_groups;
-    std::set< Operation* > proj_keys;
-    for(auto p : seg_graph.get_nodes_by_vi(vi))
-    {
-        proj_groups.insert( { p.first.root_in_vi, p } );
-        proj_keys.insert({p.first.root_in_vi});
-    }
-
-    for ( auto key : proj_keys )
-    {
-        if ( proj_groups.count( key ) > 1 )
-        {
-            if ( can_emit_independently( proj_groups, key ) )
-            {
-                get_expression_for_projection_with_indepenent_choices(
-                    vi, fdb, decode_time_expression_creator, proj_groups, key );
-            }
-            else
-            {
-                auto projections_for_same_root = proj_groups.equal_range( key );
-                for ( auto proj_it = projections_for_same_root.first;
-                      proj_it != projections_for_same_root.second; proj_it++ )
-                {
-                    auto t = ( *proj_it ).second;
-                    fdb.body_insert( get_expression_for_projection(
-                        vi, ( *proj_groups.find( key ) ).second, &decode_time_expression_creator ) );
-                }
-            }
-        }
-        else
-        {
-            fdb.body_insert( get_expression_for_projection(
-                vi, ( *proj_groups.find( key ) ).second, &decode_time_expression_creator ) );
-        }
-    }
     return fdb.make();
 }
 
-decoder::Expr SEGGraphPrinter::get_expression_for_projection_with_indepenent_choices(
-    VerifyInstruction *vi, decoder::FunctionDeclarationBuilder &fdb,
-    SimpleDecodeTimeCircToExpressionVisitor &decode_time_expression_creator,
+void DecodedInstrGen::get_expression_for_projection_with_indepenent_choices(
     std::multimap< Operation *, seg_projection > &proj_groups, Operation *key )
 {
     auto p = (*proj_groups.find(key)).second;
     auto instr_proj = p.first;
     auto node = p.second;
-    std::__1::vector<decoder::Expr> func_args;
+    std::vector<decoder::Expr> func_args;
+    std::vector<decoder::Expr> argument_names;
 
-    auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &");
+    for(auto i = 0 ; i < node->subtree_count; i++)
+        argument_names.push_back(get_next_free_data_slot());
+//    auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &");
     func_args.push_back(decoder::Id("visitor"));
     func_args.insert(func_args.end(), argument_names.begin(), argument_names.end());
 
-    ToExpressionVisitor vis( vi, argument_names, &select_storage,
+    ToExpressionVisitor vis( vi, argument_names, &seg_graph_printer->select_storage,
                              &decode_time_expression_creator );
     vis.visit( key );
-    fdb.body_insert( vis.output_expressions );
+    fdb_setup.body_insert( vis.output_expressions );
 
-    auto func_decl = get_func_decl( node );
+    auto func_decl = seg_graph_printer->get_func_decl( node );
     auto funcCall = decoder::FunctionCall( func_decl.function_name, func_args );
-    return decoder::Statement( funcCall );
+    fdb_visit.body_insert(decoder::Statement( funcCall ));
 }
 
 /*
@@ -492,10 +451,8 @@ decoder::Expr SEGGraphPrinter::get_expression_for_projection_with_indepenent_cho
  *  which would result in non-isomorphic trees. The variable names are always freshly created.
  *  Resulting in a lot more variable names created then probably needed.
  */
-decoder::Expr SEGGraphPrinter::get_expression_for_projection(
-    VerifyInstruction *vi,
-    const std::pair< InstructionProjection, std::shared_ptr< SEGNode > >& instr_node_pair,
-    SimpleDecodeTimeCircToExpressionVisitor *decode_time_expression_creator )
+void DecodedInstrGen::get_expression_for_projection(
+    const std::pair< InstructionProjection, std::shared_ptr< SEGNode > >& instr_node_pair)
 {
     auto instr_proj = instr_node_pair.first;
     auto node = instr_node_pair.second;
@@ -512,56 +469,60 @@ decoder::Expr SEGGraphPrinter::get_expression_for_projection(
     arguments.push_back(decoder::Id("visitor"));
     if ( !has_choices )
     {
-        auto func_decl = get_func_decl(node);
+        auto func_decl = seg_graph_printer->get_func_decl(node);
         for ( auto &[ op, nod ] : tuple_generators( op_gen, node_gen ) )
         {
-            auto lhs = name_storage.get_unique_var_name();
-            block.push_back(
-                decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
+            auto lhs = get_next_free_data_slot();
+            auto rhs = decoder::Id( op->op->name());
+            fdb_setup.body_insert(decoder::Assign( lhs, rhs ) );
             arguments.push_back(lhs);
         }
 
         check( arguments.size() == func_decl.args.size() )
             << "calls function with incorrect number of arguments. given arguments"
             << arguments.size() << " expected: " << func_decl.args.size();
-        auto funcCall = decoder::FunctionCall( func_decl.function_name, arguments );
-        block.push_back( decoder::Statement( funcCall ) );
-        return block;
+        auto func_call = decoder::FunctionCall( func_decl.function_name, arguments );
+        fdb_visit.body_insert( func_call );
+        return;
     }
 
-    decoder::StatementBlock b;
+    decoder::StatementBlock guard_conditions;
 
     for ( auto c : instr_proj.select_choices )
     {
-        auto indx = decode_time_expression_creator->visit(c.sel->selector());
+        auto indx = decode_time_expression_creator.visit(c.sel->selector());
         auto choice = decoder::Int( static_cast< int64_t >( c.chosen_idx ) );
         auto eq = decoder::Equal( indx, choice );
-        if ( !b.empty() )
+        if ( !guard_conditions.empty() )
         {
-            auto first = b.back();
-            b.pop_back();
-            b.push_back( decoder::And( first, eq ) );
+            auto first = guard_conditions.back();
+            guard_conditions.pop_back();
+            guard_conditions.push_back( decoder::And( first, eq ) );
         }
         else
-            b.push_back( eq );
+            guard_conditions.push_back( eq );
     }
 
     for ( auto op : op_gen )
     {
-        auto lhs = name_storage.get_unique_var_name();
+        auto lhs = get_next_free_data_slot();
+        auto rhs = decoder::Id( op->op->name() );
         block.push_back(
-            decoder::Statement( decoder::Assign( lhs, decoder::Id( op->op->name() ) ) ) );
+            decoder::Statement( decoder::Assign( lhs, rhs ) ) );
         arguments.push_back(lhs);
     }
 
-    auto func_decl = get_func_decl( node );
+    auto func_decl = seg_graph_printer->get_func_decl( node );
     check( arguments.size() == func_decl.args.size() )
         << "calls function with incorrect number of arguments";
-    auto funcCall = decoder::FunctionCall( func_decl.function_name, arguments );
-    block.push_back( decoder::Statement( funcCall ) );
+    auto func_call = decoder::FunctionCall( func_decl.function_name, arguments );
 
-    decoder::If ifs( b, block );
-    return ifs;
+
+    decoder::If guarded_setup( guard_conditions, block );
+    decoder::If guarded_visit( guard_conditions, func_call );
+
+    fdb_setup.body_insert_statement( guarded_setup );
+    fdb_visit.body_insert_statement( guarded_visit );
 }
 
 void SEGGraphPrinter::print_helper_functions()
@@ -638,7 +599,7 @@ void SEGGraphPrinter::print_select_storage_helper_functions()
  * if they make a choice for every possible combination of select choices made.
  * The easiest way to do so is just count how many options we have for this emitted node.
  */
-bool SEGGraphPrinter::can_emit_independently(const std::multimap< Operation* , seg_projection>& proj_groups, Operation* key)
+bool DecodedInstrGen::can_emit_independently(const std::multimap< Operation* , seg_projection>& proj_groups, Operation* key)
 {
     std::set<Select*> s;
     bool all_use_same_seg_node = true;
@@ -809,4 +770,55 @@ std::vector< Operation * > select_values( Select *op )
     return results;
 }
 
+void DecodedInstrGen::create()
+{
+    /*
+     * There are multiple operations which are considered we would need to emit semantics for
+     * However some of them might require a decode-time choice.
+     * We keep track of the roots in both a set and multimap as multimap
+     * does not expose a nice interface to just loop over the keys
+     */
+    std::multimap< Operation* , seg_projection> proj_groups;
+    std::set< Operation* > proj_keys;
+    for(auto p : seg_graph_printer->seg_graph.get_nodes_by_vi(vi))
+    {
+        proj_groups.insert( { p.first.root_in_vi, p } );
+        proj_keys.insert({p.first.root_in_vi});
+    }
+
+    for ( auto key : proj_keys )
+    {
+        if ( proj_groups.count( key ) > 1 )
+        {
+            if ( can_emit_independently( proj_groups, key ) )
+            {
+                get_expression_for_projection_with_indepenent_choices(proj_groups, key );
+            }
+            else
+            {
+                auto projections_for_same_root = proj_groups.equal_range( key );
+                for ( auto proj_it = projections_for_same_root.first;
+                      proj_it != projections_for_same_root.second; proj_it++ )
+                {
+                    auto t = ( *proj_it ).second;
+                    get_expression_for_projection( ( *proj_groups.find( key ) ).second );
+                }
+            }
+        }
+        else
+        {
+            get_expression_for_projection(( *proj_groups.find( key ) ).second);
+        }
+    }
+}
+
+decoder::IndexVar DecodedInstrGen::get_instr_data( std::size_t at_index )
+{
+    return decoder::IndexVar( data_array, decoder::Int( static_cast< int64_t >( at_index ) ) );
+}
+
+decoder::IndexVar DecodedInstrGen::get_next_free_data_slot()
+{
+    return get_instr_data(size++);
+}
 }

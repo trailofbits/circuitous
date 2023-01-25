@@ -198,7 +198,7 @@ namespace circ::decoder {
 
     struct Struct
     {
-        Struct( const int templateSize, const std::vector< Expr >& derivedFrom = {} ) : template_size( templateSize ), templatized( templateSize == 0),
+        Struct( const int templateSize = 0, const std::vector< Expr >& derivedFrom = {} ) : template_size( templateSize ), templatized( templateSize == 0),
             derived_from( derivedFrom )
         {
             for(int i = 0; i < templateSize; i++){
@@ -229,6 +229,7 @@ namespace circ::decoder {
             Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, BitwiseAnd, Assign, Shfl, Equal, And, // binary
             If, IfElse,
             FunctionDeclaration, FunctionCall, // function
+            Struct,
             StatementBlock, Empty
     >;
 
@@ -319,5 +320,11 @@ namespace circ::decoder {
 
         Guard guard_for_expr(ExprStyle style);
     };
+
+    const Var inner_func_arg1( "first8bytes", "uint64_t");
+    const Var inner_func_arg2( "second8bytes", "uint64_t");
+    inline static const std::array<Var,2> inner_func_args = {inner_func_arg1, inner_func_arg2};
+
+    static constexpr const auto extract_helper_function_name = "extract_helper";
 }
 

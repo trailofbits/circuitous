@@ -118,14 +118,11 @@ namespace circ::decoder {
                     .expr_array( arg.body, ExprStyle::FuncBody).endl().endl();
                 },
                 [&](const Struct &arg) {
-                    raw( "struct " ).expr(arg.name).expr_array(arg.derived_from, ExprStyle::StructDerivations)
-                        .wrap(GuardStyle::CurlyWithSemiColon)
-                        .expr_array(arg.derived_from, ExprStyle::FuncBody)
-                        .expr_array(arg.derived_from, ExprStyle::FuncBody)
-                        .unwrap();
-//                        .expr_array( arg.methods, ExprStyle::StructVars);
-//                        .expr_array( arg.args, ExprStyle::FuncArgs).endl()
-//                        .expr_array( arg.body, ExprStyle::FuncBody).endl().endl();
+                    raw( "struct " ).expr(arg.name);
+//                                .expr_array(arg.derived_from, ExprStyle::StructDerivations)
+                    auto g = make_guard(GuardStyle::CurlyWithSemiColon);
+                    expr_array(arg.methods, ExprStyle::StructMethods)
+                        .expr_array(arg.variables, ExprStyle::StructVars);
                 },
         }, *e.op );
         return *this;
@@ -151,6 +148,7 @@ namespace circ::decoder {
             case GuardStyle::Curly :return {"{", "}", os, true};
             case GuardStyle::Angled : return {"<", ">", os};
             case GuardStyle::SingleColon : return {":", "", os, true};
+            case GuardStyle::CurlyWithSemiColon : return { "{", "};", os, true};
             default: circ::unreachable() << "invalid guard style";
         }
     }

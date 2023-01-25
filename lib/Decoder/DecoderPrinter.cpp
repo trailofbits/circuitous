@@ -12,17 +12,26 @@ namespace circ::decoder {
         return min_x < min_y;
     };
 
-    Expr DecoderPrinter::create_context_decoder_function(const ExtractedCtx &ctx) {
-        FunctionDeclarationBuilder fdb;
-        fdb.name(ctx.generated_name);
-        fdb.retType("int");
+    decoder::Expr DecoderPrinter::create_context_decoder_function(const ExtractedCtx &ctx) {
+        Struct s;
+        s.name = ctx.generated_name;
+        DecodedInstrGen dig(&seg_graph_printer, ctx.vi, ctx.generated_name);
+        dig.create();
+        dig.fdb_setup.name(ctx.generated_name);
         for(auto& arg : inner_func_args){
-            fdb.arg_insert(arg);
+            dig.fdb_setup.arg_insert(arg);
         }
 
         auto args = get_decode_context_function_args( ctx );
-        fdb.body({ get_decode_context_function_body( args, ctx.vi, ctx.encoding_size_in_bytes )});
-        return fdb.make();
+
+        dig.fdb_setup.name(s.name).retType("");
+        //TODO(sebas): templatize visitor type
+        dig.fdb_visit.name("visit").retType("void").arg_insert(Var("visitor", "const VisitorType&"));
+
+        //TODO(sebas): add allocation to setup
+        s.methods.push_back(dig.fdb_setup.make());
+        s.methods.push_back(dig.fdb_visit.make());
+        return s;
     }
 
     std::vector< OptionalBitArray<8> > ExtractedCtx::convert_circIR_to_input_type_array() const {
@@ -93,7 +102,7 @@ namespace circ::decoder {
             }
 
             extracted_ctxs.emplace_back(
-                "generated_decoder_prefix_" + std::to_string( vi->id() ),
+                "DecodedInst_" + std::to_string( vi->id() ),
                 static_cast< uint8_t >( encoding_length ), std::move( dec ),
                 static_cast< VerifyInstruction * >( vi ) );
         }

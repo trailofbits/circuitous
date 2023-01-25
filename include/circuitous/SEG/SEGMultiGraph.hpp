@@ -1,5 +1,7 @@
 #pragma once
 
+#include "circuitous/Decoder/DecoderPrinter.hpp"
+
 #include <circuitous/Decoder/DecodeAST.hpp>
 #include <circuitous/Decoder/DecoderPrinter.hpp>
 #include <circuitous/Diff/Diff.hpp>
@@ -423,12 +425,12 @@ namespace circ
 
     struct SEGGraphPrinter
     {
-        explicit SEGGraphPrinter( circuit_ref_t circ, std::ostream &os ) :
-            circuit( circ ), seg_graph(circ) , os( os ), ep( os )
+        explicit SEGGraphPrinter( circuit_ref_t circuit, std::ostream &os ) :
+            seg_graph(circuit), circuit(circuit) , os( os ), ep( os )
         {
             seg_graph.prepare();
             select_vis sel(&this->select_storage);
-            sel.visit(circ->root);
+            sel.visit(circuit->root);
             generate_function_definitions();
         };
 
@@ -442,60 +444,23 @@ namespace circ
                             segnode_comp_on_hash >
             func_decls;
 
+        SEGGraph seg_graph;
+        SelectStorage select_storage;
+
+        decoder::FunctionDeclaration get_func_decl(std::shared_ptr<SEGNode> node);
+
     private:
         circuit_ref_t circuit;
-        SEGGraph seg_graph;
         std::ostream &os;
         decoder::ExpressionPrinter ep;
 
-        SelectStorage select_storage;
         UniqueNameStorage name_storage;
         decoder::Var stack = decoder::Var( "stack" );
-        decoder::Expr get_expression_for_projection(
-            VerifyInstruction *vi,
-            const std::pair< InstructionProjection, std::shared_ptr< SEGNode > >
-                &instr_node_pair,
-            SimpleDecodeTimeCircToExpressionVisitor *decode_time_expression_creator );
-        void generate_function_definitions();
-        bool can_emit_independently(const std::multimap< Operation* , seg_projection>& proj_groups, Operation* key);
 
-        decoder::FunctionDeclaration get_func_decl(std::shared_ptr<SEGNode> node);
-        decoder::Expr get_expression_for_projection_with_indepenent_choices(
-            VerifyInstruction *vi, decoder::FunctionDeclarationBuilder &fdb,
-            SimpleDecodeTimeCircToExpressionVisitor &decode_time_expression_creator,
-            std::multimap< Operation *, seg_projection > &proj_groups, Operation *key );
+        void generate_function_definitions();
+
 
     };
-    /*
-     * For a projection we need to save every possible combination of choices which might be
-     * made in a single subtree for an emitted node. If we take all possible choices over a VI
-     * this might balloon way to fast, so we need to isolate this
-     *
-     * The way we do this is by having projections have a VI to know which emission group it
-     * belongs to together with the actual emitted node/Operation* which contains all
-     * information for operations
-     *
-     * So we will have emission groups/VI for an instruction
-     *      A struct of emissions/ ALL projects (pure?):
-     *          Might be shared across the entire VI
-     *      VI projections conditional
-     *          the condition list/expr
-     *          Expression node for stack, this must have as subtree pre-patched selects
-     *          pair<PPOperation*, SEGnode*, Condlist/Expr>
-     *
-     *
-     * a projection of circIR
-     *  a VI
-     *  a choice for all select nodes on decode time <Decode Condition/Extract>
-     *      From this we generate Expr conditions
-     *  Start node, always independent of the choices above I think>
-     * ????/
-     */
-
-    /*
-     * Projection of a VI.
-     * Unfinsihed projection of VI
-     */
 
     struct advice_value_visitor : Visitor< advice_value_visitor >
     {
@@ -525,6 +490,48 @@ namespace circ
         }
 
         void visit( Operation *op ) { op->traverse( *this ); }
+    };
+
+    struct DecodedInstrGen
+    {
+        DecodedInstrGen( SEGGraphPrinter *seg_graph_printer, VerifyInstruction *vi,
+                         const std::string &name ) :
+            seg_graph_printer( seg_graph_printer ),
+            name( name ),
+            vi(vi),
+            data_array( decoder::Var( name ) ),
+            decode_time_expression_creator(SimpleDecodeTimeCircToExpressionVisitor(
+                vi, decoder::inner_func_arg1,
+                decoder::inner_func_arg2,
+                decoder::extract_helper_function_name ))
+        {
+
+        }
+
+        void create();
+        SEGGraphPrinter *seg_graph_printer;
+        std::string name;
+        decoder::FunctionDeclarationBuilder fdb_setup;
+        decoder::FunctionDeclarationBuilder fdb_visit;
+        std::size_t size = 0;
+
+    private:
+        VerifyInstruction* vi;
+        decoder::Var data_array;
+        SimpleDecodeTimeCircToExpressionVisitor decode_time_expression_creator;
+
+        bool
+        can_emit_independently( const std::multimap< Operation *, seg_projection > &proj_groups,
+                                Operation *key );
+        void get_expression_for_projection(
+            const std::pair< InstructionProjection, std::shared_ptr< SEGNode > >
+                &instr_node_pair );
+
+        void get_expression_for_projection_with_indepenent_choices(
+            std::multimap< Operation *, seg_projection > &proj_groups, Operation *key );
+
+        decoder::IndexVar get_instr_data( std::size_t at_index );
+        decoder::IndexVar get_next_free_data_slot();
     };
 
     /*
