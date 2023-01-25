@@ -18,7 +18,9 @@ namespace circ
     }
 
     std::optional< gap::bigint > extract_constant( const node_template &op ) {
-        __builtin_abort();
+        if (auto con = std::get_if< constant_node >(&op) ) {
+            return gap::bigint(con->size, con->bits, 2);
+        }
         return std::nullopt;
     }
 
