@@ -22,6 +22,7 @@
 
 namespace circ::print::verilog
 {
+    using verilog_ops_t = std::vector< std::string >;
 
     namespace impl
     {
@@ -306,6 +307,7 @@ namespace circ::print::verilog
                 case Icmp_sle::kind: return "<=";
 
                 case Or::kind:
+                case Switch::kind:
                     return "|";
                 case VerifyInstruction::kind:
                 case And::kind:
@@ -448,6 +450,17 @@ namespace circ::print::verilog
         /* Nary helpers */
         std::string visit(And *op) { return make(zip(), op); }
         std::string visit(Or *op)  { return make(zip(), op); }
+
+        /* Switch, Option */
+        std::string visit(Switch *op)  { return make(zip(), op); }
+        std::string visit(Option *op)
+        {
+            auto val = get( op->value() );
+            auto cond = bin_apply( "|", op->conditions() );
+
+            auto selector = concat( verilog_ops_t( op->size, cond ) );
+            return make_wire( op, selector + " & " + val );
+        }
 
         /* Decoder result wrapper */
         std::string visit(DecoderResult *op) { return make(zip(), op); }
