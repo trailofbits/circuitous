@@ -50,7 +50,8 @@ namespace circ
 
     struct memory_node {
         std::string op_code_name;
-        bitwidth_t mem_idx;
+        maybe_bitwidth_t size;
+        std::optional< std::uint32_t > idx;
     };
 
     struct extract_node {
