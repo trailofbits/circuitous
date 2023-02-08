@@ -345,7 +345,6 @@ namespace eqsat {
 
     template< gap::graph::graph_like egraph >
     match_generator match(const rewrite_rule &rule, const egraph &graph) {
-        spdlog::debug("[eqsat] match rule {}", rule);
         co_yield matcher(rule, graph).match();
     }
 
