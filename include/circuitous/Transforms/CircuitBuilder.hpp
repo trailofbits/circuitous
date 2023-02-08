@@ -167,8 +167,8 @@ namespace circ {
             return circuit->create< Constant >( op.bits, op.size );
         }
 
-        operation make_operation(const memory_node &) {
-            throw std::runtime_error("make memory_node not implemented");
+        operation make_operation(const memory_node &op) {
+            return circuit->create< Memory >( op.size.value(), op.idx.value() );
         }
 
         operation make_operation(const extract_node &op) {

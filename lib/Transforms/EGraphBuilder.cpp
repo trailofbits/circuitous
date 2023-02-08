@@ -30,7 +30,7 @@ namespace circ
     }
 
     memory_node node_template_builder::memop(Memory *op) const {
-        return { op->op_code_str(), op->mem_idx };
+        return { op->op_code_str(), op->size, op->mem_idx };
     }
 
     extract_node node_template_builder::extract(Extract *op) const {

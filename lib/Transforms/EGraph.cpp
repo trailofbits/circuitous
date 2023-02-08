@@ -39,7 +39,7 @@ namespace circ
                 return o.op_code_name + "." + o.reg_name;
             },
             [] (const memory_node   &o) {
-                return o.op_code_name + "." + std::to_string(o.mem_idx);
+                return o.op_code_name + "." + std::to_string(o.size.value()) + "." + std::to_string(o.idx.value());
             },
             [] (const extract_node  &o) {
                 return o.op_code_name + "." + std::to_string(o.low_bit_inc) + "." + std::to_string(o.high_bit_exc);
