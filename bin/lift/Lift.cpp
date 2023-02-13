@@ -35,6 +35,10 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <circuitous/Diff/SemanticsTainter.hpp>
 
+#include <circuitous/Lifter/BaseLifter.hpp>
+#include <circuitous/Lifter/LLVMToCircIR.hpp>
+#include <circuitous/Lifter/ToLLVM.hpp>
+
 // TODO(lukas): Clean this up once remill gets rid of gflags.
 DEFINE_string(arch, "", "");
 DEFINE_string(os, REMILL_OS, "");
@@ -368,6 +372,12 @@ int main(int argc, char *argv[]) {
     else
         circuit = optimize< circ::DefaultOptimizer >(std::move(circuit), parsed_cli);
 
+    // auto l_ctx = std::make_shared< llvm::LLVMContext >();
+    // auto l_module = std::make_unique< llvm::Module >( "reopt", *l_ctx );
+
+    // auto fn = circ::convert_to_llvm( circuit.get(), l_module.get(), "reoptfn" );
+    // circ::optimize_silently( { fn } );
+    // circuit = circ::lower_fn( fn, 32 );
 
     if (parsed_cli.present< cli::Dbg >())
     {
