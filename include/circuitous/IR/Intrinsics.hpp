@@ -132,7 +132,7 @@ namespace circ::irops
     simple_intrinsic(Reg, impl::reg_allocator_t, "__circuitous.reg");
 
 
-    simple_intrinsic(Switch, impl::concat_t, "__circuitous.switch");
+    simple_intrinsic(Switch, impl::predicate_base_t, "__circuitous.switch");
     simple_intrinsic(Option, impl::option_t, "__circuitous.option");
 
     using io_type = impl::io_type;
