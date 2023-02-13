@@ -48,6 +48,14 @@ namespace circ {
       meta[std::move(key)] = std::move(val);
     }
 
+    void set_or_append_meta( key_t key, value_t val, auto &&append )
+    {
+        if ( auto current = get_meta( key ) )
+            meta[ key ] = append( *current, val );
+        else
+            set_meta( key, val );
+    }
+
     void remove_meta( key_t key )
     {
         meta.erase( std::move( key ) );
