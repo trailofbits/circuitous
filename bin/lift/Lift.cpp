@@ -33,6 +33,10 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <unordered_map>
 #include <circuitous/Diff/SemanticsTainter.hpp>
 
+#include <circuitous/Lifter/BaseLifter.hpp>
+#include <circuitous/Lifter/LLVMToCircIR.hpp>
+#include <circuitous/Lifter/ToLLVM.hpp>
+
 // TODO(lukas): Clean this up once remill gets rid of gflags.
 DEFINE_string(arch, "", "");
 DEFINE_string(os, REMILL_OS, "");
@@ -256,7 +260,7 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
     }
 
     if (auto verilog_out = cli.template get< cli::VerilogOut >())
-        circ::print_circuit(*verilog_out, circ::VerilogPrinter("circuit"), circuit.get());
+        circ::print_circuit(*verilog_out, circ::VerilogPrinter("circuit", true), circuit.get());
 }
 
 template< typename OptsList >
@@ -373,6 +377,17 @@ int main(int argc, char *argv[]) {
     else
         circuit = optimize< circ::DefaultOptimizer >(std::move(circuit), parsed_cli);
 
+    auto l_ctx = std::make_shared< llvm::LLVMContext >();
+    auto l_module = std::make_unique< llvm::Module >( "reopt", *l_ctx );
+
+    auto fn = circ::convert_to_llvm( circuit.get(), l_module.get(), "reoptfn" );
+    circ::optimize_silently( { fn } );
+    auto ptr_size = [ & ]() -> std::size_t
+    {
+        auto a = parsed_cli.template get< circ::cli::Arch >();
+        return ( a == "x86" ) ? 32 : 64;
+    }();
+    circuit = circ::lower_fn( fn, ptr_size );
 
     if (parsed_cli.present< cli::Dbg >())
     {
