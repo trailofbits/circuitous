@@ -131,6 +131,15 @@ namespace circ::irops
 
     simple_intrinsic(Reg, impl::reg_allocator_t, "__circuitous.reg");
 
+    simple_intrinsic(Commit, impl::commit, "__circuitous.commit");
+
+    simple_intrinsic(Entry, impl::bitcast, "__circuitous.entry");
+    simple_intrinsic(Leave, impl::bitcast, "__circuitous.leave");
+
+
+    simple_intrinsic(Switch, impl::predicate_base_t, "__circuitous.switch");
+    simple_intrinsic(Option, impl::option_t, "__circuitous.option");
+
     using io_type = impl::io_type;
 
     #undef sccc_prefix
