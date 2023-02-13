@@ -144,6 +144,14 @@ namespace circ
 
       public:
 
+        /* Generic iteration */
+
+        auto begin() { return _operands.begin(); }
+        auto end() { return _operands.end(); }
+
+        auto begin() const { return _operands.begin(); }
+        auto end()   const { return _operands.end(); }
+
         /* Users */
         gap::generator< T * > users()
         {
