@@ -262,6 +262,8 @@ namespace circ
         OwnsResult() = default;
 
         VerifierResult take() { return std::move(res); }
+
+        auto add_error() { return res.add_error(); };
     };
 
     struct ArityVerifier : OwnsResult
@@ -641,6 +643,81 @@ namespace circ
         }
     };
 
+    struct NodeVerifier : OwnsResult, UniqueVisitor< NodeVerifier >
+    {
+        using self_t = NodeVerifier;
+        using OwnsResult::OwnsResult;
+
+        // Verifier API
+
+        self_t &verify( circuit_ref_t circuit )
+        {
+            return *this;
+        }
+
+        // Dispatch mechanism
+
+        void advance( Operation *op )
+        {
+            for ( auto o : op->operands() )
+                this->dispatch( o );
+        }
+
+        // Generic rules
+
+        void uniform_sized( circ_ir_ptr auto op )
+        {
+            if ( op->is_leaf() )
+                return;
+
+            std::size_t uniform_size = op->operand( 0 )->size;
+            for ( auto o : op->operands() )
+            {
+                if ( uniform_size == o->size )
+                    continue;
+
+                res.add_error() << "Expected uniform size, got at least one mismatch: "
+                                << uniform_size << " vs " << o->size;
+                return;
+            }
+        }
+
+        void derived_size( circ_ir_ptr auto op )
+        {
+            if ( op->is_leaf() )
+                return add_error() << pretty_print( op ) << " should derive size from opernads "
+                                   << "but has none";
+
+            auto operand_size = op->operand( 0 )->size;
+            if ( operand_size == op->size )
+                return;
+
+            return add_error() << pretty_print( op ) << " has size " << op->size
+                               << " but should have: " << operand_size;
+        }
+
+        // Rules per operations
+
+        void visit( Switch *op )
+        {
+            for ( auto o : op->operands() )
+            {
+                if ( isa< Option >( o ) )
+                    continue;
+
+                res.add_error() << "Switch expected only Option as operands, got: "
+                                << pretty_print( o );
+            }
+
+            uniform_sized( op );
+            return advance( op );
+        }
+
+        void visit( Operation * )
+        {
+            // There is no rule for this op, just ignore it.
+        }
+    };
 
     VerifierResult verify_arity( Circuit *circuit )
     {
@@ -665,6 +742,11 @@ namespace circ
     VerifierResult verify_dag( Circuit *circuit )
     {
         return DAGVerifier().verify( circuit ).take();
+    }
+
+    VerifierResult verify_nodes( circuit_ref_t circuit )
+    {
+        return NodeVerifier().verify( circuit ).take();
     }
 
 }  // namespace circ
