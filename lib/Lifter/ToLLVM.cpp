@@ -74,7 +74,7 @@ namespace circ
             // TODO(lukas): Remove.
             void emit()
             {
-                std::ignore = get( circuit->root );
+                irb.CreateRet( get( circuit->root ) );
             }
 
             // TODO(lukas): Remove default once implementation is done, as this should
@@ -357,7 +357,6 @@ namespace circ
         auto entry = llvm::BasicBlock::Create( lmodule->getContext(), "", fn );
         auto irb = llvm::IRBuilder<>( entry );
         convert_to_llvm( circuit, irb );
-        irb.CreateRetVoid();
         return fn;
     }
 
