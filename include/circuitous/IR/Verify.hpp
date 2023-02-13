@@ -107,6 +107,8 @@ namespace circ
     VerifierResult verify_ids(Circuit *circuit);
     VerifierResult verify_dag(Circuit *circuit);
 
+    VerifierResult verify_nodes( circuit_ref_t circuit );
+
     // Really simple structural verifier
     struct Verifier
     {
@@ -118,6 +120,7 @@ namespace circ
 
         self_t &run_all(Circuit *circuit)
         {
+            run(verify_nodes, circuit);
             run(verify_dag, circuit);
             run(verify_arity, circuit );
             run(verify_advices, circuit);
