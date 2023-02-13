@@ -191,6 +191,61 @@ namespace circ::print::verilog
             return ss.str();
         }
 
+        /* Switch, Option */
+        std::string switch_as_mux( Switch *op )
+        {
+            std::map< Operation *, std::unordered_set< Operation * > > val_to_cond;
+            for ( auto o : *op )
+            {
+                auto option = dyn_cast< Option >( o );
+                check( option );
+
+                auto &conds = val_to_cond[ option->value() ];
+                for ( auto c : option->conditions() )
+                    conds.emplace( c );
+            }
+
+            using cond_val_t = std::tuple< std::string, std::string >;
+            std::vector< cond_val_t > cases;
+
+            for ( auto [ val, cond ] : val_to_cond )
+            {
+
+                auto cond_body = bin_apply( "|", cond );
+                // TODO( print-verilog ): This is a hack, because currently wire
+                //                        needs to be associated with `Operation *`?
+                //auto cond = make_wire( option, cond_body );
+
+                cases.emplace_back( std::move( cond_body ), get( val ) );
+            }
+
+            std::stringstream ss;
+            check( cases.size() != 0 );
+
+            if ( cases.size() == 1 )
+                return make_wire( op, std::get< 1 >( cases[ 0 ] ) );
+
+            auto mk_case = [ & ]( const auto &switch_case )
+            {
+                const auto &[ cond, val ] = switch_case;
+                ss << "( " << cond << " ) ? " << val << " : ";
+            };
+
+            mk_case( cases[ 0 ] );
+
+            for ( std::size_t i = 1; i < cases.size() - 1; ++i )
+            {
+                ss << "\n\t";
+                mk_case( cases[ i ] );
+            }
+
+            auto [ _, tail_val ] = cases.back();
+            ss << tail_val;
+
+            return make_wire( op, ss.str() );
+        }
+
+
         std::string mux(Select *op)
         {
             auto selector = get(op->selector());
@@ -452,7 +507,12 @@ namespace circ::print::verilog
         std::string visit(Or *op)  { return make(zip(), op); }
 
         /* Switch, Option */
-        std::string visit(Switch *op)  { return make(zip(), op); }
+        std::string visit(Switch *op)
+        {
+            if ( ctx.flag_switch_as_mux )
+                return switch_as_mux( op );
+            return make(zip(), op);
+        }
         std::string visit(Option *op)
         {
             auto val = get( op->value() );
@@ -639,7 +699,15 @@ namespace circ::print::verilog
         std::unordered_map< Operation *, std::string > args;
     };
 
-    using ctx_t = WithNames< ToStream >;
+    template< typename Next >
+    struct Config : Next
+    {
+        using Next::Next;
+
+        bool flag_switch_as_mux = false;
+    };
+
+    using ctx_t = Config< WithNames< ToStream > >;
 
     template< typename Ctx >
     struct ModuleHeaderBase
@@ -822,9 +890,11 @@ namespace circ::print::verilog
         return op_code_str(op->op_code) + "_" + std::to_string(op->size);
     }
 
-    static inline void print(std::ostream &os, const std::string &module_name, Circuit *c)
+    static inline void print(std::ostream &os, const std::string &module_name,
+                             Circuit *c, bool switch_as_mux)
     {
         ctx_t ctx{ os, c };
+        ctx.flag_switch_as_mux = switch_as_mux;
         // TODO(lukas): Add some mechanism to choose - as there will most likely be many
         //              options, this may need to be more complex than a simple flag.
         //core_module_header< iarg_fmt::UseName, ctx_t > header(ctx);
