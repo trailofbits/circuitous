@@ -255,7 +255,7 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
     }
 
     if (auto verilog_out = cli.template get< cli::VerilogOut >())
-        circ::print_circuit(*verilog_out, circ::VerilogPrinter("circuit"), circuit.get());
+        circ::print_circuit(*verilog_out, circ::VerilogPrinter("circuit", true), circuit.get());
 }
 
 template< typename OptsList >
@@ -372,12 +372,12 @@ int main(int argc, char *argv[]) {
     else
         circuit = optimize< circ::DefaultOptimizer >(std::move(circuit), parsed_cli);
 
-    // auto l_ctx = std::make_shared< llvm::LLVMContext >();
-    // auto l_module = std::make_unique< llvm::Module >( "reopt", *l_ctx );
+    auto l_ctx = std::make_shared< llvm::LLVMContext >();
+    auto l_module = std::make_unique< llvm::Module >( "reopt", *l_ctx );
 
-    // auto fn = circ::convert_to_llvm( circuit.get(), l_module.get(), "reoptfn" );
-    // circ::optimize_silently( { fn } );
-    // circuit = circ::lower_fn( fn, 32 );
+    auto fn = circ::convert_to_llvm( circuit.get(), l_module.get(), "reoptfn" );
+    circ::optimize_silently( { fn } );
+    circuit = circ::lower_fn( fn, 32 );
 
     if (parsed_cli.present< cli::Dbg >())
     {
