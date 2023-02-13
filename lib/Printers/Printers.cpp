@@ -12,7 +12,7 @@ namespace circ
 
     void VerilogPrinter::operator()( std::ostream &os, circ::Circuit *circuit )
     {
-        return print::verilog::print( os, name, circuit );
+        return print::verilog::print( os, name, circuit, switch_as_mux );
     }
 
 }  // namespace circ

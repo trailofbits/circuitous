@@ -24,8 +24,12 @@ namespace circ {
 
     struct VerilogPrinter
     {
-        VerilogPrinter( const std::string &name ) : name( name ) { }
+        VerilogPrinter( const std::string &name, bool switch_as_mux = false )
+            : name( name ), switch_as_mux( switch_as_mux )
+        {}
+
         const std::string &name;
+        bool switch_as_mux;
 
         void operator()(std::ostream &os, Circuit *circuit);
     };
