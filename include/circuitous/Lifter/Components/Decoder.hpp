@@ -9,6 +9,7 @@
 
 #include <circuitous/Lifter/Context.hpp>
 #include <circuitous/Lifter/Component.hpp>
+#include <circuitous/Lifter/Instruction.hpp>
 
 #include <remill/Arch/Arch.h>
 #include <remill/BC/IntrinsicTable.h>
@@ -25,11 +26,26 @@ namespace circ::build
         using values_t = std::vector< llvm::Value * >;
 
         llvm::IRBuilder<> &ir;
-        ISEL_view isel;
-        std::vector< llvm::Value *> to_verify;
 
-        Decoder(CtxRef ctx_, llvm::IRBuilder<> &ir_, ISEL_view &isel_)
-            : has_ctx_ref(ctx_), ir(ir_), isel(isel_)
+        using shadow_t = typename InstructionInfo::shadow_t;
+        using enc_t = typename InstructionInfo::enc_t;
+
+        const shadow_t &shadow;
+        const enc_t &enc;
+        std::size_t rinst_size;
+
+        std::vector< llvm::Value * > to_verify;
+
+        Decoder( CtxRef ctx, llvm::IRBuilder<> &ir, ISEL_view &isel )
+            : has_ctx_ref( ctx ), ir( ir ),
+              shadow( isel.shadow ), enc( isel.encoding ),
+              rinst_size( isel.instruction.bytes.size() * 8 )
+        {}
+
+        Decoder( CtxRef ctx, llvm::IRBuilder<> &ir, const InstructionInfo &info )
+            : has_ctx_ref( ctx ), ir( ir ),
+              shadow( info.shadow() ), enc( info.enc() ),
+              rinst_size( info.rinst().bytes.size() * 8 )
         {}
 
 
@@ -40,8 +56,6 @@ namespace circ::build
         values_t byte_fragments();
         std::string generate_raw_bytes(const std::string &str, uint64_t form, uint64_t to);
         llvm::Value *create_bit_check(uint64_t from, uint64_t to);
-
-        auto rinst_size() { return isel.instruction.bytes.size() * 8; }
 
         std::string convert_encoding(const auto &encoding)
         {
