@@ -55,7 +55,7 @@ namespace circ::shadowinst
     -> values_t
     {
         std::vector<llvm::Value *> translation_checks;
-        auto selector = region_selector();
+        auto selector = opaque_selector();
         for (auto &mat : mats)
         {
             auto expected_value = irb.getInt(make_APInt(mat, 0, s_reg.regions.marked_size()));
