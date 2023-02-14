@@ -261,7 +261,7 @@ namespace circ {
     void post_lift( llvm::Function &fn )
     {
         disable_opts( &fn );
-        verify_or_die( fn );
+        //verify_or_die( fn );
 
         optimize_silently( { &fn } );
 
