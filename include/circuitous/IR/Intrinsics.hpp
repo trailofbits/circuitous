@@ -82,6 +82,7 @@ namespace circ::irops
     simple_intrinsic(Extract, impl::extract_t, "__circuitous.extract");
     // See `Extract`, without reordering.
     simple_intrinsic(ExtractRaw, impl::extract_t, "__circuitous.raw_extract");
+    simple_intrinsic(InstExtractRaw, impl::extract_t, "__circuitous.inst_extract_raw");
 
     // Concats its operand, from right to left, e.g.
     // concat(x, y, z) -> xyz
@@ -97,6 +98,7 @@ namespace circ::irops
     // Create Advice of dynamic value.
     simple_intrinsic(Advice, impl::raw_allocator_t, "__circuitous.advice");
     simple_intrinsic(AdviceIndexed, impl::idx_allocator_t, "__circuitous.advice_i");
+    simple_intrinsic(OpSelector, impl::idx_allocator_t, "__circuitous.op_selector");
     // Creates opaque pointer.
     // Used by instruction lifters to handle destination operands.
     simple_intrinsic(AllocateDst, impl::raw_allocator_t, "__circuitous.allocate_dst");
@@ -111,6 +113,10 @@ namespace circ::irops
 
     // Helps to unify later all decoder related selections and operations
     simple_intrinsic(RegSelector, impl::type_idx_t, "__circuitous.reg_selector");
+
+    simple_intrinsic(ISemSrcArg, impl::type_idx_t, "__circuitous.ise_src_arg");
+    simple_intrinsic(ISemDstArg, impl::type_idx_t, "__circuitous.isem_dst_arg");
+    simple_intrinsic(InstructionSize, impl::int_like_allocator, "__circuitous.inst_size");
 
     simple_intrinsic(WasDecoded, impl::type_idx_t, "__circuitous.op.was_decoded");
     // Denotes that given hint/advice is not used and should be zeroed.
@@ -130,6 +136,11 @@ namespace circ::irops
     leaf_intrinsic(InstBits, 15 * 8, impl::fixed_leaf_t, "__circuitous.instbits");
 
     simple_intrinsic(Reg, impl::reg_allocator_t, "__circuitous.reg");
+
+    simple_intrinsic(Commit, impl::commit, "__circuitous.commit");
+
+    simple_intrinsic(Entry, impl::bitcast, "__circuitous.entry");
+    simple_intrinsic(Leave, impl::bitcast, "__circuitous.leave");
 
 
     simple_intrinsic(Switch, impl::predicate_base_t, "__circuitous.switch");

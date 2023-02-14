@@ -783,4 +783,23 @@ namespace circ::irops::impl
                          Melts
                         >;
 
+    template< typename, typename Def >
+    using bitcast = Fn< Def,
+                        DStack< NAry >,
+                        SStack< R< suffix::llvm_type > >,
+                        Melts
+                      >;
+    template< typename, typename Def >
+    using commit = Fn< Def,
+                       DStack< NAry >,
+                       SStack< R< suffix::size > >,
+                       Frozen
+                     >;
+    template< typename, typename Def >
+    using int_like_allocator = Fn< Def,
+                                   DStack<>,
+                                   SStack< R< suffix::size > >,
+                                   Melts
+                                 >;
+
 } // namespace circ::irops::impl
