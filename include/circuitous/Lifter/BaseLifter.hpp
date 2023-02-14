@@ -40,6 +40,8 @@ namespace circ
     void optimize_silently(llvm::Module *module,
                            const std::vector<llvm::Function *> &fns);
 
+    void optimize_silently( const std::vector< llvm::Function * > &fns );
+
     static inline void optimize_silently( llvm::Module *lmodule )
     {
         std::vector< llvm::Function * > fns;
@@ -52,6 +54,93 @@ namespace circ
     // Flatten all control flow into pure data-flow inside of a function.
     // TODO(lukas): Write down what are guarantees w.r.t. to metadata.
     void flatten_cfg(llvm::Function *func, const remill::IntrinsicTable &intrinsics);
+    void flatten_cfg( llvm::Function &fn );
+
+
+    static inline auto report_unsupported_intrinsic_calls( llvm::Function &isem )
+        -> std::optional< std::string >
+    {
+        auto fn_name = []( llvm::Function &f ) -> std::string
+        {
+            if ( f.hasName() )
+                return "( not named )";
+            return f.getName().str();
+        };
+
+        auto is_allowed = [ & ]( llvm::Function &callee )
+        {
+            // Indirect call is not an intrinsics and all functions should have names
+            // at this point.
+            check( callee.hasName() );
+
+            static const std::unordered_set< std::string > allowed =
+            {
+                "__remill_atomic_begin",
+                "__remill_atomic_end",
+            };
+
+            auto name = callee.getName();
+
+            if ( allowed.count( name.str() ) )
+                return true;
+
+            // Cannot handle atomics right now
+            if ( name.contains( "atomic" ) )
+                return false;
+
+            // Cannot handle any form of floats
+            if ( name.contains( "float" ) )
+                return false;
+
+            if ( name.contains( "__remill_sync_hyper_call" ) )
+                return false;
+
+            // If something was missed, lifter will most likely crash and intrinsic can
+            // be retroactively added here.
+            return true;
+        };
+
+        // Go through all calls and collect those that call functions that are not allowed.
+        std::stringstream errs;
+
+        for ( auto &bb : isem )
+            for ( auto &inst : bb )
+                if ( auto call = llvm::dyn_cast< llvm::CallInst >( &inst ) )
+                {
+                    auto callee = call->getCalledFunction();
+                    check( callee );
+                    if ( !is_allowed( *callee ) )
+                        errs << "\t" << fn_name( *callee ) << std::endl;
+                }
+
+        // Check if anything was logged.
+        auto found_errs = errs.str();
+        if ( found_errs.empty() )
+            return {};
+
+        // Prefix message with header
+        std::stringstream report;
+        report << isem.getName().str() << std::endl << std::move( found_errs );
+        return report.str();
+    }
+
+
+    static inline void check_unsupported_intrinsics(
+            const std::vector< llvm::Function * > &fns)
+    {
+        std::stringstream out;
+
+        for ( auto fn : fns )
+            if ( auto err = report_unsupported_intrinsic_calls( *fn ) )
+                out << std::move( *err );
+
+        auto reports = out.str();
+        check( reports.empty() ) << "Found unsupported intrinsic calls, dumping report:\n"
+                                 << reports;
+    }
+
+
+    void post_lift( llvm::Function &fn );
 
     struct ExaltedFunctionMeta
     {
@@ -159,6 +248,7 @@ namespace circ
             report << fn->getName().str() << std::endl << std::move(found_errs);
             return report.str();
         }
+
 
         void check_unsupported_intrinsics(const std::vector< llvm::Function * > &fns)
         {
