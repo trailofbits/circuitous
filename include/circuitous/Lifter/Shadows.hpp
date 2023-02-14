@@ -663,6 +663,8 @@ namespace circ::shadowinst
         return os << tm.to_string();
     }
 
+    using TM_t = TranslationMap< std::string, std::vector< bool > >;
+
     struct Reg : has_regions
     {
         using self_t = Reg;
