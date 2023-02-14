@@ -382,7 +382,12 @@ int main(int argc, char *argv[]) {
 
     auto fn = circ::convert_to_llvm( circuit.get(), l_module.get(), "reoptfn" );
     circ::optimize_silently( { fn } );
-    circuit = circ::lower_fn( fn, 32 );
+    auto ptr_size = [ & ]() -> std::size_t
+    {
+        auto a = parsed_cli.template get< circ::cli::Arch >();
+        return ( a == "x86" ) ? 32 : 64;
+    }();
+    circuit = circ::lower_fn( fn, ptr_size );
 
     if (parsed_cli.present< cli::Dbg >())
     {
