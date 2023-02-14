@@ -25,34 +25,6 @@ namespace circ
         }
     } // namesapce detail
 
-
-    struct EqualitySaturationPass : PassBase
-    {
-        using rules_t = std::vector< eqsat::RuleSet >;
-
-        EqualitySaturationPass() = default;
-        EqualitySaturationPass( rules_t &&rules )
-        {
-            add_rules( std::move( rules ) );
-        }
-
-        CircuitPtr run(CircuitPtr &&circuit) override
-        {
-            return eqsat::EqualitySaturation(std::move(circuit), rulesets);
-        }
-
-        void add_rules( rules_t &&ruleset )
-        {
-            rulesets.insert(
-                rulesets.end(),
-                std::make_move_iterator(ruleset.begin()),
-                std::make_move_iterator(ruleset.end())
-            );
-        }
-
-        std::vector<eqsat::RuleSet> rulesets;
-    };
-
     /*
      * Semantics from remill calculate the overflow flag directly from the values instead of
      * re-using existing flags. This leads to unnecessary computation as we have access
