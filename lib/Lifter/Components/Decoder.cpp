@@ -31,7 +31,7 @@ namespace circ::build
 
     llvm::Value *Decoder::create_bit_check(uint64_t from, uint64_t to)
     {
-        auto encoding = convert_encoding(isel.encoding);
+        auto encoding = convert_encoding( enc );
         std::string expected = generate_raw_bytes(encoding, from, to);
 
         auto size = static_cast< uint32_t >(expected.size());
@@ -48,7 +48,7 @@ namespace circ::build
     {
         values_t out;
 
-        auto unknown_regions = isel.shadow.UnknownRegions(rinst_size());
+        auto unknown_regions = shadow.UnknownRegions(rinst_size);
         // `unknown_regions` are in `[ from, size ]` format.
         for (auto [from, to] : shadowinst::FromToFormat(unknown_regions))
             out.push_back(create_bit_check(from, to));
@@ -56,9 +56,9 @@ namespace circ::build
         // TODO(lukas): Now we need to check the tail.
         //              Try to lift `6689d8` and `89d8` to demonstrate the issue.
         // TODO(lukas): For now we assume it is padded with 0s.
-        auto tail_size = static_cast< std::size_t >(kMaxNumInstBits - rinst_size());
+        auto tail_size = static_cast< std::size_t >(kMaxNumInstBits - rinst_size);
         auto tail = ir.getInt(llvm::APInt(static_cast< std::uint32_t >(tail_size), 0, false));
-        auto coerced_size = static_cast< std::size_t >(rinst_size());
+        auto coerced_size = static_cast< std::size_t >(rinst_size);
 
         auto extracted = irops::make_leaf< irops::ExtractRaw >(ir, coerced_size, tail_size);
         auto compare = irops::make< irops::DecodeCondition >(ir, {tail, extracted}, tail_size);
@@ -81,7 +81,7 @@ namespace circ::build
     auto Decoder::emit_translation_trees() -> values_t
     {
         values_t out;
-        for (const auto &s_op : isel.shadow.operands)
+        for (const auto &s_op : shadow.operands)
         {
             if (s_op.reg())
                 out.push_back(emit_translation_tree(*s_op.reg()));
