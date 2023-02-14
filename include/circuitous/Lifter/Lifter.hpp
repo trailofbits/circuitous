@@ -81,6 +81,9 @@ namespace circ
 
         std::unordered_map< uint64_t, llvm::Value * > reg_op_dsts;
 
+        std::vector< std::tuple< uint8_t, llvm::Instruction *,
+                                          llvm::Instruction * > > adviced_ops;
+
         InstructionLifter(arch_ptr_t arch_, llvm::Module *module_,
                           remill::IntrinsicTable *table_)
             : parent(arch_, table_),
@@ -212,9 +215,37 @@ namespace circ
             }
         }
 
+        llvm::CallBase *fetch_only_load( llvm::Value *x, llvm::Value *ac )
+        {
+            if ( std::distance( x->user_begin(), x->user_end() ) != 2 )
+            {
+                return nullptr;
+            }
+
+            auto user = *x->user_begin();
+            if ( user == ac )
+                user = *std::next(x->user_begin());
+            auto as_call = llvm::dyn_cast< llvm::CallBase >( user );
+
+            if ( !as_call )
+            {
+                return nullptr;
+            }
+
+            auto callee = as_call->getCalledFunction();
+            if ( !callee->hasName() || !callee->getName().startswith("__remill_read_memory_"))
+            {
+                return nullptr;
+            }
+
+            return as_call;
+
+        }
+
         auto LiftIntoBlock(remill::Instruction &inst, llvm::BasicBlock *block,
                            bool is_delayed)
         {
+            //log_dbg() << shadow->to_string();
             auto lift_status = this->parent::LiftIntoBlock(inst, block, is_delayed);
 
             // If the instruction was not lifted correctly we do not wanna do anything
@@ -243,6 +274,31 @@ namespace circ
             llvm::InlineFunctionInfo info;
             auto was_inlined = llvm::InlineFunction(*call, info);
             check(was_inlined.isSuccess());
+
+            //block->getParent()->print(llvm::errs());
+            //llvm::errs() << "\n"; llvm::errs().flush();
+
+            //for ( auto [idx, advice, ac] : adviced_ops )
+            //{
+            //    auto loaded = fetch_only_load( advice, ac );
+            //    if ( !loaded )
+            //        continue;
+            //    auto old = ac->getOperand( 0 );
+            //    advice->replaceAllUsesWith( old );
+
+            //    llvm::IRBuilder<> irb(loaded->getNextNonDebugInstruction());
+            //    auto dummy = irops::make_leaf< irops::Operand >(irb, loaded->getType(), idx);
+            //    loaded->replaceAllUsesWith( dummy );
+            //    auto wrap = irops::make< irops::AdviceConstraint >(irb, {loaded, dummy});
+            //    AddMetadata(wrap, "circuitous.verify_fn_args", 0);
+
+
+            //    ac->replaceAllUsesWith(wrap);
+            //    ac->eraseFromParent();
+            //}
+
+            //block->getParent()->print(llvm::errs());
+            //llvm::errs() << "\n"; llvm::errs().flush();
 
             return lift_status;
         }
@@ -671,6 +727,9 @@ namespace circ
             llvm::IRBuilder<> irb(bb);
             auto dummy = irops::make_leaf< irops::Operand >(irb, out->getType(), op_idx);
             auto wrap = irops::make< irops::AdviceConstraint >(irb, {out, dummy});
+
+            adviced_ops.emplace_back( op_idx, dummy, wrap );
+
             AddMetadata(wrap, "circuitous.verify_fn_args", 0);
 
             return dummy;
