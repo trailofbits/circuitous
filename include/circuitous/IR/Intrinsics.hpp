@@ -203,6 +203,49 @@ namespace circ::irops
         return I::emit(irb, c_args, *ret_size, *selector_size);
     }
 
+    // Return an integral type that is big enough to hold any value can inhabit the
+    // register associated with `reg`.
+    static inline llvm::IntegerType *int_reg_type( llvm::Module &module,
+                                                           const auto *reg )
+    {
+        // TODO(pag): Add other architecture flag names here.
+        static const std::unordered_set< std::string > flag_regs =
+        {
+            "SF", "OF", "PF", "AF", "ZF", "CF"
+        };
+
+        if ( reg->type->isIntegerTy() )
+        {
+            if ( flag_regs.count( reg->name ) )
+                return llvm::Type::getInt1Ty( module.getContext() );
+
+            return llvm::dyn_cast< llvm::IntegerType >( reg->type );
+        }
+
+        return llvm::Type::getIntNTy(
+            module.getContext(),
+            static_cast< unsigned >(
+                module.getDataLayout().getTypeAllocSize( reg->type ) * 8u ) );
+    }
+
+    static inline llvm::Value *mk_reg( llvm::IRBuilder<> &irb, const auto &reg, auto io )
+    {
+        auto &m = *irb.GetInsertBlock()->getParent()->getParent();
+        auto type = int_reg_type( m, reg );
+        return irops::make_leaf< irops::Reg >( irb, bw( m, type ), reg->name, io );
+    }
+
+    static inline llvm::Value *input_reg( llvm::IRBuilder<> &irb, const auto &reg )
+    {
+        return mk_reg( irb, reg, irops::io_type::in );
+    }
+
+    static inline llvm::Value *output_reg( llvm::IRBuilder<> &irb, const auto &reg )
+    {
+        return mk_reg( irb, reg, irops::io_type::out );
+    }
+
+
     // Queries.
     template< typename T, typename ... Ts >
     bool one_of(llvm::Function *fn)
