@@ -202,6 +202,8 @@ namespace circ
                     return make_intrinsic< irops::irop >( get( op->operands() ), op->size ); \
                 } \
 
+            circuitous_tollvm_mk_sized_intrinsic( Option, Option );
+            circuitous_tollvm_mk_sized_intrinsic( Switch, Switch );
             circuitous_tollvm_mk_sized_intrinsic( Concat, Concat );
             circuitous_tollvm_mk_sized_intrinsic( OnlyOneCondition, Xor );
             circuitous_tollvm_mk_sized_intrinsic( VerifyInstruction, VerifyInst );
