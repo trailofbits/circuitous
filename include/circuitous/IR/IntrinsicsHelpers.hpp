@@ -776,5 +776,11 @@ namespace circ::irops::impl
                            SStack< R< suffix::llvm_type >, S< suffix::idx > >,
                            Melts
                          >;
+    template< typename, typename Def >
+    using option_t = Fn< Def,
+                         DStack< NAry >,
+                         SStack< R< suffix::size > >,
+                         Melts
+                        >;
 
 } // namespace circ::irops::impl
