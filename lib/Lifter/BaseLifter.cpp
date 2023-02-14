@@ -237,10 +237,40 @@ namespace circ {
         InstrinsicHandler().lower(fns);
     }
 
+    void optimize_silently( const std::vector< llvm::Function * > &fns )
+    {
+        if ( fns.empty() )
+            return;
+        auto m = ( *fns.begin() )->getParent();
+        return optimize_silently( m, fns );
+
+    }
+
     // Flatten all control flow into pure data-flow inside of a function.
     void flatten_cfg(llvm::Function *func, const remill::IntrinsicTable &intrinsics)
     {
         Flattener(func, intrinsics.error).Run();
+    }
+
+    void flatten_cfg( llvm::Function &fn )
+    {
+        remill::IntrinsicTable table( fn.getParent() );
+        return flatten_cfg( &fn, table );
+    }
+
+    void post_lift( llvm::Function &fn )
+    {
+        disable_opts( &fn );
+        verify_or_die( fn );
+
+        optimize_silently( { &fn } );
+
+        flatten_cfg( fn );
+
+        check_unsupported_intrinsics( { &fn } );
+        optimize_silently( { &fn } );
+
+        enable_opts( &fn );
     }
 
 } // namespace circ
