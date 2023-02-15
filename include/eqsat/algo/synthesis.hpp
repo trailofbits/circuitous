@@ -23,7 +23,7 @@ namespace eqsat {
             return graph.insert(constant);
         }
 
-        auto synthesize_operation(const operation_t &operation, std::span< node_handle > children)
+        auto synthesize_operation(const atom_t &operation, std::span< node_handle > children)
             -> node_handle
         {
             return graph.insert(operation, children);
