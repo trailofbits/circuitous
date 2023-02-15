@@ -667,7 +667,7 @@ namespace circ
             llvm::IRBuilder<> ir(block);
 
             //llvm::Value *out = ir.CreateAdd(segment_reg, base_reg);
-            auto out = base_reg;
+            llvm::Value *out = base_reg;
 
             auto scale_factor = ir.CreateShl( index_reg, scale );
             out = ir.CreateAdd(out, scale_factor);
