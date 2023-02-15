@@ -240,7 +240,8 @@ namespace circ
             encodings.push_back( std::move( encoding ) );
 
             // These will be filled by other part of the pipeline!
-            shadows.emplace_back( instructions.back().bytes.size() * 8 );
+            shadows.emplace_back( instructions.back().bytes.size() * 8,
+                                  instructions.back().bytes );
             lifted_fns.emplace_back();
         }
     };
