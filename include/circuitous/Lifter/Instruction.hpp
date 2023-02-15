@@ -17,7 +17,6 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ
 {
-
     // TODO(lukas): Provide better api than `remill::Instruction`.
     struct Instruction
     {
@@ -32,7 +31,6 @@ namespace circ
         using lifted_t = llvm::Function *;
         using enc_t = std::bitset< 15 * 8 >;
 
-      private:
         std::optional< rinst_t >  _rinst;
         std::optional< enc_t >    _enc;
         std::optional< shadow_t > _shadow;
@@ -43,6 +41,8 @@ namespace circ
             : _rinst(std::move(rinst)),
               _enc(InstBytes(rinst.bytes).to_enc< 15 * 8 >())
         {}
+
+        InstructionInfo() = delete;
 
         bool has_shadow() const { return _shadow.has_value(); }
         bool has_lifted() const { return _lifted.has_value(); }
