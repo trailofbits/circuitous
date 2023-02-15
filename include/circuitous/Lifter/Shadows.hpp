@@ -959,9 +959,16 @@ namespace circ::shadowinst
         std::vector< std::set< uint32_t > > dirt;
 
         std::vector< Reg * > selectors;
-        std::size_t enc_bitsize;
 
-        explicit Instruction(std::size_t enc_bitsize_) : enc_bitsize(enc_bitsize_) {}
+        std::size_t enc_bitsize;
+        std::bitset< 15 * 8 > enc;
+
+        explicit Instruction( std::size_t enc_bitsize,
+                              std::string enc )
+            : enc_bitsize( enc_bitsize ),
+              enc( InstBytes( enc ).to_enc< 15 * 8 >() )
+        {}
+
         Instruction(const Instruction &other) : operands(other.operands)
         {
             for (const auto &o_cluster : other.deps)
