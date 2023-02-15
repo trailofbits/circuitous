@@ -117,6 +117,7 @@ namespace circ
 
         insts_t take() { return std::move(insts); }
         const insts_t &get() const { return insts; }
-    };
 
+        std::string categories() const;
+    };
 } // namespace circ
