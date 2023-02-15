@@ -68,8 +68,8 @@ namespace eqsat::test {
             return storage_type(constant_storage(con.ref()));
         }
 
-        static storage_type make(const eqsat::operation_t &op) {
-            return string_storage(op.ref());
+        static storage_type make(const eqsat::atom_t &op) {
+            return string_storage(to_string(op));
         }
     };
 

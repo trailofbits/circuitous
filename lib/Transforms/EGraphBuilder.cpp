@@ -7,41 +7,6 @@
 namespace circ
 {
     //
-    // node_template constructors
-    //
-    op_code_node node_template_builder::opcode(auto *op) const {
-        return { op->op_code_str() };
-    }
-
-    sized_node node_template_builder::sized(auto *op) const {
-        return { op->op_code_str(), op->size };
-    }
-
-    advice_node node_template_builder::advice(Advice *op) const {
-        return { op->op_code_str(), op->size, op->advice_idx };
-    }
-
-    register_node node_template_builder::regop(auto *op) const {
-        return { op->op_code_str(), op->size, op->reg_name };
-    }
-
-    constant_node node_template_builder::constop(Constant *op) const {
-        return { op->op_code_str(), op->size, op->bits };
-    }
-
-    memory_node node_template_builder::memop(Memory *op) const {
-        return { op->op_code_str(), op->size, op->mem_idx };
-    }
-
-    extract_node node_template_builder::extract(Extract *op) const {
-        return { op->op_code_str(), op->low_bit_inc, op->high_bit_exc };
-    }
-
-    select_node node_template_builder::select(Select *op) const {
-        return { op->op_code_str(), op->size, op->bits };
-    }
-
-    //
     // Visits
     //
     node_template node_template_builder::visit(InputRegister *op) {

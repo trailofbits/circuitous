@@ -15,18 +15,21 @@
 
 namespace circ
 {
-    struct node_template_builder : NonDefaultingVisitor< node_template_builder > {
+    struct node_template_builder
+        : NonDefaultingVisitor< node_template_builder >
+        , circuit_egraph_builder_base
+    {
         //
         // node_template constructors
         //
-        op_code_node  opcode(auto *op) const;
-        sized_node    sized(auto *op) const;
-        advice_node   advice(Advice *op) const;
-        register_node regop(auto *op) const;
-        constant_node constop(Constant *op) const;
-        memory_node   memop(Memory *op) const;
-        extract_node  extract(Extract *op) const;
-        select_node   select(Select *op) const;
+        using circuit_egraph_builder_base::opcode;
+        using circuit_egraph_builder_base::sized;
+        using circuit_egraph_builder_base::advice;
+        using circuit_egraph_builder_base::regop;
+        using circuit_egraph_builder_base::constop;
+        using circuit_egraph_builder_base::memop;
+        using circuit_egraph_builder_base::extract;
+        using circuit_egraph_builder_base::select;
 
         //
         // Visits

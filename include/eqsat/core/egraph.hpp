@@ -365,7 +365,7 @@ namespace eqsat::graph
             return insert(builder_type::make(con), {});
         }
 
-        node_handle insert(const operation_t &op, std::span< node_handle > children) {
+        node_handle insert(const atom_t &op, std::span< node_handle > children) {
             return insert(builder_type::make(op), children);
         }
     };
