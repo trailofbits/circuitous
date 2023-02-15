@@ -122,7 +122,7 @@ namespace eqsat {
         {
             if (auto con = extract_constant(n)) {
                 if (con.value() == c.ref()) {
-                    spdlog::debug("[eqsat] matched constant {} with {}", c, con.value());
+                    // spdlog::debug("[eqsat] matched constant {} with {}", c, con.value());
                     co_yield { graph.find(&n), matched };
                 }
             }
@@ -135,7 +135,7 @@ namespace eqsat {
             -> single_match_generator
         {
             if (node_name(n) == o.ref()) {
-                spdlog::debug("[eqsat] matched op {} with {}", o, node_name(n));
+                // spdlog::debug("[eqsat] matched op {} with {}", o, node_name(n));
                 co_yield { graph.find(&n), matched };
             }
         }
@@ -154,7 +154,7 @@ namespace eqsat {
                 }
             }
 
-            spdlog::debug("[eqsat] matched place {} with {}", p, node_name(n));
+            // spdlog::debug("[eqsat] matched place {} with {}", p, node_name(n));
 
             single_match_result result = { handle, matched };
             result.matched_places.emplace(id, maybe_node_handle(handle));
@@ -289,7 +289,6 @@ namespace eqsat {
             co_yield match(get_expr_with_name(lab, pattern).expr, matched);
         }
 
-
         match_generator match(std::vector< label_t > labels, multi_match_result partial_result) {
             auto label = labels.back();
             labels.pop_back();
@@ -345,6 +344,7 @@ namespace eqsat {
 
     template< gap::graph::graph_like egraph >
     match_generator match(const rewrite_rule &rule, const egraph &graph) {
+        // spdlog::debug("[eqsat] match rule {}", rule);
         co_yield matcher(rule, graph).match();
     }
 
