@@ -11,6 +11,7 @@
 #include <circuitous/IR/Intrinsics.hpp>
 
 #include <circuitous/Fuzz/InstNavigation.hpp>
+#include <circuitous/Lifter/ISELBank.hpp>
 #include <circuitous/Lifter/Shadows.hpp>
 #include <circuitous/Lifter/SReg.hpp>
 #include <circuitous/Lifter/ShadowMat.hpp>
@@ -78,6 +79,8 @@ namespace circ
 
         uint64_t word_size = 0;
         uint64_t select_counter = 0;
+
+        std::size_t target_size = 0;
 
         std::unordered_map< uint64_t, llvm::Value * > reg_op_dsts;
 
@@ -242,10 +245,54 @@ namespace circ
 
         }
 
+        auto biggest_isel(remill::Instruction &inst)
+            -> std::tuple< std::size_t, std::string >
+        {
+            llvm::StringRef name = inst.function;
+            auto [ base, size ] = name.rsplit( '_' );
+
+            auto to_int = []( llvm::StringRef str ) -> std::optional< std::size_t >
+            {
+                std::size_t out;
+                //log_info() << "Converting: " << str.str();
+                if ( str.getAsInteger( 10, out ) )
+                    return {};
+                return out;
+            };
+
+            auto original_size = to_int( size );
+            if ( !original_size )
+                return { 0, name.str() };
+
+            std::tuple< std::size_t, std::string > out = { *original_size, name.str() };
+
+            for ( auto &fn : module->getGlobalList() )
+            {
+                if ( !fn.hasName() )
+                    continue;
+                auto full_name = fn.getName();
+                if ( !full_name.consume_front( "ISEL_" ) )
+                    continue;
+
+                auto [ fbase, fsize ] = full_name.rsplit( '_' );
+                if ( fbase == base && *to_int( fsize ) >= std::get< 0 >( out ) )
+                    out = { *to_int( fsize ), full_name.str() };
+            }
+
+            return out;
+
+        }
+
         auto LiftIntoBlock(remill::Instruction &inst, llvm::BasicBlock *block,
                            bool is_delayed)
         {
-            //log_dbg() << shadow->to_string();
+            auto irb = llvm::IRBuilder<>( block );
+            auto [ size, fn ] = biggest_isel( inst );
+
+            log_info() << "[ old-lifter ]: For " << inst.function << " => " << fn;
+            target_size = size;
+            //inst.function = fn;
+
             auto lift_status = this->parent::LiftIntoBlock(inst, block, is_delayed);
 
             // If the instruction was not lifted correctly we do not wanna do anything
@@ -257,6 +304,19 @@ namespace circ
 
             auto call = fetch_sem_call(block);
             check(call);
+
+            static std::unordered_set< std::string > callees;
+            auto name = call->getCalledFunction()->getName().str();
+            if (callees.count(name))
+            {
+                log_info() << "Re-using: " << name;
+            } else {
+                log_info() << "New entry: " << name;
+                callees.emplace(name);
+            }
+
+
+
             consolidate_isel(call->getCalledFunction());
 
             // We need to actually store the new value of instruction pointer
@@ -468,6 +528,12 @@ namespace circ
             return llvm::ConstantInt::get(ty, 0, false);
         }
 
+        llvm::Value *enlarge( llvm::IRBuilder<> &ir,
+                              llvm::Value *selected, llvm::Type *trg_type )
+        {
+            return irops::make< irops::Entry >( ir, selected, trg_type );
+        }
+
         // If register does not have a shadow we can procees the same way default lifter
         // does. However, if a shadow is present we need to do more complex decision
         // mostly in form of `selectN` with possible `undef` that represents that a register
@@ -497,7 +563,7 @@ namespace circ
                 return this->parent::LoadRegValue(bb, state_ptr, input_name(name));
             };
 
-            auto selected = LiftSReg(bb, ir, s_reg, locate_reg);
+            llvm::Value *selected = LiftSReg(bb, ir, s_reg, locate_reg);
 
             auto dst = [&](auto what) -> llvm::Value * {
                 if (llvm::isa<llvm::PointerType>(concrete->getType())) {
@@ -513,7 +579,9 @@ namespace circ
                 }
                 check(what->getType()->isIntOrIntVectorTy() &&
                       concrete->getType()->isIntOrIntVectorTy());
-                return ir.CreateSExtOrTrunc(what, concrete->getType());
+
+                return enlarge( ir, selected, concrete->getType() );
+                //return ir.CreateSExtOrTrunc(enlarge(selected), concrete->getType());
             };
             return dst(selected);
         }
