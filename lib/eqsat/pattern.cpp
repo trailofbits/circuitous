@@ -59,9 +59,17 @@ namespace eqsat
         return fmap(value, bigint_parser());
     }
 
+    constexpr bool isspecial(char c) noexcept {
+        return c == '_';
+    }
+
+    constexpr bool isnamechar(char c) noexcept {
+        return isalpha(c) || isspecial(c);
+    };
+
     constexpr parser< name_t > auto name_parser() {
         return [](parse_input_t in) -> parse_result_t< name_t > {
-            if (auto prefix = length_parser(isalpha)(in); prefix && result(prefix) > 0) {
+            if (auto prefix = length_parser(isnamechar)(in); prefix && result(prefix) > 0) {
                 if (auto suffix = length_parser(isdigit)(rest(prefix))) {
                     auto length = result(prefix) + result(suffix);
                     return {
