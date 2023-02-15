@@ -755,11 +755,12 @@ namespace circ
             auto displacement = LiftSImmediate(block, CurrentShade().address()->displacement(),
                                                r_op.addr.displacement);
 
-            auto segment_reg = LiftSReg< ifuzz::sel::segment >(block, state_ptr, r_op);
+            //auto segment_reg = LiftSReg< ifuzz::sel::segment >(block, state_ptr, r_op);
 
             llvm::IRBuilder<> ir(block);
 
-            llvm::Value *out = ir.CreateAdd(segment_reg, base_reg);
+            //llvm::Value *out = ir.CreateAdd(segment_reg, base_reg);
+            llvm::Value *out = base_reg;
 
             auto scale_factor = ir.CreateShl( index_reg, scale );
             out = ir.CreateAdd(out, scale_factor);
