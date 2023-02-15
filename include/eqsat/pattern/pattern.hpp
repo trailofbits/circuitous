@@ -127,6 +127,16 @@ namespace eqsat
         std::optional< bitwidth_t > _bitwidth;
     };
 
+    static inline std::string atom_name(const atom_t &atom) {
+        const atom_base& base = atom;
+        return std::visit( gap::overloaded{
+            [&](const constant_t& c)  { return c.ref().to_string(2); },
+            [&](const operation_t& o) { return o.ref(); },
+            [&](const place_t& p)     { return p.ref(); },
+            [&](const label_t& l)     { return label_name(l); },
+        }, base);
+    }
+
     template< typename stream >
     stream& operator<<(stream& os, const atom_t& atom) {
         const atom_base& base = atom;

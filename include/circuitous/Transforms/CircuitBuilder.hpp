@@ -54,23 +54,104 @@ namespace circ {
             return holds_alternative< sized_node, advice_node >(op) && !bitwidth(op).has_value();
         }
 
+        bitwidth_t size_of_operands(const std::vector< operation > &children) {
+            if (children.empty()) {
+                return 0;
+            }
+
+            bitwidth_t bitwidth = children[0]->size;
+            for (const auto &child : children) {
+                if (child->size != bitwidth) {
+                    return 0;
+                }
+            }
+
+            return bitwidth;
+        }
+
+        bitwidth_t compute_bitwidth(const sized_node &sized, const std::vector< operation > &children) {
+            auto result = llvm::StringSwitch< bitwidth_t >(sized.op_code_name)
+                // .Case("in.timestamp",     circuit->create< InputTimestamp >( size ))
+                // .Case("out.timestamp",    circuit->create< OutputTimestamp >( size ))
+                // .Case("in.error_flag",    circuit->create< InputErrorFlag >( size ))
+                // .Case("out.error_flag",   circuit->create< OutputErrorFlag >( size ))
+                // .Case("undefined",        circuit->create< Undefined >( size ))
+                // .Case("instruction_bits", circuit->create< InputInstructionBits >( size ))
+
+                .Case("Add" ,  size_of_operands(children))
+                .Case("Sub" ,  size_of_operands(children))
+                .Case("Mul" ,  size_of_operands(children))
+                .Case("UDiv",  size_of_operands(children))
+                .Case("SDiv",  size_of_operands(children))
+                .Case("URem",  size_of_operands(children))
+                .Case("Xor" ,  size_of_operands(children))
+                .Case("SRem",  size_of_operands(children))
+                .Case("Shl" ,  size_of_operands(children))
+                .Case("LShr",  size_of_operands(children))
+                .Case("AShr",  size_of_operands(children))
+                // .Case("Trunc", size_of_operands(children))
+                // .Case("ZExt",  size_of_operands(children))
+                // .Case("SExt",  size_of_operands(children))
+
+                .Case("Icmp_ult", 1)
+                .Case("Icmp_slt", 1)
+                .Case("Icmp_ugt", 1)
+                .Case("Icmp_eq", 1)
+                .Case("Icmp_ne", 1)
+                .Case("Icmp_uge", 1)
+                .Case("Icmp_ule", 1)
+                .Case("Icmp_sgt", 1)
+                .Case("Icmp_sge", 1)
+                .Case("Icmp_sle", 1)
+
+                // .Case("concat", circuit->create< Concat >( size ))
+
+                .Case("Or" ,  size_of_operands(children))
+                .Case("And",  size_of_operands(children))
+                .Case("Xor",  size_of_operands(children))
+
+                // .Case("pop_count",             circuit->create< PopulationCount >( size ))
+                // .Case("count_lead_zeroes",     circuit->create< CountLeadingZeroes >( size ))
+                // .Case("count_trailing_zeroes", circuit->create< CountTrailingZeroes >( size ))
+                .Case("not",  size_of_operands(children))
+
+                // .Case("Switch", circuit->create< Switch >( size ))
+                // .Case("Option", circuit->create< Option >( size ))
+                .Default( 0 );
+
+            if (!result) {
+                log_kill() << "not implemented: update bitwidths of " << node_name(sized);
+            }
+
+            return result;
+        }
+
         operation extract(const optimal_node &node) {
             auto node_ptr = node.node;
             if (cached.count(node_ptr)) {
                 return cached.at(node_ptr);
             }
 
-            const auto &data = unwrap(node_ptr->data);
+            std::vector< operation > children;
+            for (const auto &ch : node.children()) {
+                children.push_back(extract(ch));
+            }
+
+            auto data = unwrap(node_ptr->data);
 
             if (needs_compute_bitwidth(data)) {
-                log_kill() << "Not implemented: update bitwidths of " << node_name(data);
+                if (auto *sized = std::get_if< sized_node >(&data)) {
+                    sized->size = compute_bitwidth(*sized, children);
+                } else {
+                    log_kill() << "not implemented: update bitwidths of " << node_name(data);
+                }
             }
 
             auto op = make_operation(data);
             cached.emplace(node_ptr, op);
 
-            for (const auto &ch : node.children()) {
-                op->add_operand(extract(ch));
+            for (auto child : children) {
+                op->add_operand(child);
             }
 
             return op;
@@ -113,7 +194,7 @@ namespace circ {
                 .Case("UDiv",  circuit->create< UDiv >( size ))
                 .Case("SDiv",  circuit->create< SDiv >( size ))
                 .Case("URem",  circuit->create< URem >( size ))
-                .Case("Xor",  circuit->create< Xor >( size ))
+                .Case("Xor",   circuit->create< Xor >( size ))
                 .Case("SRem",  circuit->create< SRem >( size ))
                 .Case("Shl",   circuit->create< Shl >( size ))
                 .Case("LShr",  circuit->create< LShr >( size ))
