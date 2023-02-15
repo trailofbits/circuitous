@@ -12,7 +12,9 @@
 #include <circuitous/Lifter/Memory.hpp>
 #include <circuitous/Lifter/Instruction.hpp>
 #include <circuitous/Lifter/SelectFold.hpp>
+
 #include <circuitous/Lifter/Components/Decoder.hpp>
+#include <circuitous/Lifter/Components/OperandSelection.hpp>
 
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Util/Warnings.hpp>
@@ -30,43 +32,8 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <sstream>
 
-namespace circ {
-
-    // TODO(pag): Add other architecture flag names here.
-    static const std::string kFlagRegisters =
-        ",SF,OF,PF,AF,ZF,CF"  // x86, amd64.
-        ",N,Z,C,V"  // AArch64.
-        ",icc_c,icc_v,icc_z,icc_n"  // SPARCv8.
-        ",xcc_c,xcc_v,xcc_z,xcc_n"  // SPARCv9.
-        ",";
-
-    // Return an integral type that is big enough to hold any value can inhabit the
-    // register associated with `reg`.
-    static llvm::IntegerType *IntegralRegisterType(llvm::Module &module,
-                                                   const remill::Register *reg)
-    {
-        if (reg->type->isIntegerTy())
-        {
-            // Optimization for flag registers, which should only occupy a single
-            // bit. We look to see if it's in the set of
-            if (auto found_at = kFlagRegisters.find(reg->name);
-                found_at != std::string::npos && 0 < found_at &&
-                (found_at + 1u) < kFlagRegisters.size() &&
-                kFlagRegisters[found_at - 1u] == ',' &&
-                kFlagRegisters[found_at + reg->name.size()] == ',')
-            {
-                return llvm::Type::getInt1Ty(module.getContext());
-            }
-
-            return llvm::dyn_cast<llvm::IntegerType>(reg->type);
-        }
-
-        return llvm::Type::getIntNTy(
-            module.getContext(),
-            static_cast<unsigned>(
-                module.getDataLayout().getTypeAllocSize(reg->type) * 8u));
-    }
-
+namespace circ
+{
     using reg_ptr_t = const remill::Register *;
     std::vector<reg_ptr_t> EnclosedClosure(reg_ptr_t ptr)
     {
@@ -94,7 +61,7 @@ namespace circ {
 
         // How much space does register occupy in form iN. There is an
         // optimization for flag registers.
-        auto reg_type = IntegralRegisterType(*bb->getModule(), reg);
+        auto reg_type = irops::int_reg_type(*bb->getModule(), reg);
         auto store_type =
             ir.getIntNTy(static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
         auto coerced_type = ir.CreateBitCast(gep, llvm::PointerType::getUnqual(store_type));
@@ -113,7 +80,7 @@ namespace circ {
 
         // How much space does register occupy in form iN. There is an
         // optimization for flag registers.
-        auto reg_type = IntegralRegisterType(*bb->getModule(), reg);
+        auto reg_type = irops::int_reg_type(*bb->getModule(), reg);
         auto store_type =
             ir.getIntNTy(static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
         auto coerced_type = ir.CreateBitCast(gep, llvm::PointerType::getUnqual(store_type));
@@ -125,6 +92,22 @@ namespace circ {
         return loaded;
     }
 
+
+    void State::reset( llvm::IRBuilder<> &irb, const Ctx::regs_t &regs )
+    {
+        log_info() << "[state]: reset";
+        for ( const auto &reg : regs )
+            store( irb, reg, irops::input_reg( irb, reg ) );
+    }
+
+    void State::commit( llvm::IRBuilder<> &irb, CtxRef ctx )
+    {
+        std::vector< llvm::Value * > args;
+        for ( const auto &reg : ctx.regs() )
+            args.push_back( load( irb, reg ) );
+        irops::make< irops::Commit >( irb, args, 1u );
+
+    }
 
     // After optimizations some context may be merged, but llvm opt will not remove them
     // from the top-level xor function.
@@ -212,7 +195,7 @@ namespace circ {
     {
         std::vector< llvm::Type * > params_types;
         for (auto reg : ctx.regs()) {
-            const auto reg_type = IntegralRegisterType(*ctx.module(), reg);
+            const auto reg_type = irops::int_reg_type(*ctx.module(), reg);
             params_types.push_back(reg_type);
             params_types.push_back(reg_type);
         }
@@ -772,4 +755,144 @@ namespace circ {
 
         return PostLiftOpt::run(builder.finish());
     }
+
+
+    /** _v2 **/
+
+    void CircuitMaker_v2::init_function()
+    {
+        auto type = llvm::FunctionType::get( ctx.ir().getInt1Ty(), {}, false );
+        auto linkage = llvm::GlobalValue::ExternalLinkage;
+        fn = llvm::Function::Create( type, linkage, "__circ.circuit_v2", ctx.module() );
+
+        auto entry = llvm::BasicBlock::Create( *ctx.llvm_ctx(), "entry", fn );
+        llvm::IRBuilder<> irb( entry );
+
+        state = State( entry, ctx.state_type() );
+        // Initialize state with all regs we want to use.
+        state->reset( irb, ctx.regs() );
+    }
+
+    /** State helpers **/
+    void CircuitMaker_v2::reset_state()
+    {
+        auto irb = mk_irb();
+        return state->reset( irb, ctx.regs() );
+    }
+
+    void CircuitMaker_v2::commit_state()
+    {
+        auto irb = mk_irb();
+        return state->commit( irb, ctx );
+    }
+
+    auto CircuitMaker_v2::materialize( const isem::ISem *def )
+        -> instance_ptr_t
+    {
+        log_info() << "[cmv2]: Materializing ...";;
+
+        reset_state();
+        auto irb = mk_irb();
+        auto pc = irops::mk_reg( irb, ctx.pc_reg(), irops::io_type::in );
+
+        auto inst_size = irops::make_leaf< irops::InstructionSize >( irb, ctx.ptr_size );
+        auto next_inst = irb.CreateAdd( state->load( irb, ctx.pc_reg() ), inst_size );
+        state->store( irb, ctx.pc_reg(), next_inst );
+
+        auto sem_call = call_semantic( irb, &def->self(), **state, pc, ctx.undef_mem_ptr() );
+        inline_or_die( sem_call );
+
+        commit_state();
+        auto [ it, _ ] = def_to_instances.emplace(
+                def,
+                std::make_shared< ISemInstance >( def, inst_size ) );
+        return it->second;
+    }
+
+    void CircuitMaker_v2::computationals( const isem::ISem *def )
+    {
+        auto instance = instance_of( def );
+        auto irb = mk_irb();
+
+        for ( const auto &reg : ctx.regs() )
+        {
+            auto loaded = state->load( irb, reg );
+            auto eq = irops::make< irops::OutputCheck >(
+                    irb, { loaded, irops::output_reg( irb, reg ) } );
+            instance->computationals[ reg ] = eq;
+        }
+    }
+
+    llvm::Function *CircuitMaker_v2::make_from( const InstructionBatch &batch )
+    {
+        std::unordered_map< const InstructionInfo *, isem::ISem * > info_to_def;
+        for ( const auto &info : batch.get() )
+        {
+            check( info._rinst );
+            auto def = isems.make( info.rinst().function, *ctx.module() );
+            auto instance = materialize( def );
+            computationals( def );
+
+            info_to_instance[ &info ] = std::move( instance );
+        }
+
+        log_info() << "[cmv2]:" << isems.to_string();
+
+
+        auto op_select = build::OperandSelection::build( ctx, batch );
+        log_info() << op_select.to_string();
+
+        for ( auto &[ info, instance ] : info_to_instance )
+        {
+            log_info() << "[cmv2]:" << "Initializing context.";
+            Context ctx;
+
+            llvm::IRBuilder<> irb_op( &*fn->begin() );
+            std::size_t idx = 0;
+            for ( auto value : op_select.assign( irb_op, *info ) )
+            {
+                check( value );
+
+                check( instance->def->args.size() > idx )
+                    << instance->def->args.size() << " <= " << idx;
+
+                auto variable_bp = instance->def->args[ idx++ ];
+                llvm::IRBuilder<> irb( &*fn->begin() );
+                auto variable = isem::ISem::reconstruct_arg( irb, variable_bp );
+
+                check ( value && variable );
+                auto ac = irops::make< irops::AdviceConstraint >( irb, { value, variable } );
+                ctx.add( ac );
+            }
+
+
+            llvm::IRBuilder<> irb( &*fn->begin() );
+
+            for ( const auto &[ _, val ] : instance->computationals )
+                ctx.add( val );
+
+            auto [ x, y ] = build::Decoder( this->ctx, irb, *info ).get_decoder_tree();
+            ctx.add( std::move( x ) );
+            ctx.add( std::move( y ) );
+            ctx.materialize( irb );
+        }
+
+
+        {
+            llvm::IRBuilder<> irb( &*fn->begin() );
+            irb.CreateRet( irb.getTrue() );
+        }
+
+        fn->print( llvm::errs() );
+        optimize_silently( { fn } );
+        fn->print( llvm::errs() );
+        check( false );
+        return nullptr;
+    }
+
+    llvm::Value *CircuitMaker_v2::Context::materialize( llvm::IRBuilder<> &irb )
+    {
+        return irops::make< irops::VerifyInst >( irb, _args );
+    }
+
 }  // namespace circ
