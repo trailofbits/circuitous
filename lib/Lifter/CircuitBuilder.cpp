@@ -365,10 +365,16 @@ namespace circ {
 
         ctx.clean_module({circuit_fn});
 
-        irops::enable_opts< irops::VerifyInst, irops::Select >(ctx.module());
+        irops::disable_opts< irops::VerifyInst, irops::Select >(ctx.module());
 
         remill::VerifyModule(ctx.module());
         optimize_silently(ctx.module(), {circuit_fn});
+
+        SelectFolder::ctx_to_selects_t select_map =
+            ContextCollector< irops::VerifyInst, irops::Select >( circuit_fn ).run();
+
+        auto select_fold = SelectFolder( select_map, circuit_fn );
+        select_fold.run();
 
         remill::VerifyModule(ctx.module());
         irops::disable_opts< irops::Select, irops::Advice >(ctx.module());
