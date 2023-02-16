@@ -95,6 +95,15 @@ namespace circ
         return true;
     }
 
-
+    auto AdviceConstraint::ctx_conds() -> gap::generator< Operation * >
+    {
+        for ( auto ctx : dyn_cast< VerifyInstruction >( users() ) )
+        {
+            check( ctx );
+            auto decoder = ctx->decoder();
+            check( decoder );
+            co_yield *decoder;
+        }
+    }
 
 }  // namespace circ
