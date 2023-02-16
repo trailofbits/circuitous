@@ -20,42 +20,45 @@
 
 namespace circ::build
 {
-    struct Decoder : has_ctx_ref
+    struct Decoder
     {
-        using has_ctx_ref::has_ctx_ref;
         using values_t = std::vector< llvm::Value * >;
 
         llvm::IRBuilder<> &ir;
 
         using shadow_t = typename InstructionInfo::shadow_t;
+        using shadows_t = std::vector< shadow_t >;
         using enc_t = typename InstructionInfo::enc_t;
 
-        const shadow_t &shadow;
-        const enc_t &enc;
-        std::size_t rinst_size;
+        using navig_t = shadowinst::navig;
+
+        const shadows_t &shadows;
 
         std::vector< llvm::Value * > to_verify;
 
-        Decoder( CtxRef ctx, llvm::IRBuilder<> &ir, ISEL_view &isel )
-            : has_ctx_ref( ctx ), ir( ir ),
-              shadow( isel.shadow ), enc( isel.encoding ),
-              rinst_size( isel.instruction.bytes.size() * 8 )
+        Decoder( llvm::IRBuilder<> &ir, ISEL_view &isel )
+            : ir( ir ),
+              shadows( isel.shadows )
         {}
 
-        Decoder( CtxRef ctx, llvm::IRBuilder<> &ir, const InstructionInfo &info )
-            : has_ctx_ref( ctx ), ir( ir ),
-              shadow( info.shadow() ), enc( info.enc() ),
-              rinst_size( info.rinst().bytes.size() * 8 )
+        Decoder( llvm::IRBuilder<> &ir, const InstructionInfo &info )
+            : ir( ir ),
+              shadows( info.shadows )
         {}
 
+       Decoder( llvm::IRBuilder<> &ir, const shadows_t &shadows )
+            : ir( ir ),
+              shadows( shadows )
+        {}
 
         auto get_decoder_tree() -> std::tuple< llvm::Value *, std::vector< llvm::Value * > >;
-
+        auto hardcoded_checks() -> values_t;
       private:
 
-        values_t byte_fragments();
+        values_t byte_fragments( const shadow_t &shadow );
         std::string generate_raw_bytes(const std::string &str, uint64_t form, uint64_t to);
-        llvm::Value *create_bit_check(uint64_t from, uint64_t to);
+        llvm::Value *create_bit_check( const shadow_t &shadow,
+                                       uint64_t from, uint64_t to);
 
         std::string convert_encoding(const auto &encoding)
         {
@@ -67,8 +70,10 @@ namespace circ::build
             return full_inst;
         }
 
-        values_t emit_translation_trees();
-        llvm::Value *emit_translation_tree(const shadowinst::Reg &sreg);
+        llvm::Value *emit_translation_tree( const shadowinst::Reg &sreg,
+                                            llvm::Value *selector );
+
+        std::tuple< values_t, values_t > tie_selectors( const values_t &conds );
     };
 
 }  // namespace circ::build
