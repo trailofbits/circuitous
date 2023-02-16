@@ -26,6 +26,7 @@ namespace circ
     struct ShiftConfig
     {
         static bool replace( Op *op ) { return true; }
+        static bool ignore( Op * op ) { return false; }
 
         static Operation *adjust_operand( Circuit *circuit,
                                           Switch *bp_operand,
@@ -89,8 +90,28 @@ namespace circ
         }
     };
 
-    template<> struct MergeConfig< Add > : ShiftConfig< Add > {};
-    template<> struct MergeConfig< Sub > : ShiftConfig< Sub > {};
+    template<> struct MergeConfig< Add > : ShiftConfig< Add >
+    {
+        static bool ignore( Add *op )
+        {
+            for ( auto o : dyn_cast< Constant >( op->operands() ) )
+                if ( o )
+                    return true;
+            return false;
+
+        }
+    };
+    template<> struct MergeConfig< Sub > : ShiftConfig< Sub >
+    {
+        static bool ignore( Sub *op )
+        {
+            for ( auto o : dyn_cast< Constant >( op->operands() ) )
+                if ( o )
+                    return true;
+            return false;
+
+        }
+    };
 
     template<> struct MergeConfig< SDiv > : ShiftConfig< SDiv > {};
     template<> struct MergeConfig< UDiv > : ShiftConfig< UDiv > {};
@@ -342,6 +363,9 @@ namespace circ
                 auto ignored = decoding_tree( circuit );
 
                 for ( auto op : circuit->attr< Op >() )
+                {
+                    if ( Configuration< Op >::ignore( op ) )
+                        continue;
                     for ( auto ctx : ctx_info[ op ] )
                     {
                         if ( ignored.count( op ) )
@@ -360,6 +384,8 @@ namespace circ
                         }();
                         insert_point->second.add( op );
                     }
+                }
+
             }
 
             const auto &raw() const { return mapping; }
@@ -426,7 +452,11 @@ namespace circ
 
         auto get_is_aspirant() const
         {
-            return []( auto op ) { return isa< Op >( op ); };
+            return []( auto op )
+            {
+                auto c = dyn_cast< Op >( op );
+                return c && !config::ignore( c );
+            };
         }
 
         std::vector< aspirant_t > of_size() const
