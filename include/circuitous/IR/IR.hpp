@@ -518,6 +518,8 @@ namespace circ
 
         Advice *advice() { return dyn_cast< Advice >( this->EnforceCtx::fixed() ); }
         Operation *runtime_value() { return this->EnforceCtx::dynamic(); }
+
+        auto ctx_conds() -> gap::generator< Operation * >;
     };
 
     struct WriteConstraint : MemoryConstraint
