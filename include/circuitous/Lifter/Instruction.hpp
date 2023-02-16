@@ -125,6 +125,10 @@ namespace circ
 
         self_t &fuzz();
 
+        // Aggregate all Instructions with the same ISEL to one while remembering all shadows.
+        // TODO( lifter ): Shadows need to be compatible?
+        self_t &aggregate();
+
         template< typename ILifter >
         self_t &lift()
         {
