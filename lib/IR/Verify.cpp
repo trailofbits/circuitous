@@ -529,6 +529,7 @@ namespace circ
                                                 DecoderResult, Extract,
                                                 InputInstructionBits, And, Icmp_eq,
                                                 Not,
+                                                Select,
                                                 Or, Xor, Concat >();
             for (auto root : circuit->attr< DecoderResult >())
                 verify_constrained_subtree(root, root, allowed_nodes);
