@@ -212,21 +212,6 @@ namespace circ
         void inject(const InstructionBatch &batch);
         void inject(const InstructionInfo &batch);
 
-        void inject_isels(const isels_t& isels)
-        {
-            for (const auto &isel : isels)
-                inject_isel(isel);
-        }
-
-        void inject_isel(const InstructionSelection &isel)
-        {
-            for (auto i = 0u; i < isel.instructions.size(); ++i)
-            {
-                inject_semantic_modular(ISEL_view(isel, i));
-                this->move_head();
-            }
-        }
-
         // TODO(lukas): Fix and replace the old way of lifting.
         void inject_semantic_modular(ISEL_view isel);
         llvm::Function *finish();
