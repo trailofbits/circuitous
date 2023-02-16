@@ -18,6 +18,7 @@ add_circuitous_library( transforms
     EqualitySaturation.cpp
     OverflowFlagFix.cpp
     ConjureALU.cpp
+    LowerAdvices.cpp
   LINK_LIBS
     circuitous::eqsat
     fmt::fmt
