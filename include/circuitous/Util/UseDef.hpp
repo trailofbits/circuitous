@@ -207,7 +207,7 @@ namespace circ
             value->add_user(self());
         }
 
-        void add_operands(gap::ranges::range auto &&vs)
+        void add_operands(gap::ranges::range auto vs)
         {
             for (auto v : vs)
                 add_operand(v);
