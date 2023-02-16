@@ -60,6 +60,7 @@ DEFINE_string(ciff_in, "", "Load input from circuitous-seed --dbg produced file"
 DEFINE_string(patterns, "", "Equality saturation patterns.");
 DEFINE_bool(eqsat, false, "Enable equality saturation based optimizations.");
 DEFINE_bool(conjure_alu, false, "Enable conjure-alu optimization.");
+DEFINE_bool(no_advices, false, "Lower all advices. Cannot be used with conjure-alu.");
 DEFINE_bool(dbg, false, "Enable various debug dumps");
 DEFINE_bool(quiet, false, "");
 
@@ -70,6 +71,11 @@ namespace circ::cli
     struct ConjureALU : circ::DefaultCmdOpt, Arity< 0 >
     {
         static inline const auto opt = circ::CmdOpt( "--conjure-alu", false );
+    };
+
+    struct NoAdvices : circ::DefaultCmdOpt, Arity< 0 >
+    {
+        static inline const auto opt = circ::CmdOpt( "--no-advices", false );
     };
 };
 
@@ -102,6 +108,9 @@ namespace
             opt.template emplace_pass< circ::CollapseOpsPass >( "collapse-ops" );
         }
 
+        if ( cli.template present< circ::cli::NoAdvices >() )
+            opt.template emplace_pass< circ::LowerAdvices >( "lower-advices" );
+
         if ( cli.template present< circ::cli::ConjureALU >() )
         {
             std::vector< circ::Operation::kind_t > kinds =
@@ -121,6 +130,7 @@ namespace
             };
             opt.template emplace_pass< circ::ConjureALUPass >( "conjure-alu", kinds );
         }
+
 
         auto result = opt.run(std::move(circuit));
         circ::log_info() << "Optimizations done.";
@@ -169,6 +179,7 @@ using other_options = circ::tl::TL<
 using optimization_options = circ::tl::TL<
     circ::cli::Simplify,
     circ::cli::ConjureALU,
+    circ::cli::NoAdvices,
     circ::cli::EqSat,
     circ::cli::Patterns
 >;
