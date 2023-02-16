@@ -61,6 +61,32 @@ namespace circ
         return *this;
     }
 
+    auto InstructionBatch::aggregate() -> self_t &
+    {
+        std::map< std::string, InstructionInfo > isel_to_shadow;
+
+        for ( auto &&inst : std::move( insts ) )
+        {
+            auto it = isel_to_shadow.find( inst.rinst().function );
+            if ( it == isel_to_shadow.end() )
+            {
+                // To avoid UB
+                auto isel = inst.rinst().function;
+                isel_to_shadow.emplace( isel, std::move( inst ) );
+                continue;
+            }
+
+            check( inst.has_shadow() );
+            it->second.merge( std::move( inst ) );
+        }
+
+        insts.clear();
+        for ( auto &&[ _, info ] : std::move( isel_to_shadow ) )
+            insts.push_back( std::move( info ) );
+
+        return *this;
+    }
+
     std::string InstructionBatch::categories() const
     {
         // reg, addr, imm
