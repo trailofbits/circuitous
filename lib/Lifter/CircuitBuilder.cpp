@@ -855,6 +855,7 @@ namespace circ
 
             llvm::IRBuilder<> irb_op( &*fn->begin() );
             std::size_t idx = 0;
+            log_info() << "[cmv2]:" << "Binding operands";
             for ( auto value : op_select.assign( irb_op, *info ) )
             {
                 check( value );
@@ -867,6 +868,9 @@ namespace circ
                 auto variable = isem::ISem::reconstruct_arg( irb, variable_bp );
 
                 check ( value && variable );
+                log_info() << "[cmv2]:" << "Binding:\n"
+                           << "        - val:" << dbg_dump( value ) << "\n"
+                           << "        - var:" << dbg_dump( variable );
                 auto ac = irops::make< irops::AdviceConstraint >( irb, { value, variable } );
                 ctx.add( ac );
             }
@@ -874,18 +878,20 @@ namespace circ
 
             llvm::IRBuilder<> irb( &*fn->begin() );
 
+            log_info() << "[cmv2]:" << "Adding computationals to context.";
             for ( const auto &[ _, val ] : instance->computationals )
                 ctx.add( val );
 
             log_info() << "[cmv2]:" << "Emitting decoder.";
-            auto [ x, y ] = build::Decoder( irb, *info ).get_decoder_tree();
 
+            auto [ x, y ] = build::Decoder( irb, *info ).get_decoder_tree();
             ctx.add( std::move( x ) );
             ctx.add( std::move( y ) );
             ctx.materialize( irb );
         }
 
 
+        log_info() << "[cmv2]:" << "Emitting return.";
         {
             llvm::IRBuilder<> irb( &*fn->begin() );
             irb.CreateRet( irb.getTrue() );
