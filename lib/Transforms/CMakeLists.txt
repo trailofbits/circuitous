@@ -13,6 +13,8 @@ add_circuitous_library( transforms
   SOURCES
     EqualitySaturation.cpp
     OverflowFlagFix.cpp
+    ConjureALU.cpp
+    LowerAdvices.cpp
   LINK_LIBS
     circuitous::eqsat
   HEADERS
