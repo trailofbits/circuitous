@@ -225,7 +225,7 @@ namespace circ
             {
                 const auto &[ name, def ] = history[ 0 ];
                 ss << name << ":" << std::endl;
-                printer::Print( ss, def );
+                printer::Print( ss, def, false );
             }
 
             for ( std::size_t i = 1; i < history.size(); ++i )
@@ -236,7 +236,7 @@ namespace circ
             }
 
             ss << std::endl << "In the end:" << std::endl;
-            printer::Print( ss, history.back().second );
+            printer::Print( ss, history.back().second, false );
             ss << std::endl;
             return ss.str();
         }
