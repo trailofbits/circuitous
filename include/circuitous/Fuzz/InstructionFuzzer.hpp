@@ -159,7 +159,7 @@ namespace circ
 
         auto fuzz_ops(bool generate_all=true)
         {
-            shadowinst::Instruction shadow_inst(rinst_bitsize());
+            shadowinst::Instruction shadow_inst(rinst_bitsize(), rinst.bytes);
             auto [op_bits, dirts] = generate_bits();
 
             for (std::size_t i = 0; i < rinst.operands.size(); ++i)
