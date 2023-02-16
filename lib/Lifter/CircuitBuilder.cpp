@@ -435,15 +435,16 @@ namespace circ {
 
         ctxs.emplace_back(this->head,
                           saturation_prop, timestamp_prop, params, reg_selector_constraint,
-                          mem_checks, err_checks, extra_params
+                          mem_checks, /* err_checks, */ extra_params
                           );
         auto [dst_cond, dst_regs_checks] = handle_dst_regs_(dst_regs, isel, state);
         ir.SetInsertPoint(this->head);
         auto computational_transition = ir.CreateAnd(dst_regs_checks, preserved);
-        auto computational_res = ir.CreateOr(c_ebit, computational_transition);
-        auto error_transition = emit_error_transitions(c_ebit);
-        ir.SetInsertPoint(this->head);
-        ctxs.back()._add(ir.CreateAnd(computational_res, error_transition));
+        //auto computational_res = ir.CreateOr(c_ebit, computational_transition);
+        //auto error_transition = emit_error_transitions(c_ebit);
+        //ir.SetInsertPoint(this->head);
+        //ctxs.back()._add(ir.CreateAnd(computational_res, error_transition));
+        ctxs.back()._add( computational_transition );
 
         add_isel_metadata(ctxs.back().current, isel);
     }
@@ -728,6 +729,7 @@ namespace circ {
 
         llvm::IRBuilder<> irb(this->head);
         auto [ebit_in, ebit_out] = irops::make_all_leaves< irops::ErrorBit >(irb);
+        return { {}, ebit_out };
 
         auto current_err = [&](llvm::Value *ebit_in_ = ebit_in) -> llvm::Value * {
             auto delta_err = err::synthesise_current(irb, begin, end);
