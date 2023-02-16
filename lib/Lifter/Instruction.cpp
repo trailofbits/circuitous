@@ -49,7 +49,10 @@ namespace circ
     auto InstructionBatch::add(raw_insts_t &&rinsts) -> self_t &
     {
         for (auto &&rinst : rinsts)
-            insts.emplace_back(std::move(rinst));
+        {
+            auto bytes = rinst.bytes;
+            insts.emplace_back(std::move(rinst), bytes);
+        }
         return *this;
     }
 
