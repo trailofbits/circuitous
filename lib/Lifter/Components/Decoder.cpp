@@ -17,21 +17,24 @@ CIRCUITOUS_RELAX_WARNINGS
 CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <circuitous/Lifter/Components/Decoder.hpp>
+#include <circuitous/Util/Overloads.hpp>
 
 #include <sstream>
 
 namespace circ::build
 {
-    std::string Decoder::generate_raw_bytes(const std::string &full,
-                                            uint64_t from, uint64_t to)
+    /* DecoderBase:: */
+
+    std::string DecoderBase::generate_raw_bytes( const std::string &full,
+                                                 uint64_t from, uint64_t to )
     {
         auto n = full.substr(from, to - from);
         std::reverse(n.begin(), n.end());
         return n;
     }
 
-    llvm::Value *Decoder::create_bit_check( const shadow_t &shadow,
-                                            uint64_t from, uint64_t to )
+    llvm::Value *DecoderBase::create_bit_check( const shadow_t &shadow,
+                                                uint64_t from, uint64_t to )
     {
         auto encoding = convert_encoding( shadow.enc );
         std::string expected = generate_raw_bytes(encoding, from, to);
@@ -40,14 +43,14 @@ namespace circ::build
         check(size == to - from) << size << " != " << to - from
                                  << ":" << to << "-" << from;
 
-        auto expected_v = ir.getInt(llvm::APInt(size, expected, 2));
-        auto extracted = irops::make_leaf< irops::ExtractRaw >(ir,
+        auto expected_v = irb.getInt(llvm::APInt(size, expected, 2));
+        auto extracted = irops::make_leaf< irops::ExtractRaw >(irb,
                 static_cast< std::size_t >(from),
                 static_cast< std::size_t >(to - from));
-        return irops::make< irops::DecodeCondition >(ir, {expected_v, extracted}, size);
+        return irops::make< irops::DecodeCondition >(irb, {expected_v, extracted}, size);
     }
 
-    auto Decoder::byte_fragments( const shadow_t &shadow ) -> values_t
+    auto DecoderBase::byte_fragments( const shadow_t &shadow ) -> values_t
     {
         values_t out;
 
@@ -60,16 +63,22 @@ namespace circ::build
         //              Try to lift `6689d8` and `89d8` to demonstrate the issue.
         // TODO(lukas): For now we assume it is padded with 0s.
         auto tail_size = static_cast< std::size_t >( kMaxNumInstBits - shadow.enc_bitsize );
-        auto tail = ir.getInt( llvm::APInt( static_cast< std::uint32_t >( tail_size ),
+        auto tail = irb.getInt( llvm::APInt( static_cast< std::uint32_t >( tail_size ),
                                             0, false) );
         auto coerced_size = static_cast< std::size_t >( shadow.enc_bitsize );
 
-        auto extracted = irops::make_leaf< irops::ExtractRaw >( ir, coerced_size, tail_size );
-        auto compare = irops::make< irops::DecodeCondition >( ir,
+        auto extracted = irops::make_leaf< irops::ExtractRaw >( irb, coerced_size, tail_size );
+        auto compare = irops::make< irops::DecodeCondition >( irb,
                                                               { tail, extracted },
                                                               tail_size );
         out.push_back( compare );
         return out;
+    }
+
+    llvm::Value *DecoderBase::hardcoded_check( const shadow_t &shadow )
+    {
+        auto all_fragments = byte_fragments( shadow );
+        return irops::make< irops::And >( irb, all_fragments );
     }
 
     auto Decoder::hardcoded_checks() -> values_t
@@ -77,12 +86,58 @@ namespace circ::build
         std::vector< llvm::Value * > fragment_instances;
         // Collect all fragment conditions.
         for ( const auto &shadow : shadows )
-        {
-            auto all_fragments = byte_fragments( shadow );
-            fragment_instances.emplace_back( irops::make< irops::And >( ir, all_fragments ) );
-        }
+            fragment_instances.emplace_back( hardcoded_check( shadow ) );
         return fragment_instances;
     }
+
+
+    llvm::Value *DecoderBase::holes( const shadow_t &shadow )
+    {
+        std::vector< llvm::Value * > holes_per_tm;
+
+        auto process = overloaded
+        {
+            [ & ]( const shadowinst::Reg &sreg )
+            {
+                holes_per_tm.emplace_back( holes( sreg ) );
+            },
+            [ & ]( const auto & ) {} // ignore rest
+        };
+        shadow.for_each_present( process );
+
+        return irops::make< irops::And >( irb, holes_per_tm );
+    }
+
+    llvm::Value *DecoderBase::holes( const shadowinst::Reg &sreg )
+    {
+        auto materializer = shadowinst::Materializer( irb, sreg );
+        auto selector = materializer.region_selector();
+        return emit_translation_tree( sreg, selector );
+    }
+
+    llvm::Value *DecoderBase::emit_translation_tree( const shadowinst::Reg &sreg,
+                                                     llvm::Value *selector )
+    {
+        if ( sreg.regions.marked_size() == 0 )
+            return irb.getTrue();
+
+        if (sreg.tm().is_saturated())
+            return irb.getTrue();
+
+        values_t conds;
+        for ( auto &val : sreg.tm().complement() )
+            conds.push_back( irb.CreateICmpEQ( selector, irb.getInt( val ) ) );
+        return irb.CreateNot( irops::make< irops::Or >( irb, conds ) );
+    }
+
+    /* AtomDecoder:: */
+
+    llvm::Value *AtomDecoder::get_decoder_tree()
+    {
+        return irops::make< irops::DecoderResult >( irb, byte_fragments( atom.abstract ) );
+    }
+
+    /* Decoder:: */
 
     auto Decoder::get_decoder_tree()
     -> std::tuple< llvm::Value *, std::vector< llvm::Value * > >
@@ -92,118 +147,22 @@ namespace circ::build
         for ( const auto &shadow : shadows )
         {
             auto all_fragments = byte_fragments( shadow );
-            fragment_instances.emplace_back( irops::make< irops::And >( ir, all_fragments ) );
+            fragment_instances.emplace_back( irops::make< irops::And >( irb, all_fragments ) );
         }
 
-        auto [ dec, ties ] = tie_selectors( fragment_instances );
-        fragment_instances.insert( fragment_instances.end(), dec.begin(), dec.end() );
+        fragment_instances.emplace_back( all_holes() );
+        return { irops::make< irops::DecoderResult >( irb, fragment_instances ), values_t{} };
 
-        return { irops::make< irops::DecoderResult >( ir, fragment_instances ), ties };
     }
 
-    llvm::Value *Decoder::emit_translation_tree( const shadowinst::Reg &sreg,
-                                                 llvm::Value *selector )
+    llvm::Value *Decoder::all_holes()
     {
-        if ( sreg.regions.marked_size() == 0 )
-            return ir.getTrue();
+        std::vector< llvm::Value * > holes_per_tm;
 
-        if (sreg.tm().is_saturated())
-            return ir.getTrue();
+        for ( auto &shadow : shadows )
+            holes_per_tm.emplace_back( holes( shadow ) );
 
-        values_t conds;
-        for ( auto &val : sreg.tm().complement() )
-            conds.push_back( ir.CreateICmpEQ( selector, ir.getInt( val ) ) );
-        return ir.CreateNot( irops::make< irops::Or >( ir, conds ) );
-    }
-
-    auto Decoder::tie_selectors( const values_t &conds ) -> std::tuple< values_t, values_t >
-    {
-        check( conds.size() == shadows.size() );
-
-        if ( shadows.empty() )
-            return {};
-
-        using s_reg_t = const shadowinst::Reg;
-        auto get_reg = [ & ]( const auto &from ) -> s_reg_t *
-        {
-            return from.reg();
-        };
-
-        auto get_base = [ & ]( const auto &from ) -> s_reg_t *
-        {
-            if ( !from.address() || !from.address()->base_reg() )
-                return nullptr;
-            return from.address()->base_reg();
-        };
-
-        auto get_index = [ & ]( const auto &from ) -> s_reg_t *
-        {
-            if ( !from.address() || !from.address()->index_reg() )
-                return nullptr;
-            return from.address()->index_reg();
-        };
-
-        auto mk_selector = [ & ]( auto sreg )
-        {
-            auto materializer = shadowinst::Materializer( ir, *sreg );
-            return materializer.region_selector();
-        };
-
-        std::vector< llvm::Value * > decoder_fragments;
-        std::vector< llvm::Value * > ties;
-
-        using bucket_t = std::tuple< llvm::Type *, std::size_t, llvm::Value * >;
-        std::vector< bucket_t > buckets;
-
-        auto handle_bucket = [ & ]( llvm::Type *t, std::size_t selector )
-            -> bucket_t &
-        {
-            for ( auto &entry : buckets )
-            {
-                auto &[ a, b, _ ] = entry;
-                if ( a == t && b == selector )
-                    return entry;
-            }
-
-            auto val = llvm::ConstantInt::get( t, 0, false );
-            buckets.emplace_back( t, selector, val );
-            return buckets.back();
-        };
-
-        auto operands_size = shadows[ 0 ].operands.size();
-        auto exec = [ & ]( auto get )
-        {
-            for ( std::size_t i = 0; i < operands_size; ++i )
-            {
-                for ( std::size_t j = 0; j < shadows.size(); ++j )
-                {
-                    auto sreg = get( shadows[ j ][ i ] );
-                    if ( !sreg || sreg->regions.marked_size() == 0 )
-                       continue;
-
-                    auto materializer = shadowinst::Materializer( ir, *sreg );
-                    auto type = materializer.selector_type();
-
-                    auto &[ t, s, val ] = handle_bucket( type, *sreg->selector );
-                    val = ir.CreateSelect( conds[ j ], mk_selector( sreg ), val );
-                    decoder_fragments.push_back( emit_translation_tree( *sreg, val ) );
-                }
-            }
-        };
-
-        exec( get_reg );
-        exec( get_base );
-        exec( get_index );
-        exec( get_segment );
-
-        for ( auto [ t, s, v ] : buckets )
-        {
-            auto opaque = irops::make_leaf< irops::RegSelector >( ir, t, s );
-            auto ac = irops::make< irops::AdviceConstraint >( ir, { v, opaque } );
-            ties.push_back( ac );
-        }
-
-        return { decoder_fragments, ties };
+        return irops::make< irops::And >( irb, holes_per_tm );
     }
 
 }  // namespace circ::build
