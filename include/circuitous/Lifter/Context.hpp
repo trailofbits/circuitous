@@ -251,21 +251,16 @@ namespace circ
     {
         const remill::Instruction &instruction;
         const InstructionEncoding &encoding;
-        const shadowinst::Instruction &shadow;
+        const std::vector< shadowinst::Instruction > &shadows;
         llvm::Function *lifted;
-
-        ISEL_view( const InstructionSelection &isel, uint64_t i )
-          : instruction( isel.instructions[ i ] ), encoding( isel.encodings[ i ] ),
-            shadow( isel.shadows[ i ] ), lifted( isel.lifted_fns[ i ] )
-        {}
 
         ISEL_view(const remill::Instruction &rinst,
                   const InstructionEncoding &enc,
-                  const shadowinst::Instruction &shadow,
+                  const std::vector< shadowinst::Instruction > &shadows,
                   llvm::Function *lifted)
             : instruction( rinst ),
               encoding( enc ),
-              shadow( shadow ),
+              shadows( shadows ),
               lifted( lifted )
         {}
     };
