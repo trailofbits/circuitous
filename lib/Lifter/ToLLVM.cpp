@@ -159,9 +159,10 @@ namespace circ
 
             }
 
-            llvm::Value *visit( const Not * )
+            llvm::Value *visit( const Not *op )
             {
-                log_kill() << "Not implemented";
+                check( op->operands_size() == 1 );
+                return irb.CreateNot( get( op->operand( 0 ) ) );
             }
 
             #define circuitous_tollvm_mk_cast( operation, call ) \
