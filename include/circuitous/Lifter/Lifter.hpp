@@ -790,7 +790,8 @@ namespace circ
             // TODO(lukas): Determine when is `current_op` supposed to be incremented
             auto op_idx = this->current_op;
             auto out = this->InstructionLifter::LiftOperand(inst, bb, state_ptr, arg, op);
-            if (inst.operands[op_idx].action == remill::Operand::kActionWrite)
+            if (inst.operands[op_idx].action == remill::Operand::kActionWrite &&
+                inst.operands[op_idx].type != remill::Operand::kTypeAddress)
                 return out;
 
             llvm::IRBuilder<> irb(bb);
