@@ -91,8 +91,8 @@ namespace circ::build
                     out.push_back(emit_translation_tree(*s_op.address()->base_reg()));
                 if (s_op.address()->index_reg())
                     out.push_back(emit_translation_tree(*s_op.address()->index_reg()));
-                if (s_op.address()->segment_reg())
-                    out.push_back(emit_translation_tree(*s_op.address()->segment_reg()));
+                //if (s_op.address()->segment_reg())
+                //    out.push_back(emit_translation_tree(*s_op.address()->segment_reg()));
             }
         }
         return out;
