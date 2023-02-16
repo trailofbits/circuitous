@@ -208,6 +208,51 @@ circ::CircuitPtr get_input_circuit(auto &cli)
     return {};
 }
 
+void print_dot( const auto &cli, const circ::CircuitPtr &circuit )
+{
+    if ( auto input_colors = cli.template get< cli::DotHighlight >() )
+    {
+        auto hl = HighlightColorer( std::move( *input_colors ) );
+        DotPrinter< decltype( hl ) > dp( hl );
+        return print_circuit( *dot_out, dp, circuit.get() );
+    }
+
+    if ( cli.template present< cli::DotSemantics >() )
+    {
+        circ::DotPrinter< SemanticsColorer > dp;
+        return circ::print_circuit( *dot_out, dp, circuit.get() );
+    }
+
+    if ( auto coloring = cli.template get< cli::DotDiff >() )
+    {
+        auto print_diff = [ & ]< inspect::SubPathCol T >()
+        {
+            return circ::print_circuit( *dot_out, DotPrinter< DiffColorer< T > >(),
+                                        circuit.get() );
+        };
+
+        if ( coloring == "ibtdr" )
+            return print_diff.template operator()< InstrBitsToDRSubPathCollector >();
+
+        if ( coloring == "full" )
+            return print_diff.template operator()< LeafToVISubPathCollector >();
+
+        // the following color schemes are based on semantic tainting
+        SemanticsColorer sc;
+        sc.color_circuit( circuit.get() );
+        if ( coloring == "ctt" )
+            print_diff.template operator()< ConfigToTargetSubPathCollector >();
+
+        if ( coloring == "ltt" )
+            print_diff.template operator()< LeafToTargetSubPathCollector >();
+
+        return sc.remove_coloring( circuit.get() );
+    }
+
+    circ::DotPrinter< EmptyColorer > dp;
+    return circ::print_circuit( *dot_out, dp, circuit.get() );
+}
+
 void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
 {
     using namespace circ;
@@ -221,49 +266,7 @@ void store_outputs(const auto &cli, const circ::CircuitPtr &circuit)
         print_circuit( *json_out, print_json, circuit.get() );
 
     if ( auto dot_out = cli.template get< cli::DotOut >() )
-    {
-        if ( auto input_colors = cli.template get< cli::DotHighlight >() )
-        {
-            auto hl = HighlightColorer( std::move( *input_colors ) );
-            DotPrinter< decltype( hl ) > dp( hl );
-            return print_circuit( *dot_out, dp, circuit.get() );
-        }
-
-        if ( cli.template present< cli::DotSemantics >() )
-        {
-            circ::DotPrinter< SemanticsColorer > dp;
-            return circ::print_circuit( *dot_out, dp, circuit.get() );
-        }
-
-        if ( auto coloring = cli.template get< cli::DotDiff >() )
-        {
-            auto print_diff = [ & ]< inspect::SubPathCol T >()
-            {
-                return circ::print_circuit( *dot_out, DotPrinter< DiffColorer< T > >(),
-                                            circuit.get() );
-            };
-
-            if ( coloring == "ibtdr" )
-                return print_diff.template operator()< InstrBitsToDRSubPathCollector >();
-
-            if ( coloring == "full" )
-                return print_diff.template operator()< LeafToVISubPathCollector >();
-
-            // the following color schemes are based on semantic tainting
-            SemanticsColorer sc;
-            sc.color_circuit( circuit.get() );
-            if ( coloring == "ctt" )
-                print_diff.template operator()< ConfigToTargetSubPathCollector >();
-
-            if ( coloring == "ltt" )
-                print_diff.template operator()< LeafToTargetSubPathCollector >();
-
-            return sc.remove_coloring( circuit.get() );
-        }
-
-        circ::DotPrinter< EmptyColorer > dp;
-        return circ::print_circuit( *dot_out, dp, circuit.get() );
-    }
+        print_dot( cli, circuit );
 
     if (auto verilog_out = cli.template get< cli::VerilogOut >())
         circ::print_circuit(*verilog_out, circ::VerilogPrinter("circuit", true), circuit.get());
