@@ -110,13 +110,14 @@ struct Printer {
   using args_occurences_t = typename Collector::args_occurences_t;
 
   template<typename OS>
-  static void Print(OS &os, const Collector &self) {
+  static void Print(OS &os, const Collector &self, bool verbose) {
     os << "Node counts:" << std::endl;
     for (auto &[op_code, occurencies] : self.nodes) {
       os << " " << op_code_str(op_code)
          << " " << self.total_count(occurencies)
          << std::endl;
-      print_occurences(os, occurencies, "\t");
+      if ( verbose )
+        print_occurences(os, occurencies, "\t");
     }
     os << std::endl;
   }
@@ -163,19 +164,24 @@ struct Printer {
 
 template<typename Collector, typename P>
 struct PrintStatistics_ : Collector, P {
+
+  bool verbose;
+
+  PrintStatistics_( bool verbose ) : verbose( verbose ) {}
+
   template<typename OS>
   void Run(Operation *op, OS &os) {
     this->Collector::Run(op);
-    this->P::Print(os, *this);
+    this->P::Print(os, *this, verbose);
   }
 };
 
 using StatsPrinter = PrintStatistics_<RawNodesCounter, Printer<RawNodesCounter>>;
 
 // TODO(lukas): Make more configurable
-static inline std::string GetStats(Operation *op) {
+static inline std::string GetStats(Operation *op, bool verbose=false) {
   std::stringstream ss;
-  StatsPrinter().Run(op, ss);
+  StatsPrinter(verbose).Run(op, ss);
   return ss.str();
 }
 
