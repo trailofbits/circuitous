@@ -969,8 +969,9 @@ namespace circ::shadowinst
               enc( InstBytes( enc ).to_enc< 15 * 8 >() )
         {}
 
-        Instruction(const Instruction &other) : operands(other.operands)
+        Instruction(const Instruction &other) : operands(other.operands), enc( other.enc )
         {
+            check( other.selectors.empty() );
             for (const auto &o_cluster : other.deps)
             {
                 std::vector< operand_ctx_t > cluster;
