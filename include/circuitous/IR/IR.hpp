@@ -457,6 +457,9 @@ namespace circ
         const Operation *dynamic() const { return _operands[kDynamic]; }
         const Operation *fixed() const { return _operands[kFixed]; }
 
+        Operation *variable() const { return _operands[ kFixed ]; }
+        Operation *value() const { return _operands[ kDynamic ]; }
+
         std::string suffix_() const
         {
             if (_operands.size() != 2)
