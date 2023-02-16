@@ -27,38 +27,45 @@ namespace circ
     struct InstructionInfo
     {
         using rinst_t = remill::Instruction;
+
         using shadow_t = shadowinst::Instruction;
+        using shadows_t = std::vector< shadow_t >;
+
         using lifted_t = llvm::Function *;
         using enc_t = std::bitset< 15 * 8 >;
 
-        std::optional< rinst_t >  _rinst;
+        // enc must be first as we will be moving `rinst` in.
         std::optional< enc_t >    _enc;
-        std::optional< shadow_t > _shadow;
+        std::optional< rinst_t >  _rinst;
+
         std::optional< lifted_t > _lifted;
 
+        std::vector< shadow_t > shadows;
+        std::vector< rinst_t > rinsts;
+
       public:
-        InstructionInfo(remill::Instruction rinst)
-            : _rinst(std::move(rinst)),
-              _enc(InstBytes(rinst.bytes).to_enc< 15 * 8 >())
+        InstructionInfo(remill::Instruction rinst, std::string bytes)
+            : _enc(InstBytes( bytes ).to_enc< 15 * 8 >()),
+              rinsts{ std::move( rinst ) }
         {}
 
         InstructionInfo() = delete;
 
-        bool has_shadow() const { return _shadow.has_value(); }
+        bool has_shadow() const { return !shadows.empty(); }
         bool has_lifted() const { return _lifted.has_value(); }
 
-        rinst_t &rinst()   { check(_rinst); return *_rinst; }
-        shadow_t &shadow() { check(_shadow); return *_shadow; }
+        rinst_t &rinst()   { check(!rinsts.empty()); return rinsts[ 0 ]; }
+        shadow_t &shadow() { check(has_shadow()); return shadows.front(); }
         lifted_t &lifted() { check(_lifted); return *_lifted; }
         enc_t &enc()       { check(_enc); return *_enc; }
 
-        const rinst_t &rinst()   const { check(_rinst); return *_rinst; }
-        const shadow_t &shadow() const { check(_shadow); return *_shadow; }
+        const rinst_t &rinst()   const  { check(!rinsts.empty()); return rinsts[ 0 ]; }
+        const shadow_t &shadow() const { check(has_shadow()); return shadows.front(); }
         const lifted_t &lifted() const { check(_lifted); return *_lifted; }
         const enc_t &enc()       const { check(_enc); return *_enc; }
 
-        void set(rinst_t r) { _rinst = std::make_optional( std::move(r) ); }
-        void set(shadow_t s) { _shadow = std::make_optional( std::move(s) ); }
+        void set(rinst_t r) { rinsts.emplace_back( std::move(r) ); }
+        void set(shadow_t s) { shadows.emplace_back( std::move(s) ); }
         void set(enc_t e) { _enc = std::make_optional( std::move(e) ); }
         void set(lifted_t l) { _lifted = std::make_optional( std::move(l) ); }
 
@@ -80,6 +87,16 @@ namespace circ
             check(_rinst && _enc) << "InstructionInfo is in inconsistent state!";
             return has_shadow() && has_lifted();
         }
+
+        void merge( InstructionInfo &&other )
+        {
+            shadows.insert( shadows.end(),
+                            std::make_move_iterator( other.shadows.begin() ),
+                            std::make_move_iterator( other.shadows.end() ) );
+            rinsts.insert( rinsts.end(),
+                           std::make_move_iterator( other.rinsts.begin() ),
+                           std::make_move_iterator( other.rinsts.end() ) );
+        }
     };
 
     struct InstructionBatch : has_ctx_ref
@@ -88,6 +105,8 @@ namespace circ
         using self_t = InstructionBatch;
         using insts_t = std::vector< InstructionInfo >;
         using raw_insts_t = std::vector< remill::Instruction >;
+
+        using shadows_t = InstructionInfo::shadows_t;
 
         insts_t insts;
 
