@@ -67,6 +67,11 @@ namespace circ
 
     bool has_remill_overflow_flag_semantics( RegConstraint *op );
 
+    struct LowerAdvices : PassBase
+    {
+        circuit_owner_t run( circuit_owner_t &&circuit ) override;
+    };
+
     struct RemillOFPatch : PassBase
     {
         circuit_owner_t run( circuit_owner_t &&circuit ) override
