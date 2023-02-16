@@ -528,6 +528,7 @@ namespace circ
             auto allowed_nodes = collect_kinds< DecodeCondition, Constant,
                                                 DecoderResult, Extract,
                                                 InputInstructionBits, And, Icmp_eq,
+                                                Not,
                                                 Or, Xor, Concat >();
             for (auto root : circuit->attr< DecoderResult >())
                 verify_constrained_subtree(root, root, allowed_nodes);
