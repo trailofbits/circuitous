@@ -245,7 +245,7 @@ namespace circ
 
     void circuit_builder::inject(const InstructionInfo &info)
     {
-        auto view = ISEL_view(info.rinst(), info.enc(), info.shadow(), info.lifted());
+        auto view = ISEL_view(info.rinst(), info.enc(), info.shadows, info.lifted());
         inject_semantic_modular(view);
         this->move_head();
     }
@@ -388,7 +388,7 @@ namespace circ
         ir.SetInsertPoint(this->head);
 
         auto [params, reg_selector_constraint] =
-            build::Decoder(ctx, ir, isel).get_decoder_tree();
+            build::Decoder(ir, isel).get_decoder_tree();
 
         auto mem_checks = mem::synthetize_memory(begin, end, ctx.ptr_size);
         ir.SetInsertPoint(this->head);
@@ -434,10 +434,10 @@ namespace circ
             if (isel.instruction.operands[i].action != remill::Operand::Action::kActionWrite)
                 continue;
 
-            if (!isel.shadow.operands[i].reg())
+            if (!isel.shadows[ 0 ].operands[i].reg())
                 continue;
             if (idx == 0)
-                return { &(*isel.shadow.operands[i].reg()), i };
+                return { &(*isel.shadows[ 0 ].operands[i].reg()), i };
             --idx;
         }
         return { nullptr, 0 };
@@ -560,7 +560,7 @@ namespace circ
             if (isel.instruction.operands[i].action != remill::Operand::Action::kActionWrite)
                 continue;
 
-            auto &s_op = isel.shadow.operands[i];
+            auto &s_op = isel.shadows[ 0 ].operands[i];
             if (!s_op.reg())
                 continue;
 
@@ -615,7 +615,7 @@ namespace circ
                 if (dst_regs.size() == 0)
                     continue;
 
-                auto &s_op = isel.shadow.operands[i];
+                auto &s_op = isel.shadows[ 0 ].operands[i];
                 if (!s_op.reg())
                     continue;
 
@@ -871,7 +871,9 @@ namespace circ
             for ( const auto &[ _, val ] : instance->computationals )
                 ctx.add( val );
 
-            auto [ x, y ] = build::Decoder( this->ctx, irb, *info ).get_decoder_tree();
+            log_info() << "[cmv2]:" << "Emitting decoder.";
+            auto [ x, y ] = build::Decoder( irb, *info ).get_decoder_tree();
+
             ctx.add( std::move( x ) );
             ctx.add( std::move( y ) );
             ctx.materialize( irb );
