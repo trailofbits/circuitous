@@ -27,81 +27,206 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ::irops
 {
+    using io_type = impl::io_type;
 
-    #define sccc_prefix(what) static constexpr const char *fn_prefix = what
-    #define dot_sep() static constexpr const char *delim = "."
+    namespace impl
+    {
+        using runtime_args_t = const std::vector< llvm::Value * > &;
 
-    #define simple_intrinsic(what, code, attr) \
-    namespace data { struct what { sccc_prefix(attr); dot_sep(); }; } \
-    struct what : code< what, data::what > {}
+        template< typename self_t >
+        struct default_construction
+        {
+            template< typename Bld, typename ... Args >
+            static auto make( Bld &&bld, runtime_args_t runtime, Args && ... args )
+            {
+                return self_t::emit( std::forward< Bld >( bld ),
+                                     runtime,
+                                     std::forward< Args >( args ) ... );
+            }
 
-    #define leaf_intrinsic(what, size, code, attr) \
-    namespace data { struct what { sccc_prefix(attr); dot_sep(); }; } \
-    struct what : code< data::what, size > {}
+            template< typename Bld, typename ... Args >
+            static auto make( Bld &&bld, llvm::Value *v, Args && ... args )
+            {
+                return self_t::emit( std::forward< Bld >( bld ),
+                                     runtime_args_t{ v },
+                                     std::forward< Args >( args ) ... );
+            }
+
+
+        };
+
+        template< typename self_t >
+        struct leaf
+        {
+            template< typename Bld, typename ... Args >
+            static auto make( Bld && bld, Args && ... args )
+            {
+                return self_t::emit( std::forward< Bld >( bld ),
+                                     std::forward< Args >( args ) ... );
+            }
+        };
+
+        template< typename self_t >
+        struct Select
+        {
+            template< typename Bld >
+            static auto make( Bld &&bld, runtime_args_t runtime )
+            {
+                auto selector_size = impl::uniform_size( runtime.begin(),
+                                                         std::next( runtime.begin() ) );
+                auto ret_size = impl::uniform_size( std::next( runtime.begin() ),
+                                                    runtime.end());
+                check( selector_size && ret_size );
+                return self_t::emit( std::forward< Bld >( bld ),
+                                     runtime,
+                                     *ret_size, *selector_size );
+            }
+
+        };
+
+        template< typename self_t >
+        struct ExtractRaw : leaf< self_t >, default_construction< self_t >
+        {
+            using leaf< self_t >::make;
+            using default_construction< self_t >::make;
+        };
+
+    } // namespace impl
+
+    #define circuitous_irops_sccc_prefix(what) static constexpr const char *fn_prefix = what
+    #define circuitous_irops_dot_sep() static constexpr const char *delim = "."
+
+    #define circuitous_irops_intrinsic(what, code, ctor, attr) \
+        namespace data { \
+            struct what { \
+                circuitous_irops_sccc_prefix(attr); \
+                circuitous_irops_dot_sep(); \
+            }; \
+        } \
+        struct what : code< what, data::what >, ctor< what > \
+        { \
+            using code< what, data::what >::emit; \
+        }
+
+    #define circuitous_irops_simple_intrinsic(what, code, attr) \
+        circuitous_irops_intrinsic(what, code, impl::default_construction, attr)
+
+    #define circuitous_irops_unique_ctor(what, code, attr) \
+        circuitous_irops_intrinsic(what, code, impl::what, attr);
+
+    #define circtuitous_irop_leaf_intrinsic(what, core, attr) \
+        circuitous_irops_intrinsic(what, code, impl::leaf, attr)
+
+    #define circuitous_irops_fixed_sized_leaf(what, size, code, attr) \
+        namespace data { \
+            struct what { \
+                circuitous_irops_sccc_prefix(attr); \
+                circuitous_irops_dot_sep(); \
+            }; \
+        } \
+        struct what : code< data::what, size >, impl::leaf< what > {}
+
 
     // N-ary operation, returns true iff exactly one operand is true
-    simple_intrinsic(Xor, impl::predicate_base_t, "__circuitous.xor");
+    circuitous_irops_simple_intrinsic( Xor, impl::predicate_base_t, "__circuitous.xor" );
+
     // N-ary operation, returns true iff all operands are true
-    simple_intrinsic(And, impl::predicate_base_t, "__circuitous.and");
+    circuitous_irops_simple_intrinsic( And, impl::predicate_base_t, "__circuitous.and" );
+
     // N-ary operation, return true iff at least one operand is true
-    simple_intrinsic(Or, impl::predicate_base_t, "__circuitous.or");
+    circuitous_irops_simple_intrinsic( Or, impl::predicate_base_t, "__circuitous.or" );
+
     // Same as `And`.
-    simple_intrinsic(VerifyInst, impl::predicate_base_t, "__circuitous.verify_inst");
+    circuitous_irops_simple_intrinsic( VerifyInst,
+                                       impl::predicate_base_t,
+                                       "__circuitous.verify_inst" );
 
     // Result of multiple decoder checks, semantically equivalent to `&&` on all its arguments.
     // Reason this is a separate intrinsic is that the node will be easily identifiable by
     // later analysis/transformation.
-    simple_intrinsic(DecoderResult, impl::predicate_base_t, "__circuitous.decoder_result");
+    circuitous_irops_simple_intrinsic( DecoderResult,
+                                       impl::predicate_base_t,
+                                       "__circuitous.decoder_result" );
 
     // Binary operation, that returns true iff its operands are equal
-    simple_intrinsic(Eq, impl::bin_predicate_t, "__circuitous.eq");
+    circuitous_irops_simple_intrinsic( Eq,
+                                       impl::bin_predicate_t,
+                                       "__circuitous.eq" );
+
     // Same as `Eq`, serves to denote output comparison.
-    simple_intrinsic(OutputCheck, impl::bin_predicate_t, "__circuitous.register_constraint");
+    circuitous_irops_simple_intrinsic( OutputCheck,
+                                       impl::bin_predicate_t,
+                                       "__circuitous.register_constraint" );
+
     // Same as `Eq`, serves to denote constraint on value of Advice.
-    simple_intrinsic(AdviceConstraint, impl::bin_predicate_t, "__circuitous.advice_constraint");
+    circuitous_irops_simple_intrinsic( AdviceConstraint,
+                                       impl::bin_predicate_t,
+                                       "__circuitous.advice_constraint" );
+
     // Same as `Eq`, serves to denote comparison with instruction bits.
-    simple_intrinsic(DecodeCondition, impl::bin_predicate_t, "__circuitous.decode_condition");
+    circuitous_irops_simple_intrinsic( DecodeCondition,
+                                       impl::bin_predicate_t,
+                                       "__circuitous.decode_condition" );
 
     // Value of Error.
-    simple_intrinsic(Error, impl::identity_t, "__circuitous.error");
+    circuitous_irops_simple_intrinsic( Error, impl::identity_t, "__circuitous.error" );
+
     // Unary function used to wrap values so they are:
     //  * recognizable
     //  * not optimized away
     // Useful to communicate information between instruction lifter and circuit builder.
-    simple_intrinsic(Transport, impl::identity_t, "__circuitous.transport");
+    // TODO( irops ): Deprecated.
+    circuitous_irops_simple_intrinsic( Transport, impl::identity_t, "__circuitous.transport" );
+
     // See `Transport`.
     // Useful to hinder optimizations.
-    simple_intrinsic(Identity, impl::identity_t, "__circuitous.identity");
+    circuitous_irops_simple_intrinsic( Identity, impl::identity_t, "__circuitous.identity" );
+
     // Denotes that operand is operand of instruction that is immediate (usually either
     // constant or extract from instbits).
-    simple_intrinsic(InputImmediate, impl::identity_t, "__circuitous.input_immediate");
+    circuitous_irops_simple_intrinsic( InputImmediate,
+                                       impl::identity_t,
+                                       "__circuitous.input_immediate" );
 
     // Extract.X.Y() - extract [X, X + Y), from its operand.
     // If there is no operands, instbits are used instead.
     // Extracted bytes may be reordered to comply with architecture endianity.
-    simple_intrinsic(Extract, impl::extract_t, "__circuitous.extract");
+    circuitous_irops_simple_intrinsic( Extract, impl::extract_t, "__circuitous.extract" );
+
     // See `Extract`, without reordering.
-    simple_intrinsic(ExtractRaw, impl::extract_t, "__circuitous.raw_extract");
-    simple_intrinsic(InstExtractRaw, impl::extract_t, "__circuitous.inst_extract_raw");
+    circuitous_irops_unique_ctor( ExtractRaw, impl::extract_t, "__circuitous.raw_extract" );
+    circuitous_irops_simple_intrinsic( InstExtractRaw,
+                                       impl::extract_t,
+                                       "__circuitous.inst_extract_raw" );
 
     // Concats its operand, from right to left, e.g.
     // concat(x, y, z) -> xyz
-    simple_intrinsic(Concat, impl::concat_t, "__circuitous.concat");
+    circuitous_irops_simple_intrinsic( Concat, impl::concat_t, "__circuitous.concat" );
+
     // N-ary case of select, can be though of as a multiplexer
     // `select( iN selector, iX v0, iX, v1, ... , iX v(2^N - 1))`
     // There must be enough operands to satisfy all possible values of selector.
     // Returned value is that on position that is equal to runtime value of `selector`.
-    simple_intrinsic(Select, impl::select_t, "__circuitous.select");
+    circuitous_irops_unique_ctor( Select, impl::select_t, "__circuitous.select" );
 
     // Creates Memory hint of fixed value. See `Parsed` for its layout.
-    simple_intrinsic(Memory, impl::mem_allocator_t, "__circuitous.memory");
+    circuitous_irops_simple_intrinsic( Memory, impl::mem_allocator_t, "__circuitous.memory" );
+
     // Create Advice of dynamic value.
-    simple_intrinsic(Advice, impl::raw_allocator_t, "__circuitous.advice");
-    simple_intrinsic(AdviceIndexed, impl::idx_allocator_t, "__circuitous.advice_i");
-    simple_intrinsic(OpSelector, impl::idx_allocator_t, "__circuitous.op_selector");
+    circuitous_irops_simple_intrinsic( Advice, impl::raw_allocator_t, "__circuitous.advice" );
+    circuitous_irops_simple_intrinsic( AdviceIndexed,
+                                       impl::idx_allocator_t,
+                                       "__circuitous.advice_i" );
+    circuitous_irops_simple_intrinsic( OpSelector,
+                                       impl::idx_allocator_t,
+                                       "__circuitous.op_selector" );
+
     // Creates opaque pointer.
     // Used by instruction lifters to handle destination operands.
-    simple_intrinsic(AllocateDst, impl::raw_allocator_t, "__circuitous.allocate_dst");
+    circuitous_irops_simple_intrinsic( AllocateDst,
+                                       impl::raw_allocator_t,
+                                       "__circuitous.allocate_dst" );
+
     // Used by instrution lifters to create opaque values that serve as operands
     // to intrinsics. This is useful, so that the data flow in llvm can be disconnected
     // ```
@@ -109,68 +234,102 @@ namespace circ::irops
     // %constraint = __circuitous.advice_constraint(%real_value, %x)
     // ```
     // this should allow llvm optimizations to eliminate more instructions.
-    simple_intrinsic(Operand, impl::type_idx_t, "__circuitous.operand_advice");
+    circuitous_irops_simple_intrinsic( Operand,
+                                       impl::type_idx_t,
+                                       "__circuitous.operand_advice" );
 
     // Helps to unify later all decoder related selections and operations
-    simple_intrinsic(RegSelector, impl::type_idx_t, "__circuitous.reg_selector");
+    circuitous_irops_simple_intrinsic( RegSelector,
+                                       impl::type_idx_t,
+                                       "__circuitous.reg_selector" );
 
-    simple_intrinsic(ISemSrcArg, impl::type_idx_t, "__circuitous.ise_src_arg");
-    simple_intrinsic(ISemDstArg, impl::type_idx_t, "__circuitous.isem_dst_arg");
-    simple_intrinsic(InstructionSize, impl::int_like_allocator, "__circuitous.inst_size");
+    circuitous_irops_simple_intrinsic( ISemSrcArg,
+                                       impl::type_idx_t,
+                                       "__circuitous.ise_src_arg" );
 
-    simple_intrinsic(WasDecoded, impl::type_idx_t, "__circuitous.op.was_decoded");
+    circuitous_irops_simple_intrinsic( ISemDstArg,
+                                       impl::type_idx_t,
+                                       "__circuitous.isem_dst_arg" );
+
+    circuitous_irops_simple_intrinsic( InstructionSize,
+                                       impl::int_like_allocator,
+                                       "__circuitous.inst_size" );
+
+    circuitous_irops_simple_intrinsic( WasDecoded,
+                                       impl::type_idx_t,
+                                       "__circuitous.op.was_decoded" );
+
     // Denotes that given hint/advice is not used and should be zeroed.
-    simple_intrinsic(UnusedConstraint, impl::unary_check_t, "__circuitous.unused_constraint");
+    circuitous_irops_simple_intrinsic( UnusedConstraint,
+                                       impl::unary_check_t,
+                                       "__circuitous.unused_constraint" );
+
     // Anchor some part of code - usefull to keep track of code regions (e.g. all instructions
     // that were inserted by inlining a function call).
-    simple_intrinsic(Breakpoint, impl::identity_t, "__circuitous.breakpoint");
+    circuitous_irops_simple_intrinsic( Breakpoint,
+                                       impl::identity_t,
+                                       "__circuitous.breakpoint" );
 
     // Memory operation constraints.
-    simple_intrinsic(ReadConstraint, impl::frozen_predicate_t, "__circuitous.memread");
-    simple_intrinsic(WriteConstraint, impl::frozen_predicate_t, "__circuitous.memwrite");
+    circuitous_irops_simple_intrinsic( ReadConstraint,
+                                       impl::frozen_predicate_t,
+                                       "__circuitous.memread" );
+
+    circuitous_irops_simple_intrinsic( WriteConstraint,
+                                       impl::frozen_predicate_t,
+                                       "__circuitous.memwrite" );
 
     // I/O values. Not included in argument list to make their usage more comfortable.
     // TODO(lukas): Maybe it is worth to represent all registers this way as well.
-    leaf_intrinsic(ErrorBit, 1, impl::fixed_leaf_t, "__circuitous.error_bit");
-    leaf_intrinsic(Timestamp, 64,  impl::fixed_leaf_t, "__circuitous.timestamp");
-    leaf_intrinsic(InstBits, 15 * 8, impl::fixed_leaf_t, "__circuitous.instbits");
+    circuitous_irops_fixed_sized_leaf( ErrorBit, 1,
+                                       impl::fixed_leaf_t,
+                                       "__circuitous.error_bit" );
 
-    simple_intrinsic(Reg, impl::reg_allocator_t, "__circuitous.reg");
+    circuitous_irops_fixed_sized_leaf( Timestamp, 64,
+                                       impl::fixed_leaf_t,
+                                       "__circuitous.timestamp" );
 
-    simple_intrinsic(Commit, impl::commit, "__circuitous.commit");
+    circuitous_irops_fixed_sized_leaf( InstBits, 15 * 8,
+                                       impl::fixed_leaf_t,
+                                       "__circuitous.instbits" );
 
-    simple_intrinsic(Entry, impl::bitcast, "__circuitous.entry");
-    simple_intrinsic(Leave, impl::bitcast, "__circuitous.leave");
+    circuitous_irops_simple_intrinsic( Reg, impl::reg_allocator_t, "__circuitous.reg" );
+
+    circuitous_irops_simple_intrinsic( Commit, impl::commit, "__circuitous.commit" );
+
+    circuitous_irops_simple_intrinsic( Entry, impl::bitcast, "__circuitous.entry" );
+    circuitous_irops_simple_intrinsic( Leave, impl::bitcast, "__circuitous.leave" );
 
 
-    simple_intrinsic(Switch, impl::predicate_base_t, "__circuitous.switch");
-    simple_intrinsic(Option, impl::option_t, "__circuitous.option");
+    circuitous_irops_simple_intrinsic( Switch, impl::predicate_base_t, "__circuitous.switch" );
+    circuitous_irops_simple_intrinsic( Option, impl::option_t, "__circuitous.option" );
 
-    using io_type = impl::io_type;
-
-    #undef sccc_prefix
-    #undef dot_sep
-    #undef simple_intrinsic
-    #undef leaf_intrinsic
+    #undef circuitous_irops_sccc_prefix
+    #undef circuitous_irops_dot_sep
+    #undef circuitous_irops_intrinsic
+    #undef circuitous_irops_simple_intrinsic
+    #undef circuitous_irops_unique_ctor
+    #undef circtuitous_irop_leaf_intrinsic
+    #undef circuitous_irops_fixed_sized_leaf
 
     // Create call to given intrinsic.
     // `args` are forwarded to the intrinsic creator
     // `c_args` are operands of the emitted llvm::CallInst.
-    template< typename I, typename ...Args >
-    auto make(llvm::IRBuilder<> &ir, const std::vector< llvm::Value * > &c_args, Args &&...args)
+    template< typename I, typename Bld, typename ...Args >
+    auto make(Bld &&ir, const std::vector< llvm::Value * > &c_args, Args &&...args)
     {
         return I::emit(ir, c_args, std::forward<Args>(args)...);
     }
 
-    template< typename I, typename ...Args >
-    auto make(llvm::IRBuilder<> &ir, llvm::Value *c_arg, Args &&...args)
+    template< typename I, typename Bld, typename ...Args >
+    auto make(Bld &&ir, llvm::Value *c_arg, Args &&...args)
     {
         check(c_arg);
         return I::emit(ir, std::vector< llvm::Value * >{c_arg}, std::forward<Args>(args)...);
     }
 
-    template< typename I, typename ... Args >
-    auto make(llvm::IRBuilder<> &ir, gap::generator< llvm::Value * > cargs, Args && ... args)
+    template< typename I, typename Bld, typename ... Args >
+    auto make(Bld &&ir, gap::generator< llvm::Value * > cargs, Args && ... args)
     {
         std::vector< llvm::Value * > c;
         for ( auto a : cargs )
@@ -228,7 +387,7 @@ namespace circ::irops
                 module.getDataLayout().getTypeAllocSize( reg->type ) * 8u ) );
     }
 
-    static inline llvm::Value *mk_reg( llvm::IRBuilder<> &irb, const auto &reg, auto io )
+    static inline llvm::Value *mk_reg( auto &&irb, const auto &reg, auto io )
     {
         auto &m = *irb.GetInsertBlock()->getParent()->getParent();
         auto type = int_reg_type( m, reg );
