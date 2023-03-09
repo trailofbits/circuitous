@@ -120,8 +120,7 @@ namespace circ::shadowinst
     template< typename ...Args >
     llvm::Value *mask_shift_coerce(llvm::Value *what, Args && ...args)
     {
-        return mask_coerce( shift_coerce( what, std::forward< Args >(args) ...),
-                            std::forward< Args >(args) ...);
+        return mask_coerce( shift_coerce( what, args ...), args ... );
     }
 
     auto store_fragment(auto what, auto full, auto &irb,
