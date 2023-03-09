@@ -13,6 +13,8 @@
 CIRCUITOUS_RELAX_WARNINGS
 CIRCUITOUS_UNRELAX_WARNINGS
 
+#include <gap/core/generator.hpp>
+
 #include <optional>
 
 namespace circ
@@ -99,6 +101,173 @@ namespace circ
         }
     };
 
+    // One atomic thing to lift, should consist of
+    //  * concrete instance
+    //  * shadow
+    //  TODO( lifter ): Do we really need the concrete instance moving forward?
+    struct Atom
+    {
+        using concrete_t = remill::Instruction;
+        using abstract_t = shadowinst::Instruction;
+
+        concrete_t concrete;
+        abstract_t abstract;
+
+        Atom( concrete_t concrete, abstract_t abstract )
+            : concrete( std::move( concrete ) ),
+              abstract( std::move( abstract ) )
+        {}
+
+        isel_t isel()
+        {
+            return concrete.function;
+        }
+
+        struct slice_view
+        {
+            template< typename C, typename A >
+            using p = std::tuple< C *, A * >;
+
+            using rop = remill::Operand;
+
+            using imm = p< rop::Immediate , shadowinst::Immediate >;
+            using reg = p< rop::Register , shadowinst::Reg >;
+            using addr = p< rop::Address , shadowinst::Address >;
+
+            using storage_t = std::variant< imm, reg, addr >;
+            storage_t raw;
+            std::size_t size;
+
+            slice_view( remill::Operand *concrete_op, shadowinst::Operand *abstract_op )
+                : raw( mk_raw( concrete_op, abstract_op ) ), size( concrete_op->size )
+            {}
+
+            static storage_t mk_raw( remill::Operand *concrete_op,
+                                     shadowinst::Operand *abstract_op )
+            {
+                switch( concrete_op->type )
+                {
+                    case remill::Operand::kTypeRegister:
+                        return reg( &concrete_op->reg, abstract_op->reg() );
+                    case remill::Operand::kTypeImmediate:
+                        return imm( &concrete_op->imm, abstract_op->immediate() );
+                    case remill::Operand::kTypeAddress:
+                        return addr( &concrete_op->addr, abstract_op->address() );
+                    default:
+                        log_kill() << "Unsupported type of concrete instruction.";
+                }
+            }
+        };
+
+        auto slice( std::size_t idx ) -> slice_view
+        {
+            return slice_view( &concrete.operands[ idx ], &abstract.operands[ idx ] );
+        }
+
+        auto slices() -> gap::generator< slice_view >
+        {
+            for ( std::size_t i = 0; i < concrete.operands.size(); ++i )
+                co_yield slice( i );
+        }
+
+        std::size_t operand_count()
+        {
+            return concrete.operands.size();
+        }
+
+        bool is_read( std::size_t i )
+        {
+            return concrete.operands[ i ].action = remill::Operand::kActionRead;
+        }
+
+        bool is_write( std::size_t i )
+        {
+            return concrete.operands[ i ].action = remill::Operand::kActionWrite;
+        }
+    };
+
+    // template args:
+    //  `A` - atom to be used
+    //  `I` - materialized isel
+    template< typename A >
+    struct Unit
+    {
+        using atom_t = A;
+        using atoms_t = std::vector< atom_t >;
+
+        isel_t isel;
+        atoms_t atoms;
+
+        Unit( isel_t isel, atoms_t atoms )
+            : isel( isel ), atoms( std::move( atoms ) )
+        {}
+
+        auto begin() { return atoms.begin(); }
+        auto end() { return atoms.end(); }
+
+        auto operand_count()
+        {
+            check( !atoms.empty() );
+            std::size_t out = atoms.front().operand_count();
+            for ( std::size_t i = 0; i < atoms.size(); ++i )
+                check( out == atoms[ i ].operand_count() );
+            return out;
+        }
+
+        auto slices( std::size_t idx ) -> gap::generator< typename atom_t::slice_view >
+        {
+            for ( std::size_t i = 0u; i < atoms.size(); ++i )
+                co_yield atoms[ i ].slice( idx );
+        }
+
+        bool is_read( std::size_t i ) { return atoms.front().is_read( i ); }
+        bool is_write( std::size_t i ) { return atoms.front().is_write( i ); }
+    };
+
+
+    template< typename ISem, typename Next >
+    struct with_materialized_isel : Next
+    {
+        using isem_t = ISem;
+
+        isem_t isem_instance;
+    };
+
+    template< typename U >
+    struct Worklist
+    {
+        using unit_t = U;
+
+        std::vector< U > todo;
+
+        template< typename M >
+        auto materialize( auto &&materialize ) &&
+        {
+            Worklist< decltype( materialize( std::declval< unit_t >() ) ) > out;
+
+            for ( auto unit : std::move( todo ) )
+                out.emplace_back( materialize( std::move( unit ) ) );
+            return out;
+        }
+
+        auto begin() { return todo.begin(); }
+        auto begin() const { return todo.begin(); }
+
+        auto end() { return todo.end(); }
+        auto end() const { return todo.end(); }
+
+        void add( unit_t unit )
+        {
+            todo.emplace_back( std::move( unit ) );
+        }
+
+        template< typename ... Args >
+        void emplace( Args && ... args )
+        {
+            todo.emplace_back( std::forward< Args >( args ) ... );
+        }
+    };
+
     struct InstructionBatch : has_ctx_ref
     {
         using parent_t = has_ctx_ref;
@@ -143,4 +312,5 @@ namespace circ
 
         std::string categories() const;
     };
+
 } // namespace circ
