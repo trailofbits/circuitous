@@ -11,6 +11,8 @@
 #include <circuitous/Lifter/Instruction.hpp>
 #include <circuitous/Lifter/Component.hpp>
 
+#include <circuitous/Lifter/SReg.hpp>
+
 #include <remill/Arch/Arch.h>
 #include <remill/BC/IntrinsicTable.h>
 
@@ -27,6 +29,8 @@ namespace circ::build
 {
     using values_t = std::vector< llvm::Value * >;
     using value_gen_t = gap::generator< llvm::Value * >;
+
+    llvm::Type *zero_reg_type( llvm::IRBuilder<> &irb, llvm::StringRef name );
 
     // At each index in returned vector there is either
     //  * value if shadow can be materialized via one of the chosen selects
@@ -86,8 +90,11 @@ namespace circ::build
             return write_map;
         }
 
-        llvm::Value *make_select( llvm::IRBuilder<> &irb, const shadowinst::TM_t &tm,
-                                  bool is_read );
+        static llvm::Value *make_select( llvm::IRBuilder<> &irb,
+                                         const shadowinst::TM_t &tm,
+                                         Ctx &ctx,
+                                         llvm::Value *selector,
+                                         bool is_read );
 
         llvm::Value *materialize( llvm::IRBuilder<> &irb, std::size_t idx, bool is_read );
         llvm::Value *request( llvm::IRBuilder<> &irb, std::size_t idx,
@@ -116,39 +123,255 @@ namespace circ::build
         std::string to_string() const;
     };
 
-    struct OperandLifter : has_ctx_ref
+    template< typename RegState >
+    struct StatelessRequester
     {
-        llvm::IRBuilder<> &irb;
-        OperandSelection::Requester read_requester;
-        OperandSelection::Requester write_requester;
-        // TODO: Not sure how to do this clenaer, the whole thing is stateful anyway.
-        bool is_read = false;
+        using state_t = RegState;
+        using value_t = llvm::Value *;
+        using values_t = std::vector< llvm::Value * >;
 
-        // We may need to access some global information when lifting specific
-        // operands.
-        const InstructionInfo &info;
+        Ctx &ctx;
+        state_t &state;
 
-        OperandLifter( CtxRef ctx,
-                       llvm::IRBuilder<> &irb, OperandSelection &selection,
-                       const InstructionInfo &info )
-            : has_ctx_ref( ctx ),
-              irb( irb ),
-              read_requester( selection, true ), write_requester( selection, false ),
-              info( info )
+        std::size_t next_idx = 0;
+
+        StatelessRequester( Ctx &ctx, state_t &state )
+            : ctx( ctx ), state( state )
         {}
 
-        values_t lift() &&;
-        llvm::Value *request( const shadowinst::TM_t &tm );
+        value_t make_select( llvm::IRBuilder<> &irb,
+                             const shadowinst::TM_t &tm,
+                             llvm::Value *selector,
+                             bool is_read,
+                             auto &&coerce )
+        {
+            std::vector< llvm::Value * > args( ( 1 << tm.bitsize ) + 1, nullptr );
+            args[ 0 ] = selector;
 
-        llvm::Value *lift( const shadowinst::Operand &s_op, const remill::Operand &r_op );
+            for ( const auto &[ str, reg_name ] : tm.reverse_bitmap() )
+            {
+                auto idx = llvm::APInt( static_cast< uint32_t >( tm.bitsize ), str, 2 )
+                    .getLimitedValue();
 
-        llvm::Value *lift( const shadowinst::Reg &s_reg,
-                           const remill::Operand::Register &r_reg );
+                check( args.size() > idx + 1 );
+                args[ idx + 1 ] = coerce( state.load( irb, ctx.reg( reg_name ) ) );
+            }
 
-        llvm::Value *lift( const shadowinst::Immediate &s_imm );
+            auto trg_type = [ & ]()
+            {
+                for ( auto v : args )
+                    if ( v )
+                        return v->getType();
+                log_kill() << "Trying to create select without values";
+            }();
 
-        llvm::Value *lift( const shadowinst::Address &s_addr,
-                           const remill::Operand::Address &r_addr );
+            auto zero = llvm::ConstantInt::get( trg_type, 0, false );
+            for ( std::size_t i = 0; i < args.size(); ++i )
+                if ( !args[ i ] )
+                    args[ i ] = zero;
+
+            return irops::Select::make( irb, args );
+        }
+
+
+        llvm::Value *request( llvm::IRBuilder<> &irb, const shadowinst::TM_t &tm,
+                              bool is_read, auto &&coerce )
+        {
+            auto selector = irops::make_leaf< irops::OpSelector >( irb, tm.bitsize,
+                                                                   next_idx++ );
+            return make_select( irb, tm, selector, is_read, coerce );
+        }
+    };
+
+    template< typename State >
+    StatelessRequester( Ctx, State ) -> StatelessRequester< State >;
+
+    template< typename Req >
+    struct OperandLifter : has_ctx_ref
+    {
+        using requester_t = Req;
+
+        llvm::IRBuilder<> &irb;
+        requester_t &requester;
+        bool is_read;
+
+        OperandLifter( CtxRef &ctx,
+                       llvm::IRBuilder<> &irb,
+                       requester_t &requester,
+                       bool is_read )
+            : has_ctx_ref( ctx ), irb( irb ),
+              requester( requester ),
+              is_read( is_read )
+        {}
+
+        llvm::Value *request( const shadowinst::TM_t &tm )
+        {
+           auto identity = [ & ]( auto v ) { return v; };
+           return requester.request( irb, tm, is_read, identity );
+        }
+
+        llvm::Value *request_word( const shadowinst::TM_t &tm )
+        {
+            auto extend = [ & ]( llvm::Value *v )
+            {
+                if ( ctx.bw( v ) < ctx.ptr_size )
+                    return irb.CreateZExt( v, ctx.word_type() );
+                return v;
+            };
+            return requester.request( irb, tm, is_read, extend );
+        }
+
+        llvm::Value *lift( const shadowinst::Operand &s_op,
+                           const remill::Operand &r_op )
+        {
+            if ( auto imm = s_op.immediate() )
+                return lift( *imm );
+            if ( auto reg = s_op.reg() )
+                return lift( *reg, r_op.reg );
+            if ( auto addr = s_op.address() )
+                return lift( *addr, r_op.addr );
+            check( !s_op.shift() );
+
+            return nullptr;
+        }
+
+        llvm::Value *lift( typename Atom::slice_view view )
+        {
+            auto process = [ & ]( const auto &raw )
+            {
+                auto [ c, a ] = raw;
+                return lift( c, a );
+            };
+
+            return std::visit( process, view.raw );
+        }
+
+        llvm::Value *lift( const remill::Operand::Immediate *r_imm,
+                           const shadowinst::Immediate *s_imm )
+        {
+            check( r_imm && s_imm );
+
+            if ( s_imm->regions.marked_size() == 0 )
+                return ctx.zero();
+            check( s_imm->regions.marked_size() != 0 );
+            // This maybe needs to be relaxed?
+            check( s_imm->regions.areas.size() == 1 );
+
+            auto [ from, size ] = *( s_imm->regions.areas.begin() );
+            return irops::make_leaf< irops::InstExtractRaw >( irb, from, size );
+        }
+
+        // Dedup
+        llvm::Value *lift( const shadowinst::Immediate *s_imm )
+        {
+            check( s_imm );
+
+            if ( s_imm->regions.marked_size() == 0 )
+                return ctx.zero();
+            check( s_imm->regions.marked_size() != 0 );
+            // This maybe needs to be relaxed?
+            check( s_imm->regions.areas.size() == 1 );
+
+            auto [ from, size ] = *( s_imm->regions.areas.begin() );
+            return irops::make_leaf< irops::InstExtractRaw >( irb, from, size );
+        }
+
+        llvm::Value *lift( const remill::Operand::Register *r_reg,
+                           const shadowinst::Reg *s_reg )
+        {
+            check( r_reg && s_reg );
+
+            if ( s_reg->tm().is_saturated_by_zeroes() || s_reg->tm().empty() )
+                return ctx.zero();
+
+            auto select = request_word( s_reg->tm() );
+            check( select );
+
+            log_info() << "[operand-lifter]:" << "mask_shift_coerce";
+            auto x = shadowinst::mask_shift_coerce( select, irb, *s_reg, *ctx.arch() );
+            log_info() << "[operand-lifter]:"<< "done";
+            return x;
+        }
+
+        llvm::Value *lift( const remill::Operand::Address *r_addr,
+                           const shadowinst::Address *s_addr )
+        {
+            check( r_addr && s_addr );
+            // We are on purpose ignoring segments here, even though they are reflected in the
+            // decoder check that gets emitted eventually.
+            log_info() << "[operand-lifter]:" << "addr:base";
+            auto base = [ & ]() -> llvm::Value *
+            {
+                if ( auto s_base = s_addr->base_reg() )
+                    return lift( &r_addr->base_reg, s_base );
+
+                if ( r_addr->base_reg.name.empty() )
+                    return ctx.zero();
+
+                return make_reg( r_addr->base_reg.name );
+            }();
+
+            log_info() << "[operand-lifter]:" << "addr:index";
+            auto index = [ & ]() -> llvm::Value *
+            {
+                if ( auto s_index = s_addr->index_reg() )
+                    return lift( &r_addr->index_reg, s_index );
+
+                log_info() << "[operand-lifter]:" << "addr:index:empty";
+                if ( r_addr->index_reg.name.empty() )
+                    return ctx.zero();
+
+                log_info() << "[operand-lifter]:" << "addr:index:defaulting to"
+                                                  << r_addr->index_reg.name;
+                return make_reg( r_addr->index_reg.name );
+            }();
+
+            log_info() << "[operand-lifter]:" << "addr:scale";
+            auto scale = [ & ]() -> llvm::Value *
+            {
+                if ( auto s_scale = s_addr->scale() )
+                    return lift( s_scale );
+
+                return llvm::ConstantInt::get( ctx.word_type(),
+                                               static_cast< unsigned >( r_addr->scale ), true );
+            }();
+
+            log_info() << "[operand-lifter]:" << "addr:displacement";
+            auto displacement = [ & ]() -> llvm::Value *
+            {
+                if ( auto s_displacement = s_addr->displacement() )
+                   return lift( s_displacement );
+
+               return llvm::ConstantInt::get( ctx.word_type(),
+                                              static_cast< unsigned >( r_addr->displacement ),
+                                              true );
+            }();
+
+            auto resize = [ & ]( auto what )
+            {
+                if ( what->getType() == ctx.word_type() )
+                    return what;
+                return irb.CreateSExt( what, ctx.word_type() );
+            };
+
+            log_info() << "[operand-lifter]:" << "addr:Building the expression!";
+            auto scale_factor = irb.CreateShl( resize( index ), resize( scale ) );
+
+            llvm::Value *out = resize( base );
+            out = irb.CreateAdd( out, scale_factor );
+            out = irb.CreateAdd( out, resize( displacement ) );
+
+            return out;
+        }
+
+
+        llvm::Value *make_reg( std::string name )
+        {
+            return irops::mk_reg(
+                irb, ctx.reg( name ),
+                ( is_read ) ? irops::io_type::in : irops::io_type::out );
+        }
+
     };
 
 }  // namespace circ::build
