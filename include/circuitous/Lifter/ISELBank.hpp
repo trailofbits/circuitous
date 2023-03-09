@@ -67,6 +67,14 @@ namespace circ::isem
                                                    const arg_blueprint_t &bp );
     };
 
+
+    using isem_def_t = std::shared_ptr< ISem >;
+
+    isem_def_t make_isem( const std::string &isel_name,
+                          llvm::Module &semantics,
+                          llvm::Function &into );
+
+
     struct ISemBank : has_ctx_ref
     {
         using parent_t = has_ctx_ref;
@@ -75,9 +83,10 @@ namespace circ::isem
 
         // TODO(lift): Once this is no longer a prototype check if this is needed.
         // More names can point to the same isem.
-        using isem_def_t = std::shared_ptr< ISem >;
         using isem_ref_t = const ISem *;
         using rinst_t = remill::Instruction;
+
+        using isem_def_t = isem_def_t;
 
       private:
 
