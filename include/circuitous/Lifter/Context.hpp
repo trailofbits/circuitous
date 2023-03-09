@@ -10,10 +10,14 @@
 #include <circuitous/Lifter/Shadows.hpp>
 #include <circuitous/Support/Check.hpp>
 
+#include <circuitous/Util/LLVMUtil.hpp>
+
+CIRCUITOUS_RELAX_WARNINGS
 #include <remill/Arch/Arch.h>
 #include <remill/Arch/Name.h>
 #include <remill/BC/Util.h>
 #include <remill/OS/OS.h>
+CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace llvm {
   class Module;
@@ -81,6 +85,11 @@ namespace circ
         auto zero()
         {
             return llvm::ConstantInt::get( word_type(), 0, false );
+        }
+
+        std::size_t bw( llvm::Value *v )
+        {
+            return ::circ::bw( *module(), v->getType() );
         }
 
         auto clean_module( const std::unordered_set<llvm::Function *> &keep )
