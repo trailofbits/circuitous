@@ -960,7 +960,7 @@ namespace circ::shadowinst
 
         std::vector< Reg * > selectors;
 
-        std::size_t enc_bitsize;
+        std::size_t enc_bitsize = 0;
         std::bitset< 15 * 8 > enc;
 
         explicit Instruction( std::size_t enc_bitsize,
@@ -969,7 +969,10 @@ namespace circ::shadowinst
               enc( InstBytes( enc ).to_enc< 15 * 8 >() )
         {}
 
-        Instruction(const Instruction &other) : operands(other.operands), enc( other.enc )
+        Instruction(const Instruction &other)
+            : operands(other.operands),
+              enc_bitsize( other.enc_bitsize ),
+              enc( other.enc )
         {
             check( other.selectors.empty() );
             for (const auto &o_cluster : other.deps)
