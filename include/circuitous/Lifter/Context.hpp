@@ -31,6 +31,8 @@ namespace remill {
 
 namespace circ
 {
+    using isel_t = std::string;
+
     struct Names
     {
         // TODO(lukas): Merge into `Context`.
