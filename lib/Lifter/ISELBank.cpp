@@ -95,9 +95,6 @@ namespace circ::isem
 
             void make_call()
             {
-                std::ignore = irb;
-                std::ignore = sem;
-
                 log_info() << "[isem]: Making call";
 
                 enable_opts( sem );
@@ -105,6 +102,7 @@ namespace circ::isem
                 irb.CreateRet( call );
 
                 sem->print( llvm::errs() );
+                log_info() << "[isem]: Inlining.";
                 llvm::InlineFunctionInfo info;
                 auto was_inlined = llvm::InlineFunction( *call, info );
                 check( was_inlined.isSuccess() );
@@ -138,6 +136,15 @@ namespace circ::isem
 
 
     } // namespace
+
+    isem_def_t make_isem( const std::string &name,
+                          llvm::Module &semantics,
+                          llvm::Function &into )
+    {
+        auto sem = semantic_fn( name, semantics );
+        check( sem );
+        return AdviceLifter::lift( into, **sem );
+    }
 
     auto semantic_fns( llvm::Module &in )
         -> gap::generator< llvm::Function * >
