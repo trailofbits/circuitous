@@ -113,7 +113,11 @@ namespace circ
         }
 
         static constant_node constop(Constant *op) {
-            return { op->op_code_str(), op->size, op->bits };
+            return { Constant::op_code_str(), op->size, op->bits };
+        }
+
+        static constant_node constop( bitwidth_t size, const std::string &bits) {
+            return { Constant::op_code_str(), size, bits };
         }
 
         static memory_node memop(Memory *op) {
@@ -150,13 +154,11 @@ namespace circ
         using circuit_egraph_builder_base::extract;
         using circuit_egraph_builder_base::select;
 
-        static storage_type make(const eqsat::constant_t &con) {
-            // TODO build storage
-            throw std::runtime_error("not implemented constant synthesis");
-        }
-
         static storage_type make(const eqsat::atom_t &op) {
-            // TODO build storage
+            if (auto *con = std::get_if< eqsat::constant_t >(&op)) {
+                return constop(op.bitwidth().value(), con->ref().to_string(2));
+            }
+
             auto name = atom_name(op);
             auto res = llvm::StringSwitch< storage_type, std::optional< storage_type > >(name)
                 .Case("register_constraint", opcode(name))
