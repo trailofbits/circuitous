@@ -9,7 +9,9 @@
   _Pragma( "clang diagnostic ignored \"-Wsign-conversion\"" ) \
   _Pragma( "clang diagnostic ignored \"-Wconversion\"" ) \
   _Pragma( "clang diagnostic ignored \"-Wold-style-cast\"" ) \
-  _Pragma( "clang diagnostic ignored \"-Wnon-virtual-dtor\"" )
+  _Pragma( "clang diagnostic ignored \"-Wnon-virtual-dtor\"" ) \
+  _Pragma( "clang diagnostic ignored \"-Wshadow\"" ) \
+  _Pragma( "clang diagnostic ignored \"-Wdeprecated-declarations\"" )
 
 #define CIRCUITOUS_UNRELAX_WARNINGS \
-  _Pragma( "clang diagnostic pop" ) \
+  _Pragma( "clang diagnostic pop" )
