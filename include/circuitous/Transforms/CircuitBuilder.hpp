@@ -227,8 +227,8 @@ namespace circ {
                 .Case("count_trailing_zeroes", circuit->create< CountTrailingZeroes >( size ))
                 .Case("not",                   circuit->create< Not >( size ))
 
-                .Case("Switch", circuit->create< Switch >( size ))
-                .Case("Option", circuit->create< Option >( size ))
+                .Case("switch", circuit->create< Switch >( size ))
+                .Case("option", circuit->create< Option >( size ))
 
                 .Default( nullptr );
         }
