@@ -79,6 +79,18 @@ namespace circ::run
         return out;
     }
 
+    std::string Memory::to_string() const
+    {
+        std::stringstream ss;
+        ss << std::hex;
+
+        ss << "Memory: [ addr ] := byte\n";
+        for ( const auto &[ addr, val ] : memory )
+            ss << "\t[ " << addr << "] := " << llvm::toString( val, 16, false ) << "\n";
+
+        return ss.str();
+    }
+
     bool NodeState::set(Operation *op, value_type value)
     {
         if (has_value(op))
