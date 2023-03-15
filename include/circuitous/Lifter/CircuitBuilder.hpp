@@ -30,6 +30,8 @@ namespace circ
     // Forward declare
     struct InstructionBatch;
 
+    using builder_ref = llvm::IRBuilder<> &;
+
     namespace isem
     {
         struct ISem;
@@ -62,28 +64,89 @@ namespace circ
         return ir.CreateCall(fn, inst_func_args);
     }
 
-    struct State
+    static inline llvm::CallInst *call_semantic(
+            llvm::IRBuilder<> &ir,
+            llvm::Function *fn,
+            llvm::Value *s, llvm::Value *m,
+            std::vector< llvm::Value * > args)
+    {
+        std::vector< llvm::Value * > inst_func_args;
+        inst_func_args.emplace_back( s );
+        inst_func_args.emplace_back( m );
+
+        inst_func_args.insert( inst_func_args.end(), args.begin(), args.end() );
+
+        return ir.CreateCall(fn, inst_func_args);
+    }
+    struct wraps_remill_value
+    {
+      protected:
+        llvm::Value *storage = nullptr;
+
+      public:
+
+        wraps_remill_value() = delete;
+        wraps_remill_value( llvm::Value *storage ) : storage( storage ) {}
+
+        wraps_remill_value( llvm::BasicBlock *where, llvm::Type *t )
+            : storage( llvm::IRBuilder<>( where ).CreateAlloca( t ) )
+        {}
+
+        wraps_remill_value( llvm::Function *fn, llvm::Type *t );
+
+        llvm::Value *operator->() const { return storage; }
+        llvm::Value *operator->() { return storage; }
+
+        llvm::Value *operator*() const { return storage; }
+        llvm::Value *operator*() { return storage; }
+    };
+
+    struct State : wraps_remill_value
     {
         using reg_ptr_t = const remill::Register *;
 
-        llvm::Value *state = nullptr;
-
-        State(llvm::BasicBlock *where, llvm::Type *type)
-            : state(llvm::IRBuilder<>(where).CreateAlloca(type))
-        {}
-
-        auto raw() { return state; }
-        auto type() { return state->getType(); }
+        using wraps_remill_value::wraps_remill_value;
 
         void store(llvm::IRBuilder<> &ir, const reg_ptr_t where, llvm::Value *what);
         llvm::Value *load(llvm::IRBuilder<> &ir, const reg_ptr_t where);
 
         void reset( llvm::IRBuilder<> &irb, const Ctx::regs_t &regs );
         void commit( llvm::IRBuilder<> &irb, CtxRef ctx );
-
-        llvm::Value *operator*() const { return state; }
-        llvm::Value *operator*() { return state; }
     };
+
+    struct MemoryPtr : wraps_remill_value
+    {
+        MemoryPtr( llvm::Type *t )
+            : wraps_remill_value( llvm::UndefValue::get( t ) )
+        {}
+    };
+
+    struct Trace
+    {
+        CtxRef ctx;
+        std::vector< State > storage;
+
+        Trace( CtxRef ctx, State input, State output )
+            : ctx( ctx ),
+              storage{ input, output }
+        {}
+
+        void reset( builder_ref bld, const Ctx::regs_t &regs )
+        {
+            for ( auto &state : storage )
+                state.reset( bld, regs );
+        }
+
+        void commit( builder_ref bld )
+        {
+            for ( auto &state : storage )
+                state.commit( bld, ctx );
+        }
+
+        auto &input() { return storage[ 0 ]; }
+        auto &output() { return storage[ 1 ]; }
+    };
+
 
     struct CircuitFunction : has_ctx_ref
     {
@@ -291,83 +354,82 @@ namespace circ
         llvm::Function *make_from(const InstructionBatch &batch);
     };
 
-    struct CircuitMaker_v2 : has_ctx_ref
+    struct CircuitFunction_v2
     {
-        // Simple structure to keep track of all links and information
-        // with lifted isems.
-        struct ISemInstance
+        llvm::Function &fn;
+        Trace trace;
+        MemoryPtr memory_ptr;
+
+        llvm::IRBuilder<> irb_instance;
+
+        CircuitFunction_v2( Ctx &ctx );
+
+        static llvm::Function &mk_function( Ctx &ctx );
+
+        auto &operator*() { return fn; }
+        const auto &operator*() const { return fn; }
+
+        llvm::IRBuilder<> &irb()
         {
-            const isem::ISem *def;
-            llvm::Instruction *inst_size;
-            std::map< Ctx::reg_ptr_t, llvm::Value * > computationals;
-
-            explicit ISemInstance( const isem::ISem *def, llvm::Instruction *inst_size )
-                : def( def ), inst_size( inst_size )
-            {}
-        };
-
-        struct Context
-        {
-            std::vector< llvm::Value * > _args;
-
-            void add( llvm::Value *v ) { _args.push_back( v ); }
-
-            template< gap::ranges::range R >
-            void add( R &&r )
-            {
-                for ( auto x : r )
-                    add( x );
-            }
-
-            llvm::Value *materialize( llvm::IRBuilder<> &irb );
-        };
-
-        isem::ISemBank isems = isem::ISemBank( this->ctx );
-
-        llvm::Function *fn;
-        std::optional< State > state;
-
-        // One instance can be used by multiple isems.
-        using instance_ptr_t = std::shared_ptr< ISemInstance >;
-        std::unordered_map< const isem::ISem *, instance_ptr_t > def_to_instances;
-        std::unordered_map< const InstructionInfo *, instance_ptr_t > info_to_instance;
-
-        CircuitMaker_v2( CtxRef ctx_ref )
-            : has_ctx_ref( ctx_ref )
-        {
-            init_function();
-        }
-
-        // Sets `fn`, `state`. Creates a function with a basic block that contains
-        // `State` properly initialized to initial values.
-        void init_function();
-
-        llvm::Function *make_from( const InstructionBatch &batch );
-
-        llvm::IRBuilder<> mk_irb() { return llvm::IRBuilder<>( &*fn->begin() ); }
-
-        // State helpers
-        void reset_state();
-        void commit_state();
-
-        // ISem  operations
-        instance_ptr_t materialize( const isem::ISem * );
-        void computationals( const isem::ISem * );
-
-        instance_ptr_t instance_of( const isem::ISem *def )
-        {
-            auto it = def_to_instances.find( def );
-            check( it != def_to_instances.end() );
-            return it->second;
-        }
-
-        instance_ptr_t instance_of( const InstructionInfo &info )
-        {
-            auto it = info_to_instance.find( &info );
-            check( it != info_to_instance.end() );
-            return it->second;
+            return irb_instance;
         }
     };
 
+    struct ExaltationContext
+    {
+        using values_t = std::vector< llvm::Value * >;
+        using unit_t = Unit< Atom >;
+        using builder_t = llvm::IRBuilder<>;
+        using reg_ptr_t = typename Ctx::reg_ptr_t;
+
+        Ctx &ctx;
+        CircuitFunction_v2 &circuit_fn;
+
+        std::vector< llvm::Value * > sub_root;
+        std::vector< llvm::Value * > root;
+
+        // ( reg, ( decoder_cond, value ) ]
+        std::map< reg_ptr_t, std::vector< std::tuple< llvm::Value *, llvm::Value * > > > checks;
+
+        ExaltationContext( Ctx &ctx, CircuitFunction_v2 &circuit_fn )
+            : ctx( ctx ), circuit_fn( circuit_fn )
+        {}
+
+        /* Utilities */
+
+        auto &irb() { return circuit_fn.irb(); }
+
+        auto &input() { return circuit_fn.trace.input(); }
+        auto &output() { return circuit_fn.trace.output(); }
+
+        auto &memory_ptr() { return circuit_fn.memory_ptr; }
+
+        auto pc() { return irops::mk_reg( irb(), ctx.pc_reg(), irops::io_type::in ); }
+
+        /* State helpers */
+
+        void reset_state();
+        void commit_state();
+
+        /* Actual lifting */
+
+        void finalize();
+        llvm::Value *reg_check( reg_ptr_t );
+        auto reg_write_mux_operands( reg_ptr_t ptr ) -> gap::generator< llvm::Value * >;
+
+        void remove_write( llvm::Value * );
+
+        void exalt( unit_t &unit );
+        values_t synthetize_decoders( unit_t &unit );
+        void bump_pc( const values_t &decoders, unit_t &unit );
+
+        using reg_to_vals = std::unordered_map< std::string, values_t >;
+        reg_to_vals written_condition( const values_t &decoders,
+                                       unit_t &unit, std::size_t idx );
+
+        using stores_t = std::vector< llvm::StoreInst * >;
+        stores_t stores_to( llvm::Instruction *v );
+        llvm::Value *last_store( const stores_t &stores );
+    };
 
 }  // namespace circ
