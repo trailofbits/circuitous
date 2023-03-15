@@ -23,6 +23,8 @@
 
 #include <remill/Arch/Instruction.h>
 
+#include <gap/core/generator.hpp>
+
 namespace circ
 {
     struct Decoder : has_ctx_ref
@@ -41,5 +43,23 @@ namespace circ
         std::vector< remill::Instruction > decode_all(llvm::StringRef buff);
         std::optional< remill::Instruction > decode(const InstBytes &bytes);
     };
+
+
+    static inline auto decode_all( Ctx &ctx, llvm::StringRef buf )
+    {
+        return Decoder( ctx ).decode_all( buf );
+    }
+
+    static inline auto decode_all( Ctx &ctx, const std::vector< InstBytes > &insts )
+        -> gap::generator< remill::Instruction >
+    {
+        auto decoder = Decoder( ctx );
+        for ( const auto &inst : insts )
+        {
+            auto maybe_inst = decoder.decode( inst );
+            check( maybe_inst ) << "Decoder failed on:" << inst.as_hex_str();
+            co_yield std::move( *maybe_inst );
+        }
+    }
 
 } // namespace circ
