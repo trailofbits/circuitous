@@ -30,15 +30,16 @@ void Derive< S >::derive_cond(ReadConstraint *rc_op)
         auto addr = this->get_node_val(op->addr_arg())->getLimitedValue();
         auto size = this->get_node_val(op->size_arg())->getLimitedValue();
 
+        llvm::APInt val { irops::memory::size(this->circuit->ptr_size), 0, false };
+
         if (!this->state->defined(addr, size)) {
             std::stringstream ss;
             ss << "Memory at " << std::hex << addr << " is not defined with size: " << size;
             log_error() << ss.str();
-            this->set_node_val(op->hint_arg(), {});
+            this->set_node_val(op->hint_arg(), val);
             return this->false_val();
         }
 
-        llvm::APInt val { irops::memory::size(this->circuit->ptr_size), 0, false };
 
         val.insertBits(this->true_val(), 0);
         val.insertBits(this->false_val(), 1);
