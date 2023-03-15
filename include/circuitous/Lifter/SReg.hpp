@@ -105,7 +105,7 @@ namespace circ::shadowinst
         shadowinst::SelectMaker selects{ irb };
         for (auto &[shift_val, conds] : shift_coerce_info(s_reg, arch)) {
             std::vector<llvm::Value *> args;
-            auto reg_selector = Materializer(irb, s_reg).opaque_selector();
+            auto reg_selector = Materializer(irb, s_reg).region_selector();
             for (auto &bstr : conds) {
                 auto constant = llvm::APInt{static_cast<uint32_t>(bstr.size()), bstr, 2};
                 args.push_back(irb.CreateICmpEQ(reg_selector, irb.getInt(constant)));
@@ -130,7 +130,7 @@ namespace circ::shadowinst
     {
         std::map< uint64_t, llvm::Value * > shifts;
         for (auto &[shift_val, conds] : shift_coerce_info(s_reg, arch)) {
-            auto reg_selector = Materializer(irb, s_reg).opaque_selector();
+            auto reg_selector = Materializer(irb, s_reg).region_selector();
             shifts[shift_val * 8] = irops::is_one_of(irb, reg_selector, conds);
         }
 
