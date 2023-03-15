@@ -131,8 +131,19 @@ void OpSem<S>::visit(DecoderResult *op)
 template< typename S >
 void OpSem< S >::visit( Switch *op )
 {
-    auto value = this->compute_or( op->operands(), this->zero( op->size ) );
-    this->set_node_val( op, value );
+    auto val = [ & ]() -> value_type
+    {
+        for ( auto option : dyn_cast< Option >( op->operands() ) )
+        {
+            auto sel = this->compute_or( option->conditions(), this->false_val() );
+            if ( sel == this->true_val() )
+                return this->get_node_val( option->value() );
+        }
+
+        return this->zero( op->size );
+    }();
+
+    this->set_node_val( op, val );
 }
 
 template< typename S >
