@@ -213,21 +213,6 @@ namespace circ::run
             return { current_trace, next_trace };
         }
 
-        std::optional< bool > short_circuit(Operation *op)
-        {
-            // This can happen if `op` is not in `current` context.
-            if (!node_state.has_value(op))
-                return {};
-            auto decoder = current->decoder();
-            check( decoder );
-            if ( *decoder != op )
-                return {};
-
-            if (node_state.get(op) == semantics.false_val())
-                return { false };
-            return {};
-        }
-
         result_t run() {
             init();
             // Set constants first, as they are never blocked by anything.
@@ -237,20 +222,15 @@ namespace circ::run
             while (!todo.empty()) {
                 auto x = todo.pop();
                 dispatch(x);
-                // If decoder result failed, we can just return a false as the result will
-                // be false.
-                if (auto r = short_circuit(x)) {
-                    log_dbg() << "Short circuiting to result, as decode was not satisfied.";
-                    return result_t::not_decoded;
-                }
             }
-            if (!node_state.has_value(current))
+
+            if (!node_state.has_value(circuit->root))
             {
                 no_value_reached_witness();
                 return result_t::value_not_reached;
             }
 
-            if (auto res = node_state.get(current))
+            if (auto res = node_state.get(circuit->root))
                 return (*res == semantics.true_val()) ? result_t::accepted : result_t::rejected;
 
             unreachable() << "Spawn::run() did not reach any result!";
