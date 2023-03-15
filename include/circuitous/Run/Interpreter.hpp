@@ -57,12 +57,16 @@ namespace circ::run
         {
             result_vector_t results;
 
+            log_dbg() << "[QueueInterpreter]:" << "Gping to run:"
+                      << circuit->attr< VerifyInstruction >().size()
+                      << "runs.";
             for (auto ctx : circuit->attr< VerifyInstruction >())
             {
                 auto runner = std::make_unique< Spawn >(
                         circuit, ctx, ctx_info, initial_node_state, initial_memory);
                 runner->derive( to_derive );
                 auto status = runner->run();
+                log_dbg() << "[QueueInterpreter]:" << to_string( status );
                 results.push_back(std::make_tuple(status, std::move(runner)));
             }
             return results;
