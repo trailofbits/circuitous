@@ -15,6 +15,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <cstdint>
 #include <optional>
+#include <map>
 #include <unordered_map>
 
 namespace circ::run
@@ -25,7 +26,7 @@ namespace circ::run
 
     struct Memory
     {
-        using memory_map_t = std::unordered_map< uint64_t, raw_value_type >;
+        using memory_map_t = std::map< uint64_t, raw_value_type >;
 
         uint32_t hint_size;
         memory_map_t memory;
