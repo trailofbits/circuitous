@@ -64,19 +64,20 @@ namespace circ
     /* v2 */
 
     // Group by ISEL
-    auto CircuitSmithy_v2::categorize( atoms_t &&atoms ) -> worklist_t
+    auto CircuitSmithy_v2::categorize( atoms_t atoms ) -> worklist_t
     {
         std::unordered_map< isel_t, atoms_t > groups;
 
-        for ( auto &&atom : std::move( atoms ) )
+        for ( auto &atom : std::move( atoms ) )
         {
             auto isel = atom.isel();
-            groups[ isel ].emplace_back( std::move( atom ) );
+            groups[ isel ].push_back( std::move( atom ) );
         }
 
         worklist_t out;
-        for ( auto &&[ isel, atom ] : std::move( groups ) )
+        for ( auto &[ isel, atom ] : std::move( groups ) )
             out.emplace( isel, std::move( atom ) );
+
         return out;
     }
 
@@ -92,6 +93,21 @@ namespace circ
 
     auto CircuitSmithy_v2::smelt ( concretes_t &&concretes ) -> atoms_t
     {
+        auto dsts = []( auto c )
+        {
+            std::size_t got = 0;
+            for ( auto x : c.operands )
+                if ( x.action == remill::Operand::kActionWrite )
+                    ++got;
+            if ( got > 1 )
+                log_info() << "[REPORT]:" << c.Serialize();
+        };
+
+        for ( auto c : concretes )
+        {
+            dsts( c );
+        }
+
         atoms_t out;
         for ( auto concrete : std::move( concretes ) )
         {
@@ -108,13 +124,15 @@ namespace circ
     auto CircuitSmithy_v2::forge( atoms_t &&atoms ) -> circuit_ptr_t
     {
         auto circuit_fn = CircuitFunction_v2( ctx );
-
         auto worklist = categorize( std::move( atoms ) );
+
+        log_info() << "[smithy]:" << "Worklist contains:" << worklist.size() << "entries!";
 
         auto exalt_context = ExaltationContext( ctx, circuit_fn );
         for ( auto &unit : worklist )
             exalt_context.exalt( unit );
 
+        exalt_context.finalize();
 
         return lower_fn( &*circuit_fn, ctx.ptr_size );
     }

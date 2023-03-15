@@ -52,11 +52,17 @@ namespace circ
         return out;
     }
 
+    wraps_remill_value::wraps_remill_value( llvm::Function *fn, llvm::Type *t )
+    {
+        check( !fn->isDeclaration() );
+        storage = llvm::IRBuilder<>( &*fn->begin() ).CreateAlloca( t );
+    }
+
     void State::store(llvm::IRBuilder<> &ir, const reg_ptr_t reg, llvm::Value *val)
     {
         auto bb = ir.GetInsertBlock();
         const auto &dl = bb->getModule()->getDataLayout();
-        auto gep = reg->AddressOf(state, bb);
+        auto gep = reg->AddressOf(storage, bb);
         ir.SetInsertPoint(bb);
 
         // How much space does register occupy in form iN. There is an
@@ -73,9 +79,10 @@ namespace circ
 
     llvm::Value *State::load(llvm::IRBuilder<> &ir, const reg_ptr_t reg)
     {
+        check( reg );
         auto bb = ir.GetInsertBlock();
         const auto &dl = bb->getModule()->getDataLayout();
-        auto gep = reg->AddressOf(state, bb);
+        auto gep = reg->AddressOf(storage, bb);
         ir.SetInsertPoint(bb);
 
         // How much space does register occupy in form iN. There is an
@@ -378,7 +385,7 @@ namespace circ
         check(isel.lifted);
 
         State state { this->head, ctx.state_ptr_type()->getPointerElementType() };
-        auto state_ptr = state.raw();
+        auto state_ptr = *state;
         llvm::IRBuilder<> ir(this->head);
 
         for (const auto &[reg, arg, _] : arg_map)
@@ -657,7 +664,7 @@ namespace circ
                                                             << " >= " << dst_regs.size();
                     auto eq = irops::make< irops::Xor >(ir, reg_checks);
                     auto dst_load = make_non_opaque_load(ir, dst_regs[proccessed - 1]);
-                    auto reg_addr = reg_part->AddressOf(state.raw(), ir);
+                    auto reg_addr = reg_part->AddressOf(*state, ir);
 
                     auto store_ty =
                         llvm::cast<llvm::PointerType>(reg_addr->getType())->getPointerElementType();
@@ -765,148 +772,355 @@ namespace circ
 
     /** _v2 **/
 
-    void CircuitMaker_v2::init_function()
+    CircuitFunction_v2::CircuitFunction_v2( Ctx &ctx )
+        : fn( mk_function( ctx ) ),
+          trace( ctx, State( &fn, ctx.state_type() ), State( &fn, ctx.state_type() ) ),
+          memory_ptr( ctx.memory_ptr_type() ),
+          irb_instance( &*fn.begin() )
+    {
+        log_info() << "[circ-fn]:" << "Adjusting insert point";
+        auto bb = &*fn.begin();
+        irb_instance.SetInsertPoint( bb, bb->begin() );
+    }
+
+    llvm::Function &CircuitFunction_v2::mk_function( Ctx &ctx )
     {
         auto type = llvm::FunctionType::get( ctx.ir().getInt1Ty(), {}, false );
         auto linkage = llvm::GlobalValue::ExternalLinkage;
-        fn = llvm::Function::Create( type, linkage, "__circ.circuit_v2", ctx.module() );
+        auto fn = llvm::Function::Create( type, linkage, "__circ.circuit_v2", ctx.module() );
 
-        auto entry = llvm::BasicBlock::Create( *ctx.llvm_ctx(), "entry", fn );
-        llvm::IRBuilder<> irb( entry );
+        llvm::BasicBlock::Create( *ctx.llvm_ctx(), "entry", fn );
 
-        state = State( entry, ctx.state_type() );
-        // Initialize state with all regs we want to use.
-        state->reset( irb, ctx.regs() );
+        log_info() << "[circ-fn]:" << "Dummy terminator.";
+        llvm::IRBuilder<> irb( &*fn->begin() );
+        //irb.CreateRet( irb.getTrue() );
+        return *fn;
+    }
+
+    void ExaltationContext::exalt( unit_t &unit )
+    {
+        log_info() << "[exalt]: Starting to exalt a unit ...";
+
+        for ( auto &atom : unit )
+        {
+            log_info() << "[exalt]:" << atom.concrete.Serialize();
+            log_info() << "[exalt]:" << atom.abstract.to_string();
+        }
+
+        reset_state();
+
+        log_info() << "[exalt]: Synthetizing decoders ...";
+        auto decoders = synthetize_decoders( unit );
+
+        auto &irb = this->irb();
+        log_info() << "[exalt]: Bumping pc ...";
+        bump_pc( decoders, unit );
+
+        log_info() << "[exalt]: Fetching semantic ...";
+        auto semantic = isem::semantic_fn( unit.isel, *ctx.module() );
+        post_lift( **semantic );
+        //flatten_cfg( **semantic );
+
+
+
+        log_info() << "[exalt]: Lifting & binding operands ...";
+
+        std::vector< llvm::Value * > lifted_operands = { *memory_ptr(), *input() };
+        std::vector< std::tuple< llvm::Instruction *, std::size_t > > writes;
+
+        auto requester = build::StatelessRequester( ctx, input() );
+        for ( std::size_t i = 0; i < unit.operand_count(); ++i )
+        {
+            log_info() << "[exalt]:" << "Operand" << i;
+            auto decoder_it = decoders.begin();
+
+            auto arg = remill::NthArgument( *semantic, 2 + i );
+            if ( unit.is_write( i ) &&
+                 unit.atoms.front().concrete.operands[ i ].type == remill::Operand::kTypeRegister )
+            {
+                auto dst = irops::AllocateDst::make( irb, *input(), arg->getType() );
+
+                log_info() << dbg_dump( (*semantic)->getType() );
+                log_info() << dbg_dump( dst );
+                lifted_operands.emplace_back( dst );
+                writes.emplace_back( dst, i );
+                continue;
+            }
+
+            std::vector< llvm::Value * > options;
+            for ( auto view : unit.slices( i ) )
+            {
+                log_info() << "[exalt]:" << "Processing slice_view";
+                auto lifter = build::OperandLifter( ctx, irb, requester, unit.is_read( i ) );
+                auto operand = lifter.lift( view );
+
+                if ( ctx.bw( operand ) < ctx.bw( arg ) )
+                    operand = irb.CreateZExt( operand, arg->getType() );
+
+                auto option = irops::Option::make( irb,
+                                                   { operand, *( decoder_it++ ) },
+                                                   ctx.bw( operand ) );
+                options.emplace_back( option );
+            }
+
+            lifted_operands.emplace_back( irops::Switch::make( irb, options ) );
+            log_info() << "[exalt]:" << "Operand" << i << "done";
+        }
+
+        for ( auto o : lifted_operands )
+            log_info() << dbg_dump( o );
+
+        auto sem_call = irb.CreateCall( *semantic, lifted_operands );
+
+        auto make_breakpoint = []( auto ir )
+        {
+            return irops::make< irops::Breakpoint >( ir, ir.getTrue() );
+        };
+        auto [ begin, end ] = inline_flattened( sem_call, make_breakpoint );
+        auto mem_checks = mem::synthetize_memory( begin, end, ctx.ptr_size );
+
+        begin->eraseFromParent();
+        end->eraseFromParent();
+
+        log_info() << "[exalt]:" << "Post call";
+
+        std::map< std::size_t, std::tuple< stores_t, reg_to_vals > > tmp;
+        for ( auto [ dst, idx ] : writes )
+        {
+            auto conds = written_condition( decoders, unit, idx );
+            auto stores = stores_to( dst );
+            tmp.emplace( idx, std::make_tuple( std::move( stores ), std::move( conds ) ) );
+        }
+
+        auto merged_decoders = irops::Or::make( irb, decoders );
+        auto unit_decoder = irops::DecoderResult::make( irb, merged_decoders );
+        mem_checks.emplace_back( unit_decoder );
+
+        auto [ebit_in, ebit_out] = irops::make_all_leaves< irops::ErrorBit >(irb);
+        mem_checks.emplace_back( irb.CreateICmpEQ( ebit_in, ebit_out ) );
+        auto unit_ctx = irops::VerifyInst::make( irb, mem_checks );
+        sub_root.emplace_back( unit_ctx );
+
+        for ( auto &reg : ctx.regs() )
+        {
+            auto normal_flow_value = input().load( irb, reg );
+
+            std::vector< llvm::Value * > options;
+            for ( auto [ _, data ] : tmp )
+            {
+                auto [ stores, conds ] = data;
+                for ( auto &[ key, vals ] : conds )
+                {
+                    if ( enclosing_reg( ctx.arch(), key ) != reg )
+                        continue;
+
+                    auto runtime_value = last_store( stores );
+                    input().store( irb, ctx.reg( key ), runtime_value );
+
+                    auto full_val = input().load( irb, reg );
+
+                    auto full_conds = irops::Or::make( irb, vals );
+                    options.emplace_back( irops::Option::make( irb,
+                                                               { full_val, full_conds },
+                                                               ctx.bw( full_val ) ) );
+                }
+
+                // Clean up.
+                input().store( irb, reg, normal_flow_value );
+            }
+
+            if ( options.empty() )
+            {
+                checks[ reg ].emplace_back( unit_decoder, normal_flow_value );
+            } else {
+                options.push_back( irops::Option::make( irb,
+                                                        {normal_flow_value, irb.getTrue() },
+                                                        ctx.bw( normal_flow_value ) ) );
+                auto s = irops::Switch::make( irb, options );
+                checks[ reg ].emplace_back( unit_decoder, s );
+            }
+        }
+    }
+
+    void ExaltationContext::remove_write( llvm::Value *dst )
+    {
+        auto p_type = llvm::dyn_cast< llvm::PointerType >( dst->getType() );
+        check( p_type ) << "Dst reg type before lowering is not pointer";
+
+        irb().SetInsertPoint( llvm::cast< llvm::Instruction >( dst ) );
+        auto allocation = irb().CreateAlloca( p_type->getPointerElementType(),
+                                              nullptr, "DSTA_" );
+
+        auto as_inst = llvm::dyn_cast< llvm::Instruction >( dst );
+        check( as_inst );
+        as_inst->replaceAllUsesWith( allocation );
+        as_inst->eraseFromParent();
+    }
+
+
+    auto ExaltationContext::synthetize_decoders( unit_t &unit ) -> values_t
+    {
+        values_t out;
+
+        auto &irb = this->irb();
+        for ( auto &atom : unit )
+            out.push_back( build::AtomDecoder( irb, atom ).get_decoder_tree() );
+        return out;
+    }
+
+    auto ExaltationContext::written_condition( const values_t &decoders,
+                                               unit_t &unit,
+                                               std::size_t idx )
+        -> reg_to_vals
+    {
+        reg_to_vals out;
+
+        auto decoder = decoders.begin();
+
+        auto &irb = this->irb();
+        for ( auto view : unit.slices( idx ) )
+        {
+            auto reg = std::get_if< typename decltype( view )::reg >( &view.raw );
+            check( reg );
+
+            auto [ r_reg, s_reg ] = *reg;
+
+            if( !s_reg || s_reg->tm().empty() )
+                continue;
+
+            auto selector = shadowinst::Materializer( irb, *s_reg ).region_selector();
+            check( decoder != decoders.end() );
+            for ( auto [ name, keys ] : s_reg->tm() )
+            {
+                values_t conds;
+                for ( auto key : keys )
+                {
+                    auto bstr = shadowinst::TM_t::make_bitstring( key );
+                    auto c = llvm::APInt( static_cast< uint32_t >( bstr.size() ), bstr, 2 );
+                    conds.emplace_back( irb.CreateICmpEQ( selector, irb.getInt( c ) ) );
+                }
+
+                auto selectors = irops::Or::make( irb, conds );
+                out[ name ].emplace_back( irops::And::make( irb, { *decoder, selectors } ) );
+            }
+            ++decoder;
+        }
+        return out;
+    }
+
+    auto ExaltationContext::stores_to( llvm::Instruction *v ) -> stores_t
+    {
+        // Filter all stores
+        std::vector< llvm::StoreInst * > stores;
+        auto collect_stores = [ & ]( auto src, auto next ) -> void
+        {
+            for ( auto user : src->users() )
+            {
+                if ( auto store = llvm::dyn_cast< llvm::StoreInst >( user ) )
+                    stores.push_back( store );
+                if ( auto bc = llvm::dyn_cast< llvm::BitCastInst >( user ) )
+                    next( bc, next );
+
+                check( !llvm::isa< llvm::PtrToIntInst >( user ) &&
+                       !llvm::isa< llvm::GetElementPtrInst >( user ) );
+            }
+        };
+        collect_stores( v, collect_stores );
+        return stores;
+    }
+
+    llvm::Value *ExaltationContext::last_store( const stores_t &stores )
+    {
+        // NOTE(lukas): It is expected that if there are multiple stores,
+        //              Flattener component will make sure they are properly guarded
+        //              wrt path condition.
+        check( stores.size() >= 1, [ & ]{ return dbg_dump( stores ); } );
+
+        // Next they are being ordered to determine which is last, therefore
+        // they need to be in the same basic block
+        auto bb = stores[ 0 ]->getParent();
+        llvm::StoreInst *last = stores[ 0 ];
+
+        for ( auto store : stores )
+            if ( inst_distance( &*bb->begin(), store ) > inst_distance( &*bb->begin(), last ) )
+                last = store;
+        return last->getOperand( 0 );
+    }
+
+    auto ExaltationContext::reg_write_mux_operands( reg_ptr_t reg )
+        -> gap::generator< llvm::Value * >
+    {
+        check( checks.count( reg ) );
+        auto partial_checks = checks[ reg ];
+
+        if ( partial_checks.empty() )
+        {
+            co_yield irops::input_reg( irb(), reg );
+            co_return;
+        }
+
+        for ( auto [ unit_decoder, runtime ] : partial_checks )
+            co_yield irops::Option::make( irb(), { runtime, unit_decoder }, ctx.bw( runtime ) );
+    }
+
+
+    llvm::Value *ExaltationContext::reg_check( reg_ptr_t reg )
+    {
+        llvm::Value *mux = irops::make< irops::Switch >( irb(), reg_write_mux_operands( reg ) );
+        llvm::Value *out_reg = irops::output_reg( irb(), reg );
+        return irops::OutputCheck::make( irb(), { mux, out_reg } );
+    }
+
+    void ExaltationContext::finalize()
+    {
+        for ( auto reg : ctx.regs() )
+            root.emplace_back( reg_check( reg ) );
+
+        // Bump timestamp.
+        auto [ ts_in, ts_out ] = irops::make_all_leaves< irops::Timestamp >( irb() );
+        auto runtime_ts = irb().CreateAdd( ts_in, irb().getInt64( 1 ) );
+        root.emplace_back( irops::OutputCheck::make( irb(), { runtime_ts, ts_out } ) );
+
+        root.emplace_back( irops::Or::make( irb(), sub_root ) );
+
+        auto result = irops::And::make( irb(), root );
+        irb().CreateRet( result );
+
+
+        auto exec = [ & ]( auto v ) { return remove_write( v ); };
+        irops::AllocateDst::for_all_in( &*circuit_fn, exec );
+
+        optimize_silently( { &*circuit_fn } );
     }
 
     /** State helpers **/
-    void CircuitMaker_v2::reset_state()
+    void ExaltationContext::reset_state()
     {
-        auto irb = mk_irb();
-        return state->reset( irb, ctx.regs() );
+        auto &irb = this->irb();
+        return input().reset( irb, ctx.regs() );
     }
 
-    void CircuitMaker_v2::commit_state()
+    void ExaltationContext::commit_state()
     {
-        auto irb = mk_irb();
-        return state->commit( irb, ctx );
+        auto &irb = this->irb();
+        return input().commit( irb, ctx );
     }
 
-    auto CircuitMaker_v2::materialize( const isem::ISem *def )
-        -> instance_ptr_t
+    void ExaltationContext::bump_pc( const values_t &decoders, unit_t &unit )
     {
-        log_info() << "[cmv2]: Materializing ...";;
+        auto decoder = decoders.begin();
 
-        reset_state();
-        auto irb = mk_irb();
-        auto pc = irops::mk_reg( irb, ctx.pc_reg(), irops::io_type::in );
-
-        auto inst_size = irops::make_leaf< irops::InstructionSize >( irb, ctx.ptr_size );
-        auto next_inst = irb.CreateAdd( state->load( irb, ctx.pc_reg() ), inst_size );
-        state->store( irb, ctx.pc_reg(), next_inst );
-
-        auto sem_call = call_semantic( irb, &def->self(), **state, pc, ctx.undef_mem_ptr() );
-        inline_or_die( sem_call );
-
-        commit_state();
-        auto [ it, _ ] = def_to_instances.emplace(
-                def,
-                std::make_shared< ISemInstance >( def, inst_size ) );
-        return it->second;
-    }
-
-    void CircuitMaker_v2::computationals( const isem::ISem *def )
-    {
-        auto instance = instance_of( def );
-        auto irb = mk_irb();
-
-        for ( const auto &reg : ctx.regs() )
+        std::vector< llvm::Value * > options;
+        for ( auto &atom : unit )
         {
-            auto loaded = state->load( irb, reg );
-            auto eq = irops::make< irops::OutputCheck >(
-                    irb, { loaded, irops::output_reg( irb, reg ) } );
-            instance->computationals[ reg ] = eq;
-        }
-    }
-
-    llvm::Function *CircuitMaker_v2::make_from( const InstructionBatch &batch )
-    {
-        std::unordered_map< const InstructionInfo *, isem::ISem * > info_to_def;
-        for ( const auto &info : batch.get() )
-        {
-            check( info._rinst );
-            auto def = isems.make( info.rinst().function, *ctx.module() );
-            auto instance = materialize( def );
-            computationals( def );
-
-            info_to_instance[ &info ] = std::move( instance );
+            auto inst_size = llvm::ConstantInt::get( ctx.word_type(), atom.encoding_size() );
+            options.emplace_back( irops::Option::make( irb(), { inst_size, *( decoder++ ) },
+                                                       ctx.bw( inst_size ) ) );
         }
 
-        log_info() << "[cmv2]:" << isems.to_string();
-
-
-        auto op_select = build::OperandSelection::build( ctx, batch );
-        log_info() << op_select.to_string();
-
-        for ( auto &[ info, instance ] : info_to_instance )
-        {
-            log_info() << "[cmv2]:" << "Initializing context.";
-            Context ctx;
-
-            llvm::IRBuilder<> irb_op( &*fn->begin() );
-            std::size_t idx = 0;
-            log_info() << "[cmv2]:" << "Binding operands";
-            for ( auto value : op_select.assign( irb_op, *info ) )
-            {
-                check( value );
-
-                check( instance->def->args.size() > idx )
-                    << instance->def->args.size() << " <= " << idx;
-
-                auto variable_bp = instance->def->args[ idx++ ];
-                llvm::IRBuilder<> irb( &*fn->begin() );
-                auto variable = isem::ISem::reconstruct_arg( irb, variable_bp );
-
-                check ( value && variable );
-                log_info() << "[cmv2]:" << "Binding:\n"
-                           << "        - val:" << dbg_dump( value ) << "\n"
-                           << "        - var:" << dbg_dump( variable );
-                auto ac = irops::make< irops::AdviceConstraint >( irb, { value, variable } );
-                ctx.add( ac );
-            }
-
-
-            llvm::IRBuilder<> irb( &*fn->begin() );
-
-            log_info() << "[cmv2]:" << "Adding computationals to context.";
-            for ( const auto &[ _, val ] : instance->computationals )
-                ctx.add( val );
-
-            log_info() << "[cmv2]:" << "Emitting decoder.";
-
-            auto [ x, y ] = build::Decoder( irb, *info ).get_decoder_tree();
-            ctx.add( std::move( x ) );
-            ctx.add( std::move( y ) );
-            ctx.materialize( irb );
-        }
-
-
-        log_info() << "[cmv2]:" << "Emitting return.";
-        {
-            llvm::IRBuilder<> irb( &*fn->begin() );
-            irb.CreateRet( irb.getTrue() );
-        }
-
-        fn->print( llvm::errs() );
-        optimize_silently( { fn } );
-        fn->print( llvm::errs() );
-        check( false );
-        return nullptr;
-    }
-
-    llvm::Value *CircuitMaker_v2::Context::materialize( llvm::IRBuilder<> &irb )
-    {
-        return irops::make< irops::VerifyInst >( irb, _args );
+        auto offset = irops::Switch::make( irb(), options );
+        auto next_inst = irb().CreateAdd( input().load( irb(), ctx.pc_reg() ), offset  );
+        input().store( irb(), ctx.pc_reg(), next_inst );
     }
 
 }  // namespace circ

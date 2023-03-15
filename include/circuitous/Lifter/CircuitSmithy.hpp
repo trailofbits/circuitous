@@ -73,7 +73,7 @@ namespace circ
 
       private:
 
-        worklist_t categorize( atoms_t &&atoms );
+        worklist_t categorize( atoms_t atoms );
 
       public:
 
