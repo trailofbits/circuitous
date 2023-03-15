@@ -52,6 +52,8 @@ namespace circ::run
 
         static Parsed deconstruct(const llvm::APInt &value, std::size_t hint_size);
         static llvm::APInt construct(const Parsed &parsed, std::size_t hint_size);
+
+        std::string to_string() const;
     };
 
     struct NodeState
