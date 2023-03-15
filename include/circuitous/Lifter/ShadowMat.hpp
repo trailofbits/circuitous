@@ -132,6 +132,8 @@ namespace circ::shadowinst
         [[nodiscard]] llvm::Value *region_selector() const;
         [[nodiscard]] llvm::Value *opaque_selector() const;
 
+        [[nodiscard]] static llvm::Value *region_selector( const TM_t &tm );
+
         llvm::Value *tie_opaque_selector() const;
 
         llvm::Value *was_decoded() const;
