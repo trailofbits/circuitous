@@ -142,10 +142,14 @@ namespace circ
 
             using storage_t = std::variant< imm, reg, addr >;
             storage_t raw;
+
             std::size_t size;
+            bool is_read;
 
             slice_view( remill::Operand *concrete_op, shadowinst::Operand *abstract_op )
-                : raw( mk_raw( concrete_op, abstract_op ) ), size( concrete_op->size )
+                : raw( mk_raw( concrete_op, abstract_op ) ),
+                  size( concrete_op->size ),
+                  is_read( concrete_op->action == remill::Operand::kActionWrite )
             {}
 
             static storage_t mk_raw( remill::Operand *concrete_op,
@@ -163,6 +167,7 @@ namespace circ
                         log_kill() << "Unsupported type of concrete instruction.";
                 }
             }
+
         };
 
         auto slice( std::size_t idx ) -> slice_view
@@ -272,6 +277,8 @@ namespace circ
         {
             todo.emplace_back( std::forward< Args >( args ) ... );
         }
+
+        std::size_t size() const { return todo.size(); }
     };
 
     struct InstructionBatch : has_ctx_ref
