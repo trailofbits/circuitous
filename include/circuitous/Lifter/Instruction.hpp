@@ -118,6 +118,12 @@ namespace circ
               abstract( std::move( abstract ) )
         {}
 
+        Atom( const Atom & ) = delete;
+        Atom( Atom && ) = default;
+
+        Atom &operator=( const Atom & ) = delete;
+        Atom &operator=( Atom && ) = default;
+
         isel_t isel()
         {
             return concrete.function;
