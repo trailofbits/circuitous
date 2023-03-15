@@ -219,12 +219,6 @@ namespace circ
                            bool is_delayed)
         {
             auto irb = llvm::IRBuilder<>( block );
-            auto [ size, fn ] = biggest_isel( inst );
-
-            log_info() << "[ old-lifter ]: For " << inst.function << " => " << fn;
-            target_size = size;
-            //inst.function = fn;
-
             auto lift_status = this->parent::LiftIntoBlock(inst, block, is_delayed);
 
             // If the instruction was not lifted correctly we do not wanna do anything
