@@ -428,6 +428,10 @@ namespace
             if (irops::ExtractRaw::is(fn)) {
                 return VisitExtractRawIntrinsic(call, fn);
             }
+
+            if (irops::InstExtractRaw::is(fn)) {
+                return VisitExtractRawIntrinsic(call, fn);
+            }
             if (irops::InputImmediate::is(fn)) {
                 auto [size] = irops::InputImmediate::parse_args(fn);
                 return VisitGenericIntrinsic< InputImmediate >(call, fn, static_cast< uint32_t >(size));
