@@ -186,14 +186,24 @@ namespace circ
             return concrete.operands.size();
         }
 
-        bool is_read( std::size_t i )
+        bool is_read( std::size_t i ) const
         {
-            return concrete.operands[ i ].action = remill::Operand::kActionRead;
+            return concrete.operands[ i ].action == remill::Operand::kActionRead;
         }
 
-        bool is_write( std::size_t i )
+        bool is_write( std::size_t i ) const
         {
-            return concrete.operands[ i ].action = remill::Operand::kActionWrite;
+            return concrete.operands[ i ].action == remill::Operand::kActionWrite;
+        }
+
+        std::size_t size( std::size_t i ) const
+        {
+            return concrete.operands[ i ].size;
+        }
+
+        std::size_t encoding_size() const
+        {
+            return concrete.bytes.size();
         }
     };
 
@@ -231,8 +241,8 @@ namespace circ
                 co_yield atoms[ i ].slice( idx );
         }
 
-        bool is_read( std::size_t i ) { return atoms.front().is_read( i ); }
-        bool is_write( std::size_t i ) { return atoms.front().is_write( i ); }
+        bool is_read( std::size_t i ) const { return atoms.front().is_read( i ); }
+        bool is_write( std::size_t i ) const { return atoms.front().is_write( i ); }
     };
 
 
