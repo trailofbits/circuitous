@@ -150,6 +150,9 @@ namespace circ::build
 
             for ( const auto &[ str, reg_name ] : tm.reverse_bitmap() )
             {
+                if ( reg_name.starts_with( "__remill_zero" ) )
+                    continue;
+
                 auto idx = llvm::APInt( static_cast< uint32_t >( tm.bitsize ), str, 2 )
                     .getLimitedValue();
 
@@ -159,9 +162,9 @@ namespace circ::build
 
             auto trg_type = [ & ]()
             {
-                for ( auto v : args )
-                    if ( v )
-                        return v->getType();
+                for ( std::size_t i = 1; i < args.size(); ++i)
+                    if ( args[ i ] )
+                        return args[ i ]->getType();
                 log_kill() << "Trying to create select without values";
             }();
 
@@ -180,6 +183,13 @@ namespace circ::build
             auto selector = irops::make_leaf< irops::OpSelector >( irb, tm.bitsize,
                                                                    next_idx++ );
             return make_select( irb, tm, selector, is_read, coerce );
+        }
+
+        llvm::Value *request( llvm::IRBuilder<> &irb, const shadowinst::Reg &s_reg,
+                              bool is_read, auto &&coerce )
+        {
+            auto selector = shadowinst::Materializer( irb, s_reg ).region_selector();
+            return make_select( irb, s_reg.tm(), selector, is_read, coerce );
         }
     };
 
@@ -204,21 +214,28 @@ namespace circ::build
               is_read( is_read )
         {}
 
-        llvm::Value *request( const shadowinst::TM_t &tm )
+        template< typename S >
+        llvm::Value *request( S &&arg )
         {
            auto identity = [ & ]( auto v ) { return v; };
-           return requester.request( irb, tm, is_read, identity );
+           return requester.request( irb, std::forward< S >( arg ), is_read, identity );
         }
 
-        llvm::Value *request_word( const shadowinst::TM_t &tm )
+        template< bool is_signed, typename S >
+        llvm::Value *request_word( S &&arg )
         {
             auto extend = [ & ]( llvm::Value *v )
             {
                 if ( ctx.bw( v ) < ctx.ptr_size )
-                    return irb.CreateZExt( v, ctx.word_type() );
+                {
+                    if constexpr ( is_signed )
+                        return irb.CreateSExt( v, ctx.word_type() );
+                    else
+                        return irb.CreateZExt( v, ctx.word_type() );
+                }
                 return v;
             };
-            return requester.request( irb, tm, is_read, extend );
+            return requester.request( irb, std::forward< S >( arg ), is_read, extend );
         }
 
         llvm::Value *lift( const shadowinst::Operand &s_op,
@@ -258,7 +275,7 @@ namespace circ::build
             check( s_imm->regions.areas.size() == 1 );
 
             auto [ from, size ] = *( s_imm->regions.areas.begin() );
-            return irops::make_leaf< irops::InstExtractRaw >( irb, from, size );
+            return irops::make_leaf< irops::ExtractRaw >( irb, from, size );
         }
 
         // Dedup
@@ -273,18 +290,22 @@ namespace circ::build
             check( s_imm->regions.areas.size() == 1 );
 
             auto [ from, size ] = *( s_imm->regions.areas.begin() );
-            return irops::make_leaf< irops::InstExtractRaw >( irb, from, size );
+            return irops::make_leaf< irops::ExtractRaw >( irb, from, size );
         }
 
         llvm::Value *lift( const remill::Operand::Register *r_reg,
                            const shadowinst::Reg *s_reg )
         {
             check( r_reg && s_reg );
+            log_info() << s_reg->to_string();
 
             if ( s_reg->tm().is_saturated_by_zeroes() || s_reg->tm().empty() )
+            {
+                log_info() << "[operand-lifter]:" << "Register tm resolves as zero.";
                 return ctx.zero();
+            }
 
-            auto select = request_word( s_reg->tm() );
+            auto select = request_word< false >( *s_reg );
             check( select );
 
             log_info() << "[operand-lifter]:" << "mask_shift_coerce";
@@ -347,19 +368,22 @@ namespace circ::build
                                               true );
             }();
 
-            auto resize = [ & ]( auto what )
+            auto resize = [ & ]( auto what, bool is_signed )
             {
                 if ( what->getType() == ctx.word_type() )
                     return what;
-                return irb.CreateSExt( what, ctx.word_type() );
+
+                if ( is_signed )
+                    return irb.CreateSExt( what, ctx.word_type() );
+                return irb.CreateZExt( what, ctx.word_type() );
             };
 
             log_info() << "[operand-lifter]:" << "addr:Building the expression!";
-            auto scale_factor = irb.CreateShl( resize( index ), resize( scale ) );
+            auto scale_factor = irb.CreateShl( resize( index, false ), resize( scale, false ) );
 
-            llvm::Value *out = resize( base );
+            llvm::Value *out = resize( base, false );
             out = irb.CreateAdd( out, scale_factor );
-            out = irb.CreateAdd( out, resize( displacement ) );
+            out = irb.CreateAdd( out, resize( displacement, true ) );
 
             return out;
         }
