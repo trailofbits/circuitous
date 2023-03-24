@@ -68,25 +68,4 @@ namespace circ
         }, op);
     }
 
-  // maybe_bitwidth bitwidth(const circuit_enode *node)
-  // {
-  //   if (node->is_bond_node()) {
-  //     return std::nullopt;
-  //   }
-  //   return bitwidth(node->data());
-  // }
-
-  // bool is_context_node(const circuit_enode *node)
-  // {
-  //   return name(node) == "VerifyInstruction";
-  // }
-
-  // std::optional<llvm::APInt>extract_constant(const circuit_enode *node)
-  // {
-  //   if (auto con = std::get_if< constant_node >(&node->data())) {
-  //     return llvm::APInt(con->size, con->bits, 10);
-  //   }
-  //   return std::nullopt;
-  // }
-
 } // namespace cird::eqsat

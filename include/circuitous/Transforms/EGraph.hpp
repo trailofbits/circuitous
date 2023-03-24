@@ -116,7 +116,7 @@ namespace circ
             return { Constant::op_code_str(), op->size, op->bits };
         }
 
-        static constant_node constop( bitwidth_t size, const std::string &bits) {
+        static constant_node constop(bitwidth_t size, const std::string &bits) {
             return { Constant::op_code_str(), size, bits };
         }
 

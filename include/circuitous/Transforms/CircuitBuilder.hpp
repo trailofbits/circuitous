@@ -120,7 +120,11 @@ namespace circ {
                 .Default( 0 );
 
             if (!result) {
-                log_kill() << "not implemented: update bitwidths of " << node_name(sized);
+                spdlog::debug("[eqsat] children");
+                for (auto ch : children) {
+                    spdlog::debug("[eqsat] {} {}", ch->name(), ch->size);
+                }
+                log_kill() << "not implemented: update bitwidths of " << node_name(sized) << " children size: " << children.size();
             }
 
             return result;
@@ -172,8 +176,6 @@ namespace circ {
                 .Case("VerifyInstruction",    circuit->create< VerifyInstruction >())
                 .Case("OnlyOneCondition",     circuit->create< OnlyOneCondition >())
 
-                .Case("DecoderResult", circuit->create< DecoderResult >())
-
                 .Default( nullptr );
         }
 
@@ -194,7 +196,6 @@ namespace circ {
                 .Case("UDiv",  circuit->create< UDiv >( size ))
                 .Case("SDiv",  circuit->create< SDiv >( size ))
                 .Case("URem",  circuit->create< URem >( size ))
-                .Case("Xor",   circuit->create< Xor >( size ))
                 .Case("SRem",  circuit->create< SRem >( size ))
                 .Case("Shl",   circuit->create< Shl >( size ))
                 .Case("LShr",  circuit->create< LShr >( size ))
@@ -245,7 +246,12 @@ namespace circ {
         }
 
         operation make_operation(const constant_node &op) {
-            return circuit->create< Constant >( op.bits, op.size );
+            // TODO fixme in a sane way
+            auto view = std::string_view(op.bits);
+            if (view.starts_with("0b")) {
+                view.remove_prefix(2);
+            }
+            return circuit->create< Constant >( std::string(view), op.size );
         }
 
         operation make_operation(const memory_node &op) {
