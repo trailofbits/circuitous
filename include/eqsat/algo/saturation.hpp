@@ -140,19 +140,22 @@ namespace eqsat
     template< gap::graph::graph_like egraph >
     saturation_result< egraph > make_step(
         saturable_egraph< egraph > &&graph,
-        std::span< rule_set > sets
+        std::span< rule_set > sets,
+        int steps
     ) {
         spdlog::debug("[eqsat] saturation step");
         // TODO: paralelize
 
         for (const auto &set : sets) {
-            spdlog::debug("[eqsat] applying sreule set {}", set.name);
+            spdlog::debug("[eqsat] applying rule set {}", set.name);
             for (const auto &rule : set.rules) {
                 graph = std::move(graph) | action::match_and_apply{ rule };
             }
         }
 
-        return { std::move(graph), stop_reason::unknown };
+        auto stop = steps == 1 ? stop_reason::iteration_limit : stop_reason::none;
+
+        return { std::move(graph), stop };
     }
 
     //
@@ -164,13 +167,15 @@ namespace eqsat
         std::span< rule_set > rules
     ) {
         spdlog::debug("[eqsat] saturate start");
-        // egraph.rebuild()
 
         stop_reason status = stop_reason::none;
+
+        int steps = 3;
         while (status == stop_reason::none) {
-            auto [g, s] = make_step(std::move(graph), rules);
+            auto [g, s] = make_step(std::move(graph), rules, --steps);
             graph = std::move(g);
             status = s;
+            graph.rebuild();
         }
 
         spdlog::debug("[eqsat] saturate stop {}", to_string(status));
