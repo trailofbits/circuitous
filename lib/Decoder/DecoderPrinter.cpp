@@ -176,18 +176,20 @@ namespace circ::decoder {
         return st;
     }
 
-    Expr DecoderPrinter::get_decode_context_function_body(const decode_func_args &args,
-                                                           VerifyInstruction* vi,
-                                                          int encoding_size) {
+    If DecoderPrinter::get_decode_context_function_body( const decode_func_args &args,
+                                                         Expr to_call )
+    {
         StatementBlock block;
-        for(auto& arg: args){
-            block.emplace_back( create_ignore_bits_setter( arg ));
+        for ( auto &arg : args )
+        {
+            block.emplace_back( create_ignore_bits_setter( arg ) );
         }
 
         std::vector< Expr > compare_exprs;
-        for(auto& arg: args){
-            if ( !arg.byte.contains_only_ignore_bits())
-                compare_exprs.push_back( get_comparison( arg ));
+        for ( auto &arg : args )
+        {
+            if ( !arg.byte.contains_only_ignore_bits() )
+                compare_exprs.push_back( get_comparison( arg ) );
         }
 
         Expr valid_encoding_check = Id();
@@ -196,15 +198,12 @@ namespace circ::decoder {
         else if ( compare_exprs.size() == 2 )
             valid_encoding_check = And( compare_exprs[ 0 ], compare_exprs[ 1 ] );
         else
-            circ::unreachable() << "All instruction bytes should have been packed into at most 2 uint64's";
+            circ::unreachable()
+                << "All instruction bytes should have been packed into at most 2 uint64's";
 
-        If is_valid_encoding_check(
-            valid_encoding_check, Return ( Int(-1)));
+        If guarded_check( valid_encoding_check, to_call );
 
-        block.emplace_back( is_valid_encoding_check );
-        block.emplace_back( seg_graph_printer.print_decoder( vi ).body );
-        block.emplace_back( Return(Int(encoding_size)));
-        return block;
+        return guarded_check;
     }
 
     Expr DecoderPrinter::get_comparison(const decode_context_function_arg &arg ) {
@@ -270,7 +269,8 @@ namespace circ::decoder {
         if ( to_split.size() == 1 ) {
             auto ctx= *to_split[ 0 ];
             auto args = std::vector<Expr>(inner_func_args.begin(), inner_func_args.end());
-            return Return( FunctionCall( ctx.generated_name, args));
+            auto decoded_instr_call = Return( FunctionCall( ctx.generated_name, args) );
+            return get_decode_context_function_body(get_decode_context_function_args(ctx), decoded_instr_call);
         }
 
         auto indice_values = get_decode_requirements_per_index( to_split, already_chosen_bits );

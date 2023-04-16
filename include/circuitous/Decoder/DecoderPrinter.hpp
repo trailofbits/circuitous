@@ -168,7 +168,7 @@ namespace circ::decoder {
         using decode_func_args =  std::vector<decode_context_function_arg>;
         static decode_func_args get_decode_context_function_args(const ExtractedCtx& ctx);
         Expr create_context_decoder_function(const ExtractedCtx &ctx);
-        Expr get_decode_context_function_body(const decode_func_args& args, VerifyInstruction* vi, int encoding_size);
+        If get_decode_context_function_body(const decode_func_args& args, Expr to_call);
         Expr generate_decoder_selection_tree(const std::vector< ExtractedCtx * > &to_split,
                                              std::vector< std::pair< std::size_t, int>> already_chosen_bits,
                                              int depth);
