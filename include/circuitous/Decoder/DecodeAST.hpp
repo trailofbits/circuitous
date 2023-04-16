@@ -6,6 +6,7 @@
 #include <vector>
 #include <memory>
 #include <circuitous/IR/Circuit.hpp>
+#include <stack>
 
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
@@ -91,9 +92,7 @@ namespace circ::decoder {
 
     struct FunctionDeclaration {
         FunctionDeclaration(const Id& retType, const Id& functionName,
-                            const std::vector< VarDecl > &args, const StatementBlock &body)
-        : retType( retType ), function_name( functionName ), args( args ), body( body ) {}
-
+                            const std::vector< VarDecl > &args, const StatementBlock &body);
         Id retType;
         Id function_name;
         std::vector< VarDecl > args;
@@ -102,15 +101,13 @@ namespace circ::decoder {
 
     struct FunctionDeclarationBuilder{
         using self_t = FunctionDeclarationBuilder;
-        self_t& retType(const Id& retType) {_retType = retType; return *this;};
-        self_t& name(const Id& name) { _function_name = name; return *this; };
-        self_t& arg_insert(const VarDecl& args) { _args.emplace_back(args); return *this; };
-        self_t& body_insert(const Expr& expr) { _body.emplace_back(expr); return *this; };
-        self_t& body_insert_statement(const Expr& expr) { _body.emplace_back(Statement(expr)); return *this; };
-        self_t& body(const StatementBlock& b) { _body = b; return *this; };
-        FunctionDeclaration make() {
-            return FunctionDeclaration( _retType, _function_name, _args, _body );
-        };
+        self_t& retType(const Id& retType);
+        self_t& name(const Id& name);
+        self_t& arg_insert(const VarDecl& args);
+        self_t& body_insert(const Expr& expr);
+        self_t& body_insert_statement(const Expr& expr);
+        self_t& body(const StatementBlock& b);
+        FunctionDeclaration make();
 
     private:
         Id _retType;
@@ -123,35 +120,24 @@ namespace circ::decoder {
     {
         using BinaryOp::BinaryOp;
 
-        const Expr &cond() const { return this->ops[ 0 ]; };
-        const Expr &ifBody() const { return this->ops[ 1 ]; };
+        const Expr &cond() const;
+        const Expr &ifBody() const;
     };
 
     struct IfElse : NAryOperation< Expr > {
         using NAryOperation< Expr >::NAryOperation;
 
-        const Expr &cond() const {return this->ops[ 0 ];};
-        const Expr &ifBody() const {return this->ops[ 1 ];};
-        const Expr &elseBody() const {return this->ops[ 2 ];};
+        const Expr &cond() const;
+        const Expr &ifBody() const;
+        const Expr &elseBody() const;
     };
 
     struct FunctionCall {
-        FunctionCall( const Var &var, const Id &func, std::vector< Expr > args ) : args( args )
-        {
-            if ( !var.is_struct )
-            {
-                function_name = var.name;
-                return;
-            }
-            auto delim = var.is_pointer ? "->" : ".";
-            this->function_name = Id( var.name + delim + func );
-        };
+        FunctionCall( const Var &var, const Id &func, std::vector< Expr > args );
 
-        FunctionCall(const Id &functionName, std::vector< Expr > args)
-                                    : function_name( functionName ), args( args ) {} ;
+        FunctionCall(const Id &functionName, std::vector< Expr > args);
 
-        FunctionCall(const Id &functionName, std::vector< Expr > args, std::vector< Expr > template_parameters)
-            : function_name( functionName ), args( args ), template_parameters(template_parameters) {} ;
+        FunctionCall(const Id &functionName, std::vector< Expr > args, std::vector< Expr > template_parameters);
 
         Id function_name;
         std::vector< Expr > args;
@@ -198,13 +184,8 @@ namespace circ::decoder {
 
     struct Struct
     {
-        Struct( const int templateSize = 0, const std::vector< Expr >& derivedFrom = {} ) : template_size( templateSize ), templatized( templateSize == 0),
-            derived_from( derivedFrom )
-        {
-            for(int i = 0; i < templateSize; i++){
-                template_typenames.push_back(Id("T" + std::to_string(i)));
-            }
-        }
+        Struct( const int templateSize = 0 );
+        Struct( const int templateSize, const std::vector< Expr >& derivedFrom );
 
         Id name;
         const int template_size;
@@ -217,9 +198,11 @@ namespace circ::decoder {
         std::vector<FunctionDeclaration> methods;
     };
 
-    struct StructDecl: UnaryOp<Struct>{ using UnaryOp::UnaryOp;
-        StructDecl() { }
-    };
+//    struct StructDecl: UnaryOp<Struct>
+//    {
+//        using UnaryOp::UnaryOp;
+////        explicit StructDecl() { }
+//    };
 
     struct Empty { };
 

@@ -185,4 +185,125 @@ namespace circ::decoder {
             case ExprStyle::StructDerivations: return make_guard( GuardStyle::SingleColon );
         }
     }
+
+    const Expr &If::cond() const
+    {
+        return this->ops[ 0 ];
+    }
+
+    const Expr &If::ifBody() const
+    {
+        return this->ops[ 1 ];
+    }
+
+    const Expr &IfElse::cond() const
+    {
+        return this->ops[ 0 ];
+    }
+
+    const Expr &IfElse::ifBody() const
+    {
+        return this->ops[ 1 ];
+    }
+
+    const Expr &IfElse::elseBody() const
+    {
+        return this->ops[ 2 ];
+    }
+
+    FunctionCall::FunctionCall( const Var &var, const Id &func, std::vector< Expr > args ) :
+        args( args )
+    {
+        if ( !var.is_struct )
+        {
+            function_name = var.name;
+            return;
+        }
+        auto delim = var.is_pointer ? "->" : ".";
+        this->function_name = Id( var.name + delim + func );
+    }
+
+    FunctionCall::FunctionCall( const Id &functionName, std::vector< Expr > args ) :
+        function_name( functionName ), args( args )
+    {
+    }
+
+    FunctionCall::FunctionCall( const Id &functionName, std::vector< Expr > args,
+                                std::vector< Expr > template_parameters ) :
+        function_name( functionName ),
+        args( args ), template_parameters( template_parameters )
+    {
+    }
+
+    FunctionDeclaration::FunctionDeclaration( const Id &retType, const Id &functionName,
+                                              const std::vector< VarDecl > &args,
+                                              const StatementBlock &body ) :
+        retType( retType ),
+        function_name( functionName ), args( args ), body( body )
+    {
+    }
+
+    FunctionDeclarationBuilder::self_t &
+    FunctionDeclarationBuilder::body_insert( const Expr &expr )
+    {
+        _body.emplace_back( expr );
+        return *this;
+    }
+
+    FunctionDeclarationBuilder::self_t &
+    FunctionDeclarationBuilder::body_insert_statement( const Expr &expr )
+    {
+        _body.emplace_back( Statement( expr ) );
+        return *this;
+    }
+
+    FunctionDeclarationBuilder::self_t &
+    FunctionDeclarationBuilder::body( const StatementBlock &b )
+    {
+        _body = b;
+        return *this;
+    }
+
+    FunctionDeclaration FunctionDeclarationBuilder::make()
+    {
+        return FunctionDeclaration( _retType, _function_name, _args, _body );
+    }
+
+    FunctionDeclarationBuilder::self_t &FunctionDeclarationBuilder::retType( const Id &retType )
+    {
+        _retType = retType;
+        return *this;
+    }
+
+    FunctionDeclarationBuilder::self_t &FunctionDeclarationBuilder::name( const Id &name )
+    {
+        _function_name = name;
+        return *this;
+    }
+
+    FunctionDeclarationBuilder::self_t &
+    FunctionDeclarationBuilder::arg_insert( const VarDecl &args )
+    {
+        _args.push_back( args );
+        return *this;
+    }
+
+    Struct::Struct( const int templateSize ) :
+        template_size( templateSize ), templatized( templateSize == 0 ), derived_from( {} )
+    {
+        for ( int i = 0; i < templateSize; i++ )
+        {
+            template_typenames.push_back( Id( "T" + std::to_string( i ) ) );
+        }
+    }
+
+    Struct::Struct( const int templateSize, const std::vector< Expr > &derivedFrom ) :
+        template_size( templateSize ), templatized( templateSize == 0 ),
+        derived_from( derivedFrom )
+    {
+        for ( int i = 0; i < templateSize; i++ )
+        {
+            template_typenames.push_back( Id( "T" + std::to_string( i ) ) );
+        }
+    }
 };
