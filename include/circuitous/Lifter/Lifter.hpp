@@ -218,15 +218,15 @@ namespace circ
         auto LiftIntoBlock(remill::Instruction &inst, llvm::BasicBlock *block,
                            bool is_delayed)
         {
+            auto state_ptr = remill::NthArgument(block->getParent(),
+                                                 remill::kStatePointerArgNum);
             auto irb = llvm::IRBuilder<>( block );
-            auto lift_status = this->parent::LiftIntoBlock(inst, block, is_delayed);
+            auto lift_status = this->parent::LiftIntoBlock(inst, block, state_ptr, is_delayed);
 
             // If the instruction was not lifted correctly we do not wanna do anything
             // in the block.
             if (lift_status != remill::kLiftedInstruction)
                 return lift_status;
-            auto state_ptr =
-                remill::NthArgument(block->getParent(), remill::kStatePointerArgNum);
 
             auto call = fetch_sem_call(block);
             check(call);
@@ -250,8 +250,10 @@ namespace circ
             // NOTE(lukas): This should technically be responsiblity of
             //              remill::InstructionLifter but it is not happening for some reason.
             llvm::IRBuilder ir(block);
-            auto pc_ref = LoadRegAddress(block, state_ptr, remill::kPCVariableName);
-            auto next_pc_ref = LoadRegAddress(block, state_ptr, remill::kNextPCVariableName);
+            auto [ pc_ref, pc_ref_type ] =
+                LoadRegAddress(block, state_ptr, remill::kPCVariableName);
+            auto [ next_pc_ref, next_pc_ref_type ] =
+                LoadRegAddress(block, state_ptr, remill::kNextPCVariableName);
             ir.CreateStore(make_non_opaque_load(ir, next_pc_ref), pc_ref);
             auto return_val = remill::LoadMemoryPointer(block, *table);
             ir.CreateRet(return_val);

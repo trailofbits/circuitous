@@ -6,8 +6,6 @@
 #include <circuitous/Support/Check.hpp>
 #include <circuitous/Util/Warnings.hpp>
 
-#include <remill/BC/Compat/CallSite.h>
-
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>

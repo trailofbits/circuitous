@@ -198,8 +198,7 @@ namespace circ
                             call->replaceAllUsesWith( call->getArgOperand( 2u ) );
                             continue;
                         }
-                        inst->removeFromParent();
-                        new_block->getInstList().insert( new_block->end(), inst );
+                        inst->moveBefore(*new_block, new_block->end());
                     } else if ( auto ret = llvm::dyn_cast< llvm::ReturnInst >( inst ) ) {
                         ret_vals[ ret ] = reaching_cond[ block ];
                     } else if ( auto store = llvm::dyn_cast< llvm::StoreInst >( inst ) ) {
@@ -211,19 +210,19 @@ namespace circ
                         // Otherwise the SF would always be `0` no matter the `x`
                         llvm::IRBuilder<> ir( new_block );
                         auto ptr_op = store->getPointerOperand();
-                        auto original = make_non_opaque_load( ir, ptr_op );
+                        auto original = ir.CreateLoad( store->getValueOperand()->getType(),
+                                                       store->getPointerOperand() );
                         auto guarded = ir.CreateSelect( reaching_cond[ block ],
                                                         store->getOperand( 0 ), original );
                         ir.CreateStore( guarded, ptr_op );
                     } else if ( !inst->isTerminator() ) {
-                        inst->removeFromParent();
-                        new_block->getInstList().insert( new_block->end(), inst );
+                        inst->moveBefore(*new_block, new_block->end());
                     } else {
-                      // Here only Terminator instructions such
-                      // as `br` or `switch` should fall through,
-                      // and we have already taken care of those.
-                      check( llvm::isa< llvm::BranchInst >( inst ) ||
-                             llvm::isa< llvm::SwitchInst >( inst ) );
+                        // Here only Terminator instructions such
+                        // as `br` or `switch` should fall through,
+                        // and we have already taken care of those.
+                        check( llvm::isa< llvm::BranchInst >( inst ) ||
+                               llvm::isa< llvm::SwitchInst >( inst ) );
                     }
                 }
             }
@@ -237,8 +236,7 @@ namespace circ
             if ( 1 == ret_vals.size() )
             {
                 auto &[ ret, _ ] = *ret_vals.begin();
-                ret->removeFromParent();
-                new_block->getInstList().insert( new_block->end(), ret );
+                ret->moveBefore(*new_block, new_block->end());
                 return;
             }
             // Create a tower of selects, where the default value is a call to
@@ -279,5 +277,4 @@ namespace circ
             verify_function(*func);
         }
     }; // struct Flattener
-       //
 } // namespace circ

@@ -20,8 +20,6 @@
 #include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Check.hpp>
 
-#include <remill/BC/Compat/CallSite.h>
-
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/ADT/PostOrderIterator.h>
 #include <llvm/IR/CFG.h>
@@ -90,9 +88,8 @@ namespace circ
         auto reg_type = irops::int_reg_type(*bb->getModule(), reg);
         auto store_type =
             ir.getIntNTy(static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
-        auto coerced_type = ir.CreateBitCast(gep, llvm::PointerType::getUnqual(store_type));
 
-        auto loaded = make_non_opaque_load(ir, coerced_type);
+        auto loaded = ir.CreateLoad(store_type, gep);
         if (reg_type != store_type)
             return ir.CreateTrunc(loaded, reg_type);
 
@@ -384,7 +381,7 @@ namespace circ
     {
         check(isel.lifted);
 
-        State state { this->head, ctx.state_ptr_type()->getPointerElementType() };
+        State state { this->head, ctx.state_ptr_type() };
         auto state_ptr = *state;
         llvm::IRBuilder<> ir(this->head);
 
@@ -666,8 +663,7 @@ namespace circ
                     auto dst_load = make_non_opaque_load(ir, dst_regs[proccessed - 1]);
                     auto reg_addr = reg_part->AddressOf(*state, ir);
 
-                    auto store_ty =
-                        llvm::cast<llvm::PointerType>(reg_addr->getType())->getPointerElementType();
+                    auto store_ty = llvm::cast<llvm::PointerType>(reg_addr->getType());
 
                     ir.CreateStore(ir.CreateSExtOrTrunc(dst_load, store_ty), reg_addr);
                     auto full_val = state.load(ir, reg);
@@ -693,7 +689,7 @@ namespace circ
             check(p_type) << "Dst reg type before lowering is not pointer";
 
             llvm::IRBuilder<> ir(llvm::cast< llvm::Instruction >(dst));
-            out.push_back(ir.CreateAlloca(p_type->getPointerElementType(), nullptr, "DSTA_"));
+            out.push_back(ir.CreateAlloca(p_type, nullptr, "DSTA_"));
             dst->replaceAllUsesWith(out.back());
             llvm::dyn_cast< llvm::Instruction >(dst)->eraseFromParent();
         }
@@ -819,8 +815,6 @@ namespace circ
         log_info() << "[exalt]: Fetching semantic ...";
         auto semantic = isem::semantic_fn( unit.isel, *ctx.module() );
         post_lift( **semantic );
-        //flatten_cfg( **semantic );
-
 
 
         log_info() << "[exalt]: Lifting & binding operands ...";
@@ -948,7 +942,7 @@ namespace circ
         check( p_type ) << "Dst reg type before lowering is not pointer";
 
         irb().SetInsertPoint( llvm::cast< llvm::Instruction >( dst ) );
-        auto allocation = irb().CreateAlloca( p_type->getPointerElementType(),
+        auto allocation = irb().CreateAlloca( p_type,
                                               nullptr, "DSTA_" );
 
         auto as_inst = llvm::dyn_cast< llvm::Instruction >( dst );

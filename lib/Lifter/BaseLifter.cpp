@@ -5,7 +5,6 @@
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
 
-#include <remill/BC/Compat/CallSite.h>
 #include <remill/BC/Util.h>
 #include <remill/BC/Optimizer.h>
 
@@ -21,8 +20,6 @@ CIRCUITOUS_RELAX_WARNINGS
 
 #include <llvm/Support/raw_os_ostream.h>
 #include <llvm/CodeGen/IntrinsicLowering.h>
-
-#include <remill/BC/Compat/TargetLibraryInfo.h>
 CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ {
@@ -33,41 +30,34 @@ namespace circ {
         using intrinsic_id = llvm::Intrinsic::ID;
         using intrinsic_map = std::map< intrinsic_id, calls_t >;
 
-        using callsite_t = remill::compat::llvm::CallSite;
-
         intrinsic_map llvm_intrinsics;
         calls_t remill_compares;
         calls_t remill_flag_computations;
 
-        bool can_llvm_intrinsic(callsite_t cs)
+        bool can_llvm_intrinsic(llvm::CallInst *cs)
         {
-            auto id = cs.getCalledFunction()->getIntrinsicID();
+            auto id = cs->getCalledFunction()->getIntrinsicID();
             return id == llvm::Intrinsic::usub_sat ||
                    id == llvm::Intrinsic::fshr ||
                    id == llvm::Intrinsic::fshl;
         }
 
-        llvm::CallInst *get_call(callsite_t cs)
+        void catalogue_llvm_intrinsic(llvm::CallInst *cs)
         {
-            return llvm::dyn_cast< llvm::CallInst >(cs.getInstruction());
+            auto id = cs->getCalledFunction()->getIntrinsicID();
+            llvm_intrinsics[id].push_back(cs);
         }
 
-        void catalogue_llvm_intrinsic(callsite_t cs)
+        bool try_catalogue_remill_intrinsic(llvm::CallInst *cs)
         {
-            auto id = cs.getCalledFunction()->getIntrinsicID();
-            llvm_intrinsics[id].push_back(get_call(cs));
-        }
-
-        bool try_catalogue_remill_intrinsic(callsite_t cs)
-        {
-            auto callee = cs.getCalledFunction();
+            auto callee = cs->getCalledFunction();
             if (!callee->hasName())
                 return false;
 
             auto try_catalogue = [&](auto prefix, auto &storage) {
                 if (!callee->getName().startswith(prefix))
                     return false;
-                storage.push_back(get_call(cs));
+                storage.push_back(cs);
                 return true;
             };
 
@@ -75,10 +65,8 @@ namespace circ {
                    || try_catalogue("__remill_flag_computation_", remill_flag_computations);
         }
 
-        void categorize_callsite(callsite_t cs)
+        void categorize_callsite(llvm::CallInst *cs)
         {
-            if (!cs.isCall())
-                return;
             if (can_llvm_intrinsic(cs))
                 return catalogue_llvm_intrinsic(cs);
 
@@ -90,9 +78,10 @@ namespace circ {
             for (auto fn : fns)
                 for (auto &bb : *fn)
                     for (auto &inst : bb)
-                    // NOTE(lukas): I opted to go inst by inst to avoid accidentaly
-                    //              modifying semantic functions we do not use.
-                    categorize_callsite(remill::compat::llvm::CallSite(&inst));
+                        // NOTE(lukas): I opted to go inst by inst to avoid accidentaly
+                        //              modifying semantic functions we do not use.
+                        if ( auto call = llvm::dyn_cast< llvm::CallInst >( &inst ) )
+                            categorize_callsite( call );
         }
 
         // Try to use builtin llvm lowering.
@@ -209,16 +198,12 @@ namespace circ {
                            const std::vector<llvm::Function *> &fns)
     {
         llvm::legacy::FunctionPassManager func_manager(module);
-        auto TLI = new llvm::TargetLibraryInfoImpl(llvm::Triple(module->getTargetTriple()));
-        TLI->disableAllFunctions(); // `-fno-builtin`
 
         llvm::PassManagerBuilder builder;
         builder.OptLevel = 3;
         builder.SizeLevel = 0;
         builder.Inliner = llvm::createFunctionInliningPass(250);
-        builder.LibraryInfo = TLI;
         builder.DisableUnrollLoops = false;
-        builder.RerollLoops = false;
         builder.SLPVectorize = false;
         builder.LoopVectorize = false;
 
