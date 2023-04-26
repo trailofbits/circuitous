@@ -514,7 +514,7 @@ namespace circ
                 std::stringstream ss;
 
                 remill::Instruction tmp;
-                if (!arch->DecodeInstruction(0, bytes, tmp)) {
+                if (!arch->DecodeInstruction(0, bytes, tmp, {})) {
                     ss << "Decode failed!\n";
                     return yield({}, idxs, ss.str());
                 }

@@ -45,7 +45,7 @@ namespace circ::ifuzz::permutate
                 flipped[i] = static_cast< char >(byte ^ (mask << j));
 
                 remill::Instruction tmp;
-                if (arch->DecodeInstruction(0, flipped, tmp)) {
+                if (arch->DecodeInstruction(0, flipped, tmp, {})) {
                     out[index] = std::move(tmp);
                 }
             }
