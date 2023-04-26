@@ -63,6 +63,7 @@ DEFINE_bool(conjure_alu, false, "Enable conjure-alu optimization.");
 DEFINE_bool(no_advices, false, "Lower all advices. Cannot be used with conjure-alu.");
 DEFINE_bool(dbg, false, "Enable various debug dumps");
 DEFINE_bool(quiet, false, "");
+DEFINE_string(lift_with, "", "");
 
 namespace cli = circ::cli;
 
@@ -76,6 +77,17 @@ namespace circ::cli
     struct NoAdvices : circ::DefaultCmdOpt, Arity< 0 >
     {
         static inline const auto opt = circ::CmdOpt( "--no-advices", false );
+    };
+
+    struct LiftWith : DefaultCmdOpt, HasAllowed< LiftWith >,
+                      PathArg
+    {
+        static inline const auto opt = circ::CmdOpt( "--lift-with", true );
+
+        static inline const std::unordered_set< std::string > allowed =
+        {
+            "v1", "v2"
+        };
     };
 };
 
@@ -141,6 +153,10 @@ namespace
 }  // namespace
 
 
+using lifter_config = circ::tl::TL<
+    cli::LiftWith
+>;
+
 using input_options = circ::tl::TL<
     cli::CiffIn,
     cli::IRIn,
@@ -191,7 +207,8 @@ using cmd_opts_list = circ::tl::merge<
     remill_config_options,
     other_options,
     dot_options,
-    optimization_options
+    optimization_options,
+    lifter_config
 >;
 
 circ::CircuitPtr get_input_circuit(auto &cli)
@@ -199,7 +216,15 @@ circ::CircuitPtr get_input_circuit(auto &cli)
     auto make_circuit = [&](auto buf) {
         circ::log_info() << "Going to make circuit";
         circ::Ctx ctx{ *cli.template get< cli::OS >(), *cli.template get< cli::Arch >() };
-        return circ::CircuitSmithy(std::move(ctx)).smelt(buf).forge();
+
+        auto lifter_id = *cli.template get< cli::LiftWith >();
+
+        if ( lifter_id == "v1" )
+            return circ::CircuitSmithy(std::move(ctx)).smelt(buf).forge();
+        else if ( lifter_id == "v2" )
+            return circ::CircuitSmithy_v2(std::move(ctx)).default_forge(buf);
+        else
+            circ::log_kill() << "Unexpected config of lifter:" << lifter_id;
     };
 
     if (auto bytes = cli.template get< cli::BytesIn >())
@@ -309,6 +334,7 @@ auto parse_and_validate_cli(int argc, char *argv[]) -> std::optional< circ::Pars
     }
 
     if (v.check(one_of< input_options >())
+         .check(is_present< cli::LiftWith >())
          .process_errors(yield_err))
     {
         return {};
