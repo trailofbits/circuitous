@@ -359,10 +359,10 @@ namespace circ
 
         error_t validate(const parsed_t &parsed)
         {
-            auto missing = this->parent_t::filter_missing< Args ... >();
+            auto missing = this->parent_t::filter_missing< Args ... >(parsed);
             if (missing.size() == 0)
                 return {};
-            return "Missing: " << parent_t::format_opts(missing);
+            return "Missing: " + parent_t::format_opts(missing);
         }
     };
 
