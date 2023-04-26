@@ -27,7 +27,7 @@ namespace circ::run::trace
         using parent_t = std::optional< std::string >;
         using parent_t::parent_t;
 
-        MaybeValue(llvm::Optional< llvm::StringRef > w)
+        MaybeValue(std::optional< llvm::StringRef > w)
         {
             if (w)
                 *this = w->str();
@@ -159,7 +159,7 @@ namespace circ::run::trace
 
                 Trace::Entry entry;
 
-                auto convert( llvm::Optional< llvm::StringRef > &&src )
+                auto convert( std::optional< llvm::StringRef > &&src )
                 {
                     check( src );
                     auto size = src->size() * 4;

@@ -324,9 +324,7 @@ namespace circ
     static inline llvm::LoadInst *make_non_opaque_load(llvm::IRBuilder<> &irb,
                                                        llvm::Value *from)
     {
-        auto ptr_ty = llvm::dyn_cast< llvm::PointerType >(from->getType());
-        check(ptr_ty);
-        return irb.CreateLoad(ptr_ty->getPointerElementType(), from);
+        log_kill() << "Not implemented.";
     }
 
     static inline std::size_t bw( llvm::Module &m, llvm::Type *type )

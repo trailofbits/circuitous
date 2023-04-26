@@ -21,7 +21,7 @@ namespace circ
                                      const remill::Instruction &inst)
     {
         remill::Instruction copy;
-        if (!arch->DecodeInstruction(inst.pc + 32, inst.bytes, copy) ||
+        if (!arch->DecodeInstruction(inst.pc + 32, inst.bytes, copy, {}) ||
             inst.operands.size() != copy.operands.size())
         {
             return false;
@@ -42,7 +42,7 @@ namespace circ
             return std::make_tuple( std::nullopt, buff );
 
         remill::Instruction inst;
-        if (!ctx.arch()->DecodeInstruction(0, buff, inst) || !inst.IsValid())
+        if (!ctx.arch()->DecodeInstruction(0, buff, inst, {}) || !inst.IsValid())
             // Failed, move one byte.
             return decode(buff.substr(1));
         // Success, return inst with shorter buffer.

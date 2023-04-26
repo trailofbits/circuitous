@@ -143,17 +143,17 @@ namespace circ::irops::impl
 
             static std::string make(llvm::Type *t)
             {
-                auto type_name = [](auto rec, auto type) -> std::string
+                auto type_name = [](auto type) -> std::string
                 {
                     if (auto p_type = llvm::dyn_cast<llvm::PointerType>(type))
-                        return "p" + rec(rec, p_type->getPointerElementType());
+                        return "ptr";
 
                     auto int_type = llvm::dyn_cast< llvm::IntegerType >(type);
                     check(int_type);
                     auto size = int_type->getScalarSizeInBits();
                     return std::to_string(size);
                 };
-                return type_name(type_name, t);
+                return type_name(t);
             }
 
             static parsed_t parse(llvm::StringRef str)
