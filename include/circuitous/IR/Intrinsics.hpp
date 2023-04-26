@@ -381,10 +381,7 @@ namespace circ::irops
             return llvm::dyn_cast< llvm::IntegerType >( reg->type );
         }
 
-        return llvm::Type::getIntNTy(
-            module.getContext(),
-            static_cast< unsigned >(
-                module.getDataLayout().getTypeAllocSize( reg->type ) * 8u ) );
+        log_kill() << "Non integer regs are not supported yet.";
     }
 
     static inline llvm::Value *mk_reg( auto &&irb, const auto &reg, auto io )

@@ -65,8 +65,16 @@ namespace circ
 
         auto ir() { return llvm::IRBuilder<>{ *llvm_ctx() }; }
 
-        auto state_ptr_type() const { return _arch->StatePointerType(); }
-        auto state_type() const { return state_ptr_type()->getPointerElementType(); }
+        // TOOD(lifter): Probably no longer needed with opaque pointers?
+        auto state_ptr_type() const
+        {
+            return _arch->StatePointerType();
+        }
+
+        auto state_type() const
+        {
+            return _arch->StatePointerType();
+        }
         auto memory_ptr_type() const { return _arch->MemoryPointerType(); }
         auto undef_mem_ptr() { return llvm::UndefValue::get( memory_ptr_type() ); }
 

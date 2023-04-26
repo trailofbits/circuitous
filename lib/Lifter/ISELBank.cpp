@@ -56,7 +56,7 @@ namespace circ::isem
             {
                 if ( auto ptr_type = llvm::dyn_cast< llvm::PointerType >( arg->getType() ) )
                 {
-                    auto raw_type = ptr_type->getPointerElementType();
+                    auto raw_type = ptr_type; //->getPointerElementType();
                     auto val = irops::make_leaf< irops::ISemDstArg >( irb, raw_type, idx );
                     auto alloca = irops::make_leaf< irops::AllocateDst >( irb, ptr_type );
                     irb.CreateStore( val, alloca );

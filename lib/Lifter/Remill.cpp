@@ -38,7 +38,6 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <remill/Arch/Arch.h>
 #include <remill/Arch/Name.h>
-#include <remill/BC/Compat/Error.h>
 #include <remill/BC/Util.h>
 #include <remill/OS/OS.h>
 
