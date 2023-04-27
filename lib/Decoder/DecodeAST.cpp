@@ -88,7 +88,7 @@ namespace circ::decoder {
                 [&](const Shfl &arg) {binary_op( arg, "<<");},
 
                 [&](const Equal &arg) {binary_op( arg, "==");},
-                [&](const Assign &arg) {binary_op( arg, "=", GuardStyle::None);},
+                [&](const Assign &arg) {binary_op( arg, "=", GuardStyle::None).raw(';');},
                 [&](const StatementBlock &arg) {
                     for (auto &e: arg) {
                         expr( e );
@@ -122,7 +122,8 @@ namespace circ::decoder {
 //                                .expr_array(arg.derived_from, ExprStyle::StructDerivations)
                     auto g = make_guard(GuardStyle::CurlyWithSemiColon);
                     expr_array(arg.methods, ExprStyle::StructMethods)
-                        .expr_array(arg.variables, ExprStyle::StructVars);
+                        .expr_array(arg.default_init_variables, ExprStyle::StructVars)
+                        .expr_array(arg.assignment_init_variables, ExprStyle::StructVars);
                 },
         }, *e.op );
         return *this;

@@ -194,7 +194,8 @@ namespace circ::decoder {
 
         void insert_method(FunctionDeclaration method);
         std::vector<Expr> derived_from; // should be structs, but our printers crash if this is a struct
-        std::vector<Var> variables;
+        std::vector<VarDecl> default_init_variables;
+        std::vector<Assign> assignment_init_variables;
         std::vector<FunctionDeclaration> methods;
     };
 

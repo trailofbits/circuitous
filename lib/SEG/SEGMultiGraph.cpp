@@ -239,7 +239,7 @@ SEGGraph::get_nodes_by_vi( VerifyInstruction *vi )
     return m;
 }
 
-void SEGGraph:: calculate_costs()
+void SEGGraph::calculate_costs()
 {
     // calc inline cost and declare fd if possible
     for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(*this))
@@ -474,7 +474,8 @@ void DecodedInstrGen::get_expression_for_projection(
         {
             auto lhs = get_next_free_data_slot();
             auto rhs = decoder::Id( op->op->name());
-            fdb_setup.body_insert(decoder::Assign( lhs, rhs ) );
+
+            member_initializations.push_back( decoder::Assign( lhs, rhs ) );
             arguments.push_back(lhs);
         }
 
@@ -507,8 +508,7 @@ void DecodedInstrGen::get_expression_for_projection(
     {
         auto lhs = get_next_free_data_slot();
         auto rhs = decoder::Id( op->op->name() );
-        block.push_back(
-            decoder::Statement( decoder::Assign( lhs, rhs ) ) );
+        member_initializations.push_back( decoder::Statement ( decoder::Assign( lhs, rhs ) ) );
         arguments.push_back(lhs);
     }
 
@@ -518,10 +518,11 @@ void DecodedInstrGen::get_expression_for_projection(
     auto func_call = decoder::FunctionCall( func_decl.function_name, arguments );
 
 
-    decoder::If guarded_setup( guard_conditions, block );
+//    decoder::If guarded_setup( guard_conditions, block );
     decoder::If guarded_visit( guard_conditions, func_call );
+    \
 
-    fdb_setup.body_insert_statement( guarded_setup );
+//    fdb_setup.body_insert_statement( guarded_setup );
     fdb_visit.body_insert_statement( guarded_visit );
 }
 
@@ -788,7 +789,12 @@ void DecodedInstrGen::create()
 
     for ( auto key : proj_keys )
     {
-        if ( proj_groups.count( key ) > 1 )
+        // checks for there exists multiple different execution trees for this given root
+        if ( proj_groups.count( key ) == 1 )
+        {
+            get_expression_for_projection(( *proj_groups.find( key ) ).second);
+        }
+        else
         {
             if ( can_emit_independently( proj_groups, key ) )
             {
@@ -805,10 +811,6 @@ void DecodedInstrGen::create()
                 }
             }
         }
-        else
-        {
-            get_expression_for_projection(( *proj_groups.find( key ) ).second);
-        }
     }
 }
 
@@ -817,8 +819,10 @@ decoder::IndexVar DecodedInstrGen::get_instr_data( std::size_t at_index )
     return decoder::IndexVar( data_array, decoder::Int( static_cast< int64_t >( at_index ) ) );
 }
 
-decoder::IndexVar DecodedInstrGen::get_next_free_data_slot()
+decoder::VarDecl DecodedInstrGen::get_next_free_data_slot()
 {
-    return get_instr_data(size++);
+    auto index = std::to_string(size++);
+    auto var = decoder::Var(member_variable_prefix + index);
+    return decoder::VarDecl(var);
 }
 }

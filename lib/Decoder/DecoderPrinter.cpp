@@ -31,6 +31,7 @@ namespace circ::decoder {
         //TODO(sebas): add allocation to setup
         s.methods.push_back(dig.fdb_setup.make());
         s.methods.push_back(dig.fdb_visit.make());
+        s.assignment_init_variables = std::move(dig.member_initializations);
         return s;
     }
 

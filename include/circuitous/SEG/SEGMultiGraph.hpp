@@ -513,6 +513,7 @@ namespace circ
         std::string name;
         decoder::FunctionDeclarationBuilder fdb_setup;
         decoder::FunctionDeclarationBuilder fdb_visit;
+        std::vector<decoder::Assign> member_initializations;
         std::size_t size = 0;
 
     private:
@@ -531,7 +532,9 @@ namespace circ
             std::multimap< Operation *, seg_projection > &proj_groups, Operation *key );
 
         decoder::IndexVar get_instr_data( std::size_t at_index );
-        decoder::IndexVar get_next_free_data_slot();
+        decoder::VarDecl get_next_free_data_slot();
+
+        const std::string member_variable_prefix = "node_";
     };
 
     /*
