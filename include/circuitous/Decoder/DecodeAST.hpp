@@ -17,6 +17,19 @@ namespace circ::decoder {
 
     using Id = std::string;
 
+    struct Type
+    {
+        Type();
+        explicit Type( Id name );
+        explicit Type( Id name, const std::vector< Expr > &templateParameters );
+        Id name;
+
+        std::vector< Expr > template_parameters;
+        bool is_constexpr = false;
+        bool is_const = false;
+        bool is_static = false;
+    };
+
     struct Var {
         explicit Var( Id s, Id t = "auto", bool is_struct = false, bool is_pointer = false ) :
             name( std::move( s ) ), type( std::move( t ) ), is_struct( is_struct ),
@@ -91,9 +104,9 @@ namespace circ::decoder {
     using StatementBlock = std::vector< Expr >;
 
     struct FunctionDeclaration {
-        FunctionDeclaration(const Id& retType, const Id& functionName,
+        FunctionDeclaration(const Type& retType, const Id& functionName,
                             const std::vector< VarDecl > &args, const StatementBlock &body);
-        Id retType;
+        Type retType;
         Id function_name;
         std::vector< VarDecl > args;
         StatementBlock body;
@@ -101,7 +114,7 @@ namespace circ::decoder {
 
     struct FunctionDeclarationBuilder{
         using self_t = FunctionDeclarationBuilder;
-        self_t& retType(const Id& retType);
+        self_t& retType(const Type& retType);
         self_t& name(const Id& name);
         self_t& arg_insert(const VarDecl& args);
         self_t& body_insert(const Expr& expr);
@@ -110,7 +123,7 @@ namespace circ::decoder {
         FunctionDeclaration make();
 
     private:
-        Id _retType;
+        Type _retType;
         Id _function_name;
         std::vector< VarDecl > _args;
         StatementBlock _body;
@@ -208,7 +221,7 @@ namespace circ::decoder {
     struct Empty { };
 
     using op_t = std::variant<
-            Expr, Int, Uint64, Id, //primitive types Expr, int, std::string
+            Expr, Int, Uint64, Id, Type, //primitive types Expr, int, std::string
             Var, VarDecl, Statement, Return, CastToUint64, IndexVar, EnumValue, Enum, EnumDecl, Dereference, // unary
             Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, BitwiseAnd, Assign, Shfl, Equal, And, // binary
             If, IfElse,

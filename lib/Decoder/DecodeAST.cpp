@@ -51,6 +51,14 @@ namespace circ::decoder {
                 [&](const Plus &arg) {binary_op( arg, "+" );},
                 [&](const Mul &arg) {binary_op( arg, "*" );},
                 [&](const Id &arg) { raw(arg);},
+                [&](const Type &arg) {
+                    if(arg.is_constexpr) raw("constexpr ");
+                    if(arg.is_const) raw("const ");
+                    if(arg.is_static) raw("static ");
+                    expr( arg.name );
+                    if( arg.template_parameters.size() != 0 )
+                        expr_array( arg.template_parameters, ExprStyle::TemplateParams );
+                },
                 [&](const Int &arg) { raw(arg.value);},
                 [&](const Uint64 &arg) { raw("0b", std::bitset< 64 >( arg.value ));},
                 [&](const Expr &arg) { circ::unreachable() << "No plain expr allowed" ; },
@@ -113,7 +121,7 @@ namespace circ::decoder {
                             .expr_array( arg.args, ExprStyle::FuncArgs );
                 },
                 [&](const FunctionDeclaration &arg) {
-                    raw( arg.retType, " ", arg.function_name )
+                    expr( arg.retType).raw(" ", arg.function_name )
                     .expr_array( arg.args, ExprStyle::FuncArgs).endl()
                     .expr_array( arg.body, ExprStyle::FuncBody).endl().endl();
                 },
@@ -236,7 +244,7 @@ namespace circ::decoder {
     {
     }
 
-    FunctionDeclaration::FunctionDeclaration( const Id &retType, const Id &functionName,
+    FunctionDeclaration::FunctionDeclaration( const Type &retType, const Id &functionName,
                                               const std::vector< VarDecl > &args,
                                               const StatementBlock &body ) :
         retType( retType ),
@@ -270,7 +278,7 @@ namespace circ::decoder {
         return FunctionDeclaration( _retType, _function_name, _args, _body );
     }
 
-    FunctionDeclarationBuilder::self_t &FunctionDeclarationBuilder::retType( const Id &retType )
+    FunctionDeclarationBuilder::self_t &FunctionDeclarationBuilder::retType( const Type &retType )
     {
         _retType = retType;
         return *this;
@@ -307,4 +315,17 @@ namespace circ::decoder {
             template_typenames.push_back( Id( "T" + std::to_string( i ) ) );
         }
     }
+
+    Type::Type( Id name ) :
+        name(name)
+    {
+    }
+
+    Type::Type( Id name, const std::vector< Expr > &templateParameters ) :
+        name(name),
+        template_parameters( templateParameters )
+    {
+    }
+
+    Type::Type() { }
 };
