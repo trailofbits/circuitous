@@ -24,9 +24,11 @@ namespace circ::decoder {
 
         auto args = get_decode_context_function_args( ctx );
 
-        dig.fdb_setup.name(s.name).retType("");
+        dig.fdb_setup.name(s.name).retType( decoder::Type() );
         //TODO(sebas): templatize visitor type
-        dig.fdb_visit.name("visit").retType("void").arg_insert(Var("visitor", "const VisitorType&"));
+        dig.fdb_visit.name( "visit" )
+            .retType( decoder::Type( "void" ) )
+            .arg_insert( Var( "visitor", "const VisitorType&" ) );
 
         //TODO(sebas): add allocation to setup
         s.methods.push_back(dig.fdb_setup.make());
@@ -132,7 +134,7 @@ namespace circ::decoder {
     Expr DecoderPrinter::create_top_level_function() {
         FunctionDeclarationBuilder fdb;
         fdb.name(circuit_decode_function_name);
-        fdb.retType("int");
+        fdb.retType( decoder::Type("int") );
         fdb.arg_insert( Var( bytes_input_variable, "std::array<uint8_t,15>" ));
 
         fdb.body_insert( get_top_level_arg_conversion());

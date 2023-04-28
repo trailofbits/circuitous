@@ -1,4 +1,5 @@
 #include "circuitous/Decoder/DecoderPrinter.hpp"
+#include "circuitous/Decoder/GenerationHelpers.hpp"
 
 #include <circuitous/SEG/SEGMultiGraph.hpp>
 #include <memory>
@@ -160,7 +161,7 @@ expression_for_seg_node( std::unordered_map< circ::SEGNode, circ::decoder::Funct
     if(!func_decls.contains(node))
     {
         decoder::FunctionDeclarationBuilder fdb;
-        fdb.retType("VisRetType")
+        fdb.retType( decoder::Type( "VisRetType" ) )
             .name(unique_names_storage.get_unique_var_name().name)
             .arg_insert(decoder::VarDecl(decoder::Var("visitor", "const VisitorType& ")));
         for(auto arg_name : arg_names)
@@ -317,7 +318,7 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
          * Mainly due to simplicity of its implementation.
          */
         auto can_use_select_helper_function = true;
-        for(std::size_t i = 1; i < op->operands_size(); i++)
+        for(std::size_t i = 1; i < op->operands_size() && can_use_select_helper_function; i++)
             can_use_select_helper_function = can_use_select_helper_function && op->operand(i)->operands_size() == 0;
 
         if(can_use_select_helper_function)
@@ -393,8 +394,7 @@ decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *
      */
     auto decoder_name = "decoder_for_vi" + std::to_string( vi->id() );
     circ::decoder::FunctionDeclarationBuilder fdb;
-    fdb.name(decoder_name)
-        .retType("void");
+    fdb.name(decoder_name).retType( decoder::Type("void") );
 
     return fdb.make();
 }
@@ -709,26 +709,56 @@ std::size_t SelectStorage::hash_select_targets( Select *sel )
     return std::hash< std::string > {}( pp.Hash( select_values( sel ) ) );
 }
 
+bool are_trees_isomorphic( const std::vector< Operation * > &ops )
+{
+    if ( ops.size() < 2 )
+        return true;
+
+    print::CompactPrinter cp;
+    std::string first_hash = cp.Hash( ops[ 0 ] );
+    return std::all_of( ops.begin() + 1, ops.end(),
+                        [ & ]( Operation *op ) {
+                            std::cout << "comparing: " << cp.Hash(op) << " = " << first_hash << std::endl;
+                            return cp.Hash( op ) == first_hash; } );
+}
+
+
+
+
 void SelectStorage::register_select( Select *sel )
 {
     decoder::FunctionDeclarationBuilder fdb;
     print::PrettyPrinter pp;
+
+    if ( !are_trees_isomorphic( select_values(sel) ) )
+        circ::unreachable() << "adding select helper for non-isomorphic select";
+
     auto values_hash = hash_select(sel);
+
 
     fdb.name("select_" + std::to_string(values_hash));
     //TODO get type of
-    fdb.retType(decoder::Id("VisitorInputType"));
     decoder::Var select_index = decoder::Var("index", "int:" + std::to_string(sel->bits));
     fdb.arg_insert(decoder::VarDecl(select_index));
+
+
     for(std::size_t i = 0; i < select_values( sel ).size(); i++ )
     {
-        // TODO replace with to string visitor
-        auto res = pp.Print( sel->operand( i ), 0 );
-        //TODO turn if else into if
+        std::vector< decoder::Expr > block;
+        auto start_op_ptr = std::make_shared< nodeWrapper >( sel->operand(i+1) );
+        for(auto x : gap::graph::dfs<gap::graph::yield_node::on_open>(start_op_ptr))
+        {
+            block.push_back(decoder::Id(x->op->name()));
+        }
+
+        decoder::Tuple tuple( block.size() );
+
+        //TODO turn if else into switch
         auto if_expr = decoder::If(
             decoder::Equal( select_index, decoder::Int( static_cast< int64_t >( i ) ) ),
-            decoder::Return( decoder::Id( res ) ) );
+            decoder::Return( tuple.Construct( block ) ) );
         fdb.body_insert( if_expr );
+        fdb.retType( tuple.get_type() );
     }
 
     selects.insert( std::make_pair( values_hash, fdb.make() ) );
@@ -776,7 +806,7 @@ void DecodedInstrGen::create()
     /*
      * There are multiple operations which are considered we would need to emit semantics for
      * However some of them might require a decode-time choice.
-     * We keep track of the roots in both a set and multimap as multimap
+     * We keep track of the roots in both a set and multimap since multimap
      * does not expose a nice interface to just loop over the keys
      */
     std::multimap< Operation* , seg_projection> proj_groups;
@@ -789,28 +819,31 @@ void DecodedInstrGen::create()
 
     for ( auto key : proj_keys )
     {
-        // checks for there exists multiple different execution trees for this given root
+        // checks for there exists multiple different execution trees for this given root node
+        // If not than we up the emit the subtree with a trivial walk
         if ( proj_groups.count( key ) == 1 )
         {
             get_expression_for_projection(( *proj_groups.find( key ) ).second);
+            continue ;
         }
-        else
+
+        // Here we have execution path that depend on decode time choices
+        if ( can_emit_independently( proj_groups, key ) )
         {
-            if ( can_emit_independently( proj_groups, key ) )
-            {
-                get_expression_for_projection_with_indepenent_choices(proj_groups, key );
-            }
-            else
-            {
-                auto projections_for_same_root = proj_groups.equal_range( key );
-                for ( auto proj_it = projections_for_same_root.first;
-                      proj_it != projections_for_same_root.second; proj_it++ )
-                {
-                    auto t = ( *proj_it ).second;
-                    get_expression_for_projection( ( *proj_groups.find( key ) ).second );
-                }
-            }
+            get_expression_for_projection_with_indepenent_choices(proj_groups, key );
+            continue;
         }
+
+        // We have to emit all execution paths guarded by all required choices
+        auto projections_for_same_root = proj_groups.equal_range( key );
+        for ( auto proj_it = projections_for_same_root.first;
+              proj_it != projections_for_same_root.second; proj_it++ )
+        {
+            auto t = ( *proj_it ).second;
+            get_expression_for_projection( ( *proj_groups.find( key ) ).second );
+        }
+
+
     }
 }
 

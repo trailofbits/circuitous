@@ -22,4 +22,9 @@ namespace circ::decoder
         return FunctionCall( "std::get", { tuple }, { Uint64 { index } } );
     }
 
+    Type Tuple::get_type()
+    {
+        return Type( "std::tuple",
+                     std::vector< Expr >( size, Id( "VisitorReturnType" ) ) );
+    }
 };
