@@ -54,27 +54,33 @@ namespace circ::decoder {
     /*
      * Main easy storage class.
      */
-    template < typename T >
+    template < typename T , int n = -1 >
     struct NAryOperation {
         template < typename... U >
         NAryOperation(U &&... expression) {
             (ops.template emplace_back( std::forward<U>(expression) ), ...);
+
+            if constexpr ( n > 0 )
+            {
+                circ::check( ops.size() == n )
+                    << "Expression required " << n << " arguments, got: " << ops.size();
+            }
         }
 
         std::vector< T > ops;
     };
 
     template < typename T >
-    struct BinaryOp : NAryOperation< T > {
-        using NAryOperation< T >::NAryOperation;
+    struct BinaryOp : NAryOperation< T, 2 > {
+        using NAryOperation< T, 2 >::NAryOperation;
 
         const T &lhs() const {return this->ops[ 0 ];};
         const T &rhs() const {return this->ops[ 1 ];};
     };
 
     template < typename T >
-    struct UnaryOp : NAryOperation< T > {
-        using NAryOperation< T >::NAryOperation;
+    struct UnaryOp : NAryOperation< T, 1 > {
+        using NAryOperation< T, 1 >::NAryOperation;
 
         const T &value() const {return this->ops[ 0 ];} ;
     };
