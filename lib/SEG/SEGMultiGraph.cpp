@@ -591,40 +591,45 @@ void SEGGraphPrinter::print_select_storage_helper_functions()
  * if( cond2 == 2 )
  * ...
  *
- * if( cond2 == 1)
+ * if( cond2 == 1 )
  * ...
- * if( cond2 == 1
+ * if( cond2 == 1 )
  * ...
  *
- * Our current approach is to check for if for all selects which have a choice
- * if they make a choice for every possible combination of select choices made.
- * The easiest way to do so is just count how many options we have for this emitted node.
+ * We have two requirements:
+ *  1. All choices for a select need to be isomorphic
+ *      If this is not the case than the next variable we write to will be dependent on a decode
+ * time value
+ *  2. The emission of a select choice may not be dependent on another.
+ *      For instance lets say we have 3 select choices A, B and C. With A being a parent to both and B and C have 2 children that are also leafs
+ *      This example should produce one field/variable but the value it gets is dependent on A regardless.
+ *
+ * For this it suffices to just check 2 things:
+ *  1. No select is a child of another select
+ *  2. All nodes use the same SEG Node
  */
-bool DecodedInstrGen::can_emit_independently(const std::multimap< Operation* , seg_projection>& proj_groups, Operation* key)
+bool DecodedInstrGen::selects_emission_locations_are_constant(const std::multimap< Operation* , seg_projection>& proj_groups, Operation* key)
 {
-    std::set<Select*> s;
-    bool all_use_same_seg_node = true;
-    std::shared_ptr<SEGNode> comparison = nullptr;
-    auto equal_range = proj_groups.equal_range(key);
-    for(auto it = equal_range.first; it != equal_range.second; it++)
+    std::shared_ptr< SEGNode > comparison = nullptr;
+    auto equal_range = proj_groups.equal_range( key );
+    for ( auto it = equal_range.first; it != equal_range.second; it++ )
     {
-        for(auto x :it->second.first.select_choices)
-            s.insert(x.sel);
 
-        if(comparison == nullptr)
+        if ( comparison == nullptr )
+        {
             comparison = it->second.second;
+            // we just need to check this once as this works on an operation level
+            if( operation_has_nested_select( it->second.first ))
+                return false;
+        }
         else
         {
-            if(comparison->get_hash() != it->second.second->get_hash())
-                all_use_same_seg_node = false;
+            if ( comparison->get_hash() != it->second.second->get_hash() )
+                return false;
         }
     }
 
-    std::size_t target_count = 1;
-    for(auto x : s)
-        target_count = target_count * (1 << x->bits);
-
-    return proj_groups.count(key) == target_count && all_use_same_seg_node;
+    return true;
 }
 
 decoder::FunctionDeclaration
@@ -801,6 +806,37 @@ std::vector< Operation * > select_values( Select *op )
     return results;
 }
 
+struct HasSelectInProjectionVisitor : AdviceResolvingVisitor< HasSelectInProjectionVisitor >
+{
+    using AdviceResolvingVisitor::AdviceResolvingVisitor;
+    void visit( Select *op ) { found_select = true; }
+    void visit( Operation *op ) { op->traverse( *this ); }
+
+    bool found_select = false;
+};
+
+
+struct HasSubSelectInProjectionVisitor : AdviceResolvingVisitor< HasSubSelectInProjectionVisitor >
+{
+    using AdviceResolvingVisitor::AdviceResolvingVisitor;
+    void visit( Select *op ) {
+        HasSelectInProjectionVisitor vis( vi );
+        op->traverse( vis );
+        if(vis.found_select)
+            found_sub_select = true;
+    }
+    void visit( Operation *op ) { op->traverse( *this ); }
+
+    bool found_sub_select = false;
+};
+
+bool operation_has_nested_select( const InstructionProjection &projection )
+{
+    HasSubSelectInProjectionVisitor vis( projection.vi );
+    vis.dispatch( projection.root_in_vi );
+    return vis.found_sub_select;
+}
+
 void DecodedInstrGen::create()
 {
     /*
@@ -828,9 +864,9 @@ void DecodedInstrGen::create()
         }
 
         // Here we have execution path that depend on decode time choices
-        if ( can_emit_independently( proj_groups, key ) )
+        if ( selects_emission_locations_are_constant( proj_groups, key ) )
         {
-            get_expression_for_projection_with_indepenent_choices(proj_groups, key );
+            get_expression_for_complete_seg_isomorphisms( proj_groups, key );
             continue;
         }
 

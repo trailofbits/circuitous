@@ -912,4 +912,19 @@ namespace circ
         UniqueNameStorage &unique_names_storage, const SEGNode &node,
         std::vector< decoder::Var > arg_names );
 
+    bool operation_has_nested_select( const InstructionProjection &projection );
+
+    template < typename Derived, bool IsConst = false >
+    struct AdviceResolvingVisitor : Visitor< Derived, IsConst >
+    {
+        AdviceResolvingVisitor( VerifyInstruction *vi ) : vi( vi ) {};
+
+        auto visit( Advice *op )
+        {
+            this->parent_t::dispatch( get_op_attached_to_advice_in_vi( op, vi ) );
+        }
+
+    protected:
+        VerifyInstruction *vi;
+    };
 }
