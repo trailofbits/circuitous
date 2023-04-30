@@ -5,9 +5,9 @@
 #include <memory>
 #include <sstream>
 
-namespace circ{
+namespace circ::decoder{
 
-std::vector< std::shared_ptr<circ::SEGNode> > circ::SEGNode::children()
+std::vector< std::shared_ptr<SEGNode> > SEGNode::children()
 {
     return _nodes;
 }
@@ -84,7 +84,7 @@ void SEGGraphPrinter::print_semantics_emitter()
 void SEGGraph::prepare()
 {
     extract_all_seg_nodes_from_circuit();
-    circ::dedup(*this);
+    dedup(*this);
     calculate_costs();
 }
 
@@ -123,8 +123,8 @@ decoder::FunctionCall print_SEGNode_tree( SEGNode &node, std::string stack_name,
  */
 //TODO(Sebas): change this to a register function and add an api that returns void
 std::pair< decoder::Var, decoder::StatementBlock >
-expression_for_seg_node( std::unordered_map< circ::SEGNode, circ::decoder::FunctionDeclaration,
-                                   circ::segnode_hash_on_get_hash, circ::segnode_comp_on_hash >
+expression_for_seg_node( std::unordered_map< SEGNode, FunctionDeclaration,
+                                   segnode_hash_on_get_hash, segnode_comp_on_hash >
                    &func_decls,
                UniqueNameStorage &unique_names_storage, const SEGNode &node, std::vector<decoder::Var> arg_names )
 {
@@ -189,6 +189,36 @@ expression_for_seg_node( std::unordered_map< circ::SEGNode, circ::decoder::Funct
     return { prev_func_call_var.value(), setup };
 }
 
+struct advice_value_visitor : Visitor< advice_value_visitor >
+{
+    Advice *target;
+    Operation *result = nullptr;
+    bool result_is_left_side = false;
+
+    explicit advice_value_visitor( Advice *target ) : target( target ) { }
+    void visit( AdviceConstraint *ac )
+    {
+        check( ac->operands_size() == 2 )
+            << "advice constraint does not contain 2 children";
+        check( ac->operand( 0 ) != ac->operand( 1 ) )
+            << "advice constraint points to same child twice, left id:"
+            << ac->operand( 0 )->id() << " id right:" << ac->operand( 1 )->id();
+        if ( ac->operand( 0 ) == target )
+        {
+            result_is_left_side = false;
+            result = ac->operand( 1 );
+        }
+
+        if ( ac->operand( 1 ) == target )
+        {
+            result_is_left_side = true;
+            result = ac->operand( 0 );
+        }
+    }
+
+    void visit( Operation *op ) { op->traverse( *this ); }
+};
+
 Operation *get_op_attached_to_advice_in_vi( Advice *advice, VerifyInstruction *vi)
 {
     advice_value_visitor vis(advice);
@@ -247,7 +277,7 @@ void SEGGraph::calculate_costs()
     {
         node->inline_cost
             = std::accumulate( node->_nodes.begin(), node->_nodes.end(), 1,
-                               []( int current, std::shared_ptr< circ::SEGNode > n ) {
+                               []( int current, std::shared_ptr< SEGNode > n ) {
                                    if(n->fd == false)
                                        return current + n->inline_cost;
                                    else
@@ -263,7 +293,7 @@ void SEGGraph::calculate_costs()
     {
         node->subtree_count
             = std::accumulate( node->_nodes.begin(), node->_nodes.end(), 1,
-                               []( int current, std::shared_ptr< circ::SEGNode > n )
+                               []( int current, std::shared_ptr< SEGNode > n )
                                { return current + n->subtree_count; } );
     }
 }
@@ -317,6 +347,8 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
          * Currently select helpers is only allowed for selects which have only leafs.
          * Mainly due to simplicity of its implementation.
          */
+//        selecty.get_function(op, vi);
+
         auto can_use_select_helper_function = true;
         for(std::size_t i = 1; i < op->operands_size() && can_use_select_helper_function; i++)
             can_use_select_helper_function = can_use_select_helper_function && op->operand(i)->operands_size() == 0;
@@ -569,7 +601,7 @@ void SEGGraphPrinter::generate_function_definitions()
         for(auto & [op, node ] : seg_graph.get_nodes_by_vi(vi) )
         {
             auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
-            circ::expression_for_seg_node( func_decls, name_storage, *node, argument_names );
+            expression_for_seg_node( func_decls, name_storage, *node, argument_names );
         }
     }
 }
@@ -732,41 +764,41 @@ bool are_trees_isomorphic( const std::vector< Operation * > &ops )
 
 void SelectStorage::register_select( Select *sel )
 {
-    decoder::FunctionDeclarationBuilder fdb;
-    print::PrettyPrinter pp;
-
-    if ( !are_trees_isomorphic( select_values(sel) ) )
-        circ::unreachable() << "adding select helper for non-isomorphic select";
-
-    auto values_hash = hash_select(sel);
-
-
-    fdb.name("select_" + std::to_string(values_hash));
-    //TODO get type of
-    decoder::Var select_index = decoder::Var("index", "int:" + std::to_string(sel->bits));
-    fdb.arg_insert(decoder::VarDecl(select_index));
-
-
-    for(std::size_t i = 0; i < select_values( sel ).size(); i++ )
-    {
-        std::vector< decoder::Expr > block;
-        auto start_op_ptr = std::make_shared< nodeWrapper >( sel->operand(i+1) );
-        for(auto x : gap::graph::dfs<gap::graph::yield_node::on_open>(start_op_ptr))
-        {
-            block.push_back(decoder::Id(x->op->name()));
-        }
-
-        decoder::Tuple tuple( block.size() );
-
-        //TODO turn if else into switch
-        auto if_expr = decoder::If(
-            decoder::Equal( select_index, decoder::Int( static_cast< int64_t >( i ) ) ),
-            decoder::Return( tuple.Construct( block ) ) );
-        fdb.body_insert( if_expr );
-        fdb.retType( tuple.get_type() );
-    }
-
-    selects.insert( std::make_pair( values_hash, fdb.make() ) );
+//    decoder::FunctionDeclarationBuilder fdb;
+//    print::PrettyPrinter pp;
+//
+//    if ( !are_trees_isomorphic( select_values(sel) ) )
+//        circ::unreachable() << "adding select helper for non-isomorphic select";
+//
+//    auto values_hash = hash_select(sel);
+//
+//
+//    fdb.name("select_" + std::to_string(values_hash));
+//    //TODO get type of
+//    decoder::Var select_index = decoder::Var("index", "int:" + std::to_string(sel->bits));
+//    fdb.arg_insert(decoder::VarDecl(select_index));
+//
+//
+//    for(std::size_t i = 0; i < select_values( sel ).size(); i++ )
+//    {
+//        std::vector< decoder::Expr > block;
+//        auto start_op_ptr = std::make_shared< nodeWrapper >( sel->operand(i+1) );
+//        for(auto x : gap::graph::dfs<gap::graph::yield_node::on_open>(start_op_ptr))
+//        {
+//            block.push_back(decoder::Id(x->op->name()));
+//        }
+//
+//        decoder::Tuple tuple( block.size() );
+//
+//        //TODO turn if else into switch
+//        auto if_expr = decoder::If(
+//            decoder::Equal( select_index, decoder::Int( static_cast< int64_t >( i ) ) ),
+//            decoder::Return( tuple.Construct( block ) ) );
+//        fdb.body_insert( if_expr );
+//        fdb.retType( tuple.get_type() );
+//    }
+//
+//    selects.insert( std::make_pair( values_hash, fdb.make() ) );
 }
 
 std::vector< decoder::FunctionDeclaration > SelectStorage::get_functions_for_select()

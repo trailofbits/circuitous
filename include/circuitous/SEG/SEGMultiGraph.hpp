@@ -1,6 +1,8 @@
 #pragma once
 
 #include "circuitous/Decoder/DecoderPrinter.hpp"
+#include "circuitous/Decoder/GenerationHelpers.hpp"
+#include "circuitous/Decoder/SEGGraph.hpp"
 
 #include <circuitous/Decoder/DecodeAST.hpp>
 #include <circuitous/Decoder/DecoderPrinter.hpp>
@@ -10,37 +12,8 @@
 #include <map>
 #include <memory>
 
-namespace circ
+namespace circ::decoder
 {
-    struct SelectStorage
-    {
-        void register_select (Select* sel);
-        decoder::FunctionCall get_specialization (circ::Select* sel, decoder::Expr index);
-        std::vector<decoder::FunctionDeclaration> get_functions_for_select();
-
-    private:
-        std::unordered_map<std::size_t, decoder::FunctionDeclaration> selects;
-        std::size_t hash_select_targets(Select* sel);
-    };
-
-    std::size_t hash_select(Select* op);
-    Operation* select_index(Select* op);
-    std::vector<Operation*> select_values(Select* op);
-
-    struct select_vis : UniqueVisitor<select_vis>
-    {
-        SelectStorage* st;
-        select_vis( SelectStorage *st ) : st( st ) { }
-        void visit(Operation* op){ op->traverse(*this); }
-        void visit(Select* op)
-        {
-            st->register_select(op);
-        }
-    };
-
-    Operation *get_op_attached_to_advice_in_vi( Advice *advice, VerifyInstruction *vi );
-
-
     struct SimpleDecodeTimeCircToExpressionVisitor : Visitor<SimpleDecodeTimeCircToExpressionVisitor>
     {
         bool looping_on_operation = false;
@@ -462,36 +435,6 @@ namespace circ
 
     };
 
-    struct advice_value_visitor : Visitor< advice_value_visitor >
-    {
-        Advice *target;
-        Operation *result = nullptr;
-        bool result_is_left_side = false;
-
-        explicit advice_value_visitor( Advice *target ) : target( target ) { }
-        void visit( AdviceConstraint *ac )
-        {
-            check( ac->operands_size() == 2 )
-                << "advice constraint does not contain 2 children";
-            check( ac->operand( 0 ) != ac->operand( 1 ) )
-                << "advice constraint points to same child twice, left id:"
-                << ac->operand( 0 )->id() << " id right:" << ac->operand( 1 )->id();
-            if ( ac->operand( 0 ) == target )
-            {
-                result_is_left_side = false;
-                result = ac->operand( 1 );
-            }
-
-            if ( ac->operand( 1 ) == target )
-            {
-                result_is_left_side = true;
-                result = ac->operand( 0 );
-            }
-        }
-
-        void visit( Operation *op ) { op->traverse( *this ); }
-    };
-
     struct DecodedInstrGen
     {
         DecodedInstrGen( SEGGraphPrinter *seg_graph_printer, VerifyInstruction *vi,
@@ -510,6 +453,8 @@ namespace circ
 
         void create();
         SEGGraphPrinter *seg_graph_printer;
+        std::shared_ptr<IndependentSelectEmissionHelper> select_helper;
+
         std::string name;
         decoder::FunctionDeclarationBuilder fdb_setup;
         decoder::FunctionDeclarationBuilder fdb_visit;
@@ -914,17 +859,5 @@ namespace circ
 
     bool operation_has_nested_select( const InstructionProjection &projection );
 
-    template < typename Derived, bool IsConst = false >
-    struct AdviceResolvingVisitor : Visitor< Derived, IsConst >
-    {
-        AdviceResolvingVisitor( VerifyInstruction *vi ) : vi( vi ) {};
 
-        auto visit( Advice *op )
-        {
-            this->parent_t::dispatch( get_op_attached_to_advice_in_vi( op, vi ) );
-        }
-
-    protected:
-        VerifyInstruction *vi;
-    };
 }

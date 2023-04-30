@@ -1,6 +1,10 @@
 #include "circuitous/Decoder/GenerationHelpers.hpp"
 
 #include "circuitous/Decoder/DecodeAST.hpp"
+#include "circuitous/Decoder/SEGGraph.hpp"
+#include "circuitous/IR/Shapes.hpp"
+
+#include <gap/core/graph.hpp>
 
 namespace circ::decoder
 {

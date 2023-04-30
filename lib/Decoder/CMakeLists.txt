@@ -4,6 +4,7 @@ add_headers(Decoder CIRCUITOUS_DISASSEMBLER_HEADERS
     DecoderPrinter.hpp
     DecodeAST.hpp
     GenerationHelpers.hpp
+    SEGGraph.hpp
 )
 
 add_circuitous_library( decoder
