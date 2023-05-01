@@ -918,10 +918,10 @@ namespace circ
                     options.emplace_back( irops::Option::make( irb,
                                                                { full_val, full_conds },
                                                                ctx.bw( full_val ) ) );
+                    // Clean up.
+                    input().store( irb, reg, normal_flow_value );
                 }
 
-                // Clean up.
-                input().store( irb, reg, normal_flow_value );
             }
 
             if ( options.empty() )
