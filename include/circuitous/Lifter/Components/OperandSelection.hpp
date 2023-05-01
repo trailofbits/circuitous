@@ -157,7 +157,8 @@ namespace circ::build
                     .getLimitedValue();
 
                 check( args.size() > idx + 1 );
-                args[ idx + 1 ] = coerce( state.load( irb, ctx.reg( reg_name ) ) );
+                auto parent_reg = enclosing_reg( ctx.arch(), reg_name );
+                args[ idx + 1 ] = coerce( state.load( irb, parent_reg ) );
             }
 
             auto trg_type = [ & ]()
