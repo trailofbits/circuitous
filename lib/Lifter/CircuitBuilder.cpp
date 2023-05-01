@@ -12,6 +12,7 @@
 #include <circuitous/Lifter/Memory.hpp>
 #include <circuitous/Lifter/Instruction.hpp>
 #include <circuitous/Lifter/SelectFold.hpp>
+#include <circuitous/Lifter/Undefs.hpp>
 
 #include <circuitous/Lifter/Components/Decoder.hpp>
 #include <circuitous/Lifter/Components/OperandSelection.hpp>
@@ -1084,7 +1085,15 @@ namespace circ
         auto exec = [ & ]( auto v ) { return remove_write( v ); };
         irops::AllocateDst::for_all_in( &*circuit_fn, exec );
 
+        irops::Error::for_all_in( &*circuit_fn,
+                                  []( auto c ) { c->eraseFromParent(); } );
+
+        replace_remill_undefs( &*circuit_fn );
+
+        // We firstly optimize, otherwise there would still be memory operations
+        // and we would not be able to propagate undefs.
         optimize_silently( { &*circuit_fn } );
+        propagate_remill_undefs( &*circuit_fn );
     }
 
     /** State helpers **/
