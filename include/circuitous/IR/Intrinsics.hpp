@@ -488,6 +488,35 @@ namespace circ::irops
         }
     };
 
+    template< typename T >
+    struct ConstraintBase : Instance_< T >
+    {
+        llvm::CallInst *call;
+
+        ConstraintBase( llvm::CallInst *call )
+            : Instance_< T >( call ), call( call )
+        {}
+
+        ConstraintBase( llvm::Instruction *inst )
+            : Instance_< T >( inst ), call( llvm::dyn_cast_or_null< llvm::CallInst >( inst ) )
+        {}
+
+        llvm::Value *fixed() { check( *this ); return call->getArgOperand( 1 ); }
+        llvm::Value *runtime() { check( *this ); return call->getArgOperand( 0 ); }
+
+        void set_runtime( llvm::Value *v )
+        {
+            check(*this);
+            call->setArgOperand(1, v);
+        }
+    };
+
+    template<>
+    struct Instance< OutputCheck > : ConstraintBase< OutputCheck >
+    {
+        using ConstraintBase< OutputCheck >::ConstraintBase;
+    };
+
     template<>
     struct Instance< AdviceConstraint > : Instance_< AdviceConstraint >
     {
