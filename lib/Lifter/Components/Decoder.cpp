@@ -97,12 +97,15 @@ namespace circ::build
         {
             [ & ]( const shadowinst::Reg &sreg )
             {
-                holes_per_tm.emplace_back( holes( sreg ) );
+                if ( sreg.regions.marked_size() != 0 && !sreg.tm().is_saturated() )
+                    holes_per_tm.emplace_back( holes( sreg ) );
             },
             [ & ]( const auto & ) {} // ignore rest
         };
         shadow.for_each_present( process );
 
+        if ( holes_per_tm.empty() )
+            return nullptr;
         return irops::make< irops::And >( irb, holes_per_tm );
     }
 
@@ -132,7 +135,10 @@ namespace circ::build
 
     llvm::Value *AtomDecoder::get_decoder_tree()
     {
-        return irops::make< irops::DecoderResult >( irb, byte_fragments( atom.abstract ) );
+        auto fragments = byte_fragments( atom.abstract );
+        if ( auto hole_check = holes( atom.abstract ) )
+            fragments.push_back( hole_check );
+        return irops::make< irops::DecoderResult >( irb, fragments );
     }
 
     /* Decoder:: */
