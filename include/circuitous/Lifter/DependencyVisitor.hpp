@@ -167,4 +167,34 @@ namespace circ
         }
     };
 
+    template< typename Trg >
+    struct UndefChain
+    {
+        std::unordered_set< llvm::Instruction * > found;
+
+        void _get( llvm::Instruction *val )
+        {
+            if ( auto ir_op = irops::Instance< Trg >( val ) )
+            {
+                found.emplace( val );
+                return;
+            }
+
+            for ( auto user : val->users() )
+            {
+                auto as_inst = llvm::dyn_cast< llvm::Instruction >( user );
+                check( as_inst );
+                _get( as_inst );
+            }
+        }
+
+        auto get( llvm::Instruction *val ) -> irops::Instance< Trg >
+        {
+            _get( val );
+            check( found.size() == 1, [&](){ return dbg_dump( found ); } );
+            return irops::Instance< Trg >( *found.begin() );
+        }
+
+    };
+
 }  // namespace circ
