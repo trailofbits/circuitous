@@ -28,6 +28,8 @@ CIRCUITOUS_UNRELAX_WARNINGS
 namespace circ::irops
 {
     using io_type = impl::io_type;
+    using impl::twin;
+
 
     namespace impl
     {

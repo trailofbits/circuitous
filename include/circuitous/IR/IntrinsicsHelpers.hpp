@@ -58,6 +58,15 @@ namespace circ::irops::impl
         }
     }
 
+    static inline io_type twin( io_type io )
+    {
+        switch ( io )
+        {
+            case io_type::in : return io_type::out;
+            case io_type::out : return io_type::in;
+        }
+    }
+
 
     template< typename E >
     struct to_enum {};
