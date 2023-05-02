@@ -373,6 +373,20 @@ namespace circ::decoder {
     }
 
     Type::Type() { }
+
+    bool Type::equals( const Type &rhs )
+    {
+        std::stringstream ss_lhs;
+        std::stringstream ss_rhs;
+        ExpressionPrinter lhs_ep(ss_lhs);
+        ExpressionPrinter rhs_ep(ss_rhs);
+
+        lhs_ep.print(*this);
+        rhs_ep.print(rhs);
+
+        return ss_lhs.str() == ss_rhs.str();
+    }
+
     Var::Var( Id s ) :
         name( std::move( s ) ), type( Type( "auto" ) ), is_struct( false ), is_pointer( false )
     {

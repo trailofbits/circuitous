@@ -266,7 +266,7 @@ SEGGraph::get_nodes_by_vi( VerifyInstruction *vi )
         }
     }
 
-    circ::check(m.size() != 0) << "shit is empty? wut";
+    circ::check(m.size() != 0) << "this shouldn't be empty";
     return m;
 }
 
@@ -316,130 +316,50 @@ int SEGGraph::get_maximum_vi_size()
     return *std::max_element(vals.begin(), vals.end());
 }
 
-
-struct TupleConstructor : AdviceResolvingVisitor< TupleConstructor >
+struct ToExpressionWithIsomorphicSelectsVisitor : AdviceResolvingVisitor< ToExpressionWithIsomorphicSelectsVisitor >
 {
-    explicit TupleConstructor( VerifyInstruction *vi, DecodedInstrGen &dig ) :
-        AdviceResolvingVisitor( vi ), dig( dig )
-    { }
+    explicit ToExpressionWithIsomorphicSelectsVisitor( DecodedInstrGen &dig ) :
+        AdviceResolvingVisitor( dig.vi ), dig( dig )
+    {
+    }
+
+    void visit( Advice *op ) { AdviceResolvingVisitor::visit( op ); }
 
     void visit( Operation *op )
     {
         auto lhs = dig.get_next_free_data_slot();
         dig.member_initializations.push_back( Assign( lhs, Id( op->name() ) ) );
+        generated_names.push_back( lhs.value().name );
         op->traverse( *this );
     }
 
     void visit( Select *op )
     {
-        auto func = dig.select_emission_helper.get_function(op, dig.vi);
+        //TODO(sebas): Treat non-decode time selects like Operation*
+        auto func = dig.select_emission_helper.get_function( op, dig.vi );
         auto nodes_taken = func.first;
-        auto tuple = func.second.retType;
+        auto tuple = Tuple( nodes_taken );
+        auto tuple_type = tuple.get_type();
+        circ::check( func.second.retType.equals( tuple_type ) ) << "mismatch in expected types";
 
-//        auto new_tuple_arg = VarDecl(Var())
-//        dig.tuple_constructor.arg_insert()
-//        dig.get_next_free_data_slot();
+        auto tuple_arg = dig.tuple_constructor.get_new_arg( tuple_type );
+
+        for ( size_t i = 0; i < tuple.size; i++ )
+        {
+            auto new_variable = dig.get_next_free_data_slot();
+            dig.member_declarations.push_back( new_variable );
+            MemberInit init( new_variable.value().name, tuple.get( tuple_arg, i ) );
+            generated_names.push_back( new_variable );
+            dig.tuple_constructor.member_init_insert( init );
+        }
+
+        FunctionCall helper_func_call
+            = FunctionCall( func.second.function_name, { inner_func_arg1, inner_func_arg2 } );
+        dig.main_to_tuple_call.args.push_back( helper_func_call );
     }
 
-    DecodedInstrGen& dig;
-};
-
-struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
-{
-    explicit ToExpressionVisitor( VerifyInstruction *vi, std::vector< decoder::Expr > &arguments,
-                                  IndependentSelectEmissionHelper &select_storage,
-                                  SimpleDecodeTimeCircToExpressionVisitor *decode_time_resolver,
-                                  std::size_t argument_index = 0 ) :
-        vi( vi ),
-        arguments( arguments ), select_emission_helper( select_storage ),
-        decode_time_resolver( decode_time_resolver ), arg_index( argument_index )
-    {
-    }
-
-    void visit( Advice *advice )
-    {
-        auto attached_op = get_op_attached_to_advice_in_vi( advice, vi );
-        dispatch(attached_op);
-    }
-
-    void visit( Operation *op )
-    {
-        add_assignment_to_next_argument(op->name());
-        op->traverse( *this );
-    }
-
-    void visit( Select *op )
-    {
-        /*
-         * Currently select helpers is only allowed for selects which have only leafs.
-         * Mainly due to simplicity of its implementation.
-         */
-//        selecty.get_function(op, vi);
-        auto func = select_emission_helper.get_function( op, vi );
-        arg_index += func.first;
-        // in the new constructor do two things
-        // call the given function and add it as args
-        //
-
-//
-//        auto can_use_select_helper_function = true;
-//        for(std::size_t i = 1; i < op->operands_size() && can_use_select_helper_function; i++)
-//            can_use_select_helper_function = can_use_select_helper_function && op->operand(i)->operands_size() == 0;
-//
-//        if(can_use_select_helper_function)
-//        {
-//            auto indx = decode_time_resolver->dispatch(op->selector());
-//            auto helper_call = select_storage->get_specialization(op, indx);
-//            add_assignment_to_next_argument(helper_call);
-//        }
-//        else
-//        {
-//            std::size_t first_taken_args = 0;
-//            bool is_first = true;
-//            for ( std::size_t choice = 1; choice < op->operands_size(); choice++ )
-//            {
-//                auto indx = decoder::Var( "select_id_" + std::to_string( op->id() ) );
-//                auto c_val = decoder::Int( static_cast< int64_t >( choice - 1 ) );
-//                auto eq = decoder::Equal( indx, c_val );
-//
-//                ToExpressionVisitor choice_child_vis( vi, arguments, select_storage,
-//                                                      decode_time_resolver, arg_index );
-//                choice_child_vis.visit( op->operand( choice ) );
-//                if ( is_first )
-//                {
-//                    first_taken_args = choice_child_vis.taken_args;
-//                    is_first = false;
-//                }
-//                else
-//                {
-//                    check( first_taken_args == choice_child_vis.taken_args )
-//                        << "non-isomorphic selects are not allowed for independent emission";
-//                }
-//                decoder::If ifs( eq, choice_child_vis.output_expressions );
-//                output_expressions.push_back( ifs );
-//            }
-//            arg_index = arg_index + first_taken_args;
-//        }
-    }
-
-    decoder::StatementBlock output_expressions;
-
-private:
-    VerifyInstruction *vi;
-    std::vector<decoder::Expr> arguments;
-    IndependentSelectEmissionHelper& select_emission_helper;
-    SimpleDecodeTimeCircToExpressionVisitor* decode_time_resolver;
-    std::size_t arg_index;
-    std::size_t taken_args = 0;
-
-
-    void add_assignment_to_next_argument(decoder::Expr value)
-    {
-        auto lhs = arguments[ arg_index++ ];
-        taken_args++;
-        output_expressions.push_back( decoder::Statement( decoder::Assign( lhs, value ) ) );
-        arguments.push_back( lhs );
-    }
+    std::vector< VarDecl > generated_names;
+    DecodedInstrGen &dig;
 };
 
 /*
@@ -473,16 +393,13 @@ void DecodedInstrGen::get_expression_for_projection_with_indepenent_choices(
     std::vector<decoder::Expr> func_args;
     std::vector<decoder::Expr> argument_names;
 
-    for(auto i = 0 ; i < node->subtree_count; i++)
-        argument_names.push_back(get_next_free_data_slot());
-//    auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &");
+    //TODO(sebas): Pass a var around instead of creating it inplace here
     func_args.push_back(decoder::Id("visitor"));
-    func_args.insert(func_args.end(), argument_names.begin(), argument_names.end());
 
-    ToExpressionVisitor vis( vi, argument_names, select_emission_helper,
-                             &decode_time_expression_creator );
-    vis.visit( key );
-    fdb_setup.body_insert( vis.output_expressions );
+    ToExpressionWithIsomorphicSelectsVisitor setup(*this);
+    setup.dispatch(instr_proj.root_in_vi);
+    for(auto & new_variables : setup.generated_names)
+        func_args.push_back(new_variables.value().name);
 
     auto func_decl = seg_graph_printer->get_func_decl( node );
     auto funcCall = decoder::FunctionCall( func_decl.function_name, func_args );
@@ -541,7 +458,7 @@ void DecodedInstrGen::get_expression_for_projection(
             auto rhs = decoder::Id( op->op->name());
 
             member_initializations.push_back( decoder::Assign( lhs, rhs ) );
-            arguments.push_back(lhs);
+            arguments.push_back( lhs.value().name );
         }
 
         check( arguments.size() == func_decl.args.size() )
@@ -783,18 +700,18 @@ std::size_t SelectStorage::hash_select_targets( Select *sel )
     return std::hash< std::string > {}( pp.Hash( select_values( sel ) ) );
 }
 
-bool are_trees_isomorphic( const std::vector< Operation * > &ops )
-{
-    if ( ops.size() < 2 )
-        return true;
-
-    print::CompactPrinter cp;
-    std::string first_hash = cp.Hash( ops[ 0 ] );
-    return std::all_of( ops.begin() + 1, ops.end(),
-                        [ & ]( Operation *op ) {
-                            std::cout << "comparing: " << cp.Hash(op) << " = " << first_hash << std::endl;
-                            return cp.Hash( op ) == first_hash; } );
-}
+//bool are_trees_isomorphic( const std::vector< Operation * > &ops )
+//{
+//    if ( ops.size() < 2 )
+//        return true;
+//
+//    print::CompactPrinter cp;
+//    std::string first_hash = cp.Hash( ops[ 0 ] );
+//    return std::all_of( ops.begin() + 1, ops.end(),
+//                        [ & ]( Operation *op ) {
+//                            std::cout << "comparing: " << cp.Hash(op) << " = " << first_hash << std::endl;
+//                            return cp.Hash( op ) == first_hash; } );
+//}
 
 
 
@@ -879,6 +796,7 @@ struct HasSelectInProjectionVisitor : AdviceResolvingVisitor< HasSelectInProject
 {
     using AdviceResolvingVisitor::AdviceResolvingVisitor;
     void visit( Select *op ) { found_select = true; }
+    void visit( Advice *op ) { AdviceResolvingVisitor::visit(op); }
     void visit( Operation *op ) { op->traverse( *this ); }
 
     bool found_select = false;
@@ -894,6 +812,7 @@ struct HasSubSelectInProjectionVisitor : AdviceResolvingVisitor< HasSubSelectInP
         if(vis.found_select)
             found_sub_select = true;
     }
+    void visit( Advice *op ) { AdviceResolvingVisitor::visit(op); }
     void visit( Operation *op ) { op->traverse( *this ); }
 
     bool found_sub_select = false;
@@ -960,7 +879,32 @@ decoder::IndexVar DecodedInstrGen::get_instr_data( std::size_t at_index )
 decoder::VarDecl DecodedInstrGen::get_next_free_data_slot()
 {
     auto index = std::to_string(size++);
-    auto var = decoder::Var(member_variable_prefix + index);
+    auto var = decoder::Var( member_variable_prefix + index, Type( "VisitorType" ) );
     return decoder::VarDecl(var);
+}
+
+Struct DecodedInstrGen::create_struct()
+{
+    Struct s;
+    s.name = name;
+    main_constructor.name( name ).retType( Type( "void" ) );
+    for(auto& arg : inner_func_args){
+        main_constructor.arg_insert(arg);
+    }
+
+    tuple_constructor.name(name).retType( Type("void") );
+    create();
+    main_constructor.init_call_insert(main_to_tuple_call);
+
+    fdb_visit.name( "visit" )
+        .retType( Type( "void" ) )
+        .arg_insert( Var( "visitor", Type( "const VisitorType&" ) ) );
+
+    s.constructors.push_back(tuple_constructor.make());
+    s.constructors.push_back(main_constructor.make());
+    s.methods.push_back(fdb_visit.make());
+    s.assignment_init_variables = member_initializations;
+    s.default_init_variables = member_declarations;
+    return s;
 }
 }

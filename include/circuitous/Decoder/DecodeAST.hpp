@@ -28,6 +28,8 @@ namespace circ::decoder {
         bool is_constexpr = false;
         bool is_const = false;
         bool is_static = false;
+
+        bool equals( const Type &rhs);
     };
 
     struct Var {

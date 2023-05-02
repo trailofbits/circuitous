@@ -445,6 +445,7 @@ namespace circ::decoder
             seg_graph_printer( seg_graph_printer ),
             select_emission_helper(select_emission_helper),
             name( name ),
+            main_to_tuple_call(FunctionCall(name, {})),
             vi(vi),
             data_array( decoder::Var( name ) ),
             decode_time_expression_creator(SimpleDecodeTimeCircToExpressionVisitor(
@@ -455,16 +456,19 @@ namespace circ::decoder
 
         }
 
-        void create();
+        Struct create_struct();
         SEGGraphPrinter *seg_graph_printer;
         IndependentSelectEmissionHelper &select_emission_helper;
 
         std::string name;
-        decoder::FunctionDeclarationBuilder tuple_constructor;
-        std::vector<MemberInit> tuple_constructor_member_inits;
+        ConstructorDeclarationBuilder tuple_constructor;
+        FunctionCall main_to_tuple_call;
+        ConstructorDeclarationBuilder main_constructor;
 
         decoder::FunctionDeclarationBuilder fdb_setup;
         decoder::FunctionDeclarationBuilder fdb_visit;
+
+        std::vector<decoder::VarDecl> member_declarations;
         std::vector<decoder::Assign> member_initializations;
         std::size_t size = 0;
         VerifyInstruction* vi;
@@ -474,8 +478,8 @@ namespace circ::decoder
         decoder::Var data_array;
         SimpleDecodeTimeCircToExpressionVisitor decode_time_expression_creator;
 
-        bool
-        can_emit_independently( const std::multimap< Operation *, seg_projection > &proj_groups,
+        void create();
+        bool selects_emission_locations_are_constant( const std::multimap< Operation *, seg_projection > &proj_groups,
                                 Operation *key );
         void get_expression_for_projection(
             const std::pair< InstructionProjection, std::shared_ptr< SEGNode > >

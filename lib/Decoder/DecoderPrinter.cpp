@@ -13,28 +13,8 @@ namespace circ::decoder {
     };
 
     decoder::Expr DecoderPrinter::create_context_decoder_function(const ExtractedCtx &ctx) {
-        Struct s;
-        s.name = ctx.generated_name;
-        DecodedInstrGen dig(&seg_graph_printer, ctx.vi, ctx.generated_name);
-        dig.create();
-        dig.fdb_setup.name(ctx.generated_name);
-        for(auto& arg : inner_func_args){
-            dig.fdb_setup.arg_insert(arg);
-        }
-
-        auto args = get_decode_context_function_args( ctx );
-
-        dig.fdb_setup.name(s.name).retType( decoder::Type() );
-        //TODO(sebas): templatize visitor type
-        dig.fdb_visit.name( "visit" )
-            .retType( decoder::Type( "void" ) )
-            .arg_insert( Var( "visitor", "const VisitorType&" ) );
-
-        //TODO(sebas): add allocation to setup
-        s.methods.push_back(dig.fdb_setup.make());
-        s.methods.push_back(dig.fdb_visit.make());
-        s.assignment_init_variables = std::move(dig.member_initializations);
-        return s;
+        DecodedInstrGen dig(&seg_graph_printer, select_emission_helper, ctx.vi, ctx.generated_name);
+        return dig.create_struct();
     }
 
     std::vector< OptionalBitArray<8> > ExtractedCtx::convert_circIR_to_input_type_array() const {
@@ -72,10 +52,16 @@ namespace circ::decoder {
         seg_graph_printer.print_helper_functions();
         seg_graph_printer.print_semantics_emitter();
         seg_graph_printer.print_select_storage_helper_functions();
-        for (auto &ctx: extracted_ctxs)
-        {
-            ep.print( create_context_decoder_function( ctx ));
-        }
+
+        std::vector < Expr > decoder_functions;
+        for ( auto &ctx : extracted_ctxs )
+            decoder_functions.push_back( create_context_decoder_function( ctx ) );
+
+        for ( auto &sel_helper : select_emission_helper.cache )
+            ep.print( sel_helper.fd );
+
+        for ( auto &decoder_funcs : decoder_functions )
+            ep.print( decoder_funcs );
 
         ep.print( create_top_level_function());
         os << std::endl;
@@ -134,8 +120,8 @@ namespace circ::decoder {
     Expr DecoderPrinter::create_top_level_function() {
         FunctionDeclarationBuilder fdb;
         fdb.name(circuit_decode_function_name);
-        fdb.retType( decoder::Type("int") );
-        fdb.arg_insert( Var( bytes_input_variable, "std::array<uint8_t,15>" ));
+        fdb.retType( Type( "int" ) );
+        fdb.arg_insert( Var( bytes_input_variable, Type( "std::array<uint8_t,15>" ) ) );
 
         fdb.body_insert( get_top_level_arg_conversion());
 
@@ -404,29 +390,6 @@ InputType ctoit(const char c){
         default: circ::unreachable() << "Converting invalid value to InputType";
     }
 }
-
-std::size_t hash_select( Select *op )
-{
-    print::PrettyPrinter pp;
-    return std::hash<std::string>{}( pp.Hash(select_values(op)) );
-}
-
-std::vector< Operation * > select_values( Select *op )
-{
-    std::vector< Operation * > results;
-    auto first = false;
-    //TODO(sebas): idiomize this
-    for (auto o : op->operands() )
-    {
-        if(!first)
-            first = true;
-        else
-            results.push_back(o);
-    }
-    return results;
-}
-
-Operation *select_index( Select *op ) { return op->operand(0); }
 
 
 }  // namespace circ::disassm
