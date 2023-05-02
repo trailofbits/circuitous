@@ -40,6 +40,7 @@ namespace circ::decoder {
                     case ExprStyle::StructVars: endl(); break;
                     case ExprStyle::StructDerivations: raw(", "); break;
                     case ExprStyle::StructMemberInitialization: raw(", "); break;
+                    case ExprStyle::Switch: endl(); break;
                 }
             }
         }
@@ -116,6 +117,13 @@ namespace circ::decoder {
                     .expr( arg.ifBody(), GuardStyle::Curly)
                     .raw(" else ")
                     .expr( arg.elseBody(), GuardStyle::Curly).endl();
+                },
+                [&](const case_value_expr &arg) {
+                    raw("case").expr(arg.first).raw(":").expr(arg.second);
+                },
+                [&](const Switch &arg) {
+                      raw("switch").expr(*arg.cond, GuardStyle::Parens)
+                      .expr_array(arg.cases, ExprStyle::Switch);
                 },
                 [&](const FunctionCall &arg) {
                     if(arg.template_parameters.empty())
@@ -218,6 +226,7 @@ namespace circ::decoder {
             case ExprStyle::StructVars: return make_guard( GuardStyle::None );
             case ExprStyle::StructDerivations: return make_guard( GuardStyle::SingleColon );
             case ExprStyle::StructMemberInitialization: return make_guard( GuardStyle::SingleColon );
+            case ExprStyle::Switch: return make_guard( GuardStyle::Curly );
         }
     }
 
@@ -426,4 +435,6 @@ namespace circ::decoder {
         init_calls(init_calls)
     {
     }
+
+    Switch::Switch( const Expr &e ) : cond( std::make_shared< Expr >( e ) ) {}
 };

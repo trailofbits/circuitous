@@ -198,6 +198,15 @@ namespace circ::decoder {
     };
 
 
+    using case_value_expr = std::pair< Expr , Expr >;
+    struct Switch
+    {
+        Switch(const Expr& e);
+
+        std::shared_ptr< Expr > cond;
+        std::vector< case_value_expr > cases;
+    };
+
     struct Enum;
 
     struct EnumValue {
@@ -265,7 +274,7 @@ namespace circ::decoder {
             Expr, Int, Uint64, Id, Type, //primitive types Expr, int, std::string
             Var, VarDecl, Statement, Return, CastToUint64, IndexVar, EnumValue, Enum, EnumDecl, Dereference, // unary
             Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, BitwiseAnd, Assign, MemberInit, Shfl, Equal, And, // binary
-            If, IfElse,
+            If, IfElse, Switch, case_value_expr,
             FunctionDeclaration, ConstructorDeclaration, FunctionCall, // function
             Struct,
             StatementBlock, Empty
@@ -300,7 +309,8 @@ namespace circ::decoder {
         StructMethods,
         StructVars,
         StructDerivations,
-        StructMemberInitialization
+        StructMemberInitialization,
+        Switch
     };
 
     enum class GuardStyle : uint32_t{
