@@ -128,18 +128,18 @@ expression_for_seg_node( std::unordered_map< SEGNode, FunctionDeclaration,
                    &func_decls,
                UniqueNameStorage &unique_names_storage, const SEGNode &node, std::vector<decoder::Var> arg_names )
 {
-    std::vector<decoder::Expr> args;
-    std::vector<decoder::Expr> local_vars;
-    decoder::StatementBlock setup;
+    std::vector<Expr> args;
+    std::vector<Expr> local_vars;
+    StatementBlock setup;
 
-    decoder::Var operation = arg_names[0];
+    Var operation = arg_names[0];
     auto last_index = 0;
     local_vars.push_back(operation); // requires to be first in the list when calling the visitor
     for(auto &c : node._nodes)
     {
         auto start = arg_names.begin() + last_index + 1;
         auto end = start + c->subtree_count;
-        auto child_arg_names = std::vector< decoder::Var >( start, end );
+        auto child_arg_names = std::vector< Var >( start, end );
         last_index = last_index + c->subtree_count;
         auto [ lval, set ] = expression_for_seg_node( func_decls, unique_names_storage, *c, child_arg_names );
         local_vars.push_back(lval);
@@ -147,8 +147,8 @@ expression_for_seg_node( std::unordered_map< SEGNode, FunctionDeclaration,
     }
 
     decoder::VarDecl visitor_call_var(unique_names_storage.get_unique_var_name());
-    auto visitor_call = decoder::FunctionCall("visitor.call", local_vars);
-    auto visitor_assign = decoder::Statement(decoder::Assign(visitor_call_var, visitor_call));
+    auto visitor_call = FunctionCall("visitor.call", local_vars);
+    auto visitor_assign = Statement(Assign(visitor_call_var, visitor_call));
     setup.push_back(visitor_assign);
 
     /*
@@ -161,13 +161,13 @@ expression_for_seg_node( std::unordered_map< SEGNode, FunctionDeclaration,
     if(!func_decls.contains(node))
     {
         decoder::FunctionDeclarationBuilder fdb;
-        fdb.retType( decoder::Type( "VisRetType" ) )
-            .name(unique_names_storage.get_unique_var_name().name)
-            .arg_insert(decoder::VarDecl(decoder::Var("visitor", "const VisitorType& ")));
-        for(auto arg_name : arg_names)
-            fdb.arg_insert(decoder::VarDecl(arg_name));
-        fdb.body_insert(setup);
-        fdb.body_insert(decoder::Return(visitor_call_var.value()));
+        fdb.retType( Type( "VisRetType" ) )
+            .name( unique_names_storage.get_unique_var_name().name )
+            .arg_insert( VarDecl( Var( "visitor", Type( "const VisitorType& " ) ) ) );
+        for ( auto arg_name : arg_names )
+            fdb.arg_insert( VarDecl( arg_name ) );
+        fdb.body_insert( setup );
+        fdb.body_insert( Return( visitor_call_var.value() ) );
         func_decls.insert( { node, fdb.make() } );
     }
 
@@ -317,14 +317,41 @@ int SEGGraph::get_maximum_vi_size()
 }
 
 
+struct TupleConstructor : AdviceResolvingVisitor< TupleConstructor >
+{
+    explicit TupleConstructor( VerifyInstruction *vi, DecodedInstrGen &dig ) :
+        AdviceResolvingVisitor( vi ), dig( dig )
+    { }
+
+    void visit( Operation *op )
+    {
+        auto lhs = dig.get_next_free_data_slot();
+        dig.member_initializations.push_back( Assign( lhs, Id( op->name() ) ) );
+        op->traverse( *this );
+    }
+
+    void visit( Select *op )
+    {
+        auto func = dig.select_emission_helper.get_function(op, dig.vi);
+        auto nodes_taken = func.first;
+        auto tuple = func.second.retType;
+
+//        auto new_tuple_arg = VarDecl(Var())
+//        dig.tuple_constructor.arg_insert()
+//        dig.get_next_free_data_slot();
+    }
+
+    DecodedInstrGen& dig;
+};
+
 struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 {
     explicit ToExpressionVisitor( VerifyInstruction *vi, std::vector< decoder::Expr > &arguments,
-                                  SelectStorage *select_storage,
+                                  IndependentSelectEmissionHelper &select_storage,
                                   SimpleDecodeTimeCircToExpressionVisitor *decode_time_resolver,
                                   std::size_t argument_index = 0 ) :
         vi( vi ),
-        arguments( arguments ), select_storage( select_storage ),
+        arguments( arguments ), select_emission_helper( select_storage ),
         decode_time_resolver( decode_time_resolver ), arg_index( argument_index )
     {
     }
@@ -348,45 +375,51 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
          * Mainly due to simplicity of its implementation.
          */
 //        selecty.get_function(op, vi);
+        auto func = select_emission_helper.get_function( op, vi );
+        arg_index += func.first;
+        // in the new constructor do two things
+        // call the given function and add it as args
+        //
 
-        auto can_use_select_helper_function = true;
-        for(std::size_t i = 1; i < op->operands_size() && can_use_select_helper_function; i++)
-            can_use_select_helper_function = can_use_select_helper_function && op->operand(i)->operands_size() == 0;
-
-        if(can_use_select_helper_function)
-        {
-            auto indx = decode_time_resolver->dispatch(op->selector());
-            auto helper_call = select_storage->get_specialization(op, indx);
-            add_assignment_to_next_argument(helper_call);
-        }
-        else
-        {
-            std::size_t first_taken_args = 0;
-            bool is_first = true;
-            for ( std::size_t choice = 1; choice < op->operands_size(); choice++ )
-            {
-                auto indx = decoder::Var( "select_id_" + std::to_string( op->id() ) );
-                auto c_val = decoder::Int( static_cast< int64_t >( choice - 1 ) );
-                auto eq = decoder::Equal( indx, c_val );
-
-                ToExpressionVisitor choice_child_vis( vi, arguments, select_storage,
-                                                      decode_time_resolver, arg_index );
-                choice_child_vis.visit( op->operand( choice ) );
-                if ( is_first )
-                {
-                    first_taken_args = choice_child_vis.taken_args;
-                    is_first = false;
-                }
-                else
-                {
-                    check( first_taken_args == choice_child_vis.taken_args )
-                        << "non-isomorphic selects are not allowed for independent emission";
-                }
-                decoder::If ifs( eq, choice_child_vis.output_expressions );
-                output_expressions.push_back( ifs );
-            }
-            arg_index = arg_index + first_taken_args;
-        }
+//
+//        auto can_use_select_helper_function = true;
+//        for(std::size_t i = 1; i < op->operands_size() && can_use_select_helper_function; i++)
+//            can_use_select_helper_function = can_use_select_helper_function && op->operand(i)->operands_size() == 0;
+//
+//        if(can_use_select_helper_function)
+//        {
+//            auto indx = decode_time_resolver->dispatch(op->selector());
+//            auto helper_call = select_storage->get_specialization(op, indx);
+//            add_assignment_to_next_argument(helper_call);
+//        }
+//        else
+//        {
+//            std::size_t first_taken_args = 0;
+//            bool is_first = true;
+//            for ( std::size_t choice = 1; choice < op->operands_size(); choice++ )
+//            {
+//                auto indx = decoder::Var( "select_id_" + std::to_string( op->id() ) );
+//                auto c_val = decoder::Int( static_cast< int64_t >( choice - 1 ) );
+//                auto eq = decoder::Equal( indx, c_val );
+//
+//                ToExpressionVisitor choice_child_vis( vi, arguments, select_storage,
+//                                                      decode_time_resolver, arg_index );
+//                choice_child_vis.visit( op->operand( choice ) );
+//                if ( is_first )
+//                {
+//                    first_taken_args = choice_child_vis.taken_args;
+//                    is_first = false;
+//                }
+//                else
+//                {
+//                    check( first_taken_args == choice_child_vis.taken_args )
+//                        << "non-isomorphic selects are not allowed for independent emission";
+//                }
+//                decoder::If ifs( eq, choice_child_vis.output_expressions );
+//                output_expressions.push_back( ifs );
+//            }
+//            arg_index = arg_index + first_taken_args;
+//        }
     }
 
     decoder::StatementBlock output_expressions;
@@ -394,7 +427,7 @@ struct ToExpressionVisitor : Visitor< ToExpressionVisitor >
 private:
     VerifyInstruction *vi;
     std::vector<decoder::Expr> arguments;
-    SelectStorage* select_storage;
+    IndependentSelectEmissionHelper& select_emission_helper;
     SimpleDecodeTimeCircToExpressionVisitor* decode_time_resolver;
     std::size_t arg_index;
     std::size_t taken_args = 0;
@@ -446,7 +479,7 @@ void DecodedInstrGen::get_expression_for_projection_with_indepenent_choices(
     func_args.push_back(decoder::Id("visitor"));
     func_args.insert(func_args.end(), argument_names.begin(), argument_names.end());
 
-    ToExpressionVisitor vis( vi, argument_names, &seg_graph_printer->select_storage,
+    ToExpressionVisitor vis( vi, argument_names, select_emission_helper,
                              &decode_time_expression_creator );
     vis.visit( key );
     fdb_setup.body_insert( vis.output_expressions );
@@ -600,7 +633,7 @@ void SEGGraphPrinter::generate_function_definitions()
     {
         for(auto & [op, node ] : seg_graph.get_nodes_by_vi(vi) )
         {
-            auto argument_names = name_storage.get_n_var_names(node->subtree_count, "const VisInputType &") ;
+            auto argument_names = name_storage.get_n_var_names(node->subtree_count, Type("const VisInputType &")) ;
             expression_for_seg_node( func_decls, name_storage, *node, argument_names );
         }
     }
@@ -719,20 +752,24 @@ void SEGGraph::save_nodes_from_projection( std::vector< std::shared_ptr< SEGNode
     }
 }
 
-decoder::Var UniqueNameStorage::get_unique_var_name(decoder::Id type_name)
+decoder::Var UniqueNameStorage::get_unique_var_name(decoder::Type type_name)
 {
     counter ++;
     return decoder::Var( "generated_name_" + std::to_string(counter), type_name);
 }
 
-std::vector<decoder::Var> UniqueNameStorage::get_n_var_names(int amount_of_names, decoder::Id type_name )
+decoder::Var UniqueNameStorage::get_unique_var_name()
 {
-    std::vector<decoder::Var> vars;
-    for(auto i = 0; i < amount_of_names; i++)
+    return get_unique_var_name( Type( "auto" ) );
+}
+
+std::vector<decoder::Var> UniqueNameStorage::get_n_var_names(int amount_of_names, Type type )
+{
+    std::vector< decoder::Var > vars;
+    for ( auto i = 0; i < amount_of_names; i++ )
     {
-        counter ++;
-        vars.push_back(
-            decoder::Var( "generated_name_" + std::to_string( counter ), type_name ) );
+        counter++;
+        vars.push_back( Var( "generated_name_" + std::to_string( counter ), type ) );
     }
     return vars;
 }

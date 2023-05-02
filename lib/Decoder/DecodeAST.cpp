@@ -64,7 +64,7 @@ namespace circ::decoder {
                 [&](const Expr &arg) { circ::unreachable() << "No plain expr allowed" ; },
                 [&](const Empty &arg) {},
                 [&](const Var &arg) { raw(arg.name); },
-                [&](const VarDecl &arg) { raw(arg.value().type, " ", arg.value().name); },
+                [&](const VarDecl &arg) { expr(arg.value().type).raw(" ", arg.value().name); },
                 [&]( const EnumValue &arg) {
 //                            raw(arg.e->enum_name, "::", arg.e->index(arg.index));
                         },
@@ -97,6 +97,7 @@ namespace circ::decoder {
 
                 [&](const Equal &arg) {binary_op( arg, "==");},
                 [&](const Assign &arg) {binary_op( arg, "=", GuardStyle::None).raw(';');},
+                [&](const MemberInit &arg) { expr(arg.lhs()).expr(arg.rhs(), GuardStyle::Parens);},
                 [&](const StatementBlock &arg) {
                     for (auto &e: arg) {
                         expr( e );
@@ -297,6 +298,25 @@ namespace circ::decoder {
         return *this;
     }
 
+    Var FunctionDeclarationBuilder::get_new_arg( Type t )
+    {
+        auto candidate = arg_prefix + std::to_string(arg_suffix_counter);
+        auto candidate_name_is_taken = [&](const std::string& candidate) {
+            return std::any_of( _args.begin(), _args.end(),
+                          [ & ]( VarDecl arg ) { return arg.value().name == candidate; } );
+        };
+
+        while ( !candidate_name_is_taken(candidate) )
+        {
+            arg_suffix_counter++;
+            candidate = arg_prefix + std::to_string(arg_suffix_counter);
+        }
+
+        auto new_arg = Var( candidate, t );
+        arg_insert( new_arg );
+        return new_arg;
+    }
+
     Struct::Struct( const int templateSize ) :
         template_size( templateSize ), templatized( templateSize == 0 ), derived_from( {} )
     {
@@ -321,11 +341,18 @@ namespace circ::decoder {
     {
     }
 
-    Type::Type( Id name, const std::vector< Expr > &templateParameters ) :
+    Type::Type( Id name, std::vector< Expr > templateParameters ) :
         name(name),
         template_parameters( templateParameters )
     {
     }
 
     Type::Type() { }
+    Var::Var( Id s ) :
+        name( std::move( s ) ), type( Type( "auto" ) ), is_struct( false ), is_pointer( false )
+    {
+    }
+    Var::Var( Id s, Type t, bool is_struct, bool is_pointer ) :
+        name( std::move( s ) ), type( std::move( t ) ), is_struct( is_struct ),
+        is_pointer( is_pointer ) {}
 };

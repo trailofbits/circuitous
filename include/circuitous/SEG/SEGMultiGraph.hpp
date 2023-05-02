@@ -90,9 +90,10 @@ namespace circ::decoder
 
     struct UniqueNameStorage
     {
-        decoder::Var get_unique_var_name( decoder::Id type_name = "auto" );
+        decoder::Var get_unique_var_name();
+        decoder::Var get_unique_var_name( Type t );
         std::vector< decoder::Var > get_n_var_names( int amount_of_names,
-                                                     decoder::Id type_name = "auto" );
+                                                     Type type_name );
         std::vector< decoder::Var > names;
         int counter = 0;
     };
@@ -437,9 +438,12 @@ namespace circ::decoder
 
     struct DecodedInstrGen
     {
-        DecodedInstrGen( SEGGraphPrinter *seg_graph_printer, VerifyInstruction *vi,
+        DecodedInstrGen( SEGGraphPrinter *seg_graph_printer,
+                         IndependentSelectEmissionHelper &select_emission_helper,
+                         VerifyInstruction *vi,
                          const std::string &name ) :
             seg_graph_printer( seg_graph_printer ),
+            select_emission_helper(select_emission_helper),
             name( name ),
             vi(vi),
             data_array( decoder::Var( name ) ),
@@ -453,16 +457,20 @@ namespace circ::decoder
 
         void create();
         SEGGraphPrinter *seg_graph_printer;
-        std::shared_ptr<IndependentSelectEmissionHelper> select_helper;
+        IndependentSelectEmissionHelper &select_emission_helper;
 
         std::string name;
+        decoder::FunctionDeclarationBuilder tuple_constructor;
+        std::vector<MemberInit> tuple_constructor_member_inits;
+
         decoder::FunctionDeclarationBuilder fdb_setup;
         decoder::FunctionDeclarationBuilder fdb_visit;
         std::vector<decoder::Assign> member_initializations;
         std::size_t size = 0;
+        VerifyInstruction* vi;
+        decoder::VarDecl get_next_free_data_slot();
 
     private:
-        VerifyInstruction* vi;
         decoder::Var data_array;
         SimpleDecodeTimeCircToExpressionVisitor decode_time_expression_creator;
 
@@ -477,7 +485,6 @@ namespace circ::decoder
             std::multimap< Operation *, seg_projection > &proj_groups, Operation *key );
 
         decoder::IndexVar get_instr_data( std::size_t at_index );
-        decoder::VarDecl get_next_free_data_slot();
 
         const std::string member_variable_prefix = "node_";
     };

@@ -21,7 +21,7 @@ namespace circ::decoder {
     {
         Type();
         explicit Type( Id name );
-        explicit Type( Id name, const std::vector< Expr > &templateParameters );
+        explicit Type( Id name, std::vector< Expr > templateParameters );
         Id name;
 
         std::vector< Expr > template_parameters;
@@ -31,11 +31,11 @@ namespace circ::decoder {
     };
 
     struct Var {
-        explicit Var( Id s, Id t = "auto", bool is_struct = false, bool is_pointer = false ) :
-            name( std::move( s ) ), type( std::move( t ) ), is_struct( is_struct ),
-            is_pointer( is_pointer ) {};
+        explicit Var( Id s );
+        explicit Var( Id s, Type t, bool is_struct = false, bool is_pointer = false );
+
         Id name;
-        Id type;
+        Type type;
         bool is_struct;
         bool is_pointer;
     };
@@ -100,6 +100,7 @@ namespace circ::decoder {
     struct BitwiseXor : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
     struct BitwiseAnd : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
     struct Assign : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
+    struct MemberInit : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
     struct Shfl : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
     struct Equal : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
     struct And : BinaryOp<Expr>{ using BinaryOp::BinaryOp; };
@@ -126,6 +127,9 @@ namespace circ::decoder {
         self_t& body_insert(const Expr& expr);
         self_t& body_insert_statement(const Expr& expr);
         self_t& body(const StatementBlock& b);
+
+        Var get_new_arg(Type t);
+
         FunctionDeclaration make();
 
     private:
@@ -133,6 +137,9 @@ namespace circ::decoder {
         Id _function_name;
         std::vector< VarDecl > _args;
         StatementBlock _body;
+
+        std::string arg_prefix = "arg_";
+        int arg_suffix_counter = 0;
     };
 
     struct If : BinaryOp< Expr >
@@ -229,7 +236,7 @@ namespace circ::decoder {
     using op_t = std::variant<
             Expr, Int, Uint64, Id, Type, //primitive types Expr, int, std::string
             Var, VarDecl, Statement, Return, CastToUint64, IndexVar, EnumValue, Enum, EnumDecl, Dereference, // unary
-            Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, BitwiseAnd, Assign, Shfl, Equal, And, // binary
+            Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, BitwiseAnd, Assign, MemberInit, Shfl, Equal, And, // binary
             If, IfElse,
             FunctionDeclaration, FunctionCall, // function
             Struct,
@@ -324,8 +331,8 @@ namespace circ::decoder {
         Guard guard_for_expr(ExprStyle style);
     };
 
-    const Var inner_func_arg1( "first8bytes", "uint64_t");
-    const Var inner_func_arg2( "second8bytes", "uint64_t");
+    const Var inner_func_arg1( "first8bytes", Type("uint64_t"));
+    const Var inner_func_arg2( "second8bytes", Type("uint64_t"));
     inline static const std::array<Var,2> inner_func_args = {inner_func_arg1, inner_func_arg2};
 
     static constexpr const auto extract_helper_function_name = "extract_helper";
