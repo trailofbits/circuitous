@@ -110,6 +110,18 @@ namespace circ::decoder {
     // So currently we just take Expr
     using StatementBlock = std::vector< Expr >;
 
+    struct FunctionCall {
+        FunctionCall( const Var &var, const Id &func, std::vector< Expr > args );
+
+        FunctionCall(const Id &functionName, std::vector< Expr > args);
+
+        FunctionCall(const Id &functionName, std::vector< Expr > args, std::vector< Expr > template_parameters);
+
+        Id function_name;
+        std::vector< Expr > args;
+        std::vector< Expr > template_parameters;
+    };
+
     struct FunctionDeclaration {
         FunctionDeclaration(const Type& retType, const Id& functionName,
                             const std::vector< VarDecl > &args, const StatementBlock &body);
@@ -132,7 +144,7 @@ namespace circ::decoder {
 
         FunctionDeclaration make();
 
-    private:
+    protected:
         Type _retType;
         Id _function_name;
         std::vector< VarDecl > _args;
@@ -140,6 +152,31 @@ namespace circ::decoder {
 
         std::string arg_prefix = "arg_";
         int arg_suffix_counter = 0;
+    };
+
+    struct ConstructorDeclaration : FunctionDeclaration
+    {
+        ConstructorDeclaration( const Type &retType, const Id &functionName,
+                             const std::vector< VarDecl > &args, const StatementBlock &body,
+                             const std::vector< MemberInit > &members_init,
+                             const std::vector< FunctionCall > &init_calls );
+
+        std::vector< MemberInit > member_inits;
+        std::vector< FunctionCall > init_calls;
+    };
+
+    struct ConstructorDeclarationBuilder : FunctionDeclarationBuilder
+    {
+        using self_t = ConstructorDeclarationBuilder;
+
+        self_t& member_init_insert(const MemberInit& member_init);
+        self_t& init_call_insert(const FunctionCall& init_call);
+
+        ConstructorDeclaration make();
+
+    private:
+        std::vector< MemberInit > _member_inits;
+        std::vector< FunctionCall > _init_calls;
     };
 
     struct If : BinaryOp< Expr >
@@ -158,17 +195,6 @@ namespace circ::decoder {
         const Expr &elseBody() const;
     };
 
-    struct FunctionCall {
-        FunctionCall( const Var &var, const Id &func, std::vector< Expr > args );
-
-        FunctionCall(const Id &functionName, std::vector< Expr > args);
-
-        FunctionCall(const Id &functionName, std::vector< Expr > args, std::vector< Expr > template_parameters);
-
-        Id function_name;
-        std::vector< Expr > args;
-        std::vector< Expr > template_parameters;
-    };
 
     struct Enum;
 
@@ -211,18 +237,18 @@ namespace circ::decoder {
     struct Struct
     {
         Struct( const int templateSize = 0 );
-        Struct( const int templateSize, const std::vector< Expr >& derivedFrom );
+        Struct( const int templateSize, const std::vector< Expr > &derivedFrom );
 
         Id name;
         const int template_size;
         const bool templatized;
-        std::vector<Id> template_typenames;
+        std::vector< Id > template_typenames;
 
-        void insert_method(FunctionDeclaration method);
-        std::vector<Expr> derived_from; // should be structs, but our printers crash if this is a struct
-        std::vector<VarDecl> default_init_variables;
-        std::vector<Assign> assignment_init_variables;
-        std::vector<FunctionDeclaration> methods;
+        std::vector< Expr > derived_from; // should be structs, but our printers crash if this is a struct
+        std::vector< VarDecl > default_init_variables;
+        std::vector< Assign > assignment_init_variables;
+        std::vector< FunctionDeclaration > methods;
+        std::vector< ConstructorDeclaration > constructors;
     };
 
 //    struct StructDecl: UnaryOp<Struct>
@@ -238,7 +264,7 @@ namespace circ::decoder {
             Var, VarDecl, Statement, Return, CastToUint64, IndexVar, EnumValue, Enum, EnumDecl, Dereference, // unary
             Plus, Mul, BitwiseOr, BitwiseXor, BitwiseNegate, BitwiseAnd, Assign, MemberInit, Shfl, Equal, And, // binary
             If, IfElse,
-            FunctionDeclaration, FunctionCall, // function
+            FunctionDeclaration, ConstructorDeclaration, FunctionCall, // function
             Struct,
             StatementBlock, Empty
     >;
@@ -272,6 +298,7 @@ namespace circ::decoder {
         StructMethods,
         StructVars,
         StructDerivations,
+        StructMemberInitialization
     };
 
     enum class GuardStyle : uint32_t{
@@ -281,7 +308,7 @@ namespace circ::decoder {
         Square,
         Angled,
         CurlyWithSemiColon,
-        SingleColon
+        SingleColon,
     };
 
     struct Guard{
@@ -319,7 +346,7 @@ namespace circ::decoder {
         self_t &expr(const Expr &e, const GuardStyle gs);
 
         template < typename T >
-        self_t &expr_array(const std::vector< T > &ops, ExprStyle style);
+        self_t &expr_array(const std::vector< T > &ops, ExprStyle style, bool wrap_in_statement = false);
         self_t &endl();
         self_t &binary_op(const BinaryOp <Expr> &binOp, const std::string &op,
                           GuardStyle gs = GuardStyle::Parens);

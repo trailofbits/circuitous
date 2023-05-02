@@ -19,11 +19,14 @@ namespace circ::decoder {
 
     template < typename T >
     ExpressionPrinter&
-    ExpressionPrinter::expr_array(const std::vector< T > &ops, const ExprStyle style) {
+    ExpressionPrinter::expr_array(const std::vector< T > &ops, const ExprStyle style, bool wrap_in_statement) {
         auto g = guard_for_expr(style);
 
         for (std::size_t i = 0; i < ops.size(); i++) {
-            print( ops[ i ] );
+            if( wrap_in_statement )
+                print( Statement ( ops[ i ] ) );
+            else
+                print( ops[ i ] );
 
             if ( i != ops.size() - 1 ) {
                 switch (style) {
@@ -36,6 +39,7 @@ namespace circ::decoder {
                     case ExprStyle::StructMethods: endl(); break;
                     case ExprStyle::StructVars: endl(); break;
                     case ExprStyle::StructDerivations: raw(", "); break;
+                    case ExprStyle::StructMemberInitialization: raw(", "); break;
                 }
             }
         }
@@ -126,13 +130,33 @@ namespace circ::decoder {
                     .expr_array( arg.args, ExprStyle::FuncArgs).endl()
                     .expr_array( arg.body, ExprStyle::FuncBody).endl().endl();
                 },
+                [&](const ConstructorDeclaration &arg) {
+                    expr( arg.retType).raw(" ", arg.function_name )
+                        .expr_array( arg.args, ExprStyle::FuncArgs).endl();
+
+                    std::vector< Expr > all_inits;
+                    for(auto& init : arg.init_calls)
+                        all_inits.push_back(init);
+
+                    for(auto& init : arg.member_inits)
+                        all_inits.push_back(init);
+
+                    if ( !all_inits.empty() )
+                        expr_array(all_inits, ExprStyle::StructMemberInitialization);
+
+                    expr_array( arg.body, ExprStyle::FuncBody).endl().endl();
+                },
                 [&](const Struct &arg) {
-                    raw( "struct " ).expr(arg.name);
-//                                .expr_array(arg.derived_from, ExprStyle::StructDerivations)
+                    raw("struct ").expr(arg.name);
+                    if(!arg.derived_from.empty())
+                        raw(" ").expr_array(arg.derived_from, ExprStyle::StructDerivations).endl();
+                    else
+                        endl();
                     auto g = make_guard(GuardStyle::CurlyWithSemiColon);
-                    expr_array(arg.methods, ExprStyle::StructMethods)
-                        .expr_array(arg.default_init_variables, ExprStyle::StructVars)
-                        .expr_array(arg.assignment_init_variables, ExprStyle::StructVars);
+                    expr_array(arg.constructors, ExprStyle::StructMethods)
+                    .expr_array(arg.methods, ExprStyle::StructMethods)
+                    .expr_array(arg.default_init_variables, ExprStyle::StructVars, true).endl()
+                    .expr_array(arg.assignment_init_variables, ExprStyle::StructVars);
                 },
         }, *e.op );
         return *this;
@@ -193,6 +217,7 @@ namespace circ::decoder {
             case ExprStyle::StructMethods: return make_guard( GuardStyle::None );
             case ExprStyle::StructVars: return make_guard( GuardStyle::None );
             case ExprStyle::StructDerivations: return make_guard( GuardStyle::SingleColon );
+            case ExprStyle::StructMemberInitialization: return make_guard( GuardStyle::SingleColon );
         }
     }
 
@@ -306,7 +331,7 @@ namespace circ::decoder {
                           [ & ]( VarDecl arg ) { return arg.value().name == candidate; } );
         };
 
-        while ( !candidate_name_is_taken(candidate) )
+        while ( candidate_name_is_taken(candidate) )
         {
             arg_suffix_counter++;
             candidate = arg_prefix + std::to_string(arg_suffix_counter);
@@ -352,7 +377,39 @@ namespace circ::decoder {
         name( std::move( s ) ), type( Type( "auto" ) ), is_struct( false ), is_pointer( false )
     {
     }
+
     Var::Var( Id s, Type t, bool is_struct, bool is_pointer ) :
         name( std::move( s ) ), type( std::move( t ) ), is_struct( is_struct ),
         is_pointer( is_pointer ) {}
+
+
+    ConstructorDeclaration ConstructorDeclarationBuilder::make()
+    {
+        return ConstructorDeclaration( _retType, _function_name, _args, _body,
+                                       _member_inits, _init_calls);
+    }
+
+    ConstructorDeclarationBuilder::self_t &
+    ConstructorDeclarationBuilder::init_call_insert( const FunctionCall &init_call )
+    {
+        _init_calls.push_back( init_call );
+        return *this;
+    }
+
+    ConstructorDeclarationBuilder::self_t &
+    ConstructorDeclarationBuilder::member_init_insert( const MemberInit &member_init )
+    {
+        _member_inits.push_back( member_init );
+        return *this;
+    }
+
+    ConstructorDeclaration::ConstructorDeclaration(
+        const Type &retType, const Id &functionName, const std::vector< VarDecl > &args,
+        const StatementBlock &body, const std::vector< MemberInit > &members_init,
+        const std::vector< FunctionCall > &init_calls ) :
+        FunctionDeclaration(retType, functionName, args, body),
+        member_inits(members_init),
+        init_calls(init_calls)
+    {
+    }
 };
