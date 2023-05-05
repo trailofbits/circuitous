@@ -335,23 +335,31 @@ struct ToExpressionWithIsomorphicSelectsVisitor : AdviceResolvingVisitor< ToExpr
 
     void visit( Select *op )
     {
-        //TODO(sebas): Treat non-decode time selects like Operation*
+        // TODO(sebas): Treat non-decode time selects like Operation*
         auto func = dig.select_emission_helper.get_function( op, dig.vi );
+        auto func_type = func.second.retType;
         auto nodes_taken = func.first;
+        bool is_tuple = nodes_taken > 1;
+
         auto tuple = Tuple( nodes_taken );
         auto tuple_type = tuple.get_type();
-        circ::check( func.second.retType.equals( tuple_type ) ) << "mismatch in expected types";
+        if ( is_tuple )
+            circ::check( func_type.equals( tuple_type ) )
+                << "mismatch in expected types, expected: " << to_string( tuple_type )
+                << " got:" << to_string( func_type );
+        else
+            circ::check( func_type.equals( get_value_type() ) )
+                << "mismatch in expected types, expected: " << to_string( get_value_type() )
+                << " got: " << to_string( func_type );
 
-        auto tuple_arg = dig.tuple_constructor.get_new_arg( tuple_type );
+        Var new_constr_arg( "" );
+        if(is_tuple)
+            new_constr_arg = dig.tuple_constructor.get_new_arg( tuple_type );
+        else
+            new_constr_arg = dig.tuple_constructor.get_new_arg( get_value_type() );
 
-        for ( size_t i = 0; i < tuple.size; i++ )
-        {
-            auto new_variable = dig.get_next_free_data_slot();
-            dig.member_declarations.push_back( new_variable );
-            MemberInit init( new_variable.value().name, tuple.get( tuple_arg, i ) );
-            generated_names.push_back( new_variable );
-            dig.tuple_constructor.member_init_insert( init );
-        }
+        for ( size_t i = 0; i < nodes_taken; i++ )
+            register_new_variable(i, new_constr_arg, is_tuple, tuple);
 
         FunctionCall helper_func_call
             = FunctionCall( func.second.function_name, { inner_func_arg1, inner_func_arg2 } );
@@ -360,6 +368,23 @@ struct ToExpressionWithIsomorphicSelectsVisitor : AdviceResolvingVisitor< ToExpr
 
     std::vector< VarDecl > generated_names;
     DecodedInstrGen &dig;
+
+private:
+    void register_new_variable(std::size_t index, Var& new_constr_arg, bool is_tuple, Tuple& tuple)
+    {
+        auto new_variable = dig.get_next_free_data_slot();
+        auto new_variable_name = new_variable.value().name;
+
+        if(is_tuple)
+            dig.tuple_constructor.member_init_insert(
+                MemberInit( new_variable_name, tuple.get( new_constr_arg, index ) ) );
+        else
+            dig.tuple_constructor.member_init_insert(
+                MemberInit( new_variable_name, new_constr_arg ) );
+
+        dig.member_declarations.push_back( new_variable );
+        generated_names.push_back( new_variable );
+    }
 };
 
 /*

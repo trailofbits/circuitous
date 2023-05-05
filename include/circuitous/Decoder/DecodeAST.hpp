@@ -268,7 +268,10 @@ namespace circ::decoder {
 ////        explicit StructDecl() { }
 //    };
 
-    struct Empty { };
+    struct Empty : NAryOperation< Expr, 0 >
+    {
+        using NAryOperation::NAryOperation;
+    };
 
     using op_t = std::variant<
             Expr, Int, Uint64, Id, Type, //primitive types Expr, int, std::string

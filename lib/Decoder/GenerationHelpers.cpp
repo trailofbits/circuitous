@@ -17,7 +17,7 @@ namespace circ::decoder
             << size << " got: " << values.size();
 
         return FunctionCall( "std::tuple", values,
-                             std::vector< Expr >( values.size(), Id( "VisitorReturnType" ) ) );
+                             std::vector< Expr >( values.size(), get_value_type().name ) );
     }
 
     FunctionCall Tuple::get( Expr tuple, size_t index )
@@ -29,10 +29,11 @@ namespace circ::decoder
     Type Tuple::get_type()
     {
         return Type( "std::tuple",
-                     std::vector< Expr >( size, Id( "VisitorReturnType" ) ) );
+                     std::vector< Expr >( size, get_value_type() ) );
     }
 
-    std::pair< size_t, FunctionDeclaration > IndependentSelectEmissionHelper::get_function( Select *select, VerifyInstruction *vi )
+    std::pair< size_t, FunctionDeclaration > IndependentSelectEmissionHelper::get_function(
+        Select *select, VerifyInstruction *vi )
     {
         auto helper = create_helper( select, vi );
         register_if_not_in_cache( helper );
@@ -55,7 +56,7 @@ namespace circ::decoder
 
 
 
-    select_emission_helper
+    GeneratedSelectHelper
     IndependentSelectEmissionHelper::create_helper( Select *sel, VerifyInstruction *vi )
     {
         FunctionDeclarationBuilder fdb;
@@ -66,11 +67,20 @@ namespace circ::decoder
         if ( !are_trees_isomorphic( select_values ) )
             circ::unreachable() << "adding select helper for non-isomorphic select";
 
-        decoder::Var select_index = decoder::Var( "index", Type( "uint64_t" ) );
-        fdb.arg_insert( decoder::VarDecl( select_index ) );
+        for(auto& arg : inner_func_args)
+            fdb.arg_insert( arg );
 
         // start at 1 to account for selector
         size_t block_size = 0;
+
+        SimpleDecodeTimeCircToExpressionVisitor decode_time_decoder(
+            vi, inner_func_arg1, inner_func_arg2, extract_helper_function_name );
+
+        auto selector = Var("indx", Type("uint64"));
+        auto selector_value = decode_time_decoder.dispatch( sel->selector() );
+        auto selector_init = Assign(VarDecl(selector), selector_value );
+        fdb.body_insert( Statement( selector_init ) );
+        Switch sw( selector );
         for ( std::size_t i = 1; i < sel->operands_size(); i++ )
         {
             std::vector< decoder::Expr > block;
@@ -79,34 +89,56 @@ namespace circ::decoder
             {
                 block.push_back( decoder::Id( x->op->name() ) );
             }
-
-            decoder::Tuple tuple( block.size() );
-
-            // TODO(sebas) turn if statements into switch
-            auto if_expr = decoder::If(
-                decoder::Equal( select_index, decoder::Int( static_cast< int64_t >( i ) ) ),
-                decoder::Return( tuple.Construct( block ) ) );
-            fdb.body_insert( if_expr );
-            fdb.retType( tuple.get_type() );
+            //TODO(sebas): Change emission to a direct type instead of tuple if we only have a single value
+            auto c = Equal( selector, decoder::Int( static_cast< int64_t >( i ) ) );
+            Return return_val( Id( "" ) );
+            Type return_type( Id( "" ) );
+            if ( block.size() > 1 )
+            {
+                decoder::Tuple tuple( block.size() );
+                return_val = Return( tuple.Construct( block ) );
+                return_type = tuple.get_type();
+            }
+            else
+            {
+                return_val = Return( block[ 0 ] );
+                return_type = get_value_type();
+            }
+            sw.cases.push_back( { c, return_val } );
+            fdb.retType( return_type );
             block_size = block.size();
         }
 
+        fdb.body_insert(sw);
         std::stringstream ss;
         ExpressionPrinter ep( ss );
         ep.print( fdb.make() );
         auto hash = std::hash< std::string > {}( ss.str() );
         fdb.name( "select_hash_" + std::to_string( hash ) );
 
-        return select_emission_helper { block_size, hash, fdb.make() };
+        return GeneratedSelectHelper { block_size, hash, fdb.make() };
     }
 
-    void IndependentSelectEmissionHelper::register_if_not_in_cache( const select_emission_helper &sel )
+    void IndependentSelectEmissionHelper::register_if_not_in_cache( const GeneratedSelectHelper &sel )
     {
         if(std::none_of( cache.begin(), cache.end(),
-                      [ & ]( const select_emission_helper &p ) {
+                      [ & ]( const GeneratedSelectHelper &p ) {
                           return p.hash_func_decl_without_name
                                  == sel.hash_func_decl_without_name;
                       } ))
             cache.push_back(sel);
+    }
+
+    Type get_value_type()
+    {
+        return Type("VisRetType");
+    }
+
+    std::string to_string( Expr expr )
+    {
+        std::stringstream ss;
+        ExpressionPrinter ep( ss );
+        ep.print( expr );
+        return ss.str();
     }
 };

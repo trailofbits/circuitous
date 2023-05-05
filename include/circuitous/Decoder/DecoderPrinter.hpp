@@ -137,9 +137,8 @@ namespace circ::decoder {
         circuit_ref_t circuit;
         std::ostream &os;
         SEGGraphPrinter seg_graph_printer;
-        IndependentSelectEmissionHelper select_emission_helper;
         std::vector< ExtractedCtx > extracted_ctxs;
-
+        IndependentSelectEmissionHelper select_emission_helper;
         int max_depth = 0; // used to measure performance of selection tree generation
 
         ExpressionPrinter ep;

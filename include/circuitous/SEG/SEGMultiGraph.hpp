@@ -14,60 +14,6 @@
 
 namespace circ::decoder
 {
-    struct SimpleDecodeTimeCircToExpressionVisitor : Visitor<SimpleDecodeTimeCircToExpressionVisitor>
-    {
-        bool looping_on_operation = false;
-        explicit SimpleDecodeTimeCircToExpressionVisitor( VerifyInstruction *vi,
-                                                          const decoder::Var &first8Bytes,
-                                                          const decoder::Var &second8Bytes,
-                                                          const std::string &extractHelper ) :
-            vi( vi ),
-            first_8_bytes( first8Bytes ), second_8_bytes( second8Bytes ),
-            extract_helper( extractHelper )
-        {
-        }
-
-        decoder::Expr visit( Advice *advice )
-        {
-            return dispatch(get_op_attached_to_advice_in_vi( advice, vi ));
-        }
-
-        decoder::Expr visit( Concat *concat )
-        {
-            check( concat->operands_size() > 0 ) << "concat cannot be a leaf";
-            auto first_child = concat->operand(concat->operands_size() - 1);
-            decoder::Expr tmp = dispatch(first_child);
-            auto size_offset = first_child->size;
-            for(long i = static_cast< long >( concat->operands_size() - 2 ); i >= 0; i--)
-            {
-                auto child = concat->operand( static_cast< size_t >( i ) );
-                auto new_val = dispatch(child);
-                tmp = decoder::Plus( tmp, decoder::Shfl( new_val, decoder::Int(size_offset) ) );
-                size_offset = concat->operand( static_cast< size_t >( i ) )->size;
-            }
-            return tmp;
-        }
-
-        decoder::Expr visit( Extract* extract)
-        {
-            check(extract->operands_size() == 1) << "extracting from multiple nodes is not supported";
-            check( isa<InputInstructionBits>( extract->operand(0) ) ) << "Requires to extract from input bytes for now";
-            auto low = decoder::Int(extract->low_bit_inc);
-            auto high = decoder::Int(extract->high_bit_exc);
-            return decoder::FunctionCall(extract_helper, { first_8_bytes, second_8_bytes}, { low, high } );
-        }
-
-        decoder::Expr visit( Operation *op )
-        {
-            circ::unreachable() << "Not supported: " << op->name();
-        }
-
-        VerifyInstruction *vi;
-        const decoder::Var first_8_bytes;
-        const decoder::Var second_8_bytes;
-        const std::string extract_helper;
-    };
-
     template < gap::graph::yield_node when, typename node_pointer >
         requires gap::graph::node_like< typename node_pointer::element_type >
     gap::recursive_generator< node_pointer > non_unique_dfs( node_pointer root )
