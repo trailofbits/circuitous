@@ -34,11 +34,14 @@ void SEGNode::add_child( SEGNode::node_pointer child )
 
 void SEGNode::replace_all_nodes_by_id(std::shared_ptr<SEGNode> new_target, std::string target_id)
 {
-
-    std::transform(std::begin(_nodes), std::end(_nodes), std::begin(_nodes),
-                    [&](auto& node_ptr) { if(node_ptr != nullptr && node_ptr->id == target_id ) return new_target; else return node_ptr; });
-
-
+    std::transform( std::begin( _nodes ), std::end( _nodes ), std::begin( _nodes ),
+                    [ & ]( auto &node_ptr )
+                    {
+                        if ( node_ptr != nullptr && node_ptr->id == target_id )
+                            return new_target;
+                        else
+                            return node_ptr;
+                    } );
 }
 
 void specialize( std::map< std::string, Operation * > &specs, std::shared_ptr< SEGNode > node,
@@ -55,8 +58,6 @@ void specialize( std::map< std::string, Operation * > &specs, std::shared_ptr< S
         {
             std::cerr << "not isomorphic" << std::endl;
             return;
-
-
         }
         specialize(specs, node->children()[c], child);
         c++;
@@ -226,69 +227,46 @@ void SEGGraph::remove_node( const SEGGraph::node_pointer& node )
     std::erase_if( _nodes, ids_match);
 }
 
-std::vector< std::pair< InstructionProjection, std::shared_ptr< SEGNode > >>
+std::vector< std::pair< InstructionProjection, std::shared_ptr< SEGNode > > >
 SEGGraph::get_nodes_by_vi( VerifyInstruction *vi )
 {
-    //TODO(sebas): build this once instead of building this per call
-    std::vector< std::pair< InstructionProjection , std::shared_ptr< SEGNode > >> m;
-    for(auto& n : nodes())
+    // TODO(sebas): build this once instead of building this per call
+    std::vector< std::pair< InstructionProjection, std::shared_ptr< SEGNode > > > m;
+    for ( auto &n : nodes() )
     {
-        //TODO(sebas): convert this to find_if
-        for(auto root : n->valid_for_contexts )
+        for ( auto &root : n->valid_for_contexts )
         {
-            if(root.vi == vi && n->isRoot) // this root shares the correct vi, so we should copy it
-                m.push_back( { root, n }  );
+            if ( root.vi == vi
+                 && n->isRoot ) // this root shares the correct vi, so we should copy it
+                m.push_back( { root, n } );
         }
     }
 
-    circ::check(m.size() != 0) << "this shouldn't be empty";
+    circ::check( m.size() != 0 ) << "Could not retrieve SEGNode for VI";
     return m;
 }
 
 void SEGGraph::calculate_costs()
 {
     // calc inline cost and declare fd if possible
-    for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(*this))
+    for ( auto &node : gap::graph::dfs< gap::graph::yield_node::on_close >( *this ) )
     {
-        node->inline_cost
-            = std::accumulate( node->_nodes.begin(), node->_nodes.end(), 1,
-                               []( int current, std::shared_ptr< SEGNode > n ) {
-                                   if(n->fd == false)
-                                       return current + n->inline_cost;
-                                   else
-                                       return current + 1;
-                               } );
-        if(node->inline_cost >= 2 || node->isRoot)
+        node->inline_cost = std::accumulate( node->_nodes.begin(), node->_nodes.end(), 1,
+                                             []( int current, std::shared_ptr< SEGNode > n )
+                                             {
+                                                 if ( n->fd == false )
+                                                     return current + n->inline_cost;
+                                                 else
+                                                     return current + 1;
+                                             } );
+
+        if ( node->inline_cost >= 2 || node->isRoot )
             node->fd = true;
-    }
 
-    // count nodes in subtree for every node
-    // TODO(sebas): combine this with above
-    for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>( *this ))
-    {
-        node->subtree_count
-            = std::accumulate( node->_nodes.begin(), node->_nodes.end(), 1,
-                               []( int current, std::shared_ptr< SEGNode > n )
-                               { return current + n->subtree_count; } );
+        node->subtree_count = std::accumulate( node->_nodes.begin(), node->_nodes.end(), 1,
+                                               []( int current, std::shared_ptr< SEGNode > n )
+                                               { return current + n->subtree_count; } );
     }
-}
-
-int SEGGraph::get_maximum_vi_size()
-{
-    // get maximum number of nodes used for a single VI. This determines how large the stack should be
-    std::vector<int> vals;
-    for(auto vi : circuit->attr<circ::VerifyInstruction>())
-    {
-        auto root_nodes_for_vi = this->get_nodes_by_vi(vi);
-        int a = std::accumulate(root_nodes_for_vi.begin(), root_nodes_for_vi.end(), 0,
-                                 [](auto left, auto &p) {
-                                     return left + p.second->subtree_count;
-                                 });
-        vals.push_back(a);
-
-    }
-    // TODO(Sebas): safely return this element
-    return *std::max_element(vals.begin(), vals.end());
 }
 
 struct ToExpressionWithIsomorphicSelectsVisitor : AdviceResolvingVisitor< ToExpressionWithIsomorphicSelectsVisitor >
@@ -659,22 +637,6 @@ std::vector<decoder::Var> UniqueNameStorage::get_n_var_names(int amount_of_names
     return vars;
 }
 
-
-std::vector< Operation * > select_values( Select *op )
-{
-    std::vector< Operation * > results;
-    auto first = false;
-    //TODO(sebas): idiomize this
-    for (auto o : op->operands() )
-    {
-        if(!first)
-            first = true;
-        else
-            results.push_back(o);
-    }
-    return results;
-}
-
 struct HasSelectInProjectionVisitor : AdviceResolvingVisitor< HasSelectInProjectionVisitor >
 {
     using AdviceResolvingVisitor::AdviceResolvingVisitor;
@@ -752,11 +714,6 @@ void DecodedInstrGen::create()
 
 
     }
-}
-
-decoder::IndexVar DecodedInstrGen::get_instr_data( std::size_t at_index )
-{
-    return decoder::IndexVar( data_array, decoder::Int( static_cast< int64_t >( at_index ) ) );
 }
 
 decoder::VarDecl DecodedInstrGen::get_next_free_data_slot()

@@ -370,7 +370,6 @@ namespace circ::decoder
         decoder::ExpressionPrinter ep;
 
         UniqueNameStorage name_storage;
-        decoder::Var stack = decoder::Var( "stack" );
 
         void generate_function_definitions();
     };
@@ -404,7 +403,6 @@ namespace circ::decoder
         FunctionCall main_to_tuple_call;
         ConstructorDeclarationBuilder main_constructor;
 
-        decoder::FunctionDeclarationBuilder fdb_setup;
         decoder::FunctionDeclarationBuilder fdb_visit;
 
         std::vector<decoder::VarDecl> member_declarations;
@@ -426,8 +424,6 @@ namespace circ::decoder
 
         void get_expression_for_projection_with_indepenent_choices(
             std::multimap< Operation *, seg_projection > &proj_groups, Operation *key );
-
-        decoder::IndexVar get_instr_data( std::size_t at_index );
 
         const std::string member_variable_prefix = "node_";
     };
