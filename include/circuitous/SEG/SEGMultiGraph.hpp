@@ -378,47 +378,47 @@ namespace circ::decoder
     {
         DecodedInstrGen( SEGGraphPrinter *seg_graph_printer,
                          IndependentSelectEmissionHelper &select_emission_helper,
-                         VerifyInstruction *vi,
-                         const std::string &name ) :
-            seg_graph_printer( seg_graph_printer ),
-            select_emission_helper(select_emission_helper),
-            name( name ),
-            main_to_tuple_call(FunctionCall(name, {})),
-            vi(vi),
-            data_array( decoder::Var( name ) ),
-            decode_time_expression_creator(SimpleDecodeTimeCircToExpressionVisitor(
-                vi, decoder::inner_func_arg1,
-                decoder::inner_func_arg2,
-                decoder::extract_helper_function_name ))
+                         VerifyInstruction *vi, const std::string &name ) :
+            vi( vi ),
+            name( name ), seg_graph_printer( seg_graph_printer ),
+            select_emission_helper( select_emission_helper ),
+            main_to_tuple_call( FunctionCall( name, {} ) ),
+            decode_time_expression_creator( SimpleDecodeTimeCircToExpressionVisitor(
+                vi, decoder::inner_func_arg1, decoder::inner_func_arg2,
+                decoder::extract_helper_function_name ) )
         {
-
         }
 
         Struct create_struct();
+
+        VerifyInstruction *vi;
+        std::string name;
+
         SEGGraphPrinter *seg_graph_printer;
         IndependentSelectEmissionHelper &select_emission_helper;
 
-        std::string name;
         ConstructorDeclarationBuilder tuple_constructor;
-        FunctionCall main_to_tuple_call;
         ConstructorDeclarationBuilder main_constructor;
+        FunctionCall main_to_tuple_call;
 
         decoder::FunctionDeclarationBuilder fdb_visit;
 
-        std::vector<decoder::VarDecl> member_declarations;
-        std::vector<decoder::Assign> member_initializations;
+        std::vector< decoder::VarDecl > member_declarations;
+        std::vector< decoder::Assign > member_initializations;
+
         std::size_t size = 0;
-        VerifyInstruction* vi;
         decoder::VarDecl get_next_free_data_slot();
 
     private:
-        decoder::Var data_array;
         SimpleDecodeTimeCircToExpressionVisitor decode_time_expression_creator;
+        using projection_maps =  std::multimap< Operation *, seg_projection >;
 
-        void create();
-        bool selects_emission_locations_are_constant( const std::multimap< Operation *, seg_projection > &proj_groups,
-                                Operation *key );
-        void get_expression_for_projection(
+        void create_from_seg_printer();
+
+        bool selects_emission_locations_are_constant(
+            const projection_maps &proj_groups, Operation *key );
+
+        void expr_for_proj(
             const std::pair< InstructionProjection, std::shared_ptr< SEGNode > >
                 &instr_node_pair );
 

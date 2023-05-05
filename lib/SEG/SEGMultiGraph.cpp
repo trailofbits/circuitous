@@ -389,8 +389,8 @@ void DecodedInstrGen::get_expression_for_projection_with_indepenent_choices(
  *  which would result in non-isomorphic trees. The variable names are always freshly created.
  *  Resulting in a lot more variable names created then probably needed.
  */
-void DecodedInstrGen::get_expression_for_projection(
-    const std::pair< InstructionProjection, std::shared_ptr< SEGNode > >& instr_node_pair)
+void DecodedInstrGen::expr_for_proj(
+    const std::pair< InstructionProjection, std::shared_ptr< SEGNode > > &instr_node_pair )
 {
     auto instr_proj = instr_node_pair.first;
     auto node = instr_node_pair.second;
@@ -400,31 +400,9 @@ void DecodedInstrGen::get_expression_for_projection(
         start_op_ptr, instr_proj.select_choices, vi );
     auto node_gen = non_unique_dfs< gap::graph::yield_node::on_open >( node );
 
-    bool has_choices = instr_proj.select_choices.size() > 0;
-
     decoder::StatementBlock block;
     std::vector<decoder::Expr> arguments;
     arguments.push_back(decoder::Id("visitor"));
-    if ( !has_choices )
-    {
-        auto func_decl = seg_graph_printer->get_func_decl(node);
-        for ( auto &[ op, nod ] : tuple_generators( op_gen, node_gen ) )
-        {
-            auto lhs = get_next_free_data_slot();
-            auto rhs = decoder::Id( op->op->name());
-
-            member_initializations.push_back( decoder::Assign( lhs, rhs ) );
-            arguments.push_back( lhs.value().name );
-        }
-
-        check( arguments.size() == func_decl.args.size() )
-            << "calls function with incorrect number of arguments. given arguments"
-            << arguments.size() << " expected: " << func_decl.args.size();
-        auto func_call = decoder::FunctionCall( func_decl.function_name, arguments );
-        fdb_visit.body_insert( func_call );
-        return;
-    }
-
     decoder::StatementBlock guard_conditions;
 
     for ( auto c : instr_proj.select_choices )
@@ -432,14 +410,14 @@ void DecodedInstrGen::get_expression_for_projection(
         auto indx = decode_time_expression_creator.visit(c.sel->selector());
         auto choice = decoder::Int( static_cast< int64_t >( c.chosen_idx ) );
         auto eq = decoder::Equal( indx, choice );
-        if ( !guard_conditions.empty() )
+        if ( guard_conditions.empty() )
+            guard_conditions.push_back( eq );
+        else
         {
             auto first = guard_conditions.back();
             guard_conditions.pop_back();
             guard_conditions.push_back( decoder::And( first, eq ) );
         }
-        else
-            guard_conditions.push_back( eq );
     }
 
     for ( auto op : op_gen )
@@ -453,10 +431,12 @@ void DecodedInstrGen::get_expression_for_projection(
     auto func_decl = seg_graph_printer->get_func_decl( node );
     check( arguments.size() == func_decl.args.size() )
         << "calls function with incorrect number of arguments";
-    auto func_call = decoder::FunctionCall( func_decl.function_name, arguments );
 
-    decoder::If guarded_visit( guard_conditions, func_call );
-    fdb_visit.body_insert_statement( guarded_visit );
+    auto func_call = decoder::FunctionCall( func_decl.function_name, arguments );
+    if(guard_conditions.empty())
+        fdb_visit.body_insert_statement( func_call );
+    else
+        fdb_visit.body_insert_statement( If(guard_conditions, func_call) );
 }
 
 void SEGGraphPrinter::print_helper_functions()
@@ -542,7 +522,6 @@ bool DecodedInstrGen::selects_emission_locations_are_constant(const std::multima
     auto equal_range = proj_groups.equal_range( key );
     for ( auto it = equal_range.first; it != equal_range.second; it++ )
     {
-
         if ( comparison == nullptr )
         {
             comparison = it->second.second;
@@ -670,7 +649,7 @@ bool operation_has_nested_select( const InstructionProjection &projection )
     return vis.found_sub_select;
 }
 
-void DecodedInstrGen::create()
+void DecodedInstrGen::create_from_seg_printer()
 {
     /*
      * There are multiple operations which are considered we would need to emit semantics for
@@ -688,31 +667,20 @@ void DecodedInstrGen::create()
 
     for ( auto key : proj_keys )
     {
-        // checks for there exists multiple different execution trees for this given root node
-        // If not than we up the emit the subtree with a trivial walk
-        if ( proj_groups.count( key ) == 1 )
-        {
-            get_expression_for_projection(( *proj_groups.find( key ) ).second);
-            continue ;
-        }
-
-        // Here we have execution path that depend on decode time choices
+        // Can have multiple zero or more select choices, but all choices
+        // result in the same shape and hence we can re-use variables
         if ( selects_emission_locations_are_constant( proj_groups, key ) )
-        {
-            get_expression_for_complete_seg_isomorphisms( proj_groups, key );
-            continue;
+            expr_for_proj_with_const_sel_loc( proj_groups, key );
+        else{
+            // We have to emit all execution paths guarded by all required choices
+            auto projections_for_same_root = proj_groups.equal_range( key );
+            for ( auto proj_it = projections_for_same_root.first;
+                  proj_it != projections_for_same_root.second; proj_it++ )
+            {
+                auto t = ( *proj_it ).second;
+                expr_for_proj( t );
+            }
         }
-
-        // We have to emit all execution paths guarded by all required choices
-        auto projections_for_same_root = proj_groups.equal_range( key );
-        for ( auto proj_it = projections_for_same_root.first;
-              proj_it != projections_for_same_root.second; proj_it++ )
-        {
-            auto t = ( *proj_it ).second;
-            get_expression_for_projection( ( *proj_groups.find( key ) ).second );
-        }
-
-
     }
 }
 
@@ -727,17 +695,17 @@ Struct DecodedInstrGen::create_struct()
 {
     Struct s;
     s.name = name;
-    main_constructor.name( name ).retType( Type( "void" ) );
+    main_constructor.name( name );
     for(auto& arg : inner_func_args){
         main_constructor.arg_insert(arg);
     }
+    tuple_constructor.name(name);
 
-    tuple_constructor.name(name).retType( Type("void") );
-    create();
+    create_from_seg_printer();
+
     main_constructor.init_call_insert(main_to_tuple_call);
-
     fdb_visit.name( "visit" )
-        .retType( Type( "void" ) )
+        .retType( Type( "auto" ) )
         .arg_insert( Var( "visitor", Type( "const VisitorType&" ) ) );
 
     s.constructors.push_back(tuple_constructor.make());
