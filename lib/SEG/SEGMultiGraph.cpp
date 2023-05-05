@@ -26,7 +26,6 @@ std::string SEGNode::get_hash() const
 SEGNode::SEGNode( const std::string &id ) : id( id ) { }
 std::vector< std::shared_ptr<SEGNode> > SEGNode::parents() { return _parents; }
 
-
 void SEGNode::add_child( SEGNode::node_pointer child )
 {
     this->_nodes.push_back(child);
@@ -41,7 +40,6 @@ void SEGNode::replace_all_nodes_by_id(std::shared_ptr<SEGNode> new_target, std::
 
 
 }
-
 
 void specialize( std::map< std::string, Operation * > &specs, std::shared_ptr< SEGNode > node,
                  Operation *op )
@@ -65,7 +63,6 @@ void specialize( std::map< std::string, Operation * > &specs, std::shared_ptr< S
     }
 }
 
-
 void SEGGraphPrinter::print_semantics_emitter()
 {
     for(auto& node : gap::graph::dfs<gap::graph::yield_node::on_close>(seg_graph)) {
@@ -86,28 +83,6 @@ void SEGGraph::prepare()
     extract_all_seg_nodes_from_circuit();
     dedup(*this);
     calculate_costs();
-}
-
-decoder::FunctionCall print_SEGNode_tree( SEGNode &node, std::string stack_name, Operation *op )
-{
-
-    // TODO(Sebas) convert this to a double iterator walk
-    std::size_t c = 0;
-    std::vector<decoder::FunctionCall> fcs;
-    for ( auto &child : op->operands() )
-    {
-        if(node.children().size() > c)
-            circ::unreachable() << "fucked up ";
-
-        std::shared_ptr<SEGNode> chi= node.children()[c];
-        fcs.push_back(print_SEGNode_tree(*chi.get(), stack_name, child));
-        c++;
-    }
-    std::vector<decoder::Expr> args;
-    args.push_back(decoder::Var(stack_name));
-    args.insert(args.end(), fcs.begin(), fcs.end());
-    decoder::FunctionCall fc("apply_operation", args);
-    return fc;
 }
 
 /*
@@ -387,28 +362,6 @@ private:
     }
 };
 
-/*
- * Generates one function per verify instruction that accepts instruction bytes.
- *
- * Preconditions:
- *      prepare has been called
- *
- * Postconditions:
- *      prints out the decoder functions into expression printer,
- *      probably you want to have called print_semantics beforehand
- */
-decoder::FunctionDeclaration SEGGraphPrinter::print_decoder( VerifyInstruction *vi )
-{
-    /*
-     * lets go, move all of the body inside dig
-     */
-    auto decoder_name = "decoder_for_vi" + std::to_string( vi->id() );
-    circ::decoder::FunctionDeclarationBuilder fdb;
-    fdb.name(decoder_name).retType( decoder::Type("void") );
-
-    return fdb.make();
-}
-
 void DecodedInstrGen::get_expression_for_projection_with_indepenent_choices(
     std::multimap< Operation *, seg_projection > &proj_groups, Operation *key )
 {
@@ -524,12 +477,7 @@ void DecodedInstrGen::get_expression_for_projection(
         << "calls function with incorrect number of arguments";
     auto func_call = decoder::FunctionCall( func_decl.function_name, arguments );
 
-
-//    decoder::If guarded_setup( guard_conditions, block );
     decoder::If guarded_visit( guard_conditions, func_call );
-    \
-
-//    fdb_setup.body_insert_statement( guarded_setup );
     fdb_visit.body_insert_statement( guarded_visit );
 }
 
@@ -579,11 +527,6 @@ void SEGGraphPrinter::generate_function_definitions()
             expression_for_seg_node( func_decls, name_storage, *node, argument_names );
         }
     }
-}
-void SEGGraphPrinter::print_select_storage_helper_functions()
-{
-    for(auto fdb : select_storage.get_functions_for_select())
-        ep.print(fdb);
 }
 
 /*
@@ -716,91 +659,6 @@ std::vector<decoder::Var> UniqueNameStorage::get_n_var_names(int amount_of_names
     return vars;
 }
 
-
-Operation *select_index( Select *op ) { return op->operand(0); }
-
-std::size_t SelectStorage::hash_select_targets( Select *sel )
-{
-    print::PrettyPrinter pp;
-    return std::hash< std::string > {}( pp.Hash( select_values( sel ) ) );
-}
-
-//bool are_trees_isomorphic( const std::vector< Operation * > &ops )
-//{
-//    if ( ops.size() < 2 )
-//        return true;
-//
-//    print::CompactPrinter cp;
-//    std::string first_hash = cp.Hash( ops[ 0 ] );
-//    return std::all_of( ops.begin() + 1, ops.end(),
-//                        [ & ]( Operation *op ) {
-//                            std::cout << "comparing: " << cp.Hash(op) << " = " << first_hash << std::endl;
-//                            return cp.Hash( op ) == first_hash; } );
-//}
-
-
-
-
-void SelectStorage::register_select( Select *sel )
-{
-//    decoder::FunctionDeclarationBuilder fdb;
-//    print::PrettyPrinter pp;
-//
-//    if ( !are_trees_isomorphic( select_values(sel) ) )
-//        circ::unreachable() << "adding select helper for non-isomorphic select";
-//
-//    auto values_hash = hash_select(sel);
-//
-//
-//    fdb.name("select_" + std::to_string(values_hash));
-//    //TODO get type of
-//    decoder::Var select_index = decoder::Var("index", "int:" + std::to_string(sel->bits));
-//    fdb.arg_insert(decoder::VarDecl(select_index));
-//
-//
-//    for(std::size_t i = 0; i < select_values( sel ).size(); i++ )
-//    {
-//        std::vector< decoder::Expr > block;
-//        auto start_op_ptr = std::make_shared< nodeWrapper >( sel->operand(i+1) );
-//        for(auto x : gap::graph::dfs<gap::graph::yield_node::on_open>(start_op_ptr))
-//        {
-//            block.push_back(decoder::Id(x->op->name()));
-//        }
-//
-//        decoder::Tuple tuple( block.size() );
-//
-//        //TODO turn if else into switch
-//        auto if_expr = decoder::If(
-//            decoder::Equal( select_index, decoder::Int( static_cast< int64_t >( i ) ) ),
-//            decoder::Return( tuple.Construct( block ) ) );
-//        fdb.body_insert( if_expr );
-//        fdb.retType( tuple.get_type() );
-//    }
-//
-//    selects.insert( std::make_pair( values_hash, fdb.make() ) );
-}
-
-std::vector< decoder::FunctionDeclaration > SelectStorage::get_functions_for_select()
-{
-    std::vector< decoder::FunctionDeclaration > funcs;
-
-    for(auto & k : selects)
-        funcs.push_back(k.second);
-
-    return funcs;
-}
-
-decoder::FunctionCall SelectStorage::get_specialization( circ::Select *sel, decoder::Expr index )
-{
-    auto func = selects.at( hash_select(sel));
-    return decoder::FunctionCall( func.function_name, { index } );
-}
-
-std::size_t hash_select( Select *op )
-{
-    print::PrettyPrinter pp;
-    return std::hash<std::string>{}( pp.Hash(select_values(op)) );
-}
 
 std::vector< Operation * > select_values( Select *op )
 {

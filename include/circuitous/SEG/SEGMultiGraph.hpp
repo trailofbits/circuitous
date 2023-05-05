@@ -349,14 +349,10 @@ namespace circ::decoder
             seg_graph(circuit), circuit(circuit) , os( os ), ep( os )
         {
             seg_graph.prepare();
-            select_vis sel(&this->select_storage);
-            sel.visit(circuit->root);
             generate_function_definitions();
         };
 
         void print_semantics_emitter();
-        void print_select_storage_helper_functions();
-        decoder::FunctionDeclaration print_decoder( VerifyInstruction *vi );
         void print_helper_functions();
         static constexpr const auto extract_helper_function = "extraction_helper";
 
@@ -365,7 +361,6 @@ namespace circ::decoder
             func_decls;
 
         SEGGraph seg_graph;
-        SelectStorage select_storage;
 
         decoder::FunctionDeclaration get_func_decl(std::shared_ptr<SEGNode> node);
 
@@ -378,8 +373,6 @@ namespace circ::decoder
         decoder::Var stack = decoder::Var( "stack" );
 
         void generate_function_definitions();
-
-
     };
 
     struct DecodedInstrGen
@@ -805,9 +798,6 @@ namespace circ::decoder
         }
     }
 
-    decoder::FunctionCall print_SEGNode_tree( SEGNode &node, std::string stack_name,
-                                              Operation *op );
-
     std::pair< decoder::Var, decoder::StatementBlock > expression_for_seg_node(
         std::unordered_map< SEGNode, decoder::FunctionDeclaration, segnode_hash_on_get_hash,
                             segnode_comp_on_hash > &func_decls,
@@ -815,6 +805,4 @@ namespace circ::decoder
         std::vector< decoder::Var > arg_names );
 
     bool operation_has_nested_select( const InstructionProjection &projection );
-
-
 }
