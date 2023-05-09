@@ -340,8 +340,35 @@ private:
     }
 };
 
-void DecodedInstrGen::get_expression_for_projection_with_indepenent_choices(
-    std::multimap< Operation *, seg_projection > &proj_groups, Operation *key )
+/*
+ * This adds all required expressions to express an projection of key location in proj_groups.
+ * This assumes that
+ * 1. There are multiple ways to project the key based on decode time choices
+ * 2. All projections are seg isomorphic
+ * 3. No other projection exists for the given operation.
+ * 4. For every decode time select we have an entry in the select storage
+ *
+ * This basically means that:
+ * 1. we can pre-allocate a set of variables
+ * 2. these variables are always used in calls to semantic dispatching functions in the same way
+ *
+ * Looking at possible projections we have the following conversion
+ *          N1 ------> Member variable on class
+ *          |
+ *          N2 ------> Member variable on class
+ *          |
+ *          S(decode_time_select(bits[1..4])
+ *     |          |
+ *     A          B ------> Result from select helpers
+ *     ...        ...
+ * emitted:
+ *  Constructor(std::tuple<...> t1) : AorB(std::get<0>(t1))
+ *  Constructor(instr_bits) : Constructor(select_helper(instr_bits))
+ *  N1 = value
+ *  N2 = value
+ *  AorB; <-- init through constructor
+ */
+void DecodedInstrGen::expr_for_proj_with_const_sel_loc( projection_maps &proj_groups, Operation *key )
 {
     auto p = (*proj_groups.find(key)).second;
     auto instr_proj = p.first;
@@ -407,7 +434,7 @@ void DecodedInstrGen::expr_for_proj(
 
     for ( auto c : instr_proj.select_choices )
     {
-        auto indx = decode_time_expression_creator.visit(c.sel->selector());
+        auto indx = decode_time_expression_creator.dispatch(c.sel->selector());
         auto choice = decoder::Int( static_cast< int64_t >( c.chosen_idx ) );
         auto eq = decoder::Equal( indx, choice );
         if ( guard_conditions.empty() )
@@ -424,8 +451,8 @@ void DecodedInstrGen::expr_for_proj(
     {
         auto lhs = get_next_free_data_slot();
         auto rhs = decoder::Id( op->op->name() );
-        member_initializations.push_back( decoder::Statement ( decoder::Assign( lhs, rhs ) ) );
-        arguments.push_back(lhs);
+        member_initializations.push_back( decoder::Assign( lhs, rhs )  );
+        arguments.push_back( lhs.value().name );
     }
 
     auto func_decl = seg_graph_printer->get_func_decl( node );
