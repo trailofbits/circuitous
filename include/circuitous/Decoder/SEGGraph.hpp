@@ -1,7 +1,7 @@
 #pragma once
 
-#include "gap/core/graph.hpp"
 #include "circuitous/IR/Visitors.hpp"
+#include "gap/core/graph.hpp"
 
 namespace circ::decoder
 {

@@ -14,7 +14,7 @@
 
 namespace circ::decoder
 {
-    //TODO(sebas): Move to gap?
+    // TODO(sebas): Move to gap?
     template < gap::graph::yield_node when, typename node_pointer >
         requires gap::graph::node_like< typename node_pointer::element_type >
     gap::recursive_generator< node_pointer > non_unique_dfs( node_pointer root )
@@ -39,8 +39,7 @@ namespace circ::decoder
     {
         decoder::Var get_unique_var_name();
         decoder::Var get_unique_var_name( Type t );
-        std::vector< decoder::Var > get_n_var_names( int amount_of_names,
-                                                     Type type_name );
+        std::vector< decoder::Var > get_n_var_names( int amount_of_names, Type type_name );
         std::vector< decoder::Var > names;
         int counter = 0;
     };
@@ -48,7 +47,7 @@ namespace circ::decoder
     struct SEGGraphPrinter
     {
         explicit SEGGraphPrinter( circuit_ref_t circuit, std::ostream &os ) :
-            seg_graph(circuit), circuit(circuit) , os( os ), ep( os )
+            seg_graph( circuit ), circuit( circuit ), os( os ), ep( os )
         {
             seg_graph.prepare();
             generate_function_definitions();
@@ -64,7 +63,7 @@ namespace circ::decoder
 
         SEGGraph seg_graph;
 
-        decoder::FunctionDeclaration get_func_decl(std::shared_ptr<SEGNode> node);
+        decoder::FunctionDeclaration get_func_decl( std::shared_ptr< SEGNode > node );
 
     private:
         circuit_ref_t circuit;
@@ -113,26 +112,24 @@ namespace circ::decoder
 
     private:
         SimpleDecodeTimeCircToExpressionVisitor decode_time_expression_creator;
-        using projection_maps =  std::multimap< Operation *, seg_projection >;
+        using projection_maps = std::multimap< Operation *, seg_projection >;
 
         void create_from_seg_printer();
 
-        bool selects_emission_locations_are_constant(
-            const projection_maps &proj_groups, Operation *key );
+        bool selects_emission_locations_are_constant( const projection_maps &proj_groups,
+                                                      Operation *key );
 
-        void expr_for_proj(
-            const std::pair< InstructionProjection, std::shared_ptr< SEGNode > >
-                &instr_node_pair );
+        void expr_for_proj( const std::pair< InstructionProjection, std::shared_ptr< SEGNode > >
+                                &instr_node_pair );
 
-        void expr_for_proj_with_const_sel_loc( projection_maps &proj_groups,
-                                                           Operation *key );
+        void expr_for_proj_with_const_sel_loc( projection_maps &proj_groups, Operation *key );
 
         const std::string member_variable_prefix = "node_";
     };
 
     /*
-     * This structure is an intermediate representation of a circIR subtree being converted to an
-     * InstructionProjection More-over it generates the actual SEGNodes incrementally, and
+     * This structure is an intermediate representation of a circIR subtree being converted to
+     * an InstructionProjection More-over it generates the actual SEGNodes incrementally, and
      * splits itself off for every decode-time select
      */
     struct UnfinishedProjection : InstructionProjection

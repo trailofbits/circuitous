@@ -4,43 +4,49 @@
 
 namespace circ::decoder {
 
-    void ExpressionPrinter::print(const Expr &e) {
+    void ExpressionPrinter::print( const Expr &e )
+    {
         expr( e );
     }
 
-    ExpressionPrinter & ExpressionPrinter::binary_op(const BinaryOp <Expr> &binOp,
-                                                     const std::string &op,
-                                                     GuardStyle gs) {
-        auto g = make_guard(gs);
-        expr(binOp.lhs()).raw(" ", op, " ").expr(binOp.rhs());
+    ExpressionPrinter &ExpressionPrinter::binary_op( const BinaryOp< Expr > &binOp,
+                                                     const std::string &op, GuardStyle gs )
+    {
+        auto g = make_guard( gs );
+        expr( binOp.lhs() ).raw( " ", op, " " ).expr( binOp.rhs() );
 
         return *this;
     }
 
     template < typename T >
-    ExpressionPrinter&
-    ExpressionPrinter::expr_array(const std::vector< T > &ops, const ExprStyle style, bool wrap_in_statement) {
-        auto g = guard_for_expr(style);
+    ExpressionPrinter &ExpressionPrinter::expr_array( const std::vector< T > &ops,
+                                                      const ExprStyle style,
+                                                      bool wrap_in_statement )
+    {
+        auto g = guard_for_expr( style );
 
-        for (std::size_t i = 0; i < ops.size(); i++) {
-            if( wrap_in_statement )
-                print( Statement ( ops[ i ] ) );
+        for ( std::size_t i = 0; i < ops.size(); i++ )
+        {
+            if ( wrap_in_statement )
+                print( Statement( ops[ i ] ) );
             else
                 print( ops[ i ] );
 
-            if ( i != ops.size() - 1 ) {
-                switch (style) {
-                    case ExprStyle::FuncArgs: raw(", "); break;
-                    // no ; required in funcbody as for example if statements don't end with them
-                    case ExprStyle::FuncBody: endl() ; break;
-                    case ExprStyle::EnumBody: raw(", ").endl(); break;
-                    case ExprStyle::TemplateParams: raw(", "); break;
-                    case ExprStyle::StructDecl: endl(); break;
-                    case ExprStyle::StructMethods: endl(); break;
-                    case ExprStyle::StructVars: endl(); break;
-                    case ExprStyle::StructDerivations: raw(", "); break;
-                    case ExprStyle::StructMemberInitialization: raw(", "); break;
-                    case ExprStyle::Switch: endl(); break;
+            if ( i != ops.size() - 1 )
+            {
+                switch ( style )
+                {
+                case ExprStyle::FuncArgs: raw( ", " ); break;
+                // no ; required in funcbody as for example if statements don't end with them
+                case ExprStyle::FuncBody: endl(); break;
+                case ExprStyle::EnumBody: raw( ", " ).endl(); break;
+                case ExprStyle::TemplateParams: raw( ", " ); break;
+                case ExprStyle::StructDecl: endl(); break;
+                case ExprStyle::StructMethods: endl(); break;
+                case ExprStyle::StructVars: endl(); break;
+                case ExprStyle::StructDerivations: raw( ", " ); break;
+                case ExprStyle::StructMemberInitialization: raw( ", " ); break;
+                case ExprStyle::Switch: endl(); break;
                 }
             }
         }
@@ -168,34 +174,39 @@ namespace circ::decoder {
         return *this;
     }
 
-    template <typename T, typename... Ts>
-    ExpressionPrinter &ExpressionPrinter::raw(T&& val, Ts&&... vals) {
-        os << std::forward<T>(val);
-        ((os << std::forward<Ts>(vals)), ...);
+    template < typename T, typename... Ts >
+    ExpressionPrinter &ExpressionPrinter::raw( T &&val, Ts &&...vals )
+    {
+        os << std::forward< T >( val );
+        ( ( os << std::forward< Ts >( vals ) ), ... );
         return *this;
     }
 
-    ExpressionPrinter &ExpressionPrinter::endl() {
+    ExpressionPrinter &ExpressionPrinter::endl()
+    {
         os << std::endl;
         return *this;
     }
 
-    Guard ExpressionPrinter::make_guard(GuardStyle g) {
-        switch(g){
-            case GuardStyle::None :return {"", "", os};
-            case GuardStyle::Square :return {"[", "]", os};
-            case GuardStyle::Parens :return {"  (", ") ", os};
-            case GuardStyle::Curly :return {"{", "}", os, true};
-            case GuardStyle::Angled : return {"<", ">", os};
-            case GuardStyle::SingleColon : return {":", "", os, true};
-            case GuardStyle::CurlyWithSemiColon : return { "{", "};", os, true};
-            default: circ::unreachable() << "invalid guard style";
+    Guard ExpressionPrinter::make_guard( GuardStyle g )
+    {
+        switch ( g )
+        {
+        case GuardStyle::None: return { "", "", os };
+        case GuardStyle::Square: return { "[", "]", os };
+        case GuardStyle::Parens: return { "  (", ") ", os };
+        case GuardStyle::Curly: return { "{", "}", os, true };
+        case GuardStyle::Angled: return { "<", ">", os };
+        case GuardStyle::SingleColon: return { ":", "", os, true };
+        case GuardStyle::CurlyWithSemiColon: return { "{", "};", os, true };
+        default: circ::unreachable() << "invalid guard style";
         }
     }
 
-    ExpressionPrinter::self_t &ExpressionPrinter::expr(const Expr &e, const GuardStyle gs) {
-        auto g = make_guard(gs); // needs to be bound to a variable to force proper scoping
-        expr(e);
+    ExpressionPrinter::self_t &ExpressionPrinter::expr( const Expr &e, const GuardStyle gs )
+    {
+        auto g = make_guard( gs ); // needs to be bound to a variable to force proper scoping
+        expr( e );
         return *this;
     }
 
@@ -205,9 +216,9 @@ namespace circ::decoder {
         return *this;
     }
 
-    ExpressionPrinter::self_t &ExpressionPrinter::wrap(GuardStyle style)
+    ExpressionPrinter::self_t &ExpressionPrinter::wrap( GuardStyle style )
     {
-        guards.push( make_guard(style) );
+        guards.push( make_guard( style ) );
         return *this;
     }
 
@@ -215,16 +226,17 @@ namespace circ::decoder {
     {
         switch ( style )
         {
-            case ExprStyle::FuncArgs: return make_guard( GuardStyle::Parens );
-            case ExprStyle::FuncBody: return make_guard( GuardStyle::Curly );
-            case ExprStyle::EnumBody: return make_guard( GuardStyle::Curly );
-            case ExprStyle::TemplateParams: return make_guard( GuardStyle::Angled );
-            case ExprStyle::StructDecl: return make_guard( GuardStyle::CurlyWithSemiColon );
-            case ExprStyle::StructMethods: return make_guard( GuardStyle::None );
-            case ExprStyle::StructVars: return make_guard( GuardStyle::None );
-            case ExprStyle::StructDerivations: return make_guard( GuardStyle::SingleColon );
-            case ExprStyle::StructMemberInitialization: return make_guard( GuardStyle::SingleColon );
-            case ExprStyle::Switch: return make_guard( GuardStyle::Curly );
+        case ExprStyle::FuncArgs: return make_guard( GuardStyle::Parens );
+        case ExprStyle::FuncBody: return make_guard( GuardStyle::Curly );
+        case ExprStyle::EnumBody: return make_guard( GuardStyle::Curly );
+        case ExprStyle::TemplateParams: return make_guard( GuardStyle::Angled );
+        case ExprStyle::StructDecl: return make_guard( GuardStyle::CurlyWithSemiColon );
+        case ExprStyle::StructMethods: return make_guard( GuardStyle::None );
+        case ExprStyle::StructVars: return make_guard( GuardStyle::None );
+        case ExprStyle::StructDerivations: return make_guard( GuardStyle::SingleColon );
+        case ExprStyle::StructMemberInitialization:
+            return make_guard( GuardStyle::SingleColon );
+        case ExprStyle::Switch: return make_guard( GuardStyle::Curly );
         }
     }
 
@@ -311,7 +323,8 @@ namespace circ::decoder {
         return FunctionDeclaration( _retType, _function_name, _args, _body );
     }
 
-    FunctionDeclarationBuilder::self_t &FunctionDeclarationBuilder::retType( const Type &retType )
+    FunctionDeclarationBuilder::self_t &
+    FunctionDeclarationBuilder::retType( const Type &retType )
     {
         _retType = retType;
         return *this;
@@ -332,16 +345,18 @@ namespace circ::decoder {
 
     Var FunctionDeclarationBuilder::get_new_arg( Type t )
     {
-        auto candidate = arg_prefix + std::to_string(arg_suffix_counter);
-        auto candidate_name_is_taken = [&](const std::string& candidate) {
+        auto candidate = arg_prefix + std::to_string( arg_suffix_counter );
+        auto candidate_name_is_taken = [ & ]( const std::string &candidate )
+        {
             return std::any_of( _args.begin(), _args.end(),
-                          [ & ]( VarDecl arg ) { return arg.value().name == candidate; } );
+                                [ & ]( VarDecl arg )
+                                { return arg.value().name == candidate; } );
         };
 
-        while ( candidate_name_is_taken(candidate) )
+        while ( candidate_name_is_taken( candidate ) )
         {
             arg_suffix_counter++;
-            candidate = arg_prefix + std::to_string(arg_suffix_counter);
+            candidate = arg_prefix + std::to_string( arg_suffix_counter );
         }
 
         auto new_arg = Var( candidate, t );
@@ -368,14 +383,10 @@ namespace circ::decoder {
         }
     }
 
-    Type::Type( Id name ) :
-        name(name)
-    {
-    }
+    Type::Type( Id name ) : name( name ) { }
 
     Type::Type( Id name, std::vector< Expr > templateParameters ) :
-        name(name),
-        template_parameters( templateParameters )
+        name( name ), template_parameters( templateParameters )
     {
     }
 
@@ -385,11 +396,11 @@ namespace circ::decoder {
     {
         std::stringstream ss_lhs;
         std::stringstream ss_rhs;
-        ExpressionPrinter lhs_ep(ss_lhs);
-        ExpressionPrinter rhs_ep(ss_rhs);
+        ExpressionPrinter lhs_ep( ss_lhs );
+        ExpressionPrinter rhs_ep( ss_rhs );
 
-        lhs_ep.print(*this);
-        rhs_ep.print(rhs);
+        lhs_ep.print( *this );
+        rhs_ep.print( rhs );
 
         return ss_lhs.str() == ss_rhs.str();
     }
@@ -401,13 +412,14 @@ namespace circ::decoder {
 
     Var::Var( Id s, Type t, bool is_struct, bool is_pointer ) :
         name( std::move( s ) ), type( std::move( t ) ), is_struct( is_struct ),
-        is_pointer( is_pointer ) {}
-
+        is_pointer( is_pointer )
+    {
+    }
 
     ConstructorDeclaration ConstructorDeclarationBuilder::make()
     {
-        return ConstructorDeclaration( _retType, _function_name, _args, _body,
-                                       _member_inits, _init_calls);
+        return ConstructorDeclaration( _retType, _function_name, _args, _body, _member_inits,
+                                       _init_calls );
     }
 
     ConstructorDeclarationBuilder::self_t &
@@ -428,11 +440,10 @@ namespace circ::decoder {
         const Type &retType, const Id &functionName, const std::vector< VarDecl > &args,
         const StatementBlock &body, const std::vector< MemberInit > &members_init,
         const std::vector< FunctionCall > &init_calls ) :
-        FunctionDeclaration(retType, functionName, args, body),
-        member_inits(members_init),
-        init_calls(init_calls)
+        FunctionDeclaration( retType, functionName, args, body ),
+        member_inits( members_init ), init_calls( init_calls )
     {
     }
 
-    Switch::Switch( const Expr &e ) : cond( std::make_shared< Expr >( e ) ) {}
+    Switch::Switch( const Expr &e ) : cond( std::make_shared< Expr >( e ) ) { }
 };

@@ -28,12 +28,11 @@ namespace circ::decoder
 
     Type Tuple::get_type()
     {
-        return Type( "std::tuple",
-                     std::vector< Expr >( size, get_value_type() ) );
+        return Type( "std::tuple", std::vector< Expr >( size, get_value_type() ) );
     }
 
-    std::pair< size_t, FunctionDeclaration > IndependentSelectEmissionHelper::get_function(
-        Select *select, VerifyInstruction *vi )
+    std::pair< size_t, FunctionDeclaration >
+    IndependentSelectEmissionHelper::get_function( Select *select, VerifyInstruction *vi )
     {
         auto helper = create_helper( select, vi );
         register_if_not_in_cache( helper );
@@ -52,12 +51,12 @@ namespace circ::decoder
             return true;
 
         bool are_isomorphic = true;
-        auto size = ops[0]->operands_size();
+        auto size = ops[ 0 ]->operands_size();
 
         for ( auto &op : ops )
             are_isomorphic = are_isomorphic && size == op->operands_size();
 
-        for ( std::size_t i = 0; i < ops[0]->operands_size() && are_isomorphic; i++ )
+        for ( std::size_t i = 0; i < ops[ 0 ]->operands_size() && are_isomorphic; i++ )
         {
             std::vector< Operation * > children;
             children.push_back( ops[ i ] );
@@ -72,13 +71,13 @@ namespace circ::decoder
     {
         FunctionDeclarationBuilder fdb;
 
-        auto select_values = freeze<std::vector>(sel->operands());
-        select_values.erase(select_values.begin(), select_values.begin());
+        auto select_values = freeze< std::vector >( sel->operands() );
+        select_values.erase( select_values.begin(), select_values.begin() );
 
         if ( !are_trees_isomorphic( select_values ) )
             circ::unreachable() << "adding select helper for non-isomorphic select";
 
-        for(auto& arg : inner_func_args)
+        for ( auto &arg : inner_func_args )
             fdb.arg_insert( arg );
 
         // start at 1 to account for selector
@@ -87,9 +86,9 @@ namespace circ::decoder
         SimpleDecodeTimeCircToExpressionVisitor decode_time_decoder(
             vi, inner_func_arg1, inner_func_arg2, extract_helper_function_name );
 
-        auto selector = Var("indx", Type("uint64"));
+        auto selector = Var( "indx", Type( "uint64" ) );
         auto selector_value = decode_time_decoder.dispatch( sel->selector() );
-        auto selector_init = Assign(VarDecl(selector), selector_value );
+        auto selector_init = Assign( VarDecl( selector ), selector_value );
         fdb.body_insert( Statement( selector_init ) );
         Switch sw( selector );
         for ( std::size_t i = 1; i < sel->operands_size(); i++ )
@@ -100,7 +99,7 @@ namespace circ::decoder
             {
                 block.push_back( decoder::Id( x->op->name() ) );
             }
-            //TODO(sebas): Change emission to a direct type instead of tuple if we only have a single value
+
             auto c = Equal( selector, decoder::Int( static_cast< int64_t >( i ) ) );
             Return return_val( Id( "" ) );
             Type return_type( Id( "" ) );
@@ -120,7 +119,7 @@ namespace circ::decoder
             block_size = block.size();
         }
 
-        fdb.body_insert(sw);
+        fdb.body_insert( sw );
         std::stringstream ss;
         ExpressionPrinter ep( ss );
         ep.print( fdb.make() );
@@ -130,19 +129,20 @@ namespace circ::decoder
         return GeneratedSelectHelper { block_size, hash, fdb.make() };
     }
 
-    void IndependentSelectEmissionHelper::register_if_not_in_cache( const GeneratedSelectHelper &sel )
+    void IndependentSelectEmissionHelper::register_if_not_in_cache(
+        const GeneratedSelectHelper &sel )
     {
-        if(std::none_of( cache.begin(), cache.end(),
-                      [ & ]( const GeneratedSelectHelper &p ) {
-                          return p.hash_func_decl_without_name
-                                 == sel.hash_func_decl_without_name;
-                      } ))
-            cache.push_back(sel);
+        if ( std::none_of( cache.begin(), cache.end(),
+                           [ & ]( const GeneratedSelectHelper &p ) {
+                               return p.hash_func_decl_without_name
+                                      == sel.hash_func_decl_without_name;
+                           } ) )
+            cache.push_back( sel );
     }
 
     Type get_value_type()
     {
-        return Type("VisRetType");
+        return Type( "VisRetType" );
     }
 
     std::string to_string( Expr expr )

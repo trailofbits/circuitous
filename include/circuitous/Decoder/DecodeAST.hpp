@@ -1,12 +1,12 @@
 #pragma once
 
-#include <string>
+#include <circuitous/IR/Circuit.hpp>
 #include <iostream>
+#include <memory>
+#include <stack>
+#include <string>
 #include <variant>
 #include <vector>
-#include <memory>
-#include <circuitous/IR/Circuit.hpp>
-#include <stack>
 
 template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
 template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
