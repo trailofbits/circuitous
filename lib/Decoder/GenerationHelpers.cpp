@@ -1,9 +1,11 @@
-#include "circuitous/Decoder/GenerationHelpers.hpp"
+/*
+ * Copyright (c) 2023 Trail of Bits, Inc.
+ */
 
-#include "circuitous/Decoder/DecodeAST.hpp"
-#include "circuitous/Decoder/SEGGraph.hpp"
-#include "circuitous/IR/Shapes.hpp"
-
+#include <circuitous/Decoder/DecodeAST.hpp>
+#include <circuitous/Decoder/GenerationHelpers.hpp>
+#include <circuitous/Decoder/SEGGraph.hpp>
+#include <circuitous/IR/Shapes.hpp>
 #include <gap/core/graph.hpp>
 
 namespace circ::decoder

@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2023 Trail of Bits, Inc.
+ */
+
 #pragma once
 
 #include <circuitous/IR/Circuit.hpp>

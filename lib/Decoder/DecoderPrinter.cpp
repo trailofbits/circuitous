@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2023 Trail of Bits, Inc.
+ */
+
 #include <circuitous/Decoder/DecoderPrinter.hpp>
 #include <circuitous/IR/Shapes.hpp>
 #include <circuitous/IR/Visitors.hpp>

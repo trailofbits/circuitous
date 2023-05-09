@@ -1,11 +1,13 @@
-#pragma once
+/*
+ * Copyright (c) 2023 Trail of Bits, Inc.
+ */
 
-#include "circuitous/Decoder/DecoderPrinter.hpp"
-#include "circuitous/Decoder/GenerationHelpers.hpp"
-#include "circuitous/Decoder/SEGGraph.hpp"
+#pragma once
 
 #include <circuitous/Decoder/DecodeAST.hpp>
 #include <circuitous/Decoder/DecoderPrinter.hpp>
+#include <circuitous/Decoder/GenerationHelpers.hpp>
+#include <circuitous/Decoder/SEGGraph.hpp>
 #include <circuitous/Diff/Diff.hpp>
 #include <gap/core/graph.hpp>
 #include <iostream>

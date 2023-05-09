@@ -1,3 +1,7 @@
+/*
+ * Copyright (c) 2023 Trail of Bits, Inc.
+ */
+
 #include <circuitous/Decoder/DecodeAST.hpp>
 #include <string>
 #include <variant>

@@ -1,6 +1,9 @@
-#include "circuitous/Decoder/DecoderPrinter.hpp"
-#include "circuitous/Decoder/GenerationHelpers.hpp"
+/*
+ * Copyright (c) 2023 Trail of Bits, Inc.
+ */
 
+#include <circuitous/Decoder/DecoderPrinter.hpp>
+#include <circuitous/Decoder/GenerationHelpers.hpp>
 #include <circuitous/Decoder/SEGGraphPrinter.hpp>
 #include <memory>
 #include <sstream>
