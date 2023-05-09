@@ -303,8 +303,7 @@ namespace circ::decoder
                 if ( isa< Advice >( op_child ) )
                 {
                     auto advice = static_cast< Advice * >( op_child );
-                    auto advice_value = get_op_attached_to_advice_in_vi( advice, vi );
-                    op_child = advice_value;
+                    op_child = advice->value( vi );
                 }
 
                 if ( seen_nodes.contains( op_child->id() ) )

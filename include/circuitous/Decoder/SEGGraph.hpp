@@ -204,8 +204,7 @@ namespace circ::decoder
         if ( isa< Advice >( root->op ) )
         {
             auto advice = static_cast< Advice * >( root->op );
-            auto advice_value = get_op_attached_to_advice_in_vi( advice, vi );
-            root = std::make_shared< nodeWrapper >( advice_value );
+            root = std::make_shared< nodeWrapper >( advice->value( vi ) );
         }
         if constexpr ( when == gap::graph::yield_node::on_open )
         {
@@ -312,19 +311,4 @@ namespace circ::decoder
     };
 
     using seg_projection = std::pair< InstructionProjection, std::shared_ptr< SEGNode > >;
-
-
-    template < typename Derived, bool IsConst = false >
-    struct AdviceResolvingVisitor : Visitor< Derived, IsConst >
-    {
-        AdviceResolvingVisitor( VerifyInstruction *vi ) : vi( vi ) {};
-
-        auto visit( Advice *op )
-        {
-            this->parent_t::dispatch( get_op_attached_to_advice_in_vi( op, vi ) );
-        }
-
-    protected:
-        VerifyInstruction *vi;
-    };
 }

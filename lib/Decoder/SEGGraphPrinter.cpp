@@ -210,14 +210,14 @@ void SEGGraph::calculate_costs()
     }
 }
 
-struct ToExpressionWithIsomorphicSelectsVisitor : AdviceResolvingVisitor< ToExpressionWithIsomorphicSelectsVisitor >
+struct ToExpressionWithIsomorphicSelectsVisitor : Visitor< ToExpressionWithIsomorphicSelectsVisitor >
 {
     explicit ToExpressionWithIsomorphicSelectsVisitor( DecodedInstrGen &dig ) :
-        AdviceResolvingVisitor( dig.vi ), dig( dig )
+        dig( dig )
     {
     }
 
-    void visit( Advice *op ) { AdviceResolvingVisitor::visit( op ); }
+    void visit( Advice *op ) { dispatch( op->value( dig.vi ) ); }
 
     void visit( Operation *op )
     {
@@ -583,30 +583,34 @@ std::vector<decoder::Var> UniqueNameStorage::get_n_var_names(int amount_of_names
     return vars;
 }
 
-struct HasSelectInProjectionVisitor : AdviceResolvingVisitor< HasSelectInProjectionVisitor >
+struct HasSelectInProjectionVisitor : Visitor< HasSelectInProjectionVisitor >
 {
-    using AdviceResolvingVisitor::AdviceResolvingVisitor;
+    explicit HasSelectInProjectionVisitor( VerifyInstruction *vi ) : vi( vi ) { }
     void visit( Select *op ) { found_select = true; }
-    void visit( Advice *op ) { AdviceResolvingVisitor::visit(op); }
+    void visit( Advice *op ) { dispatch( op->value( vi ) ); }
     void visit( Operation *op ) { op->traverse( *this ); }
 
     bool found_select = false;
+    VerifyInstruction *vi;
 };
 
 
-struct HasSubSelectInProjectionVisitor : AdviceResolvingVisitor< HasSubSelectInProjectionVisitor >
+struct HasSubSelectInProjectionVisitor : Visitor< HasSubSelectInProjectionVisitor >
 {
-    using AdviceResolvingVisitor::AdviceResolvingVisitor;
-    void visit( Select *op ) {
+    explicit HasSubSelectInProjectionVisitor( VerifyInstruction *vi ) : vi( vi ) { }
+
+    void visit( Advice *op ) { dispatch( op->value( vi ) ); }
+    void visit( Operation *op ) { op->traverse( *this ); }
+    void visit( Select *op )
+    {
         HasSelectInProjectionVisitor vis( vi );
         op->traverse( vis );
-        if(vis.found_select)
+        if ( vis.found_select )
             found_sub_select = true;
     }
-    void visit( Advice *op ) { AdviceResolvingVisitor::visit(op); }
-    void visit( Operation *op ) { op->traverse( *this ); }
 
     bool found_sub_select = false;
+    VerifyInstruction *vi;
 };
 
 bool operation_has_nested_select( const InstructionProjection &projection )

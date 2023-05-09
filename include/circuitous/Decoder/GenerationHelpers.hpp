@@ -12,7 +12,6 @@ namespace circ::decoder
 
     static constexpr const auto extract_helper_function_name = "extract_helper";
 
-    Operation *get_op_attached_to_advice_in_vi( Advice *advice, VerifyInstruction *vi );
     Type get_value_type();
     std::string to_string( Expr expr );
 
@@ -40,10 +39,7 @@ namespace circ::decoder
         {
         }
 
-        decoder::Expr visit( Advice *advice )
-        {
-            return dispatch( get_op_attached_to_advice_in_vi( advice, vi ) );
-        }
+        decoder::Expr visit( Advice *advice ) { return dispatch( advice->value( vi ) ); }
 
         decoder::Expr visit( Concat *concat )
         {
