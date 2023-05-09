@@ -11,7 +11,7 @@ namespace circ::decoder
 
     static constexpr const auto extract_helper_function_name = "extract_helper";
 
-    Id generate_tuple_of_visitor_type(int size);
+    Operation *get_op_attached_to_advice_in_vi( Advice *advice, VerifyInstruction *vi );
     Type get_value_type();
     std::string to_string(Expr expr);
 
@@ -28,7 +28,6 @@ namespace circ::decoder
 
     struct SimpleDecodeTimeCircToExpressionVisitor : Visitor<SimpleDecodeTimeCircToExpressionVisitor>
     {
-        bool looping_on_operation = false;
         explicit SimpleDecodeTimeCircToExpressionVisitor( VerifyInstruction *vi,
                                                           const decoder::Var &first8Bytes,
                                                           const decoder::Var &second8Bytes,

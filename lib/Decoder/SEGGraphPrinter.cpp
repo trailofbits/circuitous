@@ -145,45 +145,6 @@ expression_for_seg_node( std::unordered_map< SEGNode, FunctionDeclaration,
     return { prev_func_call_var.value(), setup };
 }
 
-struct advice_value_visitor : Visitor< advice_value_visitor >
-{
-    Advice *target;
-    Operation *result = nullptr;
-    bool result_is_left_side = false;
-
-    explicit advice_value_visitor( Advice *target ) : target( target ) { }
-    void visit( AdviceConstraint *ac )
-    {
-        check( ac->operands_size() == 2 )
-            << "advice constraint does not contain 2 children";
-        check( ac->operand( 0 ) != ac->operand( 1 ) )
-            << "advice constraint points to same child twice, left id:"
-            << ac->operand( 0 )->id() << " id right:" << ac->operand( 1 )->id();
-        if ( ac->operand( 0 ) == target )
-        {
-            result_is_left_side = false;
-            result = ac->operand( 1 );
-        }
-
-        if ( ac->operand( 1 ) == target )
-        {
-            result_is_left_side = true;
-            result = ac->operand( 0 );
-        }
-    }
-
-    void visit( Operation *op ) { op->traverse( *this ); }
-};
-
-Operation *get_op_attached_to_advice_in_vi( Advice *advice, VerifyInstruction *vi)
-{
-    advice_value_visitor vis(advice);
-    vi->traverse(vis);
-    check(vis.result != nullptr) << "could not find value";
-    check(vis.result != advice) << "returned advice to itself";
-    check(isa<Advice>(vis.result) == false) << "transitive advice found";
-    return vis.result;
-}
 
 std::vector< std::shared_ptr<SEGNode> > SEGGraph::nodes() const
 {

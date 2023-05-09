@@ -5,9 +5,6 @@
 
 namespace circ::decoder
 {
-
-    Operation *get_op_attached_to_advice_in_vi( Advice *advice, VerifyInstruction *vi);
-
     // Represents a choice made for a select node
     struct SelectChoice
     {
