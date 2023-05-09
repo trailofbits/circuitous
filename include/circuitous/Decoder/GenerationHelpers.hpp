@@ -34,8 +34,8 @@ namespace circ::decoder
         : Visitor< SimpleDecodeTimeCircToExpressionVisitor >
     {
         explicit SimpleDecodeTimeCircToExpressionVisitor( VerifyInstruction *vi,
-                                                          const decoder::Var &first8Bytes,
-                                                          const decoder::Var &second8Bytes,
+                                                          const Var &first8Bytes,
+                                                          const Var &second8Bytes,
                                                           const std::string &extractHelper ) :
             vi( vi ),
             first_8_bytes( first8Bytes ), second_8_bytes( second8Bytes ),
@@ -43,45 +43,45 @@ namespace circ::decoder
         {
         }
 
-        decoder::Expr visit( Advice *advice ) { return dispatch( advice->value( vi ) ); }
+        Expr visit( Advice *advice ) { return dispatch( advice->value( vi ) ); }
 
-        decoder::Expr visit( Concat *concat )
+        Expr visit( Concat *concat )
         {
             check( concat->operands_size() > 0 ) << "concat cannot be a leaf";
             auto first_child = concat->operand( concat->operands_size() - 1 );
-            decoder::Expr tmp = dispatch( first_child );
+            Expr tmp = dispatch( first_child );
             auto size_offset = first_child->size;
             for ( long i = static_cast< long >( concat->operands_size() - 2 ); i >= 0; i-- )
             {
                 auto child = concat->operand( static_cast< size_t >( i ) );
                 auto new_val = dispatch( child );
-                tmp = decoder::Plus( tmp,
-                                     decoder::Shfl( new_val, decoder::Int( size_offset ) ) );
+                tmp = Plus( tmp,
+                                     Shfl( new_val, Int( size_offset ) ) );
                 size_offset = concat->operand( static_cast< size_t >( i ) )->size;
             }
             return tmp;
         }
 
-        decoder::Expr visit( Extract *extract )
+        Expr visit( Extract *extract )
         {
             check( extract->operands_size() == 1 )
                 << "extracting from multiple nodes is not supported";
             check( isa< InputInstructionBits >( extract->operand( 0 ) ) )
                 << "Requires to extract from input bytes for now";
-            auto low = decoder::Int( extract->low_bit_inc );
-            auto high = decoder::Int( extract->high_bit_exc );
-            return decoder::FunctionCall( extract_helper, { first_8_bytes, second_8_bytes },
+            auto low = Int( extract->low_bit_inc );
+            auto high = Int( extract->high_bit_exc );
+            return FunctionCall( extract_helper, { first_8_bytes, second_8_bytes },
                                           { low, high } );
         }
 
-        decoder::Expr visit( Operation *op )
+        Expr visit( Operation *op )
         {
             circ::unreachable() << "Not supported: " << op->name();
         }
 
         VerifyInstruction *vi;
-        const decoder::Var first_8_bytes;
-        const decoder::Var second_8_bytes;
+        const Var first_8_bytes;
+        const Var second_8_bytes;
         const std::string extract_helper;
     };
 

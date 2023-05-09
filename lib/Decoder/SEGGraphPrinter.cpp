@@ -40,11 +40,11 @@ namespace circ::decoder
      * function or not.
      */
     // TODO(Sebas): change this to a register function and add an api that returns void
-    std::pair< decoder::Var, decoder::StatementBlock > expression_for_seg_node(
+    std::pair< Var, StatementBlock > expression_for_seg_node(
         std::unordered_map< SEGNode, FunctionDeclaration, segnode_hash_on_get_hash,
                             segnode_comp_on_hash > &func_decls,
         UniqueNameStorage &unique_names_storage, const SEGNode &node,
-        std::vector< decoder::Var > arg_names )
+        std::vector< Var > arg_names )
     {
         std::vector< Expr > args;
         std::vector< Expr > local_vars;
@@ -66,7 +66,7 @@ namespace circ::decoder
             setup.push_back( set );
         }
 
-        decoder::VarDecl visitor_call_var( unique_names_storage.get_unique_var_name() );
+        VarDecl visitor_call_var( unique_names_storage.get_unique_var_name() );
         auto visitor_call = FunctionCall( "visitor.call", local_vars );
         auto visitor_assign = Statement( Assign( visitor_call_var, visitor_call ) );
         setup.push_back( visitor_assign );
@@ -81,7 +81,7 @@ namespace circ::decoder
         // has node fd intro
         if ( !func_decls.contains( node ) )
         {
-            decoder::FunctionDeclarationBuilder fdb;
+            FunctionDeclarationBuilder fdb;
             fdb.retType( Type( "VisRetType" ) )
                 .name( unique_names_storage.get_unique_var_name().name )
                 .arg_insert( VarDecl( Var( "visitor", Type( "const VisitorType& " ) ) ) );
@@ -100,13 +100,13 @@ namespace circ::decoder
         setup.clear();
 
         auto prev_declared_func = func_decls.find( node );
-        decoder::VarDecl prev_func_call_var( unique_names_storage.get_unique_var_name() );
-        std::vector< decoder::Expr > call_args = { decoder::Id( "visitor" ) };
+        VarDecl prev_func_call_var( unique_names_storage.get_unique_var_name() );
+        std::vector< Expr > call_args = { Id( "visitor" ) };
         call_args.insert( call_args.end(), arg_names.begin(), arg_names.end() );
         auto prev_func_call
-            = decoder::FunctionCall( prev_declared_func->second.function_name, call_args );
+            = FunctionCall( prev_declared_func->second.function_name, call_args );
         auto prev_func_assign
-            = decoder::Statement( decoder::Assign( prev_func_call_var, prev_func_call ) );
+            = Statement( Assign( prev_func_call_var, prev_func_call ) );
         setup.push_back( prev_func_assign );
         return { prev_func_call_var.value(), setup };
     }
@@ -217,11 +217,11 @@ namespace circ::decoder
         auto p = ( *proj_groups.find( key ) ).second;
         auto instr_proj = p.first;
         auto node = p.second;
-        std::vector< decoder::Expr > func_args;
-        std::vector< decoder::Expr > argument_names;
+        std::vector< Expr > func_args;
+        std::vector< Expr > argument_names;
 
         // TODO(sebas): Pass a var around instead of creating it inplace here
-        func_args.push_back( decoder::Id( "visitor" ) );
+        func_args.push_back( Id( "visitor" ) );
 
         ToExpressionWithIsomorphicSelectsVisitor setup( *this );
         setup.dispatch( instr_proj.root_in_vi );
@@ -229,8 +229,8 @@ namespace circ::decoder
             func_args.push_back( new_variables.value().name );
 
         auto func_decl = seg_graph_printer->get_func_decl( node );
-        auto funcCall = decoder::FunctionCall( func_decl.function_name, func_args );
-        fdb_visit.body_insert( decoder::Statement( funcCall ) );
+        auto funcCall = FunctionCall( func_decl.function_name, func_args );
+        fdb_visit.body_insert( Statement( funcCall ) );
     }
 
     /*
@@ -272,31 +272,31 @@ namespace circ::decoder
             start_op_ptr, instr_proj.select_choices, vi );
         auto node_gen = non_unique_dfs< gap::graph::yield_node::on_open >( node );
 
-        decoder::StatementBlock block;
-        std::vector< decoder::Expr > arguments;
-        arguments.push_back( decoder::Id( "visitor" ) );
-        decoder::StatementBlock guard_conditions;
+        StatementBlock block;
+        std::vector< Expr > arguments;
+        arguments.push_back( Id( "visitor" ) );
+        StatementBlock guard_conditions;
 
         for ( auto c : instr_proj.select_choices )
         {
             auto indx = decode_time_expression_creator.dispatch( c.sel->selector() );
-            auto choice = decoder::Int( static_cast< int64_t >( c.chosen_idx ) );
-            auto eq = decoder::Equal( indx, choice );
+            auto choice = Int( static_cast< int64_t >( c.chosen_idx ) );
+            auto eq = Equal( indx, choice );
             if ( guard_conditions.empty() )
                 guard_conditions.push_back( eq );
             else
             {
                 auto first = guard_conditions.back();
                 guard_conditions.pop_back();
-                guard_conditions.push_back( decoder::And( first, eq ) );
+                guard_conditions.push_back( And( first, eq ) );
             }
         }
 
         for ( auto op : op_gen )
         {
             auto lhs = get_next_free_data_slot();
-            auto rhs = decoder::Id( op->op->name() );
-            member_initializations.push_back( decoder::Assign( lhs, rhs ) );
+            auto rhs = Id( op->op->name() );
+            member_initializations.push_back( Assign( lhs, rhs ) );
             arguments.push_back( lhs.value().name );
         }
 
@@ -304,7 +304,7 @@ namespace circ::decoder
         check( arguments.size() == func_decl.args.size() )
             << "calls function with incorrect number of arguments";
 
-        auto func_call = decoder::FunctionCall( func_decl.function_name, arguments );
+        auto func_call = FunctionCall( func_decl.function_name, arguments );
         if ( guard_conditions.empty() )
             fdb_visit.body_insert_statement( func_call );
         else
@@ -415,7 +415,7 @@ namespace circ::decoder
         return true;
     }
 
-    decoder::FunctionDeclaration
+    FunctionDeclaration
     SEGGraphPrinter::get_func_decl( std::shared_ptr< SEGNode > node )
     {
         auto sem_entry = func_decls.find( *node );
@@ -426,21 +426,21 @@ namespace circ::decoder
 
 
 
-    decoder::Var UniqueNameStorage::get_unique_var_name( decoder::Type type_name )
+    Var UniqueNameStorage::get_unique_var_name( Type type_name )
     {
         counter++;
-        return decoder::Var( "generated_name_" + std::to_string( counter ), type_name );
+        return Var( "generated_name_" + std::to_string( counter ), type_name );
     }
 
-    decoder::Var UniqueNameStorage::get_unique_var_name()
+    Var UniqueNameStorage::get_unique_var_name()
     {
         return get_unique_var_name( Type( "auto" ) );
     }
 
-    std::vector< decoder::Var > UniqueNameStorage::get_n_var_names( int amount_of_names,
+    std::vector< Var > UniqueNameStorage::get_n_var_names( int amount_of_names,
                                                                     Type type )
     {
-        std::vector< decoder::Var > vars;
+        std::vector< Var > vars;
         for ( auto i = 0; i < amount_of_names; i++ )
         {
             counter++;
@@ -521,11 +521,11 @@ namespace circ::decoder
         }
     }
 
-    decoder::VarDecl DecodedInstrGen::get_next_free_data_slot()
+    VarDecl DecodedInstrGen::get_next_free_data_slot()
     {
         auto index = std::to_string( size++ );
-        auto var = decoder::Var( member_variable_prefix + index, Type( "VisitorType" ) );
-        return decoder::VarDecl( var );
+        auto var = Var( member_variable_prefix + index, Type( "VisitorType" ) );
+        return VarDecl( var );
     }
 
     Struct DecodedInstrGen::create_struct()

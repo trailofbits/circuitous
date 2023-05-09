@@ -95,19 +95,19 @@ namespace circ::decoder
         Switch sw( selector );
         for ( std::size_t i = 1; i < sel->operands_size(); i++ )
         {
-            std::vector< decoder::Expr > block;
+            std::vector< Expr > block;
             auto start_op_ptr = std::make_shared< nodeWrapper >( sel->operand( i ) );
             for ( auto x : gap::graph::dfs< gap::graph::yield_node::on_open >( start_op_ptr ) )
             {
-                block.push_back( decoder::Id( x->op->name() ) );
+                block.push_back( Id( x->op->name() ) );
             }
 
-            auto c = Equal( selector, decoder::Int( static_cast< int64_t >( i ) ) );
+            auto c = Equal( selector, Int( static_cast< int64_t >( i ) ) );
             Return return_val( Id( "" ) );
             Type return_type( Id( "" ) );
             if ( block.size() > 1 )
             {
-                decoder::Tuple tuple( block.size() );
+                Tuple tuple( block.size() );
                 return_val = Return( tuple.Construct( block ) );
                 return_type = tuple.get_type();
             }
