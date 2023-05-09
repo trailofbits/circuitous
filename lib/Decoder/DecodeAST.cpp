@@ -70,15 +70,13 @@ namespace circ::decoder {
                 [&](const Empty &arg) {},
                 [&](const Var &arg) { raw(arg.name); },
                 [&](const VarDecl &arg) { expr(arg.value().type).raw(" ", arg.value().name); },
-                [&]( const EnumValue &arg) {
-//                            raw(arg.e->enum_name, "::", arg.e->index(arg.index));
-                        },
+                [ & ]( const EnumValue &arg ){ raw( arg.e->enum_name, "::", arg.e->index( arg.index ) ); },
                 [&]( const Enum &arg ) { raw( arg.enum_name ); },
                 [&]( const EnumDecl &arg )
                 {
-//                    raw( "enum class ", arg.value().enum_name )
-//                        .expr_array< Id >( arg.value().names, ExprStyle::EnumBody )
-//                        .endl();
+                    raw( "enum class ", arg.value().enum_name )
+                        .expr_array< Id >( arg.value().names, ExprStyle::EnumBody )
+                        .endl();
                 },
                 [&](const IndexVar &arg) { expr(arg.lhs()).expr(arg.rhs(), GuardStyle::Square); },
                 [&](const Dereference &arg) { raw("(*").expr(arg.value()).raw(")"); }, // TODO(sebas): guard styles don't take results of raw as a direct argument

@@ -209,38 +209,34 @@ namespace circ::decoder {
 
     struct Enum;
 
-    struct EnumValue {
-        EnumValue( const std::shared_ptr< Enum > &e, std::size_t index) : e( e ), index(index) { }
-        std::shared_ptr<Enum> e; // shared pointer? should not copy at least
+    struct EnumValue
+    {
+        EnumValue( const std::shared_ptr< Enum > &e, std::size_t index ) :
+            e( e ), index( index )
+        {
+        }
+
+        std::shared_ptr< Enum > e;
         std::size_t index;
     };
 
-    struct Enum {
+    struct Enum
+    {
         Enum( const Id &enumName ) : enum_name( enumName ) { }
-        void Register( const Id &value_name, Operation *op ) { names.push_back( { value_name, op} ); };
-        std::pair<Id,Operation*> index( std::size_t index ) { return names[ index ]; }
-        std::optional<EnumValue> get_by_name( Id name )
+        void Register( const Id &value_name ) { names.push_back( value_name ); };
+        Id index( std::size_t index ) { return names[ index ]; }
+        std::optional< EnumValue > get_by_name( Id name )
         {
-            auto index = std::find_if(names.begin(), names.end(), [&](std::pair<Id, Operation*> pair) { return pair.first == name; });
+            auto index = std::find_if( names.begin(), names.end(),
+                                       [ & ]( Id known_name ) { return known_name == name; } );
             if ( index != names.end() )
-                return EnumValue(std::make_shared<Enum>(*this),
+                return EnumValue( std::make_shared< Enum >( *this ),
                                   static_cast< size_t >( index - names.begin() ) );
             return std::nullopt;
         }
 
-        std::optional<EnumValue> get_by_op( Operation *op )
-        {
-            auto index = std::find_if(names.begin(), names.end(), [&](std::pair<Id, Operation*> pair) { return pair.second == op; });
-            if ( index != names.end() )
-                return EnumValue(std::make_shared<Enum>(*this),
-                                  static_cast< size_t >( index - names.begin() ) );
-            return std::nullopt;
-        }
         Id enum_name;
-
-        // This operation should represent the subtree of a specialization
-        // TODO Extract this operation out and let it be an Expr
-        std::vector<std::pair<Id, Operation*>> names;
+        std::vector< Id > names;
     };
 
     struct EnumDecl: UnaryOp<Enum>{ using UnaryOp::UnaryOp; };
