@@ -1,7 +1,6 @@
 # Copyright (c) 2022 Trail of Bits, Inc.
 
 add_headers(Decoder CIRCUITOUS_DISASSEMBLER_HEADERS
-    SEGMultiGraph.hpp
     DecoderPrinter.hpp
     DecodeAST.hpp
     GenerationHelpers.hpp
@@ -13,7 +12,7 @@ SOURCES
         DecoderPrinter.cpp
         DecodeAST.cpp
         GenerationHelpers.cpp
-        SEGMultiGraph.cpp
+        SEGGraphPrinter.cpp
 HEADERS
     ${CIRCUITOUS_DISASSEMBLER_HEADERS}
 )

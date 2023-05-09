@@ -14,6 +14,7 @@
 
 namespace circ::decoder
 {
+    //TODO(sebas): Move to gap?
     template < gap::graph::yield_node when, typename node_pointer >
         requires gap::graph::node_like< typename node_pointer::element_type >
     gap::recursive_generator< node_pointer > non_unique_dfs( node_pointer root )
@@ -130,7 +131,7 @@ namespace circ::decoder
     };
 
     /*
-     * This structure is an intermediate represntation of a circIR subtree being converted to an
+     * This structure is an intermediate representation of a circIR subtree being converted to an
      * InstructionProjection More-over it generates the actual SEGNodes incrementally, and
      * splits itself off for every decode-time select
      */
@@ -326,8 +327,6 @@ namespace circ::decoder
             }
         }
 
-        bool is_finished();
-
         std::unique_ptr< UnfinishedProjection > deep_copy( const std::string &id_postfix )
         {
             std::map< std::size_t, std::shared_ptr< Tree > > copied_nodes;
@@ -428,11 +427,6 @@ namespace circ::decoder
             return new_tree;
         };
     };
-
-    void specialize( std::map< std::string, Operation * > &specs,
-                     std::shared_ptr< SEGNode > node, Operation *op );
-
-    std::unique_ptr< SEGGraph > circ_to_segg( circuit_owner_t circuit, std::ostream &o );
 
     template < gap::graph::graph_like g >
     void absorb_node_into_an_existing_root( g &graph, const SEGGraph::node_pointer &to_hash );

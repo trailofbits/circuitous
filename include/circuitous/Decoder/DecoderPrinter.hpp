@@ -1,7 +1,8 @@
 #pragma once
 
 #include "circuitous/Decoder/DecodeAST.hpp"
-#include <circuitous/Decoder/SEGMultiGraph.hpp>
+
+#include <circuitous/Decoder/SEGGraphPrinter.hpp>
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/Transforms/PassBase.hpp>
 #include <ostream>

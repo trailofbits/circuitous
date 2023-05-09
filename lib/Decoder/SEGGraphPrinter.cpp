@@ -1,7 +1,7 @@
 #include "circuitous/Decoder/DecoderPrinter.hpp"
 #include "circuitous/Decoder/GenerationHelpers.hpp"
 
-#include <circuitous/Decoder/SEGMultiGraph.hpp>
+#include <circuitous/Decoder/SEGGraphPrinter.hpp>
 #include <memory>
 #include <sstream>
 
@@ -42,26 +42,6 @@ void SEGNode::replace_all_nodes_by_id(std::shared_ptr<SEGNode> new_target, std::
                         else
                             return node_ptr;
                     } );
-}
-
-void specialize( std::map< std::string, Operation * > &specs, std::shared_ptr< SEGNode > node,
-                 Operation *op )
-{
-    auto res_pair = specs.try_emplace(node->id, op);
-    if(!res_pair.second) // not inserted so already exists
-        node->specializeble = false;
-
-    std::size_t c =0 ;
-    for(auto & child : op->operands())
-    {
-        if(c == node->children().size())
-        {
-            std::cerr << "not isomorphic" << std::endl;
-            return;
-        }
-        specialize(specs, node->children()[c], child);
-        c++;
-    }
 }
 
 void SEGGraphPrinter::print_semantics_emitter()
