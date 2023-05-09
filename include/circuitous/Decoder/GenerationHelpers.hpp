@@ -92,5 +92,8 @@ namespace circ::decoder
         void register_if_not_in_cache( const GeneratedSelectHelper &sel );
     };
 
+    //TODO(sebas): Move this to somewhere in IR?
+    bool are_trees_isomorphic( Operation *lhs, Operation *rhs );
+    bool are_trees_isomorphic( const std::vector< Operation * > &ops );
 
 }

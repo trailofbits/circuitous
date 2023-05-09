@@ -40,21 +40,32 @@ namespace circ::decoder
         return { helper.node_count, helper.fd };
     }
 
+    bool are_trees_isomorphic( Operation *lhs, Operation *rhs )
+    {
+        std::vector< Operation * > ops { lhs, rhs };
+        return are_trees_isomorphic( ops );
+    }
 
     bool are_trees_isomorphic( const std::vector< Operation * > &ops )
     {
         if ( ops.size() < 2 )
             return true;
 
-        print::CompactPrinter cp;
-        std::string first_hash = cp.Hash( ops[ 0 ] );
-        return std::all_of( ops.begin() + 1, ops.end(),
-                            [ & ]( Operation *op ) {
-//                                std::cout << "comparing: " << cp.Hash(op) << " = " << first_hash << std::endl;
-                                return cp.Hash( op ) == first_hash; } );
+        bool are_isomorphic = true;
+        auto size = ops[0]->operands_size();
+
+        for ( auto &op : ops )
+            are_isomorphic = are_isomorphic && size == op->operands_size();
+
+        for ( std::size_t i = 0; i < ops[0]->operands_size() && are_isomorphic; i++ )
+        {
+            std::vector< Operation * > children;
+            children.push_back( ops[ i ] );
+            are_isomorphic = are_isomorphic && are_trees_isomorphic( children );
+        }
+
+        return are_isomorphic;
     }
-
-
 
     GeneratedSelectHelper
     IndependentSelectEmissionHelper::create_helper( Select *sel, VerifyInstruction *vi )
