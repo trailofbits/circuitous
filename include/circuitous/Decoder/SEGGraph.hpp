@@ -301,12 +301,8 @@ namespace circ::decoder
         void remove_node( const node_pointer &node );
         std::vector< std::pair< InstructionProjection, std::shared_ptr< SEGNode > > >
         get_nodes_by_vi( VerifyInstruction *vi );
-        //    std::vector<std::pair<GenerationUnit, std::shared_ptr<SEGNode>>>
-        //    get_nodes_by_vi(VerifyInstruction* vi); std::vector<std::pair<GenerationUnit,
-        //    std::shared_ptr<SEGNode>>> get_nodes_by_gu(const GenerationUnit& gu);
 
         void prepare();
-        int get_maximum_vi_size();
 
     private:
         // calculate costs of the nodes for emission
