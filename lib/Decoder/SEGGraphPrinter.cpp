@@ -10,48 +10,6 @@
 
 namespace circ::decoder
 {
-
-    std::vector< std::shared_ptr< SEGNode > > SEGNode::children()
-    {
-        return _nodes;
-    }
-
-    std::string SEGNode::get_hash() const
-    {
-        std::stringstream ss;
-        ss << std::to_string( _nodes.size() );
-        ss << "|";
-        for ( std::shared_ptr< SEGNode > n : _nodes )
-            ss << n->get_hash();
-
-        return ss.str();
-    }
-
-    SEGNode::SEGNode( const std::string &id ) : id( id ) { }
-    std::vector< std::shared_ptr< SEGNode > > SEGNode::parents()
-    {
-        return _parents;
-    }
-
-    void SEGNode::add_child( SEGNode::node_pointer child )
-    {
-        this->_nodes.push_back( child );
-        child->_parents.push_back( std::make_shared< SEGNode >( *this ) );
-    }
-
-    void SEGNode::replace_all_nodes_by_id( std::shared_ptr< SEGNode > new_target,
-                                           std::string target_id )
-    {
-        std::transform( std::begin( _nodes ), std::end( _nodes ), std::begin( _nodes ),
-                        [ & ]( auto &node_ptr )
-                        {
-                            if ( node_ptr != nullptr && node_ptr->id == target_id )
-                                return new_target;
-                            else
-                                return node_ptr;
-                        } );
-    }
-
     void SEGGraphPrinter::print_semantics_emitter()
     {
         for ( auto &node : gap::graph::dfs< gap::graph::yield_node::on_close >( seg_graph ) )
@@ -66,13 +24,6 @@ namespace circ::decoder
                 std::cout << std::endl;
             }
         }
-    }
-
-    void SEGGraph::prepare()
-    {
-        extract_all_seg_nodes_from_circuit();
-        dedup( *this );
-        calculate_costs();
     }
 
     /*
@@ -158,75 +109,6 @@ namespace circ::decoder
             = decoder::Statement( decoder::Assign( prev_func_call_var, prev_func_call ) );
         setup.push_back( prev_func_assign );
         return { prev_func_call_var.value(), setup };
-    }
-
-    std::vector< std::shared_ptr< SEGNode > > SEGGraph::nodes() const
-    {
-        return _nodes;
-    }
-
-    gap::generator< SEGGraph::edge_type > SEGGraph::edges() const
-    {
-        for ( auto node : _nodes )
-        {
-            for ( auto child : node->children() )
-            {
-                co_yield edge_type { node, child };
-            }
-        }
-    }
-
-    void SEGGraph::remove_node( const SEGGraph::node_pointer &node )
-    {
-        auto target_id = node->id;
-        auto ids_match = [ & ]( const std::shared_ptr< SEGNode > &node )
-        {
-            return node->id == target_id;
-        };
-        std::erase_if( _nodes, ids_match );
-    }
-
-    std::vector< std::pair< InstructionProjection, std::shared_ptr< SEGNode > > >
-    SEGGraph::get_nodes_by_vi( VerifyInstruction *vi )
-    {
-        // TODO(sebas): build this once instead of building this per call
-        std::vector< std::pair< InstructionProjection, std::shared_ptr< SEGNode > > > m;
-        for ( auto &n : nodes() )
-        {
-            for ( auto &root : n->valid_for_contexts )
-            {
-                if ( root.vi == vi
-                     && n->isRoot ) // this root shares the correct vi, so we should copy it
-                    m.push_back( { root, n } );
-            }
-        }
-
-        circ::check( m.size() != 0 ) << "Could not retrieve SEGNode for VI";
-        return m;
-    }
-
-    void SEGGraph::calculate_costs()
-    {
-        // calc inline cost and declare fd if possible
-        for ( auto &node : gap::graph::dfs< gap::graph::yield_node::on_close >( *this ) )
-        {
-            node->inline_cost = std::accumulate( node->_nodes.begin(), node->_nodes.end(), 1,
-                                                 []( int current, std::shared_ptr< SEGNode > n )
-                                                 {
-                                                     if ( n->fd == false )
-                                                         return current + n->inline_cost;
-                                                     else
-                                                         return current + 1;
-                                                 } );
-
-            if ( node->inline_cost >= 2 || node->isRoot )
-                node->fd = true;
-
-            node->subtree_count
-                = std::accumulate( node->_nodes.begin(), node->_nodes.end(), 1,
-                                   []( int current, std::shared_ptr< SEGNode > n )
-                                   { return current + n->subtree_count; } );
-        }
     }
 
     struct ToExpressionWithIsomorphicSelectsVisitor
@@ -542,51 +424,7 @@ namespace circ::decoder
         return sem_entry->second;
     }
 
-    void SEGGraph::extract_all_seg_nodes_from_circuit()
-    {
-        circ::inspect::LeafToVISubPathCollector subPathCollector;
-        std::vector< std::shared_ptr< SEGNode > > nodes;
-        int vi_counter = 0;
 
-        for ( VerifyInstruction *vi : circuit->attr< circ::VerifyInstruction >() )
-        {
-            auto ltt_paths = collect::DownTree< constraint_opts_ts >().run( vi );
-            int path_counter = 0;
-
-            for ( auto &path : ltt_paths.collected )
-            {
-                // these constraints are useless by themselves as others will use them instead
-                if ( isa< AdviceConstraint >( path ) )
-                    continue;
-
-                auto prefix = "vi_" + std::to_string( vi_counter ) + "_path"
-                              + std::to_string( path_counter ) + "_node";
-                UnfinishedProjection up( prefix, vi, path );
-                up.fully_extend();
-                save_nodes_from_projection( nodes, up );
-                path_counter++;
-            }
-            vi_counter++;
-        }
-        _nodes = nodes;
-    }
-
-    void SEGGraph::save_nodes_from_projection( std::vector< std::shared_ptr< SEGNode > > &nodes,
-                                               UnfinishedProjection &up ) const
-    {
-        auto node_gen
-            = gap::graph::dfs< gap::graph::yield_node::on_open >( up.projection.get()->node );
-        for ( auto node : node_gen )
-            nodes.push_back( node );
-
-        for ( auto copy : up.created_projections )
-        {
-            auto node_gen_proj
-                = gap::graph::dfs< gap::graph::yield_node::on_open >( copy->projection->node );
-            for ( auto node : node_gen_proj )
-                nodes.push_back( node );
-        }
-    }
 
     decoder::Var UniqueNameStorage::get_unique_var_name( decoder::Type type_name )
     {

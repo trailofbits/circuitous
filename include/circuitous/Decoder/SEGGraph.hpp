@@ -6,6 +6,7 @@
 
 #include <circuitous/IR/Visitors.hpp>
 #include <gap/core/graph.hpp>
+#include <map>
 
 namespace circ::decoder
 {
@@ -315,4 +316,114 @@ namespace circ::decoder
     };
 
     using seg_projection = std::pair< InstructionProjection, std::shared_ptr< SEGNode > >;
+
+    /*
+     * This structure is an intermediate representation of a circIR subtree being converted to
+     * an InstructionProjection More-over it generates the actual SEGNodes incrementally, and
+     * splits itself off for every decode-time select
+     */
+    struct UnfinishedProjection : InstructionProjection
+    {
+        std::unordered_set< std::shared_ptr< Tree > > to_continue_from;
+        std::unordered_set< std::shared_ptr< Tree > > selects_to_continue_from;
+
+        std::map< std::size_t, std::shared_ptr< Tree > > seen_nodes;
+        std::string segnode_prefix = "";
+
+        std::vector< std::shared_ptr< UnfinishedProjection > > created_projections;
+        std::shared_ptr< Tree > projection;
+
+        /*
+         * This constructor is meant to be used when copying an unfinished projection
+         * As this does not add itself to any of the to_continue_from sets.
+         * As in the original it might have deleted itself from this already, and should be
+         * externally set.
+         */
+        explicit UnfinishedProjection( const std::string &segnodePrefix, VerifyInstruction *vi,
+                                       std::shared_ptr< Tree > root,
+                                       const choice_set &choices );
+
+        explicit UnfinishedProjection( const std::string &segnodePrefix, VerifyInstruction *vi,
+                                       Operation *root );
+
+        void fully_extend();
+
+        void finish_up_to_decode_select();
+
+        // TODO(sebas): make output std::optional?
+        std::vector< std::shared_ptr< UnfinishedProjection > > project_select();
+
+        void extend_except_select( std::shared_ptr< Tree > tree );
+
+        std::unique_ptr< UnfinishedProjection > deep_copy( const std::string &id_postfix );
+
+    private:
+        void init_root_tree() { projection->node->isRoot = true; }
+
+        bool is_decode_select( Operation *op );
+
+        std::shared_ptr< Tree >
+        deep_copy_child( const std::string &id_postfix, const Tree &copy_from,
+                         std::map< std::size_t, std::shared_ptr< Tree > > &copied_nodes,
+                         UnfinishedProjection &copy_to );
+    };
+
+
+    template < gap::graph::graph_like g >
+    void absorb_node_into_an_existing_root( g &graph, const SEGGraph::node_pointer &to_hash )
+    { // two nodes which are both roots, and have same hashes can be merged
+        for ( std::shared_ptr< SEGNode > &to_merge_with : graph.nodes() )
+        {
+            if ( to_hash->id != to_merge_with->id && to_merge_with->isRoot && to_hash->isRoot
+                 && to_hash->get_hash() == to_merge_with->get_hash() )
+            {
+                to_merge_with->valid_for_contexts.merge( to_hash->valid_for_contexts );
+                graph.remove_node( to_hash );
+                break;
+            }
+        }
+    }
+
+    /*
+     * Deduplicate nodes with the same hash. Effectively turning the graph into a multi-graph
+     * where nodes have unique hashes/sub-trees
+     */
+    template < gap::graph::graph_like g >
+    void dedup( g &graph )
+    {
+        std::map< std::string, std::shared_ptr< SEGNode > > seen_hash;
+        for ( auto &to_hash : gap::graph::dfs< gap::graph::yield_node::on_close >( graph ) )
+        {
+            auto pair_iter_inserted = seen_hash.try_emplace( to_hash->get_hash(), to_hash );
+            if ( pair_iter_inserted.second == false )
+            { // item already existed hash replace others now
+                auto pre_existinging_hashed_node = ( *pair_iter_inserted.first ).second;
+
+                bool foundEdge = false;
+                // find parent of target that was already hashed and replace it
+                for ( auto &e : graph.edges() )
+                {
+                    // we want to replace it, and we don't replace the one with the one want to
+                    // replace with
+                    if ( e.target()->id == to_hash->id
+                         && e.target()->id != pre_existinging_hashed_node->id )
+                    {
+                        foundEdge = true;
+                        e.source()->replace_all_nodes_by_id( pre_existinging_hashed_node,
+                                                             to_hash->id );
+                        graph.remove_node( to_hash );
+                        break;
+                    }
+                }
+                // must be parent of a subtree, now replace those
+                if ( !foundEdge )
+                {
+                    if ( !to_hash->isRoot )
+                        unreachable()
+                            << "all nodes require an incoming edge or be marked as root.";
+                    absorb_node_into_an_existing_root( graph, to_hash );
+                }
+            }
+        }
+    }
 }

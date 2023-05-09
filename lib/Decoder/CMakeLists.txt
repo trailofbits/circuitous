@@ -12,6 +12,7 @@ SOURCES
         DecoderPrinter.cpp
         DecodeAST.cpp
         GenerationHelpers.cpp
+        SEGGraph.cpp
         SEGGraphPrinter.cpp
 HEADERS
     ${CIRCUITOUS_DISASSEMBLER_HEADERS}
