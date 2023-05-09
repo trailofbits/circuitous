@@ -5,6 +5,7 @@
 #include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Memory.hpp>
 #include <circuitous/IR/Circuit.hpp>
+#include <circuitous/IR/Visitors.hpp>
 
 #include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Check.hpp>
@@ -95,6 +96,39 @@ namespace circ
         return true;
     }
 
+    struct AdviceValueVisitor : UniqueVisitor< AdviceValueVisitor >
+    {
+        Advice *advice;
+        Operation *result = nullptr;
 
+        explicit AdviceValueVisitor( Advice *advice ) : advice( advice ) { }
+        void visit( AdviceConstraint *ac )
+        {
+            check( ac->operands_size() == 2 )
+                << "advice constraint does not contain 2 children";
+            check( ac->operand( 0 ) != ac->operand( 1 ) )
+                << "advice constraint points to same child twice, left id:"
+                << ac->operand( 0 )->id() << ", id right:" << ac->operand( 1 )->id();
+
+            if ( ac->operand( 0 ) == advice )
+                result = ac->operand( 1 );
+
+            if ( ac->operand( 1 ) == advice )
+                result = ac->operand( 0 );
+
+        }
+
+        void visit( Operation *op ) { op->traverse( *this ); }
+    };
+
+    Operation *Advice::value( VerifyInstruction *vi )
+    {
+        AdviceValueVisitor vis( this );
+        vi->traverse( vis );
+        check( vis.result != nullptr ) << "could not find value";
+        check( vis.result != this ) << "returned advice to itself";
+        check( isa< Advice >( vis.result ) == false ) << "transitive advice found";
+        return vis.result;
+    }
 
 }  // namespace circ

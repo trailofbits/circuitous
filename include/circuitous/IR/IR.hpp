@@ -404,6 +404,8 @@ namespace circ
         const std::string bits;
     };
 
+    struct VerifyInstruction;
+
     struct Advice final : Operation
     {
         static constexpr Operation::kind_t kind = Operation::kind_t::kAdvice;
@@ -413,7 +415,8 @@ namespace circ
         {}
 
         static std::string op_code_str() { return "Advice"; }
-        std::string name() const override { return "Advice." + std::to_string(advice_idx) ; }
+        std::string name() const override { return "Advice." + std::to_string( advice_idx ); }
+        Operation *value( VerifyInstruction *vi );
 
         std::size_t advice_idx = 0;
     };
