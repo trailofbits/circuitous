@@ -1,12 +1,12 @@
 #pragma once
 
+#include "circuitous/Decoder/DecodeAST.hpp"
+#include <circuitous/Decoder/SEGMultiGraph.hpp>
 #include <circuitous/IR/Circuit.hpp>
 #include <circuitous/Transforms/PassBase.hpp>
 #include <ostream>
-#include <vector>
 #include <string>
-#include "DecodeAST.hpp"
-#include <circuitous/SEG/SEGMultiGraph.hpp>
+#include <vector>
 
 template <int L> concept SupportedEncodingSize =  L <= 64;
 

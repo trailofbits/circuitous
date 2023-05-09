@@ -1,7 +1,7 @@
 #include "circuitous/Decoder/DecoderPrinter.hpp"
 #include "circuitous/Decoder/GenerationHelpers.hpp"
 
-#include <circuitous/SEG/SEGMultiGraph.hpp>
+#include <circuitous/Decoder/SEGMultiGraph.hpp>
 #include <memory>
 #include <sstream>
 
@@ -302,7 +302,6 @@ struct ToExpressionWithIsomorphicSelectsVisitor : AdviceResolvingVisitor< ToExpr
                 << " got:" << to_string( func_type );
         else
             circ::check( func_type.equals( get_value_type() ) )
-                << "mismatch in expected types, expected: " << to_string( get_value_type() )
                 << " got: " << to_string( func_type );
 
         Var new_constr_arg( "" );

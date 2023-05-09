@@ -16,6 +16,8 @@
 #include <circuitous/Support/Check.hpp>
 
 #include <circuitous/Lifter/CircuitSmithy.hpp>
+#include <circuitous/IR/Serialize.hpp>
+#include <circuitous/Printers.hpp>
 
 #include <circuitous/Decoder/DecoderPrinter.hpp>
 
@@ -24,10 +26,7 @@ CIRCUITOUS_RELAX_WARNINGS
 #include <glog/logging.h>
 CIRCUITOUS_UNRELAX_WARNINGS
 
-#include "circuitous/IR/Serialize.hpp"
-#include "circuitous/SEG/SEGMultiGraph.hpp"
 
-#include <circuitous/Printers.hpp>
 #include <iostream>
 #include <remill/OS/OS.h>
 #include <unordered_map>

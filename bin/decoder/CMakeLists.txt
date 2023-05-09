@@ -10,7 +10,6 @@ add_circuitous_executable( decoder
     circuitous::printers
     circuitous::transforms
     circuitous::decoder
-    circuitous::seg
     circuitous::diff
 )
 
