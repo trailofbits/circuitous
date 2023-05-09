@@ -258,11 +258,7 @@ namespace circ::decoder {
         std::vector< ConstructorDeclaration > constructors;
     };
 
-//    struct StructDecl: UnaryOp<Struct>
-//    {
-//        using UnaryOp::UnaryOp;
-////        explicit StructDecl() { }
-//    };
+
 
     struct Empty : NAryOperation< Expr, 0 >
     {
