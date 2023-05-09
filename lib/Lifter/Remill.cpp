@@ -753,18 +753,14 @@ circuit_owner_t lower_fn(llvm::Function *circuit_func,
     //TODO(lukas): Since extract does need operand, we need to have the node already present
     importer.conjure_instbits(kMaxNumInstBits);
 
-    auto num_input_regs = 0u;
-    auto num_output_regs = 0u;
     for (auto &arg : circuit_func->args()) {
         auto arg_size = static_cast<unsigned>(dl.getTypeSizeInBits(arg.getType()));
         // Expected output register.
         if (auto out_name = circuit_builder::is_output_reg(&arg)) {
             importer.Emplace<OutputRegister>(&arg, *out_name, arg_size);
-            ++num_output_regs;
             // Input register.
         } else if (auto in_name = circuit_builder::is_input_reg(&arg)) {
             importer.Emplace<InputRegister>(&arg, *in_name, arg_size);
-            ++num_input_regs;
         }
     }
 
