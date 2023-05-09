@@ -364,11 +364,5 @@ namespace circ::decoder {
 
         Guard guard_for_expr(ExprStyle style);
     };
-
-    const Var inner_func_arg1( "first8bytes", Type("uint64_t"));
-    const Var inner_func_arg2( "second8bytes", Type("uint64_t"));
-    inline static const std::array<Var,2> inner_func_args = {inner_func_arg1, inner_func_arg2};
-
-    static constexpr const auto extract_helper_function_name = "extract_helper";
 }
 

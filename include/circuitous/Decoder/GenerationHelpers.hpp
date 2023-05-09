@@ -1,10 +1,16 @@
 #pragma once
 
 #include "circuitous/Decoder/DecodeAST.hpp"
-#include "circuitous/Decoder/SEGGraph.hpp"
+#include "circuitous/IR/Visitors.hpp"
 
 namespace circ::decoder
 {
+    const Var inner_func_arg1( "first8bytes", Type("uint64_t"));
+    const Var inner_func_arg2( "second8bytes", Type("uint64_t"));
+    inline static const std::array<Var,2> inner_func_args = {inner_func_arg1, inner_func_arg2};
+
+    static constexpr const auto extract_helper_function_name = "extract_helper";
+
     Id generate_tuple_of_visitor_type(int size);
     Type get_value_type();
     std::string to_string(Expr expr);
