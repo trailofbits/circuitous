@@ -10,7 +10,7 @@ import queue
 import sys
 import re
 
-from tools.utils import RunsPopen
+from tools.utils import RunsPopen, CircuitousError
 
 class RunsPopen:
 
