@@ -166,6 +166,11 @@ namespace circ::run::trace
                     return FromJSON::convert(src, size, 16);
                 }
 
+                auto convert( std::optional< llvm::StringRef > &&src, std::size_t size )
+                {
+                    check( src );
+                    return FromJSON::convert(src, size, 16);
+                }
 
                 self_t &run(const auto &obj)
                 {
@@ -176,6 +181,35 @@ namespace circ::run::trace
 
                     for (const auto &[reg, val] : unwrap(obj.getObject("regs")))
                         entry[reg.str()] = convert(val.getAsString());
+
+                    std::size_t idx = 0;
+                    for (const auto &e : unwrap(obj.getArray("memory_hints")))
+                    {
+                        auto o = unwrap( e.getAsObject() );
+                        std::vector< llvm::APInt > partials = {
+                            llvm::APInt( 1, 1, false ),
+                            ( *convert( o.getString( "mode" ), 64 ) ).trunc( 1 ),
+                            llvm::APInt( 6, 0, false ),
+                            ( *convert( o.getString( "id" ), 64 ) ).trunc( 4 ),
+                            ( *convert( o.getString( "size" ), 64 ) ).trunc( 4 ),
+                            *convert( o.getString( "addr" ), 64 ),
+                            *convert( o.getString( "val" ), 64 ),
+                            *convert( o.getString( "ts" ), 64 )
+                        };
+
+                        irops::memory::Parsed< llvm::APInt > parsed( 64,
+                                                                     std::move( partials ) );
+
+                        llvm::APInt out { irops::memory::size( 64 ), 0, false };
+                        auto inserter = [ & ]( auto thing, auto from, auto size )
+                        {
+                            check( size == thing.getBitWidth() );
+                            out.insertBits( thing, from );
+                        };
+
+                        irops::memory::construct( parsed, inserter );
+                        entry[ "memory." + std::to_string( idx++ ) ] = out;
+                    }
                     return *this;
                 }
 
