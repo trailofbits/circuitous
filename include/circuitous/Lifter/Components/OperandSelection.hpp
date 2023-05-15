@@ -300,9 +300,14 @@ namespace circ::build
             check( r_reg && s_reg );
             log_info() << s_reg->to_string();
 
-            if ( s_reg->tm().is_saturated_by_zeroes() || s_reg->tm().empty() )
+            if ( s_reg->tm().is_saturated_by_zeroes() )
             {
-                log_info() << "[operand-lifter]:" << "Register tm resolves as zero.";
+                return ctx.zero();
+            }
+
+            if ( s_reg->tm().empty() )
+            {
+                log_info() << "[operand-lifter]:" << "Hardcoded register op.";
                 return ctx.zero();
             }
 
