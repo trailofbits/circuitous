@@ -858,7 +858,9 @@ namespace circ
                 options.emplace_back( option );
             }
 
-            lifted_operands.emplace_back( irops::Switch::make( irb, options ) );
+            auto merged = irops::Switch::make( irb, options );
+            lifted_operands.emplace_back( merged );
+
             log_info() << "[exalt]:" << "Operand" << i << "done";
         }
 
@@ -980,8 +982,18 @@ namespace circ
 
             auto [ r_reg, s_reg ] = *reg;
 
-            if( !s_reg || s_reg->tm().empty() )
+            if ( !s_reg )
+            {
+                ++decoder;
                 continue;
+            }
+
+            if ( s_reg->tm().empty() )
+            {
+                out[ r_reg->name ].emplace_back( *decoder );
+                ++decoder;
+                continue;
+            }
 
             auto selector = shadowinst::Materializer( irb, *s_reg ).region_selector();
             check( decoder != decoders.end() );
