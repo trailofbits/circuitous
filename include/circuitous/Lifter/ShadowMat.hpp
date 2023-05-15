@@ -62,7 +62,7 @@ namespace circ::shadowinst
 
         llvm::Value *initial_head(llvm::Value *val)
         {
-            return llvm::UndefValue::get(val->getType());
+            return llvm::ConstantInt::get(val->getType(), 0, false);
         }
 
         bool is_ptr(llvm::Value *val) const
