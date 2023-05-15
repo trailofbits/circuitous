@@ -263,7 +263,12 @@ namespace circ
     template< typename T > requires std::is_base_of_v< llvm::Value, T >
     std::string dbg_dump(const std::unordered_set< T * > &vs)
     {
-        not_implemented();
+        std::stringstream os;
+        os << "{" << std::endl;
+        for (auto v : vs)
+            os << remill::LLVMThingToString(v) << std::endl;
+        os << "}";
+        return os.str();
     }
 
     static inline std::string dbg_dump(llvm::BasicBlock *block)
