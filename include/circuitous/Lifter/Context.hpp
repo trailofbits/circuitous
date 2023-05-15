@@ -73,7 +73,7 @@ namespace circ
 
         auto state_type() const
         {
-            return _arch->StatePointerType();
+            return _arch->StateStructType();
         }
         auto memory_ptr_type() const { return _arch->MemoryPointerType(); }
         auto undef_mem_ptr() { return llvm::UndefValue::get( memory_ptr_type() ); }
