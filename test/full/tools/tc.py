@@ -64,6 +64,15 @@ class MemHint:
         out += (self.size << 4) + (self.type << 1) + 1
         return hex(out)[2:]
 
+    def cic_runner_export(self):
+        out = {}
+        out[ "mode" ] = hex(self.type)[2:]
+        out[ "size" ] = hex(self.size)[2:]
+        out[ "addr" ] = hex(self.addr)[2:]
+        out[ "val" ] = hex(self.value)[2:]
+        out[ "ts" ] = hex(self.ts)[2:]
+        return out
+
     def __eq__(self, other):
         if other is None:
             return False
@@ -305,10 +314,16 @@ class StateImpl(StateBase):
         out = {"instruction_bits" : self.bytes if self.bytes is not None else "00",
                "error_flag" : hex(self._ebit)[2:],
                "timestamp" : hex(self.timestamp)[2:],
-               "regs" : {}}
+               "regs" : {},
+               "memory_hints" : []}
         for reg, val in self.registers.items():
             if val is not None:
                 out["regs"][reg] = hex(val)[2:]
+        idx = 0
+        for hint in self.mem_hints:
+            out["memory_hints"].append(hint.cic_runner_export())
+            out["memory_hints"][-1]["id"] = hex(idx)[2:]
+            idx += 1
         return out
 
 class State32(StateImpl):
