@@ -16,17 +16,22 @@ namespace circ
 
     static inline void replace_undef( llvm::Instruction *inst, unsigned int idx )
     {
-        auto constraint_instance = UndefChain< irops::OutputCheck >().get( inst );
-        auto output_reg = irops::Instance< irops::Reg >( constraint_instance.fixed() );
-
-        check( output_reg );
-        auto [ size, reg, io_type ] = irops::Reg::parse_args( output_reg.fn );
-
         llvm::IRBuilder<> irb( inst );
-        auto value = irops::make_leaf< irops::Reg >( irb, size, reg, irops::twin( io_type ) );
-
-
         auto undef = inst->getOperand( idx );
+
+        auto value = [ & ]() -> llvm::Value *
+        {
+            auto constraint_instance = UndefChain< irops::OutputCheck >().get( inst );
+            if ( !constraint_instance )
+                return llvm::ConstantInt::get( undef->getType(), 0, false );
+
+            auto output_reg = irops::Instance< irops::Reg >( constraint_instance->fixed() );
+
+            check( output_reg );
+            auto [ size, reg, io_type ] = irops::Reg::parse_args( output_reg.fn );
+
+            return irops::make_leaf< irops::Reg >( irb, size, reg, irops::twin( io_type ) );
+        }();
 
         auto coerced = irb.CreateSExtOrTrunc( value, undef->getType() );
         inst->setOperand( idx, coerced );
