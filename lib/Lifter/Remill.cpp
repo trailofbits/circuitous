@@ -338,6 +338,18 @@ namespace
             return emplace_full< O >( call_args( call ), std::forward< Args >( args ) ... );
         }
 
+        template< typename O, typename ... Args >
+        target_t unique_intrinsic( llvm::CallInst *call, llvm::Function *fn,
+                                   Args &&... args)
+        {
+            if ( !uniques.count( fn ) )
+                uniques[ fn ] = emplace_full< O >( call_args( call ),
+                                                   std::forward< Args >( args ) ... );
+            return uniques[ fn ];
+        }
+
+
+
         template< typename T >
         auto get_make_io_leaf()
         {
@@ -500,8 +512,9 @@ namespace
             }
             if (irops::Memory::is(fn)) {
                 auto [_, id] = irops::Memory::parse_args(fn);
-                return VisitGenericIntrinsic< Memory >(call, fn,
-                        irops::memory::size(impl->ptr_size), static_cast< uint32_t >(id));
+                return unique_intrinsic< Memory >(
+                        call, fn,
+                        irops::memory::size( impl->ptr_size ), static_cast< uint32_t >( id ) );
             }
             if (irops::And::is(fn)) {
                 // TODO( from-llvm ): Size should be specified by intrinsic.
@@ -983,6 +996,10 @@ namespace
 
         std::unordered_map< llvm::Value *, Operation * > val_to_op;
         std::unordered_map< llvm::Value *, Operation * > leaves;
+
+        // TODO( from-llvm ): For some reason llvm does not optimize some melted
+        //                    intrinsics (Memory).
+        std::unordered_map< llvm::Function *, Operation * > uniques;
 
         std::unordered_map< std::string, Operation * > bits_to_constants;
 
