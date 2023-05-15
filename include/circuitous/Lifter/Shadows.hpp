@@ -527,6 +527,8 @@ namespace circ::shadowinst
         template< typename T = std::size_t >
         T max_mats_count() const
         {
+            if ( bitsize == 0 )
+                return static_cast< T >( 0 );
             return static_cast< T >(std::pow(2, bitsize));
         }
 
