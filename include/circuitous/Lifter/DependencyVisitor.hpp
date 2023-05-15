@@ -170,6 +170,8 @@ namespace circ
     template< typename Trg >
     struct UndefChain
     {
+        using instance_t = irops::Instance< Trg >;
+
         std::unordered_set< llvm::Instruction * > found;
 
         void _get( llvm::Instruction *val )
@@ -188,11 +190,12 @@ namespace circ
             }
         }
 
-        auto get( llvm::Instruction *val ) -> irops::Instance< Trg >
+        auto get( llvm::Instruction *val ) -> std::optional< instance_t >
         {
             _get( val );
-            check( found.size() == 1, [&](){ return dbg_dump( found ); } );
-            return irops::Instance< Trg >( *found.begin() );
+            if ( found.size() != 1 )
+                return {};
+            return { irops::Instance< Trg >( *found.begin() ) };
         }
 
     };
