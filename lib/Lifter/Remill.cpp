@@ -417,7 +417,10 @@ namespace
                 << "__remill_write_memory_* should not be present!";
 
             if ( name.startswith( "__remill_undefined_" ) )
-                return emplace< Undefined >( size_from_suffix( name ) );
+            {
+                auto bw = size_from_suffix( name );
+                return emplace< Constant >( std::string( bw, '0' ), bw );
+            }
 
             if ( irops::OpSelector::is( fn ) )
             {
