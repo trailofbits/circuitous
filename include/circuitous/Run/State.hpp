@@ -24,6 +24,13 @@ namespace circ::run
     using raw_value_type = llvm::APInt;
     using value_type = std::optional< llvm::APInt >;
 
+    static inline std::string to_string( value_type v )
+    {
+        if ( v )
+            return llvm::toString( *v, 16, false );
+        return "{}";
+    }
+
     struct Memory
     {
         using memory_map_t = std::map< uint64_t, raw_value_type >;
@@ -72,6 +79,8 @@ namespace circ::run
         auto take() { return std::move(node_values); }
 
         std::string to_string() const;
+
+        gap::generator< NodeState > permutate_memory( circuit_ref_t circuit );
     };
 
     struct StateOwner
@@ -116,6 +125,21 @@ namespace circ::run
         {
             for (auto op : circuit->attr< T >())
                 node_state.set(op, v);
+            return *this;
+        }
+
+        self_t &fill_memory()
+        {
+            for ( auto memory_op : circuit->attr< ::circ::Memory >() )
+            {
+                if ( node_state.has_value( memory_op ) )
+                    continue;
+
+               llvm::APInt val { irops::memory::size( this->circuit->ptr_size ), 0, false };
+               // TODO( run ): Extract to some helper fn.
+               val.insertBits( llvm::APInt( 4, memory_op->mem_idx, false ), 8 );
+               node_state.set( memory_op, val );
+            }
             return *this;
         }
     };
