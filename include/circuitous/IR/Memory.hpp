@@ -99,6 +99,15 @@ namespace circ::irops::memory
         }
 
         bool operator==( const Parsed< V > & ) const = default;
+
+        std::string to_string( auto &&fmt ) const
+        {
+            std::stringstream ss;
+            ss << "Parsed< V >:\n";
+            for ( std::size_t i = 0; i < vals.size(); ++i )
+                ss << "\t" << i << ": " << fmt( vals[ i ] ) << "\n";
+            return ss.str();
+        }
     };
 
 
