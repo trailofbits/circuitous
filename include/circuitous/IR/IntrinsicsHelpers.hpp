@@ -732,7 +732,7 @@ namespace circ::irops::impl
 
     template< typename, typename Def >
     using idx_allocator_t = Fn< Def,
-                                DStack< NAry >,
+                                DStack<>,
                                 SStack< R< suffix::size >, S< suffix::idx > >,
                                 Melts
                               >;
