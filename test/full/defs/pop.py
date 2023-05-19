@@ -53,9 +53,10 @@ test_pop_corners = {
     .mode("--verify")
     .DI(S(0x23000).RSP(0x3000).RIP(0x1000)
                   .rwmem(0x3000, "0040" + 6 * "00")
-                  .rwmem(0x4000, "0030" + 6 * "00"))
+                  .rwmem(0x4000, "0030" + 6 * "00")
+                  .mem_hint(MemHint.read(0x3000, 0x4000, 8)))
     .case(run_bytes = 0,
-          DE = MS().RSP(0x4000).RIP(0x1001).ts(1).mem_hint(MemHint.read(0x3000, 0x4000, 8)),
+          DE = MS().RSP(0x4000).RIP(0x1001).ts(1),
           R=True),
 
 }

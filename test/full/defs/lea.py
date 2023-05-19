@@ -42,7 +42,7 @@ test_lea_addr_ops = {
     .case(run_bytes = intel(["lea r9, [rbx + 0xff]"]), R=False)
     .case(run_bytes = intel(["lea r9, [rbx + r9]"]), R=True)
     .case(run_bytes = intel(["lea r9, [r10 + rcx]"]), R=True)
-    .case(run_bytes = intel(["lea r9, [r10 + 2 * rax + rcx]"]), R=True),
+    .case(run_bytes = intel(["lea r9, [r10 + 2 * rax + 0x1]"]), R=False),
 
     VerifyTest("lea-d_addr_op").tags({"lea", "addr_op", "min"})
     .bytes(intel(["lea rax, [rax + rbx]",
@@ -124,7 +124,7 @@ test_lea_addr_ops = {
     .case(run_bytes = intel(["lea r9d, [ebx + 0xff]"]), R=False)
     .case(run_bytes = intel(["lea r9d, [ebx + r9d]"]), R=True)
     .case(run_bytes = intel(["lea r9d, [r10d + ecx]"]), R=True)
-    .case(run_bytes = intel(["lea r9d, [r10d + 2 * eax + ecx]"]), R=True),
+    .case(run_bytes = intel(["lea r9d, [r10d + 2 * eax + 0x1]"]), R=False),
 
     VerifyTest("lea-g_addr_op_reject").tags({"lea", "addr_op", "reject"})
     .bytes(intel(["lea eax, [ebx + 2 * ecx + 0x4]"]))
@@ -195,6 +195,20 @@ test_lea_addr_ops = {
     .case(run_bytes = intel(["lea eax, [r14d + 2 * eax + 0x0]"]), R=True)
     .case(run_bytes = intel(["lea r14d, [r15d + 8 * r15d"]), R=True)
     .case(run_bytes = intel(["lea r14d, [edx + 1 * r8d - 0x60]"]), R=True),
+
+
+    VerifyTest("lea-k_addr_op permutations_32b").tags({"lea", "addr_op", "min"})
+    .bytes(intel(["lea eax, [eax + ebx]", "lea eax, [ebx + 0x01]",
+                  "lea ecx, [ecx + 2 * edx + 0x5]", "lea ecx, [eax + 0x0]",
+                  "lea eax, [ebx + 0xf543f]", "lea ecx, [ecx + 2 * edx + 0x5fdfd12]",
+                  "lea ecx, [r9d + 0x5fdfd12]", "lea ecx, [ecx + 2 * r9d + 0x5]",
+                  "lea r9d, [ebx + 0x01]", "lea eax, [ebx + r15d]",
+                  "lea r8d, [ebx + eax]", "lea eax, [r8d + 8 * ebx + 0x7fff]"]))
+    .DI(S(0xfffffffff250).aflags(0)
+    .RAX(0xffffffffff10).RBX(0xffffffffff20).RCX(0xffffffffff30)
+    .RDX(0xffffffffff40).R8(0xffffffffff50).R9(0xffffffffff60)
+    .R10(0xffffffffff70).R14(0xffffffffff80).R15(0xffffffffff90))
+    .all_defined(),
 
     VerifyTest("lea-l_addr_op_permutations_32b_reject").tags({"lea","addr_op", "reject"})
     .bytes(intel(["lea eax, [eax + ebx]", "lea eax, [ebx + 0x01]",

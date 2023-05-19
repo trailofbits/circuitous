@@ -9,7 +9,8 @@ import tools.tgen as tgen
 pushf = {
     Test("pushf-a").bytes(intel(["pushf"])).tags({"pushf", "min"}).seed(4212)
     .mode("--verify")
-    .DI(S(0x2000).RSP(0x4008).RIP(0x2000).aflags(0).rwmem(0x4000, 32 * "00"))
+    .DI(S(0x2000).RSP(0x4008).RIP(0x2000).aflags(0).rwmem(0x4000, 32 * "00")
+                 .mem_hint(MemHint.write(0x4000, 0, 8)))
     .case(run_bytes = 0,
           E = S(0x2000).RSP(0x4000).RIP(0x2001).aflags(0).ts(1)
                        .mem_hint(MemHint.write(0x4000, 0, 8)),
@@ -17,7 +18,8 @@ pushf = {
 
     Test("pushf-a").bytes(intel(["pushf"])).tags({"pushf", "min"}).seed(4212)
     .mode("--verify")
-    .DI(S(0x2000).RSP(0x4008).RIP(0x2000).aflags(1).rwmem(0x4000, 32 * "00"))
+    .DI(S(0x2000).RSP(0x4008).RIP(0x2000).aflags(1).rwmem(0x4000, 32 * "00")
+                 .mem_hint(MemHint.write(0x4000, 0xcd5, 8)))
     .case(run_bytes = 0,
           E = S(0x2000).RSP(0x4000).RIP(0x2001).aflags(1).ts(1)
                        .mem_hint(MemHint.write(0x4000, 0xcd5, 8)),

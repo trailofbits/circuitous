@@ -35,14 +35,13 @@ jmp = {
   .mode("--verify")
   .bytes(["ff25ff340000"])
   .DI(S(0x41212).RAX(0x2000).RIP(0x5000)
-                .rwmem(0xa000, 6 * "00" + "1fe0" + 32 * "00"))
+                .rwmem(0xa000, 6 * "00" + "1fe0" + 32 * "00")
+                .mem_hint(MemHint.read(0xa006, 0xe01f, 8)))
   .scases(raw, ["ff2500500000"],
-          DE = MS().RIP(0xe01f).ts(1)
-                   .mem_hint(MemHint.read(0xa006, 0xe01f, 8)), R=True)
+          DE = MS().RIP(0xe01f).ts(1), R=True)
   .scases(raw, ["ff2500500000"],
-          DE = MS().RIP(0x1fe0).ts(1)
-                   .mem_hint(MemHint.read(0xa006, 0xe01f, 8)), R=False)
-  .scases(intel, ["jmp rax"], R=False),
+          DE = MS().RIP(0x1fe0).ts(1), R=False)
+  .scases(intel, ["jmp rax"], DE=MS(), R=False)
 }
 
 circuitous_tests = [jmp]
