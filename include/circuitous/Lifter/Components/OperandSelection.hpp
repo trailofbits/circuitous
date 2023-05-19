@@ -305,10 +305,14 @@ namespace circ::build
                 return ctx.zero();
             }
 
-            if ( s_reg->tm().empty() )
+            if ( s_reg->tm().empty() || s_reg->tm().max_mats_count() == 0 )
             {
-                log_info() << "[operand-lifter]:" << "Hardcoded register op.";
-                return ctx.zero();
+                if ( r_reg->name.empty() )
+                    return ctx.zero();
+
+                log_info() << "[operand-lifter]:" << "Hardcoded register op:"
+                           << r_reg->name;
+                return requester.state.load( irb, ctx.reg( r_reg->name ) );
             }
 
             auto select = request_word< false >( *s_reg );
