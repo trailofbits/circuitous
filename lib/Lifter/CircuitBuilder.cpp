@@ -850,7 +850,7 @@ namespace circ
                 auto operand = lifter.lift( view );
 
                 if ( ctx.bw( operand ) < ctx.bw( arg ) )
-                    operand = irb.CreateZExt( operand, arg->getType() );
+                    operand = irb.CreateSExt( operand, arg->getType() );
 
                 auto option = irops::Option::make( irb,
                                                    { operand, *( decoder_it++ ) },
