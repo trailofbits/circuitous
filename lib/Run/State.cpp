@@ -108,6 +108,39 @@ namespace circ::run
         return node_values.find(op)->second;
     }
 
+    auto NodeState::permutate_memory( circuit_ref_t circuit ) -> gap::generator< NodeState >
+    {
+        std::vector< raw_value_type > pool;
+
+        for ( auto memory_op : circuit->attr< ::circ::Memory >() )
+            pool.emplace_back( *this->get( memory_op ) );
+
+
+        log_dbg() << "[run:NodeState]:" << "Permutating" << pool.size() << "memory hints";
+        auto cmp = []( const auto &a, const auto &b )
+        {
+            return a.ult( b );
+        };
+
+        std::sort( pool.begin(), pool.end(), cmp );
+        do
+        {
+            auto out = *this;
+
+            std::size_t idx = 0;
+            for ( auto memory_op : circuit->attr< ::circ::Memory >() )
+            {
+                auto val = pool[ idx++ ];
+                // TODO( run ): Extract to some helper fn.
+                val.insertBits( llvm::APInt( 4, memory_op->mem_idx, false ), 8 );
+
+                out.set( memory_op, val );
+            }
+            co_yield std::move( out );
+        } while ( std::next_permutation( pool.begin(), pool.end(), cmp ) );
+
+    }
+
     std::string NodeState::to_string() const
     {
         std::stringstream ss;

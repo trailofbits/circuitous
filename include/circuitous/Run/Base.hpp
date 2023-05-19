@@ -36,7 +36,7 @@ namespace circ::run
             : state(state), circuit(circuit)
         {}
 
-        BaseSemantics() = default;
+        BaseSemantics() = delete;
 
         template< typename ...Args >
         bool valid_values(Args &&... args)
@@ -67,6 +67,7 @@ namespace circ::run
 
         void set_node_val(Operation *op, const value_type &val)
         {
+            check( state );
             state->set_node_val(op, val);
         }
 
@@ -340,5 +341,6 @@ namespace circ::run
     };
 
     using Base = SemanticsAdapter< Derive< SemBase< BaseSemantics > > >;
+    using verifier_semantics = SemanticsAdapter< SemBase< BaseSemantics > >;
 
 } // namespace circ::run
