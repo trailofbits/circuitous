@@ -77,6 +77,29 @@ namespace circ::run
 
     void TodoQueue::push(Operation *op)
     {
+        return todo.push_back( op );
+    }
+
+    // General notify that does no extra work
+    void TodoQueue::notify(Operation *from, Operation *to)
+    {
+        _notify(to);
+    }
+
+    // Implementation
+    void TodoQueue::_notify(Operation *op)
+    {
+        auto [it, inserted] = blocked.emplace(op, op->unique_operands_count());
+        if (it->second <= 1) {
+            this->push(it->first);
+            it->second = 0;
+            return;
+        }
+        --it->second;
+    }
+
+    void QueueWithMemOrder::push( Operation *op )
+    {
         // TODO(lukas): What about `UnusedConstraint`.
         if (!is_one_of< ReadConstraint, WriteConstraint >(op))
             return todo.push_back(op);
@@ -103,24 +126,7 @@ namespace circ::run
             waiting[mem_order.allowed].clear();
         }
 
-    }
 
-    // General notify that does no extra work
-    void TodoQueue::notify(Operation *from, Operation *to)
-    {
-        _notify(to);
-    }
-
-    // Implementation
-    void TodoQueue::_notify(Operation *op)
-    {
-        auto [it, inserted] = blocked.emplace(op, op->unique_operands_count());
-        if (it->second <= 1) {
-            push(it->first);
-            it->second = 0;
-            return;
-        }
-        --it->second;
     }
 
 } // namespace circ::run

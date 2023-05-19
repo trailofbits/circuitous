@@ -19,6 +19,7 @@ namespace circ::run
         multiple_ctx_satisfied,
         runtime_error,
         value_not_reached,
+        unreachable
     };
 
     std::string to_string(result_t raw)
@@ -31,6 +32,7 @@ namespace circ::run
             case result_t::multiple_ctx_satisfied : return "multiple_ctx_satisfied";
             case result_t::value_not_reached: return "value not reached";
             case result_t::runtime_error : return "runtime_error";
+            case result_t::unreachable : return "unreachable";
         }
     }
 

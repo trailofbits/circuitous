@@ -52,8 +52,9 @@ namespace circ::run
         {
             for (auto op : circuit->attr< MO >())
             {
-                if ( !ctx_info.is_in_ctx( op, current ) )
-                    continue;
+                // TODO( run ): This should probably be extracted into
+                //              separate class.
+                std::ignore = !ctx_info.is_in_ctx( op, current );
 
                 auto idx = op->mem_idx();
                 extend(idx);
@@ -70,19 +71,18 @@ namespace circ::run
 
     struct TodoQueue
     {
-      private:
+      protected:
         std::deque< Operation * > todo;
-        std::unordered_map< uint64_t, std::vector< Operation * > > waiting;
         std::unordered_map< Operation *, uint64_t > blocked;
 
-        MemoryOrdering mem_order;
-
       public:
-        TodoQueue(MemoryOrdering mem_order_) : mem_order(std::move(mem_order_)) {}
+        TodoQueue() = default;
         TodoQueue(const TodoQueue &) = default;
         TodoQueue(TodoQueue &&) = default;
 
         TodoQueue& operator=(TodoQueue) = delete;
+
+        virtual ~TodoQueue() = default;
 
         Operation *pop()
         {
@@ -115,8 +115,22 @@ namespace circ::run
         std::string status(Operation *op);
       private:
 
-        void push(Operation *op);
+        // We are not playing on speed here, but if needed can be quickly replaced with CRTP.
+        virtual void push(Operation *op);
         void _notify(Operation *op);
+    };
+
+    struct QueueWithMemOrder : TodoQueue
+    {
+        std::unordered_map< uint64_t, std::vector< Operation * > > waiting;
+        MemoryOrdering mem_order;
+
+        QueueWithMemOrder( MemoryOrdering mem_order )
+            : mem_order( std::move( mem_order ) )
+        {}
+
+        void push( Operation *op ) override;
+
     };
 
 } // namespace circ::run

@@ -197,23 +197,16 @@ void CSem<S>::visit(WriteConstraint *op_)
         irops::memory::Parsed< llvm::APInt > args {
             this->circuit->ptr_size,
                 {this->true_val(),
-                    this->false_val(),
-                    llvm::APInt(6, 0, false),
-                    parsed.id(),
-                    *this->get_node_val(op->size_arg()),
-                    *this->get_node_val(op->addr_arg()),
-                    *this->get_node_val(op->val_arg()),
-                    *this->get_node_val(op->ts_arg())}
+                 this->true_val(),
+                 llvm::APInt(6, 0, false),
+                 parsed.id(),
+                 *this->get_node_val(op->size_arg()),
+                 *this->get_node_val(op->addr_arg()),
+                 *this->get_node_val(op->val_arg()),
+                 *this->get_node_val(op->ts_arg())}
         };
-
         return this->value(args == parsed);
     }(op_);
-
-    if (exec) {
-        auto addr = this->get_node_val(op_->addr_arg())->getLimitedValue();
-        auto value = *this->get_node_val(op_->val_arg());
-        this->state->store(addr, value);
-    }
 
     this->set_node_val(op_, exec);
 }
