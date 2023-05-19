@@ -413,6 +413,8 @@ namespace circ
 
         /* Actual lifting */
 
+        void cse();
+
         void finalize();
         llvm::Value *reg_check( reg_ptr_t );
         auto reg_write_mux_operands( reg_ptr_t ptr ) -> gap::generator< llvm::Value * >;

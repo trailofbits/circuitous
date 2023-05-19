@@ -1078,6 +1078,41 @@ namespace circ
         return irops::OutputCheck::make( irb(), { mux, out_reg } );
     }
 
+    void ExaltationContext::cse()
+    {
+        using entry_t = std::tuple< llvm::Value *, std::vector< llvm::Instruction * > >;
+        std::unordered_map< llvm::Function *, entry_t > cache;
+
+        for ( auto &inst : *( *circuit_fn ).begin() )
+        {
+            auto call = llvm::dyn_cast< llvm::CallInst >( &inst );
+            if ( !call || call->arg_size() != 0 )
+                continue;
+
+            auto callee = call->getCalledFunction();
+            if ( !cache.count( callee ) )
+            {
+                cache[ callee ] = std::make_tuple( call, std::vector< llvm::Instruction * >{} );
+            } else {
+                std::get< 1 >( cache[ callee ] ).push_back( call );
+            }
+        }
+
+        log_dbg() << "[exalt:cse]:" << "Elimination.";
+        for ( auto [ fn, e ] : cache )
+        {
+            const auto &[ keep, to_replace ] = e;
+            log_dbg() << "[exalt:cse]:" << fn->getName().str()
+                      << "has" << to_replace.size() << " calls to eliminate.";
+            for ( auto v : to_replace )
+            {
+                v->replaceAllUsesWith( keep );
+                v->eraseFromParent();
+            }
+        }
+
+    }
+
     void ExaltationContext::finalize()
     {
         for ( auto reg : ctx.regs() )
@@ -1106,6 +1141,10 @@ namespace circ
         // and we would not be able to propagate undefs.
         optimize_silently( { &*circuit_fn } );
         propagate_remill_undefs( &*circuit_fn );
+
+        cse();
+
+        optimize_silently( { &*circuit_fn } );
     }
 
     /** State helpers **/
