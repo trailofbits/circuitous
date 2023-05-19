@@ -233,6 +233,9 @@ namespace circ
     static inline auto try_enclosing_reg(auto arch, const std::string &name)
     -> std::optional< const remill::Register * >
     {
+        if ( name == "NEXT_PC" || name == "RETURN_PC" )
+            return try_enclosing_reg( arch, std::string( arch->ProgramCounterRegisterName() ) );
+
         auto remill_reg = arch->RegisterByName(name);
         if (!remill_reg)
             return {};
@@ -242,7 +245,10 @@ namespace circ
     }
 
     static inline auto enclosing_reg(auto arch, const std::string &name)
+        -> const remill::Register *
     {
+        if ( name == "NEXT_PC" || name == "RETURN_PC")
+            return enclosing_reg( arch, std::string( arch->ProgramCounterRegisterName() ) );
         auto remill_reg = arch->RegisterByName(name);
         check(remill_reg) << "Was not able to retrieve " << name;
         check(remill_reg->EnclosingRegister());
