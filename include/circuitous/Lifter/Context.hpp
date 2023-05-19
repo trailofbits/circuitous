@@ -148,6 +148,8 @@ namespace circ
 
         reg_ptr_t reg( const std::string &name )
         {
+            if ( name == "NEXT_PC" || name == "RETURN_PC" )
+                return pc_reg();
             return arch()->RegisterByName( name );
         }
 
