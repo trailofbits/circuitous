@@ -1021,6 +1021,22 @@ circuit_owner_t lower_fn( llvm::Function *circuit_fn,
     // Simply to improve human debugging.
     clear_names( circuit_fn );
 
+    std::vector< std::vector< llvm::Value * > > known;
+    auto yield = [ & ]( llvm::CallInst *call )
+    {
+        auto cargs = frozen_call_args( call );
+        cargs.erase( cargs.begin() );
+
+        for ( auto &args : known )
+        {
+            if ( args == cargs )
+                return;
+        }
+        known.emplace_back( cargs );
+    };
+
+    irops::Select::for_all_in( circuit_fn, yield );
+
     const auto module = circuit_fn->getParent();
     const auto &dl = module->getDataLayout();
 
