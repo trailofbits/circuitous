@@ -29,6 +29,8 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
 
+#include <gap/core/generator.hpp>
+
 namespace circ
 {
 
@@ -315,6 +317,12 @@ namespace circ
         llvm::InlineFunctionInfo info;
         auto was_inlined = llvm::InlineFunction( *call, info );
         check( was_inlined.isSuccess() );
+    }
+
+    static inline gap::generator< llvm::Value * > call_args( llvm::CallInst *call )
+    {
+        for ( uint32_t i = 0; i < call->arg_size(); ++i )
+            co_yield call->getArgOperand( i );
     }
 
     // `bits` is taken by copy since it is reversed inplace.
