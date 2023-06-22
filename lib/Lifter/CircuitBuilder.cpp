@@ -1080,34 +1080,59 @@ namespace circ
 
     void ExaltationContext::cse()
     {
-        using entry_t = std::tuple< llvm::Value *, std::vector< llvm::Instruction * > >;
-        std::unordered_map< llvm::Function *, entry_t > cache;
+        using call_args_t = std::vector< llvm::Value * >;
+        using calls = std::vector< llvm::CallInst * >;
+        using call_mapping = std::vector< std::tuple< call_args_t, calls > >;
 
+        std::unordered_map< llvm::Function *, call_mapping > cache;
+
+        auto add_mapping = [ & ]( llvm::CallInst *call, llvm::Function *callee )
+        {
+            auto &mapping = cache[ callee ];
+            auto current_args = freeze< std::vector >( call_args( call ) );
+
+            for ( auto &[ args, entries ] : mapping )
+            {
+                if ( current_args == args )
+                {
+                    entries.push_back( call );
+                    return;
+                }
+
+            }
+            mapping.emplace_back( current_args, calls{ call } );
+        };
+
+        log_dbg() << "[exalt:cse]:" << "Computing irops calls to de-duplicate.";
         for ( auto &inst : *( *circuit_fn ).begin() )
         {
             auto call = llvm::dyn_cast< llvm::CallInst >( &inst );
-            if ( !call || call->arg_size() != 0 )
+            if ( !call )
                 continue;
 
             auto callee = call->getCalledFunction();
-            if ( !cache.count( callee ) )
-            {
-                cache[ callee ] = std::make_tuple( call, std::vector< llvm::Instruction * >{} );
-            } else {
-                std::get< 1 >( cache[ callee ] ).push_back( call );
-            }
+            if ( !irops::is_any( call ) || irops::is_frozen( callee ) )
+                continue;
+            add_mapping( call, callee );
         }
 
         log_dbg() << "[exalt:cse]:" << "Elimination.";
-        for ( auto [ fn, e ] : cache )
+        for ( auto &[ fn, e ] : cache )
         {
-            const auto &[ keep, to_replace ] = e;
-            log_dbg() << "[exalt:cse]:" << fn->getName().str()
-                      << "has" << to_replace.size() << " calls to eliminate.";
-            for ( auto v : to_replace )
+            for ( auto &[ _, to_replace ] : e )
             {
-                v->replaceAllUsesWith( keep );
-                v->eraseFromParent();
+                check( to_replace.size() >= 1 );
+
+                if ( to_replace.size() == 1 )
+                    continue;
+
+                log_dbg() << "[exalt:cse]:" << fn->getName().str()
+                          << "has" << to_replace.size() << " calls to eliminate.";
+                for ( std::size_t i = 1; i < to_replace.size(); ++i )
+                {
+                    to_replace[ i ]->replaceAllUsesWith( to_replace[ 0 ] );
+                    to_replace[ i ]->eraseFromParent();
+                }
             }
         }
 
