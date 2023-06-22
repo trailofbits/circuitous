@@ -80,6 +80,11 @@ namespace circ::cli::run
         static inline const auto opt = CmdOpt("--ir-in", true);
     };
 
+    struct Ctl : DefaultCmdOpt, PathArg
+    {
+        static inline const auto opt = CmdOpt("--ctl", false);
+    };
+
 } // namespace circ::cli::run
 
 auto load_circ(const std::string &file)
@@ -150,6 +155,45 @@ llvm::json::Object serialize(const auto &ctl)
     return out;
 }
 
+llvm::json::Object serialize( const std::vector< circ::run::result_t > &results,
+                              const auto &memory_hints )
+{
+    llvm::json::Object out;
+
+    auto export_result = [ & ]( auto r ) -> std::string
+    {
+        if ( circ::run::accepted( r ) )
+            return "accept";
+        if ( circ::run::rejected( r ) )
+            return "reject";
+        return "error";
+    };
+
+    circ::log_dbg() << to_string( results.back() );
+    out[ "result" ] = export_result( results.back() );
+    circ::log_info() << "result:" << export_result( results.back() );
+
+    llvm::json::Object traces;
+    for ( std::size_t i = 0; i < results.size(); ++i )
+    {
+        llvm::json::Object trace;
+        trace[ "result" ] = export_result( results[ i ] );
+
+        llvm::json::Object out_hints;
+        for ( std::size_t j = 0; j < memory_hints[ i ].size(); ++j )
+        {
+            auto val = memory_hints[ i ][ j ];
+            out_hints[ str( val.id() ) ] = serialize_mem_hint( val );
+        }
+        trace[ "memory_hints" ] = std::move( out_hints );
+
+        traces[hex(i)] = std::move( trace );
+    }
+
+    out[ "traces" ] = std::move( traces );
+    return out;
+}
+
 void store_json(const std::string &path, llvm::json::Object obj)
 {
     // Open output file
@@ -171,16 +215,48 @@ void run(const CLI &parsed_cli)
     auto trace = circ::run::trace::native::load_json(*json_trace);
     circ::check(trace.entries.size() >= 2) << trace.entries.size();
 
-    circ::run::DefaultControl< circ::run::ExportMemory > ctrl;
-    circ::run::test_trace(circuit.get(), trace, ctrl);
+    auto ctl = [ & ]() -> std::string {
+        auto maybe_ctl = parsed_cli.template get< circ::cli::run::Ctl >();
+        if ( !maybe_ctl )
+            return "derive";
+        return *maybe_ctl;
+    }();
 
-    auto as_json = serialize(ctrl);
+    if ( ctl == "derive" )
+    {
+        circ::run::DefaultControl< circ::run::ExportMemory > ctrl;
+        circ::run::test_trace(circuit.get(), trace, ctrl);
 
-    auto result_path = parsed_cli.template get< circ::cli::run::ExportDerived >();
-    store_json(*result_path, std::move(as_json));
+        auto as_json = serialize(ctrl);
 
-   if (parsed_cli.template present< circ::cli::run::Die >())
-       circ::log_kill() << "FLAGS_die induced death.";
+        auto result_path = parsed_cli.template get< circ::cli::run::ExportDerived >();
+        store_json(*result_path, std::move(as_json));
+    } else if ( ctl == "verify" ) {
+        std::vector< circ::run::parsed_mem_hints > memory_hints;
+        auto collect = [ & ]( const auto &result_spawn_pairs )
+        {
+            for ( auto &[ status, spawn ] : result_spawn_pairs )
+                if ( circ::run::accepted( status ) )
+                {
+                    memory_hints.push_back( spawn->get_derived_mem() );
+                    return;
+                }
+            memory_hints.emplace_back();
+        };
+
+        auto results = circ::run::StatelessControl().test( circuit.get(), trace, collect );
+        circ::log_dbg() << "[circuitous-run]:" << "Collected " << memory_hints.size()
+                                               << "memory hints";
+        auto as_json = serialize( results, memory_hints );
+        auto result_path = parsed_cli.template get< circ::cli::run::ExportDerived >();
+        store_json( *result_path, std::move( as_json ) );
+
+    } else {
+        circ::log_kill() << "uknown ctl";
+    }
+
+    if (parsed_cli.template present< circ::cli::run::Die >())
+        circ::log_kill() << "FLAGS_die induced death.";
 }
 
 using run_modes = circ::tl::TL<
@@ -201,7 +277,8 @@ using output_options = circ::tl::TL<
 using config_options = circ::tl::TL<
     circ::cli::run::Traces,
     circ::cli::run::Memory,
-    circ::cli::run::Die
+    circ::cli::run::Die,
+    circ::cli::run::Ctl
 >;
 using other_options = circ::tl::TL<
     circ::cli::Help,
