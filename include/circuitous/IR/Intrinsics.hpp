@@ -423,6 +423,16 @@ namespace circ::irops
         return is_any(call->getCalledFunction());
     }
 
+    static inline bool is_frozen( llvm::Function *fn )
+    {
+        return !fn->hasFnAttribute( llvm::Attribute::ReadNone );
+    }
+
+    static inline bool is_melted( llvm::Function *fn )
+    {
+        return !is_frozen( fn );
+    }
+
     template< typename T, typename ... Ts >
     void enable_opts(llvm::Module *m)
     {
