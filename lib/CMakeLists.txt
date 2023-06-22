@@ -10,6 +10,9 @@ add_subdirectory( Printers )
 add_subdirectory( Support )
 add_subdirectory( Transforms )
 add_subdirectory( Util )
-add_subdirectory( Decoder )
-add_subdirectory( Diff )
 add_subdirectory( Run )
+
+# TODO(): Remove as deprecated?
+# Currently not actively developed, marked for removal.
+# add_subdirectory( Decoder )
+# add_subdirectory( Diff )
