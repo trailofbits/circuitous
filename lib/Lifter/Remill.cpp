@@ -45,18 +45,10 @@ namespace circ
 {
 namespace
 {
-
     // Returning a vector as a size is sometimes required.
-    auto call_args( llvm::CallInst *call ) -> std::vector< llvm::Value * >
+    auto frozen_call_args( llvm::CallInst *call ) -> std::vector< llvm::Value * >
     {
-        std::vector< llvm::Value * > out;
-        for ( uint32_t i = 0; i < call->arg_size(); ++i )
-        {
-            // Check if we do not include the called fn by accident.
-            check( !llvm::isa< llvm::Function >( call->getArgOperand( i ) ) );
-            out.push_back( call->getArgOperand( i ) );
-        }
-        return out;
+        return freeze< std::vector >( call_args( call ) );
     }
 
     template< typename T >
@@ -263,7 +255,7 @@ namespace
 
         target_t extract_argument( llvm::CallInst *call )
         {
-            auto args = call_args( call );
+            auto args = frozen_call_args( call );
             check( args.size() <= 1 );
             return (args.size() == 0) ? inst_bits_node() : get( args[ 0 ] );
         }
@@ -322,7 +314,7 @@ namespace
             auto op = emplace< Extract >( static_cast< uint32_t >( from ),
                                           static_cast< uint32_t >( from + size ) );
 
-            auto args = call_args( call );
+            auto args = frozen_call_args( call );
             if ( !args.empty() )
                 op->add_operand( get( args[ 0 ] ) );
             else
@@ -335,7 +327,7 @@ namespace
         target_t VisitGenericIntrinsic( llvm::CallInst *call, llvm::Function *fn,
                                         Args &&... args)
         {
-            return emplace_full< O >( call_args( call ), std::forward< Args >( args ) ... );
+            return emplace_full< O >( frozen_call_args( call ), std::forward< Args >( args ) ... );
         }
 
         template< typename O, typename ... Args >
@@ -343,7 +335,7 @@ namespace
                                    Args &&... args)
         {
             if ( !uniques.count( fn ) )
-                uniques[ fn ] = emplace_full< O >( call_args( call ),
+                uniques[ fn ] = emplace_full< O >( frozen_call_args( call ),
                                                    std::forward< Args >( args ) ... );
             return uniques[ fn ];
         }
@@ -392,14 +384,14 @@ namespace
                 case llvm::Intrinsic::ctlz :
                 {
                     auto out = emplace< CountLeadingZeroes >( value_size( call ) );
-                    out->add_operands( get( call_args( call ), { 0u } ) );
+                    out->add_operands( get( frozen_call_args( call ), { 0u } ) );
                     return out;
                 }
                 // TODO( from-llvm ): Second argument is irrelevant for our use case?
                 case llvm::Intrinsic::cttz :
                 {
                     auto out = emplace< CountTrailingZeroes >( value_size( call ) );
-                    out->add_operands( get( call_args( call ), { 0u } ) );
+                    out->add_operands( get( frozen_call_args( call ), { 0u } ) );
                     return out;
                 }
                 default:
@@ -561,7 +553,7 @@ namespace
                 auto [type] = irops::Entry::parse_args(fn);
                 auto size = irops::impl::suffix::llvm_type::to_bw< uint32_t >(type);
 
-                auto args = call_args( call );
+                auto args = frozen_call_args( call );
                 check( args.size() == 1 );
                 if ( size != value_size( args[ 0 ] ) )
                 {
@@ -881,7 +873,7 @@ namespace
         template< typename T >
         target_t with_operands( T target, llvm::CallInst *v )
         {
-            target->add_operands( get( call_args( v ) ) );
+            target->add_operands( get( frozen_call_args( v ) ) );
             return target;
         }
 
