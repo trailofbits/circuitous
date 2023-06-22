@@ -27,7 +27,6 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <remill/Arch/Arch.h>
 #include <remill/Arch/Name.h>
 #include <remill/Arch/Instruction.h>
-#include <remill/BC/Compat/Error.h>
 #include <remill/BC/Util.h>
 #include <remill/OS/OS.h>
 
@@ -403,7 +402,7 @@ struct Parser
     {
         while (!buffer.empty()) {
             rinst_t inst;
-            if (rctx.DecodeInstruction(0, buffer.substr(0, 0x20), inst))
+            if (rctx.DecodeInstruction(0, buffer.substr(0, 0x20), inst, {}))
                 if (acceptor.should_accept(inst))
                     parsed.emplace(std::move(inst));
             buffer = buffer.drop_front(1);
@@ -487,10 +486,10 @@ int main(int argc, char *argv[])
         std::cout << "[ " << ++idx << " / " << input_list.size() << " ]"
                   << " ... "
                   << "Parsing: " << file << std::endl;
-        auto maybe_buff = llvm::MemoryBuffer::getFile(file, -1, false);
-        if (remill::IsError(maybe_buff))
-            LOG(FATAL) << remill::GetErrorString(maybe_buff) << std::endl;
-        auto buff = remill::GetReference(maybe_buff)->getBuffer();
+        auto error_or_buffer = llvm::MemoryBuffer::getFile(file, -1, false);
+        if (std::error_code ec = error_or_buffer.getError())
+            LOG(FATAL) << ec << std::endl;
+        auto buff = (*error_or_buffer)->getBuffer();
 
         parser.provide(buff).run();
 
