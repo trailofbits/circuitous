@@ -23,6 +23,7 @@ add_headers( Lifter CIRCUITOUS_LIFTER_HEADERS
   ShadowMat.hpp
   Shadows.hpp
   SReg.hpp
+  Undefs.hpp
 )
 
 add_circuitous_library( lifter
