@@ -14,16 +14,18 @@ RUN if [ "${REINSTALL_CMAKE_VERSION_FROM_SOURCE}" != "none" ]; then \
     && rm -f /tmp/reinstall-cmake.sh
 
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends llvm-14 llvm-14-dev libclang-14-dev \
-        build-essential ninja-build ccache cmake-curses-gui libedit-dev libpfm4-dev zlib1g-dev python3-pip
+    && apt-get -y install --no-install-recommends clang-16 llvm-16 llvm-16-dev libclang-16-dev \
+        build-essential ninja-build ccache cmake-curses-gui libedit-dev libpfm4-dev \
+        zlib1g-dev python3-pip \
+        verilator
 
 # Remill dependencies
 RUN dpkg --add-architecture i386
 RUN apt-get update
 RUN apt-get -y install --no-install-recommends libc6-dev:i386 libstdc++-10-dev:i386 g++-multilib
 
-RUN update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-14 60
-RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-14 60
+RUN update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-16 60
+RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-16 60
 
 # Work around broken llvm packaging
 RUN touch /usr/lib/llvm-14/lib/libMLIRSupportIndentedOstream.a
