@@ -263,7 +263,7 @@ namespace eqsat {
             for (const auto &[_, eclass] : graph.eclasses()) {
                 for (auto m : match(expr, eclass, matched)) {
                     if (matched_places(m).size() == places.size()) {
-                        spdlog::debug("[eqsat] matched {}", m);
+                        //spdlog::debug("[eqsat] matched {}", m);
                         co_yield m;
                     }
                 }
