@@ -15,7 +15,7 @@ CIRCUITOUS_RELAX_WARNINGS
 CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <circuitous/Lifter/Components/Decoder.hpp>
-#include <circuitous/Util/Overloads.hpp>
+#include <gap/core/overloads.hpp>
 
 #include <sstream>
 
@@ -93,7 +93,7 @@ namespace circ::build
     {
         std::vector< llvm::Value * > holes_per_tm;
 
-        auto process = overloaded
+        auto process = gap::overloaded
         {
             [ & ]( const shadowinst::Reg &sreg )
             {
