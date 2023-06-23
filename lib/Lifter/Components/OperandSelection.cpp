@@ -17,7 +17,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <circuitous/Lifter/Components/OperandSelection.hpp>
 #include <circuitous/Lifter/SReg.hpp>
 
-#include <circuitous/Util/Overloads.hpp>
+#include <gap/core/overloads.hpp>
 
 namespace circ::build
 {
@@ -152,7 +152,7 @@ namespace circ::build
     {
         OperandSelection::Builder bld;
 
-        auto process_saturated = overloaded
+        auto process_saturated = gap::overloaded
         {
             [ & ]( const shadowinst::Reg &reg )
             {
@@ -162,7 +162,7 @@ namespace circ::build
             [ & ]( const auto & ) {} // ignore rest
         };
 
-        auto process_unsaturated = overloaded
+        auto process_unsaturated = gap::overloaded
         {
             [ & ]( const shadowinst::Reg &reg )
             {
