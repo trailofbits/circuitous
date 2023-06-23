@@ -18,7 +18,6 @@ add_circuitous_executable( run
     gflags
     circuitous::ir
     circuitous::printers
-    circuitous::diff
     circuitous::run
   HEADERS
     ${CIRCUITOUS_RUN_HEADERS}
