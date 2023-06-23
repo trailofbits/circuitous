@@ -22,7 +22,6 @@ target_link_libraries( test-circuitous
 
     circuitous::settings
     circuitous::ir
-    circuitous::decoder
     circuitous::testing
 )
 
