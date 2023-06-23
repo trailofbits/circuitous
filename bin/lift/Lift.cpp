@@ -35,7 +35,6 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
-#include <circuitous/Diff/SemanticsTainter.hpp>
 
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/LLVMToCircIR.hpp>
@@ -52,7 +51,6 @@ DEFINE_string(ir_out, "", "Path to the output IR file.");
 DEFINE_string(dot_out, "", "Path to the output GraphViz DOT file.");
 DEFINE_string(dot_highlight, "", "Names of node-type to highlight in DOT file");
 DEFINE_string(dot_semantics, "", "Colors the graph based on semantics");
-DEFINE_string(dot_diff, "", "Diffs two graphs, works only for graphs with 2 VI nodes");
 
 DEFINE_string(json_out, "", "Path to the output JSON file.");
 DEFINE_string(verilog_out, "", "Path to the output verilog file.");
@@ -179,8 +177,7 @@ using output_options = circ::tl::TL<
 
 using dot_options = circ::tl::TL<
     circ::cli::DotHighlight,
-    circ::cli::DotSemantics,
-    circ::cli::DotDiff
+    circ::cli::DotSemantics
 >;
 
 using remill_config_options = circ::tl::TL<
@@ -242,55 +239,6 @@ circ::circuit_owner_t get_input_circuit(auto &cli)
     return {};
 }
 
-void print_dot( const auto &cli, const circ::CircuitPtr &circuit, auto dot_out )
-{
-    using namespace circ;
-    using namespace circ::print;
-    using namespace circ::inspect;
-
-    if ( auto input_colors = cli.template get< cli::DotHighlight >() )
-    {
-        auto hl = HighlightColorer( std::move( *input_colors ) );
-        DotPrinter< decltype( hl ) > dp( hl );
-        return print_circuit( dot_out, dp, circuit.get() );
-    }
-
-    if ( cli.template present< cli::DotSemantics >() )
-    {
-        circ::DotPrinter< SemanticsColorer > dp;
-        return circ::print_circuit( dot_out, dp, circuit.get() );
-    }
-
-    if ( auto coloring = cli.template get< cli::DotDiff >() )
-    {
-        auto print_diff = [ & ]< inspect::SubPathCol T >()
-        {
-            return circ::print_circuit( dot_out, DotPrinter< DiffColorer< T > >(),
-                                        circuit.get() );
-        };
-
-        if ( coloring == "ibtdr" )
-            return print_diff.template operator()< InstrBitsToDRSubPathCollector >();
-
-        if ( coloring == "full" )
-            return print_diff.template operator()< LeafToVISubPathCollector >();
-
-        // the following color schemes are based on semantic tainting
-        SemanticsColorer sc;
-        sc.color_circuit( circuit.get() );
-        if ( coloring == "ctt" )
-            print_diff.template operator()< ConfigToTargetSubPathCollector >();
-
-        if ( coloring == "ltt" )
-            print_diff.template operator()< LeafToTargetSubPathCollector >();
-
-        return sc.remove_coloring( circuit.get() );
-    }
-
-    circ::DotPrinter< EmptyColorer > dp;
-    return circ::print_circuit( dot_out, dp, circuit.get() );
-}
-
 void store_outputs(const auto &cli, const circ::circuit_owner_t &circuit)
 {
     using namespace circ;
@@ -302,9 +250,6 @@ void store_outputs(const auto &cli, const circ::circuit_owner_t &circuit)
 
     if ( auto json_out = cli.template get< cli::JsonOut >() )
         print_circuit( *json_out, print_json, circuit.get() );
-
-    if ( auto dot_out = cli.template get< cli::DotOut >() )
-        print_dot( cli, circuit, *dot_out );
 
     if (auto verilog_out = cli.template get< cli::VerilogOut >())
         circ::print_circuit(*verilog_out, circ::VerilogPrinter("circuit", true), circuit.get());
