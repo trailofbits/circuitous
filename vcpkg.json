@@ -8,7 +8,7 @@
     "gap"
   ],
   "default-features": [
-    "cxx-common-llvm-14"
+    "cxx-common-llvm-16"
   ],
   "features": {
     "system-remill": {
@@ -34,13 +34,13 @@
         }
       ]
     },
-    "cxx-common-llvm-14": {
-      "description": "Build with cxx-common llvm-14 port",
+    "cxx-common-llvm-16": {
+      "description": "Build with cxx-common llvm-16 port",
       "dependencies": [
         {
           "name": "remill",
           "default-features": false,
-          "features": ["cxx-common-llvm-14"]
+          "features": ["cxx-common-llvm-16"]
         }
       ]
     }
