@@ -54,11 +54,11 @@
         }
     },
     {
-        "name": "cxx-common-llvm-14",
+        "name": "cxx-common-llvm-16",
         "hidden": true,
-        "description": "Configure with cxx-common llvm-14 port",
+        "description": "Configure with cxx-common llvm-16 port",
         "cacheVariables": {
-            "VCPKG_MANIFEST_FEATURES": "cxx-common-llvm-14",
+            "VCPKG_MANIFEST_FEATURES": "cxx-common-llvm-16",
             "VCPKG_MANIFEST_NO_DEFAULT_FEATURES": "ON"
         }
     },
@@ -128,42 +128,42 @@
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja release with cxx-common",
         "description": "Configure with cxx-common toolchain for x64-osx-rel",
-        "inherits": [ "release", "x64-osx-rel", "cxx-common-llvm-14" ]
+        "inherits": [ "release", "x64-osx-rel", "cxx-common-llvm-16" ]
     },
     {
         "name": "ninja-cxx-common-x64-osx-deb",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja debug with cxx-common",
         "description": "Configure with cxx-common toolchain for x64-osx",
-        "inherits": [ "debug", "x64-osx", "cxx-common-llvm-14" ]
+        "inherits": [ "debug", "x64-osx", "cxx-common-llvm-16" ]
     },
     {
         "name": "ninja-cxx-common-x64-linux-rel",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja release with cxx-common",
         "description": "Configure with cxx-common toolchain for x64-linux-rel",
-        "inherits": [ "release", "x64-linux-rel", "cxx-common-llvm-14" ]
+        "inherits": [ "release", "x64-linux-rel", "cxx-common-llvm-16" ]
     },
     {
         "name": "ninja-cxx-common-x64-linux-deb",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja debug with cxx-common",
         "description": "Configure with cxx-common toolchain for x64-linux",
-        "inherits": [ "debug", "x64-linux", "cxx-common-llvm-14" ]
+        "inherits": [ "debug", "x64-linux", "cxx-common-llvm-16" ]
     },
     {
         "name": "ninja-cxx-common-arm64-osx-rel",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja release with cxx-common",
         "description": "Configure with cxx-common toolchain for arm64-osx-rel",
-        "inherits": [ "release", "arm64-osx-rel", "cxx-common-llvm-14" ]
+        "inherits": [ "release", "arm64-osx-rel", "cxx-common-llvm-16" ]
     },
     {
         "name": "ninja-cxx-common-arm64-osx-deb",
         "binaryDir": "${sourceDir}/builds/${presetName}",
         "displayName": "Ninja debug with cxx-common",
         "description": "Configure with cxx-common toolchain for arm64-osx",
-        "inherits": [ "debug", "arm64-osx", "cxx-common-llvm-14" ]
+        "inherits": [ "debug", "arm64-osx", "cxx-common-llvm-16" ]
     },
 
     {
