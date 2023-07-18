@@ -70,6 +70,29 @@ namespace circ::cli::run
         static inline const auto opt = CmdOpt("--verify", false);
     };
 
+    struct ConvertTrace : DefaultCmdOpt, Arity< 1 >, HasAllowed< ConvertTrace >
+    {
+        static inline const auto opt = CmdOpt("--convert-trace", false);
+        static std::string help()
+        {
+            return "Convert trace from format specified as argument.";
+        }
+
+        static inline std::unordered_set< std::string > allowed =
+        {
+            "mttn"
+        };
+    };
+
+    struct Output : DefaultCmdOpt, PathArg
+    {
+        static inline const auto opt = CmdOpt( "--output", { "-o" }, false );
+        static std::string help()
+        {
+            return "File to store output to.";
+        }
+    };
+
     struct Die : DefaultCmdOpt, Arity< 0 >
     {
         static inline const auto opt = CmdOpt("--die", false);
@@ -261,7 +284,8 @@ void run(const CLI &parsed_cli)
 
 using run_modes = circ::tl::TL<
     circ::cli::run::Derive,
-    circ::cli::run::Verify
+    circ::cli::run::Verify,
+    circ::cli::run::ConvertTrace
 >;
 using deprecated_options = circ::tl::TL<
     circ::cli::LogDir,
@@ -272,7 +296,8 @@ using input_options = circ::tl::TL<
 >;
 using output_options = circ::tl::TL<
     circ::cli::run::ExportDerived,
-    circ::cli::DotOut
+    circ::cli::DotOut,
+    circ::cli::run::Output
 >;
 using config_options = circ::tl::TL<
     circ::cli::run::Traces,
@@ -324,6 +349,12 @@ std::optional< circ::ParsedCmd > parse_and_validate(int argc, char *argv[])
 
     if (v.validate_leaves(cmd_opts_list()).process_errors(yield_err))
         return {};
+
+    if (v.check(implies< cli::run::ConvertTrace, cli::run::Output, cli::run::IRIn >())
+         .process_errors(yield_err))
+    {
+        return {};
+    }
 
     return parsed;
 }
