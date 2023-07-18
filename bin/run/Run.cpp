@@ -128,6 +128,8 @@ auto load_circ(const std::string &file)
     return circuit;
 }
 
+/** Interpreter & testing related functions. **/
+
 std::string str(const llvm::APInt &what) { return llvm::toString(what, 16, false); }
 template< typename I > requires ( std::is_integral_v< I > )
 std::string hex(I what) { std::stringstream ss; ss << std::hex << what; return ss.str(); }
@@ -282,6 +284,29 @@ void run(const CLI &parsed_cli)
         circ::log_kill() << "FLAGS_die induced death.";
 }
 
+/** Trace conversion methods. **/
+
+void convert_trace( const auto &cli )
+{
+    circ::log_dbg() << "[run]:" << "Converting traces";
+    auto circuit = load_circ( *cli.template get< circ::cli::run::IRIn >() );
+    auto circ_trace_fmt = circ::Trace::make( circuit.get() );
+    // TODO(run): Right now as we have only one source, there is no need to check
+    //            anything.
+
+    auto trace_file = *cli.template get< circ::cli::run::Traces >();
+    auto traces = circ::run::trace::mttn::load( trace_file, circ_trace_fmt );
+    circ::log_dbg() << "[run:convert_trace]:" << "Original trace loaded from:" << trace_file;
+
+    auto out = *cli.template get< circ::cli::run::Output >();
+    circ::log_dbg() << "[run:convert-trace]:" << "Permutating memory hints!";
+    circ::log_kill() << "[run:convert-trace]:" << "\tNot implemented yet.";
+
+    circ::log_dbg() << "[run:convert-trace]:" << "Serializing into:" << out;
+    circ::log_kill() << "[run:convert-trace]:" << "\tNot implemented yet.";
+}
+
+
 using run_modes = circ::tl::TL<
     circ::cli::run::Derive,
     circ::cli::run::Verify,
@@ -397,6 +422,10 @@ int main(int argc, char *argv[])
     {
         circ::unreachable() << "--derive is currently broken, WIP.";
         run< circ::run::Interpreter >(cli);
+    } else if (cli.present< circ::cli::run::ConvertTrace >()) {
+        convert_trace(cli);
+    } else {
+        std::cerr << "[run]: Selected cmd args resulted in no operation being run.";
     }
 
     return 0;
