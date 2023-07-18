@@ -279,4 +279,179 @@ namespace circ::run::trace
 
     } // namespace native
 
+    namespace mttn
+    {
+
+        // Returns string_view, therefore the original string must live long enough!
+        struct lexer
+        {
+            // So we don't have to bother with lifetimes. This is not hot path
+            // anyway.
+            using value_type = std::string;
+
+            value_type storage;
+            std::size_t current = 0;
+
+            auto eof() const
+            {
+                return current >= storage.size();
+            }
+
+            auto next( std::size_t size ) -> value_type
+            {
+                current += size;
+                check( !eof() );
+                return storage.substr( current - size, size );
+            }
+
+            static lexer from_string(const std::string &data)
+            {
+                return { data, 0 };
+            }
+        };
+
+        struct trace_description
+        {
+            inline static const std::vector< std::string > gpr =
+            {
+                "EAX", "EBX", "ECX", "EDX",
+                "ESI", "EDI",
+                "ESP", "EBP",
+                "R8", "R9", "R10", "R11", "R12", "R13", "R14", "R15"
+            };
+
+            inline static const std::vector< std::string > syscall_regs =
+            {
+                "EBX", "ECX", "EDX"
+            };
+
+            // Directly maps to cpu state
+            struct reg
+            {
+                const std::size_t size = 32;
+                const std::string name;
+
+                reg( std::string name ) : name( name ) {}
+            };
+
+            struct memory_hint
+            {
+                static constexpr inline const std::size_t maximum = 2;
+                // Operation mask, data + Addr (big endian) + Value (big endian)
+                const std::size_t size = 8 + 32 + 32;
+            };
+
+            struct syscall_reg : protected reg
+            {
+                using reg::reg;
+            };
+
+            struct eflags
+            {
+                const std::size_t size = 4 * 8;
+            };
+
+            struct inst_bytes
+            {
+                // Padded with NOPs.
+                const std::size_t size = 8 * 12;
+            };
+
+            using entry = std::variant< reg, memory_hint, syscall_reg, eflags, inst_bytes >;
+
+            static gap::generator< entry > fields()
+            {
+                co_yield entry{ inst_bytes{} };
+
+                for ( auto reg_name : gpr )
+                    co_yield entry{ reg( reg_name ) };
+
+                for ( auto reg_name : syscall_regs )
+                    co_yield entry{ syscall_reg( reg_name ) };
+
+                co_yield entry{ reg{ "EIP" } };
+                co_yield entry{ eflags{} };
+
+                for ( std::size_t i = 0; i < memory_hint::maximum; ++i )
+                    co_yield entry{ memory_hint{} };
+            }
+        };
+
+        template< typename L >
+        struct parser : trace_description
+        {
+            using self_t = parser< L >;
+
+            using lexer_type = L;
+            using parse_map = std::map< std::string, typename lexer_type::value_type >;
+
+            using entry = typename trace_description::entry;
+          protected:
+
+            const std::string &data;
+            lexer_type lexer;
+
+            parse_map parsed;
+
+            parser( const std::string &data )
+                : data( data ), lexer( L::from_string( data ) )
+            {}
+
+            void handle( auto && ) { log_kill() << "Not implemented."; }
+
+            void handle( trace_description::reg reg )
+            {
+                auto value = lexer.next( reg.size );
+                check( !parsed.count( reg.name ) );
+                parsed[ reg.name ] = value;
+            }
+
+            auto parse() &&
+            {
+                auto dispatch = [&](auto field) { return this->handle( field ); };
+
+                for ( auto e : trace_description::fields() )
+                    std::visit( dispatch, e );
+
+                return std::move( parsed );
+            }
+
+          public:
+
+            static parse_map parse( const std::string &data )
+            {
+                return parser< lexer_type >( data ).parse();
+            }
+
+            static auto as_native_entry( const std::string &data ) -> native::Trace::Entry
+            {
+                auto parse_map = parse( data );
+
+                native::Trace::Entry out;
+                for ( auto [ key, val ] : parse_map )
+                    out[ key ] = cast( val, 2 );
+
+                return out;
+            }
+        };
+
+
+        auto load( const std::string &src, const ::circ::Trace &trace_fmt )
+            -> native::Trace
+        {
+            std::ifstream input(src);
+            check( input ) << "Problem opening file to load mttn trace from:" << src;
+
+            native::Trace out;
+            for ( std::string line; std::getline( input, line ); )
+            {
+                auto entry = parser< lexer >::as_native_entry( line );
+                out.entries.emplace_back( std::move( entry ) );
+            }
+
+            return out;
+        }
+
+    } // namespace mttn
+
 } // namespace circ::run::trace
