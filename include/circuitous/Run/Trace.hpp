@@ -59,9 +59,18 @@ namespace circ::run::trace
             using Entry = std::map< std::string, std::optional< llvm::APInt > >;
             using memory_t = std::unordered_map< uint64_t, value_type >;
 
-            uint64_t id;
+            uint64_t id = 0;
+            memory_t initial_memory = {};
+
             std::vector< Entry > entries;
-            memory_t initial_memory;
+
+            Trace( std::vector< Entry > entries )
+                : entries( std::move( entries ) )
+            {}
+
+            Trace() = default;
+
+            void push_back( Entry entry ) { entries.push_back( std::move( entry ) ); }
 
             std::string to_string() const;
 
