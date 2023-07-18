@@ -43,6 +43,14 @@ namespace circ::run::trace
         }
     };
 
+    llvm::APInt cast( const std::string str, std::size_t radix )
+    {
+        auto value = MaybeValue( str ).cast( str.size(), radix );
+        check( value ) << "Could not cast from \"" << str << "\" in radix" << radix
+                       <<  "to APInt:" << str;
+        return *value;
+    }
+
     namespace native
     {
 
