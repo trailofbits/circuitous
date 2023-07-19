@@ -329,7 +329,7 @@ namespace circ
 
         // TODO(lukas): Move to ctor?
         // Returns false is reading of header failed.
-        bool deserialize_storage()
+        [[ nodiscard ]] bool deserialize_storage()
         {
             auto [ sel ] = read< Selector >();
             if ( sel != Selector::Storage )
@@ -371,7 +371,8 @@ namespace circ
             auto maybe_kind = reconstruct_kind( raw );
             // TODO(lukas): We cannot recover right now.
             check( maybe_kind,
-                   [&]() { return "Cannot deserialize " + std::to_string( raw ); } );
+                   [&]() { return "Cannot deserialize operation kind "
+                                  + std::to_string( raw ); } );
             kind = *maybe_kind;
         }
 
@@ -508,7 +509,12 @@ namespace circ
         auto old_flags = is.flags();
         is.unsetf( std::ios::skipws );
 
-        vis.deserialize_storage();
+        // Something went really wrong
+        if (!vis.deserialize_storage())
+        {
+            log_error() << "Cannot deserialize circuit header!";
+            return {};
+        }
         vis.get_circuit()->root = vis.read_operation();
         vis.deserialize_metadata();
 
@@ -519,7 +525,7 @@ namespace circ
     auto deserialize( std::filesystem::path filename ) -> circuit_ptr_t
     {
         std::ifstream file( std::string{filename}, std::ios::binary );
-        check( file );
+        check( file ) << "Failed to open file:" << filename;
         return deserialize( file );
     }
 
