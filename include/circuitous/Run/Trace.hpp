@@ -406,6 +406,38 @@ namespace circ::run::trace
                 parsed[ reg.name ] = value;
             }
 
+            void handle( trace_description::memory_hint hint )
+            {
+
+            }
+
+            void handle( trace_description::eflags eflags )
+            {
+                auto token = lexer.next( eflags.size );
+                auto at = [&]( auto idx ) { return token[ eflags.size - idx ]; };
+                // 0 CF
+                parsed[ "CF" ] = at( 0ul );
+                // 2 PF
+                parsed[ "PF" ] = at( 2ul );
+                // 4 AF
+                parsed[ "AF" ] = at( 4ul );
+                // 6 ZF
+                parsed[ "ZF" ] = at( 6ul );
+                // 7 SF
+                parsed[ "SF" ] = at( 7ul );
+                // 11 OF
+                parsed[ "DF" ] = at( 11ul );
+                check( at( 1ul ) == '1' && at( 3ul ) == '0' && at( 5ul ) == '0' )
+                    << "Sanity check of eflags encoding failed!";
+
+            }
+
+            void handle( trace_description::syscall_reg )
+            {
+                log_dbg() << "[run::trace::mttn]:" << "Ignoring syscall_regs for now!";
+                return;
+            }
+
             auto parse() &&
             {
                 auto dispatch = [&](auto field) { return this->handle( field ); };
