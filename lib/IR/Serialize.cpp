@@ -30,6 +30,7 @@ namespace circ
             Metadatum = 0x3,
             Invalid = 0x4,
             Storage = 0x5,
+            EndOfFile = 0x6,
             Reference = 0xff
         };
 
@@ -41,6 +42,7 @@ namespace circ
             switch( sel )
             {
                 case Selector::Storage   :     return "Storage";
+                case Selector::EndOfFile :     return "EndOfFile";
                 case Selector::Operation :     return "Operation";
                 case Selector::LeafOperation : return "LeafOperation";
                 case Selector::Invalid   :     return "Invalid";
@@ -85,6 +87,11 @@ namespace circ
 
             if ( circuit->root )
                 Write( circuit->root );
+        }
+
+        void finish()
+        {
+            Write( Selector::EndOfFile );
         }
 
         Selector get_selector( Operation *op )
@@ -424,13 +431,19 @@ namespace circ
             return op_it->second;
         }
 
-        void read_metadatum()
+        // Returns `true` if it did not reach the end of file
+        bool read_metadatum()
         {
             auto [ sel ] = read< Selector >();
+
+            if ( sel == Selector::EndOfFile )
+                return false;
+
             check( sel == Selector::Metadatum ) << "Expected metadata, found"
                                                 << to_string( sel ) << "instead";
 
-            return read_metadatum_entry();
+            read_metadatum_entry();
+            return true;
         }
 
         void read_metadatum_entry()
@@ -445,8 +458,7 @@ namespace circ
 
         void deserialize_metadata()
         {
-            while ( is.good() && !is.eof() && EOF != is.peek() )
-                read_metadatum();
+            while ( read_metadatum() ) {}
         }
 
         template< typename T >
@@ -475,6 +487,8 @@ namespace circ
 
         auto write_metadata = [&]( auto op ) { vis.write_metadata( op ); };
         circuit->for_each_operation( write_metadata );
+
+        vis.finish();
 
         os.flush();
     }
