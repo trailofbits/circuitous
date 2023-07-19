@@ -160,6 +160,7 @@ namespace circ
         }
 
         template< gap::ranges::range Ops >
+            requires ( !std::is_same_v< std::remove_cvref_t< Ops >, std::string > )
         void Write( Ops &&ops )
         {
             for ( auto op : ops )
