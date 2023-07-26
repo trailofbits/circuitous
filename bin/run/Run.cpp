@@ -18,6 +18,10 @@
 #include <circuitous/IR/Serialize.hpp>
 #include <circuitous/Printers.hpp>
 
+#include <circuitous/Lifter/Context.hpp>
+#include <circuitous/Lifter/Decoder.hpp>
+#include <circuitous/Util/InstructionBytes.hpp>
+
 #include <fstream>
 #include <iostream>
 #include <unordered_map>
@@ -294,18 +298,61 @@ void convert_trace( const auto &cli )
     // TODO(run): Right now as we have only one source, there is no need to check
     //            anything.
 
+    // Sadly since mttn pads instruction bytes with NOPs we need decoder,
+    // which thanks to design of remill needs bunch of other stuff,
+    // so we may very well just make a circuitous lifter context.
+    auto ctx = circ::Ctx( "macos", "x86" );
+    auto decoder = circ::Decoder( ctx );
+    auto decode = [&]( const std::string &data ) -> std::size_t
+    {
+        circ::InstBytes converted;
+        for ( int i = static_cast< int >( data.size() - 8); i >= 0; i -= 8 )
+        {
+            auto substr = data.substr( static_cast< unsigned long >( i ), 8 );
+            converted.push_back( static_cast< char >( std::strtoul( substr.data(),
+                                                                    nullptr, 2 ) ) );
+        }
+
+        auto maybe_inst = decoder.decode_first( converted );
+        circ::check( maybe_inst ) << "Decoder failed!";
+        return maybe_inst->bytes.size();
+    };
+
     auto trace_file = *cli.template get< circ::cli::run::Traces >();
-    auto traces = circ::run::trace::mttn::load( trace_file, circ_trace_fmt );
-    circ::log_dbg() << "[run:convert_trace]:" << "Original trace loaded from:" << trace_file;
+    auto traces = circ::run::trace::mttn::load( trace_file, circ_trace_fmt, decode );
+
+    circ::log_dbg() << "[run::convert_trace]:" << "Original trace loaded from:" << trace_file;
 
     auto out = *cli.template get< circ::cli::run::Output >();
-    circ::log_dbg() << "[run:convert-trace]:" << "Permutating memory hints!";
-    circ::log_kill() << "[run:convert-trace]:" << "\tNot implemented yet.";
 
-    circ::log_dbg() << "[run:convert-trace]:" << "Serializing into:" << out;
-    circ::log_kill() << "[run:convert-trace]:" << "\tNot implemented yet.";
+    circ::log_dbg() << "[run::convert-trace]:" << "Permutating memory hints!";
+    std::vector< std::string > to_export;
+    auto collect = [ & ]( const auto &result_spawn_pairs )
+    {
+        for ( auto &[ status, spawn ] : result_spawn_pairs )
+            if ( circ::run::accepted( status ) )
+            {
+                auto [ current , next ] = spawn->to_traces();
+                // We need to also include the last entry, which will never be the first
+                // item of the `to_traces` as it is never an input.
+                if ( !to_export.empty() )
+                    to_export.back() = std::move( current );
+
+                to_export.push_back( std::move( next ) );
+                return;
+            }
+        circ::log_kill() << "[run::convert-trace]:" << "No spawn was successful.";
+    };
+
+    auto results = circ::run::StatelessControl().test( circuit.get(), traces, collect );
+
+    circ::log_dbg() << "[run::convert-trace]:" << "Serializing into:" << out;
+
+    std::ofstream ofile( out );
+    circ::check( ofile );
+    for ( const auto &entry : to_export )
+        ofile << entry;
 }
-
 
 using run_modes = circ::tl::TL<
     circ::cli::run::Derive,
