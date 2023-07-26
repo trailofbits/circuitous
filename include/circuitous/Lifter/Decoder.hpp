@@ -42,6 +42,8 @@ namespace circ
         // Recursively try to decode everything present, call `process` for each decoded inst.
         std::vector< remill::Instruction > decode_all(llvm::StringRef buff);
         std::optional< remill::Instruction > decode(const InstBytes &bytes);
+
+        maybe_inst_t decode_first( const InstBytes &bytes );
     };
 
 
