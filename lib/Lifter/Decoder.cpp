@@ -91,4 +91,9 @@ namespace circ
         return maybe_inst;
     }
 
+    auto Decoder::decode_first( const InstBytes &bytes ) -> maybe_inst_t
+    {
+        auto [ maybe_inst, _ ] = decode(bytes.raw());
+        return maybe_inst;
+    }
 } // namespace circ
