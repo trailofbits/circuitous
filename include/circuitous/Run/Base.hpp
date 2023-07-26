@@ -205,6 +205,23 @@ namespace circ::run
             safe(op, div);
         }
 
+        void visit(SRem *op)
+        {
+            auto rem = [&](auto o)
+            {
+                return (is_zero(rhs(o))) ? rhs(o) : std::make_optional( lhs(o).srem(rhs(o)) );
+            };
+            safe(op, rem);
+        }
+        void visit(URem *op)
+        {
+            auto rem = [&](auto o)
+            {
+                return (is_zero(rhs(o))) ? rhs(o) : std::make_optional( lhs(o).urem(rhs(o)) );
+            };
+            safe(op, rem);
+        }
+
         void visit(Xor *op) { safe(op, [&](auto o){ return lhs(o) ^ rhs(o); } ); }
 
         void visit(Shl *op) { safe(op, [&](auto o){ return lhs(o) << rhs(o); } ); }
