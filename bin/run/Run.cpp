@@ -366,7 +366,7 @@ void convert_trace( const auto &cli )
     std::ofstream ofile( out );
     circ::check( ofile );
     for ( const auto &entry : to_export )
-        ofile << entry;
+        ofile << entry << "\n";
 }
 
 using run_modes = circ::tl::TL<
