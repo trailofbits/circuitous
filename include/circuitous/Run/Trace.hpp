@@ -43,19 +43,20 @@ namespace circ::run::trace
         }
     };
 
-    llvm::APInt cast( const std::string str, std::size_t radix, std::size_t size )
+    static inline llvm::APInt cast( const std::string str, std::size_t radix, std::size_t size )
     {
         auto value = MaybeValue( str ).cast( size, radix );
         check( value ) << "Could not cast from \"" << str << "\" in radix" << radix
                        <<  "to APInt:" << str;
         return *value;
     }
-    llvm::APInt cast( const std::string str, std::size_t radix )
+    static inline llvm::APInt cast( const std::string str, std::size_t radix )
     {
         return cast( str, radix, str.size() );
     }
 
-    llvm::APInt construct_inst_bits( const std::string &str, std::size_t size, uint8_t radix )
+    static inline llvm::APInt construct_inst_bits( const std::string &str,
+                                                   std::size_t size, uint8_t radix )
     {
         std::string reordered;
 
