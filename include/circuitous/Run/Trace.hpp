@@ -566,7 +566,7 @@ namespace circ::run::trace
             }
         };
 
-        auto load( const std::string &src, const ::circ::Trace &trace_fmt, auto decoder )
+        auto load( const std::string &src, auto decoder )
             -> native::Trace
         {
             std::ifstream input(src);
