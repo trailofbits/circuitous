@@ -88,6 +88,20 @@ namespace circ::cli::run
         };
     };
 
+    struct ParseTrace : DefaultCmdOpt, Arity< 1 >, HasAllowed< ParseTrace >
+    {
+        static inline const auto opt = CmdOpt("--parse-trace", false);
+        static std::string help()
+        {
+            return "Parse alien trace. If output arg is missing, cout is used.";
+        }
+
+        static inline std::unordered_set< std::string > allowed =
+        {
+            "mttn"
+        };
+    };
+
     struct CircuitFromTrace : DefaultCmdOpt, Arity< 0 >
     {
         static inline const auto opt = CmdOpt("--construct-circuit", false);
@@ -306,7 +320,7 @@ auto produce_circuit( const auto &cli, const auto &trace_entries )
 
 }
 
-void convert_trace( const auto &cli )
+auto parse_alien_trace( const auto &cli )
 {
     circ::log_dbg() << "[run]:" << "Converting traces";
     // TODO(run): Right now as we have only one source, there is no need to check
@@ -329,13 +343,39 @@ void convert_trace( const auto &cli )
 
         auto maybe_inst = decoder.decode_first( converted );
         circ::check( maybe_inst ) << "Decoder failed!";
+        circ::log_dbg() << "[run]:" << "Trace contains instruction:" << maybe_inst->Serialize();
         return maybe_inst->bytes.size();
     };
 
     auto trace_file = *cli.template get< circ::cli::run::Traces >();
     auto traces = circ::run::trace::mttn::load( trace_file, decode );
+    circ::log_dbg() << "[run]:" << "Alien trace loaded from:" << trace_file;
 
-    circ::log_dbg() << "[run::convert_trace]:" << "Original trace loaded from:" << trace_file;
+    return traces;
+}
+
+void parse_trace( const auto &cli )
+{
+    auto traces = parse_alien_trace( cli );
+
+    auto dump = [&](auto &where)
+    {
+        where << traces.to_string();
+    };
+
+    if ( auto out = cli.template get< circ::cli::run::Output >() )
+    {
+        std::ofstream ofile( *out );
+        circ::check( ofile );
+        return dump( ofile );
+    }
+
+    return dump( std::cout );
+}
+
+void convert_trace( const auto &cli )
+{
+    auto traces = parse_alien_trace( cli );
 
     auto out = *cli.template get< circ::cli::run::Output >();
 
@@ -372,7 +412,8 @@ void convert_trace( const auto &cli )
 using run_modes = circ::tl::TL<
     circ::cli::run::Derive,
     circ::cli::run::Verify,
-    circ::cli::run::ConvertTrace
+    circ::cli::run::ConvertTrace,
+    circ::cli::run::ParseTrace
 >;
 using deprecated_options = circ::tl::TL<
     circ::cli::LogDir,
@@ -493,6 +534,8 @@ int main(int argc, char *argv[])
         run< circ::run::Interpreter >(cli);
     } else if (cli.present< circ::cli::run::ConvertTrace >()) {
         convert_trace(cli);
+    } else if (cli.present< circ::cli::run::ParseTrace >()) {
+        parse_trace(cli);
     } else {
         std::cerr << "[run]: Selected cmd args resulted in no operation being run.";
     }
