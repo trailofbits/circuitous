@@ -372,8 +372,8 @@ namespace circ::run::trace
 
             static gap::generator< entry > fields()
             {
-                // Trace is actually written in a reverse order
-
+                // Trace is actually written in a reverse order so this does not map
+                // that easily to serialization code of mttn trace.
                 for ( std::size_t i = 0; i < memory_hint::maximum; ++i )
                     co_yield entry{ memory_hint{} };
 
@@ -455,20 +455,13 @@ namespace circ::run::trace
 
                 std::vector< llvm::APInt > partials = {
                     cast( used, 2 ),
-                    // llvm::APInt( 1, 1, false ),
                     cast( read, 2 ),
-                    // ( *convert( o.getString( "mode" ), 64 ) ).trunc( 1 ),
                     llvm::APInt( 6, 0, false ), // reserved
                     llvm::APInt( 4, memory_hint_idx, false ), // id
-                    // ( *convert( o.getString( "id" ), 64 ) ).trunc( 4 ),
                     cast( size, 2 ),
-                    //( *convert( o.getString( "size" ), 64 ) ).trunc( 4 ),
                     cast( addr, 2 ),
-                    // *convert( o.getString( "addr" ), 64 ),
                     cast( value, 2 ),
-                    // *convert( o.getString( "val" ), 64 ),
                     llvm::APInt( 64, ts, false ) // ts
-                    // *convert( o.getString( "ts" ), 64 )
                 };
 
                 // We know mttn can only produce 32bit traces.
@@ -549,7 +542,7 @@ namespace circ::run::trace
                 std::stringstream ss;
                 ss << "Loading trace words:\n";
                 for ( std::size_t i = 0; i < lexer.storage.size(); i += 8 )
-                    ss << "\t" << i / 8 << ": " << lexer.storage.substr( i, 8 );
+                    ss << "\t" << i / 8 << ": " << lexer.storage.substr( i, 8 ) << "\n";
                 log_dbg() << "[run::trace::mttn]:" << ss.str();
 
                 auto dispatch = [&](auto field) { return this->handle( field ); };
