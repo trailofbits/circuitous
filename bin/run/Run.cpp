@@ -88,6 +88,11 @@ namespace circ::cli::run
         };
     };
 
+    struct CircuitFromTrace : DefaultCmdOpt, Arity< 0 >
+    {
+        static inline const auto opt = CmdOpt("--construct-circuit", false);
+    };
+
     struct Output : DefaultCmdOpt, PathArg
     {
         static inline const auto opt = CmdOpt( "--output", { "-o" }, false );
@@ -290,11 +295,20 @@ void run(const CLI &parsed_cli)
 
 /** Trace conversion methods. **/
 
+auto produce_circuit( const auto &cli, const auto &trace_entries )
+{
+    if ( auto in_file = cli.template get< circ::cli::run::IRIn >() )
+        return load_circ( *in_file );
+
+    // It was not supplied in a file so for now the only other options is to
+    // produce a new one from provided trace.
+    circ::log_kill() << "[run]:" << "Support of `--construct-circuit is not yet implemented!";
+
+}
+
 void convert_trace( const auto &cli )
 {
     circ::log_dbg() << "[run]:" << "Converting traces";
-    auto circuit = load_circ( *cli.template get< circ::cli::run::IRIn >() );
-    auto circ_trace_fmt = circ::Trace::make( circuit.get() );
     // TODO(run): Right now as we have only one source, there is no need to check
     //            anything.
 
@@ -319,7 +333,7 @@ void convert_trace( const auto &cli )
     };
 
     auto trace_file = *cli.template get< circ::cli::run::Traces >();
-    auto traces = circ::run::trace::mttn::load( trace_file, circ_trace_fmt, decode );
+    auto traces = circ::run::trace::mttn::load( trace_file, decode );
 
     circ::log_dbg() << "[run::convert_trace]:" << "Original trace loaded from:" << trace_file;
 
@@ -344,6 +358,7 @@ void convert_trace( const auto &cli )
         circ::log_kill() << "[run::convert-trace]:" << "No spawn was successful.";
     };
 
+    auto circuit = produce_circuit( cli, traces );
     auto results = circ::run::StatelessControl().test( circuit.get(), traces, collect );
 
     circ::log_dbg() << "[run::convert-trace]:" << "Serializing into:" << out;
@@ -364,7 +379,8 @@ using deprecated_options = circ::tl::TL<
     circ::cli::LogToStderr
 >;
 using input_options = circ::tl::TL<
-    circ::cli::run::IRIn
+    circ::cli::run::IRIn,
+    circ::cli::run::CircuitFromTrace
 >;
 using output_options = circ::tl::TL<
     circ::cli::run::ExportDerived,
@@ -422,8 +438,14 @@ std::optional< circ::ParsedCmd > parse_and_validate(int argc, char *argv[])
     if (v.validate_leaves(cmd_opts_list()).process_errors(yield_err))
         return {};
 
-    if (v.check(implies< cli::run::ConvertTrace, cli::run::Output, cli::run::IRIn >())
+    // TODO(bin:run): Should imply one of input_options.
+    if (v.check(implies< cli::run::ConvertTrace, cli::run::Output >())
          .process_errors(yield_err))
+    {
+        return {};
+    }
+
+    if (v.check(are_exclusive< input_options >()).process_errors(yield_err))
     {
         return {};
     }
