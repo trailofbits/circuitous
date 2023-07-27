@@ -449,9 +449,10 @@ namespace circ::run::trace
 
 
                 auto used = at( 7 );
+                // read is 0
                 auto read = at( 2 );
                 // Pad to 4 bits as we expect.
-                auto size = "00" + at( 1 ) + at( 0 );
+                auto size = "0" + at( 1 ) + at( 0 ) + "0";
 
                 std::vector< llvm::APInt > partials = {
                     cast( used, 2 ),
