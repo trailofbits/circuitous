@@ -302,7 +302,8 @@ namespace circ::run::trace
 
             auto next( std::size_t size ) -> value_type
             {
-                log_dbg() << "[run::trace::mttn]:" << "[ "<< current / 8 << ","
+                log_dbg() << "[run::trace::mttn]:" << "Reading token at:"
+                                                   << "["<< current / 8 << ","
                                                    << ( current + size ) / 8 << ")";
                 check( !eof() );
                 current += size;
