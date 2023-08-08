@@ -408,14 +408,15 @@ namespace circ::run::trace
             const std::string &data;
             lexer_type lexer;
             std::size_t ts;
-            decoder_type decoder;
+            decoder_type &decoder;
 
             parse_map parsed;
 
             std::size_t memory_hint_idx = 0;
 
-            parser( const std::string &data, std::size_t ts, D decoder )
-                : data( data ), lexer( L::from_string( data ) ), ts( ts ), decoder( decoder )
+            parser( const std::string &data, std::size_t ts, D &decoder )
+                : data( data ), lexer( L::from_string( data ) ),
+                  ts( ts ), decoder( decoder  )
             {}
 
             void assign( const std::string &name, const std::string &value )
@@ -562,13 +563,15 @@ namespace circ::run::trace
 
           public:
 
-            static parse_map parse( const std::string &data, std::size_t ts, auto decoder )
+            static parse_map parse( const std::string &data, std::size_t ts,
+                                    auto &decoder )
             {
-                return parser< lexer_type, decltype( decoder ) >( data, ts, decoder ).parse();
+                using parser_t = parser< lexer_type, decltype( decoder ) >;
+                return parser_t( data, ts, decoder ).parse();
             }
         };
 
-        auto load( const std::string &src, auto decoder )
+        auto load( const std::string &src, auto &&decoder )
             -> native::Trace
         {
             std::ifstream input(src);
@@ -578,8 +581,8 @@ namespace circ::run::trace
             std::size_t idx = 0;
             for ( std::string line; std::getline( input, line ); )
             {
-                auto entry = parser< lexer, decltype( decoder ) >::parse( line,
-                                                                          idx++, decoder );
+                using parser_t = parser< lexer, decltype( decoder ) >;
+                auto entry = parser_t::parse( line, idx++, decoder );
                 out.entries.emplace_back( std::move( entry ) );
             }
 
