@@ -80,6 +80,8 @@ namespace circ
         auto purify( const std::vector< InstBytes > &insts ) -> concretes_t;
         auto purify( std::string_view raw_bytes ) -> concretes_t;
 
+        auto purify( concretes_t concretes ) { return concretes; }
+
         auto smelt( concretes_t &&concretes ) -> atoms_t;
 
         auto forge( atoms_t &&atoms ) -> circuit_ptr_t;
