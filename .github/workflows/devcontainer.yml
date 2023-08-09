@@ -19,11 +19,6 @@ jobs:
         packages: write
         contents: read
 
-    strategy:
-        matrix:
-            conatiner:
-                - { version: '22.04' }
-
     steps:
       - name: Cleanup working directory with container root
         run: |
@@ -34,18 +29,18 @@ jobs:
         env:
           BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
         run: |
-          echo "IMAGE_NAME=ghcr.io/trailofbits/circuitous-ubuntu-${{ matrix.container.version }}-dev" >> ${GITHUB_ENV}
+          echo "IMAGE_NAME=ghcr.io/trailofbits/circuitous-ubuntu-22.04-dev:latest" >> ${GITHUB_ENV}
 
       - name: Build image
-        working-directory: docker
+        working-directory: .devcontainer
         run: |
           # Pull freshest ubuntu Docker image
-          docker pull ubuntu:${{ matrix.container.version }}
+          docker pull ubuntu:22.04
 
-          docker build .devcontainer --no-cache -t "${IMAGE_NAME}"
+          docker build . --no-cache -t "${IMAGE_NAME}"
 
       - name: Log in to registry
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Push image
-        run: docker push "${IMAGE_NAME}:latest"
+        run: docker push "${IMAGE_NAME}"
