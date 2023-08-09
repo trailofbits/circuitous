@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 45
     container:
-      image: "xheno/circuitous-ubuntu-22.04-dev:latest"
+      image: "ghcr.io/trailofbits/circuitous-ubuntu-22.04-dev:latest"
 
     steps:
       # setup circuitous
