@@ -14,19 +14,30 @@ RUN if [ "${REINSTALL_CMAKE_VERSION_FROM_SOURCE}" != "none" ]; then \
     && rm -f /tmp/reinstall-cmake.sh
 
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
-    && apt-get -y install --no-install-recommends llvm-14 llvm-14-dev libclang-14-dev \
-        build-essential ninja-build ccache cmake-curses-gui libedit-dev libpfm4-dev zlib1g-dev python3-pip
+    && apt-get -y install --no-install-recommends \
+        software-properties-common \
+        build-essential ninja-build ccache cmake-curses-gui libedit-dev libpfm4-dev \
+        zlib1g-dev python3-pip \
+        verilator
+
+# Install LLVM 16
+RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+RUN add-apt-repository 'deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-16 main'
+
+RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
+    && apt-get -y install --no-install-recommends \
+        clang-16 clang-tools-16 libclang-common-16-dev libclang-16-dev \
+        libllvm16 llvm-16 llvm-16-dev libclang-rt-16-dev
 
 # Remill dependencies
 RUN dpkg --add-architecture i386
 RUN apt-get update
 RUN apt-get -y install --no-install-recommends libc6-dev:i386 libstdc++-10-dev:i386 g++-multilib
 
-RUN update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-14 60
-RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-14 60
+RUN update-alternatives --install /usr/bin/c++ c++ /usr/bin/clang++-16 60
+RUN update-alternatives --install /usr/bin/cc cc /usr/bin/clang-16 60
 
-# Work around broken llvm packaging
-RUN touch /usr/lib/llvm-14/lib/libMLIRSupportIndentedOstream.a
+RUN apt-get -y purge llvm-14 clang-14
 
 # setup cxx-common
 RUN git clone -b port-files https://github.com/lifting-bits/cxx-common.git /usr/src/cxx-common
@@ -44,6 +55,7 @@ RUN cmake -B build -S . \
     -DVCPKG_HOST_TRIPLET="x64-linux-rel" \
     -DVCPKG_MANIFEST_NO_DEFAULT_FEATURES=ON \
     -DREMILL_ENABLE_TESTING=OFF \
+    -DREMILL_ENABLE_INSTALL_TARGET=ON \
     -DUSE_SYSTEM_DEPENDENCIES=ON
 
 RUN cmake --build build --target install
