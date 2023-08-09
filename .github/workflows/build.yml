@@ -22,8 +22,8 @@ on:
 
 env:
   # Setup compiler
-  CC: clang-14
-  CXX: clang++-14
+  CC: clang-16
+  CXX: clang++-16
 
 jobs:
   build_linux:
