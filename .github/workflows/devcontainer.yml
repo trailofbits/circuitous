@@ -1,0 +1,51 @@
+#
+# Copyright (c) 2023, Trail of Bits, Inc.
+# All rights reserved.
+#
+# This source code is licensed in accordance with the terms specified in
+# the LICENSE file found in the root directory of this source tree.
+#
+
+name: Build Dev Container
+
+on: workflow_dispatch
+
+jobs:
+  build_linux:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+
+    permissions:
+        packages: write
+        contents: read
+
+    strategy:
+        matrix:
+            conatiner:
+                - { version: '22.04' }
+
+    steps:
+      - name: Cleanup working directory with container root
+        run: |
+          docker run --rm -v $(pwd):/workspace -w /workspace ubuntu:latest find . -name . -o -prune -exec rm -rf -- {} + || true
+
+      - uses: actions/checkout@v3
+      - name: Generate Image Name
+        env:
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+        run: |
+          echo "IMAGE_NAME=ghcr.io/trailofbits/circuitous-ubuntu-${{ matrix.container.version }}-dev" >> ${GITHUB_ENV}
+
+      - name: Build image
+        working-directory: docker
+        run: |
+          # Pull freshest ubuntu Docker image
+          docker pull ubuntu:${{ matrix.container.version }}
+
+          docker build .devcontainer --no-cache -t "${IMAGE_NAME}"
+
+      - name: Log in to registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Push image
+        run: docker push "${IMAGE_NAME}:latest"
