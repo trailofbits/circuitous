@@ -136,7 +136,9 @@ def get_instructions(instructions, syntax="intel"):
       asm_syntax = "-masm=att"
     else:
       raise Exception("Unrecognized assm syntax")
-    args = ["clang", "-c", "-o", "insts.o", asm_syntax, "insts.S"]
+
+    cc = os.getenv('CC')
+    args = [cc, "-c", "-o", "insts.o", asm_syntax, "insts.S"]
     pipes = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                              text=True)
     out, err = pipes.communicate()
