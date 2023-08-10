@@ -716,15 +716,15 @@ namespace circ
         llvm::IRBuilder<> irb(this->head);
         auto [ebit_in, ebit_out] = irops::make_all_leaves< irops::ErrorBit >(irb);
 
-        auto current_err = [&](llvm::Value *ebit_in_ = ebit_in) -> llvm::Value * {
+        auto current_err = [&] () -> llvm::Value * {
             auto delta_err = err::synthesise_current(irb, begin, end);
             if (delta_err)
                 // Error bit can be saturated, so we need to `or` input and current.
-                return irb.CreateOr(ebit_in_, delta_err);
+                return irb.CreateOr(ebit_in, delta_err);
 
             // This instruction cannot raise error bit -> input error bit
             // cannot be set.
-            out.push_back(irb.CreateICmpEQ(ebit_in_, irb.getFalse()));
+            out.push_back(irb.CreateICmpEQ(ebit_in, irb.getFalse()));
             return irb.getFalse();
         }();
         out.push_back(irops::make< irops::OutputCheck >(irb, {current_err, ebit_out}));
