@@ -64,7 +64,7 @@ find_package( remill CONFIG REQUIRED )
 find_package( gflags CONFIG REQUIRED )
 find_package( fmt    CONFIG REQUIRED )
 
-find_package( LLVM REQUIRED CONFIG )
+find_package( LLVM ${REMILL_LLVM_VERSION} CONFIG REQUIRED )
 
 message( STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}" )
 message( STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}" )
