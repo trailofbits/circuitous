@@ -2,7 +2,7 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.241.1/containers/cpp
 {
 	"name": "C++",
-	"image": "xheno/circuitous-ubuntu-22.04-dev:latest",
+	"image": "ghcr.io/trailofbits/circuitous-ubuntu-22.04-dev:latest",
 	// to run local build of devcontainer
 	// "build": { "dockerfile": "./Dockerfile" },
 	"runArgs": ["--cap-add=SYS_PTRACE", "--security-opt", "seccomp=unconfined"],
