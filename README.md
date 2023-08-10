@@ -5,7 +5,7 @@ Build of circuitous follows the traditional, modern `cmake` build process.
 The simplest way to build and install the project is to use premade presets that take care of downloading all dependencies.
 Dependencies of circuitous are managed by `vcpkg` manifest file.
 Before building one need to specify environment variables `CXX_COMMON_ROOT` and `VCPKG_ROOT` that point to folders of pre-downloaded [vcpkg](https://github.com/microsoft/vcpkg) and [cxx-common](https://github.com/lifting-bits/cxx-common/tree/port-files) or
-run `scripts/build/setup.sh` to download and setup these dependencies automatically. We also suggest setting `CC` and `CXX` to clang when also building dependancies, as some require this. 
+run `scripts/build/setup.sh` to download and setup these dependencies automatically. We also suggest setting `CC` and `CXX` to clang when also building dependancies, as some require this.
 
 Depending on your system, use `linux` or `osx` preset.  To make `debug` build use `deb` presets:
 
@@ -74,6 +74,21 @@ Option `--reduce_imms` will run the (for now) experimental reduction of immediat
 ## Tests
 
 See `test/README.md`
+
+## Dev Container for Actions
+
+Run manually __Build Dev Container__ action or execute:
+
+```
+docker build .devcontainer --no-cache \
+    -t ghcr.io/trailofbits/circuitous-ubuntu-22.04-dev:latest
+```
+
+```
+docker push ghcr.io/trailofbits/circuitous-ubuntu-22.04-dev:latest
+```
+
+This requires to have CLI access to github resources.
 
 ## Distribution and Licensing
 
