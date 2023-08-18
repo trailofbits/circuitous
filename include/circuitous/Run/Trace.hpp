@@ -254,11 +254,36 @@ namespace circ::run::trace
             return FromJSON().run(path).take();
         }
 
+        static inline auto prune_memory_hints( circuit_ref_t circuit,
+                                               const Trace::Entry &src )
+            -> Trace::Entry
+        {
+            // We will slowly remove things.
+            Trace::Entry out = src;
+
+            for ( const auto &[ key, val ] : src )
+            {
+                auto keystr = llvm::StringRef( key );
+                if ( !keystr.consume_front( "memory." ) )
+                    continue;
+                std::size_t idx;
+                auto status = keystr.getAsInteger( 10, idx );
+                check( !status ) << "Could not convert: " << keystr.str() << " to number.";
+
+                if ( idx >= circuit->attr< ::circ::Memory >().size() )
+                    out.erase( key );
+            }
+
+            return out;
+        }
+
         static inline std::unordered_map< Operation *, value_type > make_step_trace(
                 Circuit *circuit,
-                const Trace::Entry &in,
-                const Trace::Entry &out)
+                const Trace::Entry &raw_in,
+                const Trace::Entry &raw_out)
         {
+            auto in = prune_memory_hints( circuit, raw_in );
+            auto out = prune_memory_hints( circuit, raw_out );
             using VTrace = ValuedTrace< value_type >;
             auto input = VTrace(circ::Trace::make(circuit), in)
                 .specialize(circuit, input_leaves_ts{});
