@@ -375,8 +375,9 @@ namespace circ::run::trace
             {
                 static constexpr inline const std::size_t maximum = 2;
                 // Operation mask, data + Addr (big endian) + Value (big endian)
-                const std::size_t size = 8 + 32 + 32;
+                static const std::size_t size = 8 + 32 + 32;
 
+                std::size_t idx;
             };
 
             struct syscall_reg : public reg
@@ -402,7 +403,7 @@ namespace circ::run::trace
                 // Trace is actually written in a reverse order so this does not map
                 // that easily to serialization code of mttn trace.
                 for ( std::size_t i = 0; i < memory_hint::maximum; ++i )
-                    co_yield entry{ memory_hint{} };
+                    co_yield entry{ memory_hint{ i } };
 
                 for ( auto reg_name : gpr )
                     co_yield entry{ reg( reg_name ) };
@@ -436,8 +437,6 @@ namespace circ::run::trace
             decoder_type &decoder;
 
             parse_map parsed;
-
-            std::size_t memory_hint_idx = 0;
 
             parser( const std::string &data, std::size_t ts, D &decoder )
                 : data( data ), lexer( L::from_string( data ) ),
@@ -486,7 +485,7 @@ namespace circ::run::trace
                     cast( used, 2 ),
                     cast( read, 2 ),
                     llvm::APInt( 6, 0, false ), // reserved
-                    llvm::APInt( 4, memory_hint_idx, false ), // id
+                    llvm::APInt( 4, hint.idx, false ), // id
                     cast( size, 2 ),
                     cast( addr, 2 ),
                     cast( value, 2 ),
@@ -503,7 +502,7 @@ namespace circ::run::trace
                 };
 
                 irops::memory::construct( reconstructed, inserter );
-                assign( "memory." + std::to_string( memory_hint_idx++ ), out );
+                assign( "memory." + std::to_string( hint.idx ), out );
             }
 
             void handle( trace_description::inst_bytes inst )
