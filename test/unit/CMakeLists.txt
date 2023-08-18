@@ -55,3 +55,29 @@ add_test(
   COMMAND "$<TARGET_FILE:test-eqsat>"
   WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
 )
+
+add_executable( test-trace-conversion
+  main.cpp
+  trace-conversion/basic.cpp
+)
+
+target_link_libraries( test-trace-conversion
+  PRIVATE
+    doctest::doctest
+    spdlog::spdlog
+    fmt::fmt
+
+    circuitous::settings
+    circuitous::eqsat
+    circuitous::testing
+    circuitous::run
+    circuitous::lifter
+)
+
+add_test(
+  NAME test-trace-conversion
+  COMMAND "$<TARGET_FILE:test-trace-conversion>"
+  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+)
+
+file( COPY trace-conversion/inputs DESTINATION "${CMAKE_CURRENT_BINARY_DIR}/trace-conversion" )
