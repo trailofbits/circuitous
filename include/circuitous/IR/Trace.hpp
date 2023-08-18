@@ -93,8 +93,16 @@ namespace circ
                     ss << "\t| " << pretty_print< false >(op) << std::endl;
             }
             return ss.str();
-
         }
+
+        std::optional< field_t * > fetch_field(auto &&match)
+        {
+            for (auto &[op, field] : parse_map)
+                if (match(op->name()))
+                    return { field };
+            return {};
+        }
+
 
         template< typename Derived >
         struct BuilderBase : Visitor< Derived >
@@ -170,6 +178,8 @@ namespace circ
     struct ValuedTrace : Trace
     {
         using parent_t = Trace;
+        using self_t = ValuedTrace< V >;
+
         using field_t = parent_t::field_t;
 
         using value_type = V;
@@ -187,8 +197,11 @@ namespace circ
             for (const auto &[name, v] : value_mapping)
             {
                 auto field = fetch_field(suffix_match(name));
-                check(!field_state.count(field)) << name;
-                field_state[field] = v;
+
+                check( field ) << "Could not fetch field:" << name;
+                check(!field_state.count(*field)) << name;
+
+                field_state[*field] = v;
             }
         }
 
@@ -198,14 +211,6 @@ namespace circ
             {
                 return llvm::StringRef(other).consume_back_insensitive(str);
             };
-        }
-
-        field_t *fetch_field(auto &&match)
-        {
-            for (auto &[op, field] : parse_map)
-                if (match(op->name()))
-                    return field;
-            unreachable() << "Was not able to fetch field.";
         }
 
         std::string to_string() const
