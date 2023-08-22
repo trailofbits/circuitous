@@ -32,6 +32,9 @@ namespace circ
             kFirst = 0,
             kOperation = 1,
 
+            kInputSyscallState,
+            kOutputSyscallState,
+
             kInputRegister,
             kOutputRegister,
 
@@ -369,6 +372,20 @@ namespace circ
     using InputTimestamp = Input< Timestamp, Operation::kind_t::kInputTimestamp >;
     using OutputTimestamp = Output< Timestamp, Operation::kind_t::kOutputTimestamp >;
 
+    struct SyscallState : Operation, tag::external_io
+    {
+      protected:
+        explicit SyscallState(Operation::kind_t kind, uint32_t size) : Operation(size, kind) {}
+
+      public:
+
+        static std::string op_code_str() { return "syscall_state"; }
+        std::string name() const override { return "syscall_state"; }
+    };
+
+    using InputSyscallState = Input< SyscallState, Operation::kind_t::kInputSyscallState >;
+    using OutputSyscallState = Output< SyscallState, Operation::kind_t::kOutputSyscallState >;
+
     // An undefined value.
     struct Undefined final : Operation
     {
@@ -439,11 +456,13 @@ namespace circ
 
     using input_leaves_ts = tl::make_list<
         InputInstructionBits, Advice, Memory,
-        InputTimestamp, InputErrorFlag, InputRegister
+        InputTimestamp, InputErrorFlag, InputRegister,
+        InputSyscallState
     >;
 
     using output_leaves_ts = tl::make_list<
-        OutputTimestamp, OutputErrorFlag, OutputRegister
+        OutputTimestamp, OutputErrorFlag, OutputRegister,
+        OutputSyscallState
     >;
 
     using nontrace_leaves_ts = tl::make_list<

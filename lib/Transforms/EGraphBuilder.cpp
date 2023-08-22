@@ -29,10 +29,18 @@ namespace circ
         return sized(op);
     }
 
-    node_template node_template_builder::visit(OutputErrorFlag *op) {
+    node_template node_template_builder::visit(OutputSyscallState *op) {
         return sized(op);
     }
 
+    node_template node_template_builder::visit(InputSyscallState *op) {
+        return sized(op);
+    }
+
+
+    node_template node_template_builder::visit(OutputErrorFlag *op) {
+        return sized(op);
+    }
     node_template node_template_builder::visit(Undefined *op) {
         return sized(op);
     }
