@@ -123,6 +123,9 @@ namespace circ::run
         void visit(Switch *) { not_implemented(); }
         void visit(Option *) { not_implemented(); }
 
+        void visit(InputSyscallState *) { not_implemented(); }
+        void visit(OutputSyscallState *) { not_implemented(); }
+
         void init() {};
     };
 
