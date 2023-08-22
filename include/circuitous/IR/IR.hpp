@@ -268,6 +268,14 @@ namespace circ
         return out;
     }
 
+    namespace tag
+    {
+        struct external {};
+        struct external_io : external {};
+        struct external_input : external_io {};
+        struct external_output : external_io {};
+    };
+
     /* Leaves */
 
     template< class Next, Operation::kind_t k >
