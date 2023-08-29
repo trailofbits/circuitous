@@ -51,9 +51,6 @@ namespace circ
         }
     };
 
-    llvm::Value *input_reg( llvm::IRBuilder<> &irb, const Ctx::reg_ptr_t &reg );
-    llvm::Value *output_reg( llvm::IRBuilder<> &irb, const Ctx::reg_ptr_t &reg );
-
     static inline llvm::CallInst *call_semantic(
             llvm::IRBuilder<> &ir,
             llvm::Function *fn,
