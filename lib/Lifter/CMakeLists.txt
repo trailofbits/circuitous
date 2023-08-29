@@ -12,6 +12,7 @@ add_headers( Lifter CIRCUITOUS_LIFTER_HEADERS
   DepBreaker.hpp
   DependencyVisitor.hpp
   Error.hpp
+  Exalt.hpp
   Flatten.hpp
   Instruction.hpp
   ISELBank.hpp
@@ -32,6 +33,7 @@ add_circuitous_library( lifter
     CircuitBuilder.cpp
     CircuitSmithy.cpp
     Decoder.cpp
+    Exalt.cpp
     Instruction.cpp
     ISELBank.cpp
     Remill.cpp

@@ -33,7 +33,6 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ
 {
-    using reg_ptr_t = const remill::Register *;
     std::vector<reg_ptr_t> EnclosedClosure(reg_ptr_t ptr)
     {
         std::vector<reg_ptr_t> out;
@@ -49,69 +48,6 @@ namespace circ
         // Just a sanity check
         check(std::unordered_set<reg_ptr_t>(out.begin(), out.end()).size() == out.size());
         return out;
-    }
-
-    wraps_remill_value::wraps_remill_value( llvm::Function *fn, llvm::Type *t )
-    {
-        check( !fn->isDeclaration() );
-        storage = llvm::IRBuilder<>( &*fn->begin() ).CreateAlloca( t );
-    }
-
-    void State::store(llvm::IRBuilder<> &ir, const reg_ptr_t reg, llvm::Value *val)
-    {
-        auto bb = ir.GetInsertBlock();
-        const auto &dl = bb->getModule()->getDataLayout();
-        auto gep = reg->AddressOf(storage, bb);
-        ir.SetInsertPoint(bb);
-
-        // How much space does register occupy in form iN. There is an
-        // optimization for flag registers.
-        auto reg_type = irops::int_reg_type(*bb->getModule(), reg);
-        auto store_type =
-            ir.getIntNTy(static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
-        auto coerced_type = ir.CreateBitCast(gep, llvm::PointerType::getUnqual(store_type));
-
-        if (reg_type != store_type)
-            val = ir.CreateZExt(val, store_type);
-        ir.CreateStore(val, coerced_type);
-    }
-
-    llvm::Value *State::load(llvm::IRBuilder<> &ir, const reg_ptr_t reg)
-    {
-        check( reg );
-        auto bb = ir.GetInsertBlock();
-        const auto &dl = bb->getModule()->getDataLayout();
-        auto gep = reg->AddressOf(storage, bb);
-        ir.SetInsertPoint(bb);
-
-        // How much space does register occupy in form iN. There is an
-        // optimization for flag registers.
-        auto reg_type = irops::int_reg_type(*bb->getModule(), reg);
-        auto store_type =
-            ir.getIntNTy(static_cast<unsigned>(dl.getTypeAllocSize(reg_type) * 8u));
-
-        auto loaded = ir.CreateLoad(store_type, gep);
-        if (reg_type != store_type)
-            return ir.CreateTrunc(loaded, reg_type);
-
-        return loaded;
-    }
-
-
-    void State::reset( llvm::IRBuilder<> &irb, const Ctx::regs_t &regs )
-    {
-        log_info() << "[state]: reset";
-        for ( const auto &reg : regs )
-            store( irb, reg, irops::input_reg( irb, reg ) );
-    }
-
-    void State::commit( llvm::IRBuilder<> &irb, CtxRef ctx )
-    {
-        std::vector< llvm::Value * > args;
-        for ( const auto &reg : ctx.regs() )
-            args.push_back( load( irb, reg ) );
-        irops::make< irops::Commit >( irb, args, 1u );
-
     }
 
     // After optimizations some context may be merged, but llvm opt will not remove them
