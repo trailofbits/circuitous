@@ -5,6 +5,7 @@
 #pragma once
 
 #include <circuitous/Lifter/Context.hpp>
+#include <circuitous/IR/Intrinsics.hpp>
 
 #include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Log.hpp>
@@ -27,6 +28,81 @@ namespace circ
 
     using reg_ptr_t = Ctx::reg_ptr_t;
 
+    // Provides wrapper around syscall related things similar to what we have for
+    // remill State.
+    struct syscall_submodule
+    {
+        // Technically we cannot return more values, therefore what we do instead is
+        // `%T = submodule( %state_in, %eax, %ebx, %ecx )`
+        // followed by a bunch of extracts from `%T` to have a nice api.
+        value_t submodule;
+        std::vector< value_t  > resutls;
+
+        static const inline std::array< std::size_t, 4 > entries =
+        {
+            8, 32, 32, 32
+        };
+
+        static inline const std::vector< std::string > syscall_regs =
+        {
+            "EAX", "EBX", "ECX"
+        };
+
+
+        static inline const std::unordered_set< std::string > output_regs =
+        {
+            "EAX"
+        };
+
+        static bool has_syscall_variant( reg_ptr_t reg )
+        {
+            return std::ranges::count( syscall_regs, reg->name );
+        }
+
+        static bool is_output( reg_ptr_t reg ) { return output_regs.count( reg->name ); }
+
+        static std::size_t bw()
+        {
+            std::size_t out = 0;
+            for ( auto x : entries )
+                out += x;
+            return out;
+        }
+
+        static values_t get_all( builder_t &irb, value_t submodule )
+        {
+            values_t out;
+
+            std::size_t offset = 0;
+            for ( auto size : entries )
+            {
+                auto val = irops::ExtractRaw::make( irb, submodule, offset, size );
+                offset += size;
+
+                out.push_back( val );
+            }
+            return out;
+        }
+
+        syscall_submodule( builder_t &irb, const std::vector< value_t  > &args )
+        {
+            // I am for now initializing inside the body, as we most likely
+            // will want to accept something better than a raw vector.
+            submodule = irops::make< irops::SyscallSubmodule >( irb, args );
+            resutls = get_all( irb, submodule );
+        }
+
+        value_t get( reg_ptr_t reg )
+        {
+            for ( std::size_t i = 0; i < syscall_regs.size(); ++i )
+                if ( reg->name == syscall_regs[ i ] )
+                    return resutls[ i + 1 ];
+            log_kill() << "Could not fetch syscall arg" << reg->name << ".";
+        }
+    };
+
+    // TODO(exalt): Can this be used as a generic base for
+    //              `syscall_submodule`?
     struct wraps_remill_value
     {
       protected:
