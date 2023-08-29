@@ -652,7 +652,7 @@ namespace circ
         llvm::IRBuilder<> irb(this->head);
         auto [ebit_in, ebit_out] = irops::make_all_leaves< irops::ErrorBit >(irb);
 
-        auto current_err = [&] () -> llvm::Value * {
+        auto current_err = [&, ebit_in = ebit_in] () -> llvm::Value * {
             auto delta_err = err::synthesise_current(irb, begin, end);
             if (delta_err)
                 // Error bit can be saturated, so we need to `or` input and current.
