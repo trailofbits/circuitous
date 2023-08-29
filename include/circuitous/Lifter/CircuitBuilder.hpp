@@ -11,7 +11,11 @@
 #include <circuitous/Lifter/Component.hpp>
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/Lifter.hpp>
+#include <circuitous/Lifter/Exalt.hpp>
+#include <circuitous/Lifter/Syscall.hpp>
+
 #include <circuitous/Util/Warnings.hpp>
+
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
 
@@ -29,8 +33,6 @@ namespace circ
 {
     // Forward declare
     struct InstructionBatch;
-
-    using builder_ref = llvm::IRBuilder<> &;
 
     namespace isem
     {
@@ -78,75 +80,6 @@ namespace circ
 
         return ir.CreateCall(fn, inst_func_args);
     }
-    struct wraps_remill_value
-    {
-      protected:
-        llvm::Value *storage = nullptr;
-
-      public:
-
-        wraps_remill_value() = delete;
-        wraps_remill_value( llvm::Value *storage ) : storage( storage ) {}
-
-        wraps_remill_value( llvm::BasicBlock *where, llvm::Type *t )
-            : storage( llvm::IRBuilder<>( where ).CreateAlloca( t ) )
-        {}
-
-        wraps_remill_value( llvm::Function *fn, llvm::Type *t );
-
-        llvm::Value *operator->() const { return storage; }
-        llvm::Value *operator->() { return storage; }
-
-        llvm::Value *operator*() const { return storage; }
-        llvm::Value *operator*() { return storage; }
-    };
-
-    struct State : wraps_remill_value
-    {
-        using reg_ptr_t = const remill::Register *;
-
-        using wraps_remill_value::wraps_remill_value;
-
-        void store(llvm::IRBuilder<> &ir, const reg_ptr_t where, llvm::Value *what);
-        llvm::Value *load(llvm::IRBuilder<> &ir, const reg_ptr_t where);
-
-        void reset( llvm::IRBuilder<> &irb, const Ctx::regs_t &regs );
-        void commit( llvm::IRBuilder<> &irb, CtxRef ctx );
-    };
-
-    struct MemoryPtr : wraps_remill_value
-    {
-        MemoryPtr( llvm::Type *t )
-            : wraps_remill_value( llvm::UndefValue::get( t ) )
-        {}
-    };
-
-    struct Trace
-    {
-        CtxRef ctx;
-        std::vector< State > storage;
-
-        Trace( CtxRef ctx, State input, State output )
-            : ctx( ctx ),
-              storage{ input, output }
-        {}
-
-        void reset( builder_ref bld, const Ctx::regs_t &regs )
-        {
-            for ( auto &state : storage )
-                state.reset( bld, regs );
-        }
-
-        void commit( builder_ref bld )
-        {
-            for ( auto &state : storage )
-                state.commit( bld, ctx );
-        }
-
-        auto &input() { return storage[ 0 ]; }
-        auto &output() { return storage[ 1 ]; }
-    };
-
 
     struct CircuitFunction : has_ctx_ref
     {
