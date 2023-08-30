@@ -73,10 +73,12 @@ namespace circ
         // State and other context related things will live outside in the main
         // owner.
         syscall_submodule &submodule;
+        State &state;
 
-        syscall_dfa( CtxRef ctx_ref, syscall_submodule &submodule )
+        syscall_dfa( CtxRef ctx_ref, syscall_submodule &submodule, State &state )
             : dfa_base( ctx_ref ),
-              submodule( submodule )
+              submodule( submodule ),
+              state( state )
         {}
 
         /* Static information per given dfa - we may need a way to override this later on. */
