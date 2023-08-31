@@ -151,13 +151,12 @@ namespace circ
         {}
     };
 
-    struct Trace
+    struct Trace : has_ctx_ref
     {
-        CtxRef ctx;
         std::vector< State > storage;
 
         Trace( CtxRef ctx, State input, State output )
-            : ctx( ctx ),
+            : has_ctx_ref( ctx ),
               storage{ input, output }
         {}
 
