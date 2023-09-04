@@ -2,7 +2,7 @@
  * Copyright (c) 2023 Trail of Bits, Inc.
  */
 
-#include <circuitous/Lifter/Exalt.hpp>
+#include <circuitous/Exalt/States.hpp>
 
 #include <circuitous/IR/Intrinsics.hpp>
 
