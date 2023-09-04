@@ -84,12 +84,36 @@ namespace circ
             return out;
         }
 
-        syscall_submodule( builder_t &irb, const std::vector< value_t  > &args )
+        syscall_submodule( builder_t &irb )
+            : syscall_submodule( irb, make_args( irb ) )
+        {}
+
+        syscall_submodule( builder_t &irb, const std::vector< value_t > &args )
         {
             // I am for now initializing inside the body, as we most likely
             // will want to accept something better than a raw vector.
             submodule = irops::make< irops::SyscallSubmodule >( irb, args );
             resutls = get_all( irb, submodule );
+        }
+
+        static values_t make_args( builder_t &irb )
+        {
+            // Needs to an rvalue.
+            // TODO( ir ): Fix the intrinsic code that forces this.
+            auto in = [ & ] { return irops::io_type::in; };
+
+            auto mk_reg = [ & ]( auto name )
+            {
+                return irops::make_leaf< irops::SyscallReg >( irb, 32u, name, in() );
+            };
+
+            // TODO( exalt ): Do we want to encode this as we do
+            //                in let's say alien trace parsing?
+            values_t out = { irops::make_leaf< irops::SyscallState >( irb, in() ) };
+            for ( auto reg_name : syscall_regs )
+                out.push_back( mk_reg( reg_name ) );
+
+            return out;
         }
 
         value_t get( reg_ptr_t reg )
@@ -113,8 +137,12 @@ namespace circ
         wraps_remill_value() = delete;
         wraps_remill_value( value_t storage ) : storage( storage ) {}
 
-        wraps_remill_value( llvm::BasicBlock *where, type_t t )
+        [[ deprecated ]] wraps_remill_value( llvm::BasicBlock *where, type_t t )
             : storage( builder_t( where ).CreateAlloca( t ) )
+        {}
+
+        wraps_remill_value( builder_t &bld, type_t t )
+            : storage( bld.CreateAlloca( t ) )
         {}
 
         wraps_remill_value( llvm::Function *fn, type_t t );
