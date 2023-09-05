@@ -19,34 +19,6 @@
 
 namespace circ
 {
-    /* Components that are useful only on per-unit scope.
-     * Therefore we can expect they can be supplied with some for of `builder_context`
-     * (or something similarly powerful) on creation.
-     */
-
-    enum class place : uint8_t
-    {
-        unspecified = 0,
-        root,
-        ctx,
-        meta,
-        computation,
-    };
-
-    // Idea is that this way components may be able to communicate where they need some
-    // values to live in the resulting circuit.
-    using exalted_value_t = std::tuple< place, llvm::Value * >;
-
-    using exalted_values_gen_t = gap::generator< exalted_value_t >;
-    using exalted_values_t = std::vector< exalted_value_t >;
-
-    // `[ begin, end ]` of an inlined semantic.
-    // Used as a handle for some components that do post-processing.
-    using isem_range_t = std::tuple< llvm::CallInst *, llvm::CallInst * >;
-
-    // TODO( exalt ): We probably want to generalise this.
-    using unit_t = Unit< Atom >;
-
     // Can we use this as virtual base or just a tag?
     struct unit_component_base
     {

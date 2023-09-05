@@ -7,6 +7,8 @@
 #include <circuitous/Lifter/Context.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
 
+#include <circuitous/Exalt/Common.hpp>
+
 #include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
@@ -19,15 +21,6 @@
 
 namespace circ
 {
-    using value_t = llvm::Value *;
-    using values_t = std::vector< llvm::Value * >;
-
-    using type_t = llvm::Type *;
-
-    using builder_t = llvm::IRBuilder<>;
-
-    using reg_ptr_t = Ctx::reg_ptr_t;
-
     // Provides wrapper around syscall related things similar to what we have for
     // remill State.
     struct syscall_submodule
