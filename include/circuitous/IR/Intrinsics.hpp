@@ -116,7 +116,7 @@ namespace circ::irops
     #define circuitous_irops_unique_ctor(what, code, attr) \
         circuitous_irops_intrinsic(what, code, impl::what, attr);
 
-    #define circtuitous_irop_leaf_intrinsic(what, core, attr) \
+    #define circuitous_irop_leaf_intrinsic(what, code, attr) \
         circuitous_irops_intrinsic(what, code, impl::leaf, attr)
 
     #define circuitous_irops_fixed_sized_leaf(what, size, code, attr) \
@@ -306,12 +306,17 @@ namespace circ::irops
     circuitous_irops_simple_intrinsic( Switch, impl::predicate_base_t, "__circuitous.switch" );
     circuitous_irops_simple_intrinsic( Option, impl::option_t, "__circuitous.option" );
 
+    /* Component specific */
+    circuitous_irops_simple_intrinsic( SyscallSubmodule,
+                                       impl::concat_t,
+                                       "__circuitous.execute_syscall" );
+
     #undef circuitous_irops_sccc_prefix
     #undef circuitous_irops_dot_sep
     #undef circuitous_irops_intrinsic
     #undef circuitous_irops_simple_intrinsic
     #undef circuitous_irops_unique_ctor
-    #undef circtuitous_irop_leaf_intrinsic
+    #undef circuitous_irop_leaf_intrinsic
     #undef circuitous_irops_fixed_sized_leaf
 
     // Create call to given intrinsic.
