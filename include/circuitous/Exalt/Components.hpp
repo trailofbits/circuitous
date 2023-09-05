@@ -124,6 +124,11 @@ namespace circ
         }
 
         auto &irb() { return fn_ctx.irb(); }
+
+        llvm::Function *take_fn() &&
+        {
+            return &*( fn_ctx.fn );
+        }
     };
 
 }  // namespace circ
