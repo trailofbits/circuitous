@@ -19,18 +19,14 @@
 
 namespace circ
 {
-    template< typename U, typename BuilderCtx >
     struct unit_lifter
     {
-        using unit_t = U;
-        using builder_ctx_t = BuilderCtx;
-
         builder_context &b_ctx;
 
         // TODO( exalt ): Change to only work on `&&` of `unit_lifter` if an internal
         //                state is introduced.
         // TODO( exalt ): Figure out return type.
-        void exalt( unit_t unit );
+        void exalt( unit_t &unit );
     };
 
     // Owns `builder_context`
