@@ -11,6 +11,8 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <circuitous/IR/Circuit.hpp>
 
+#include <circuitous/Exalt/Lifter.hpp>
+
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/CircuitBuilder.hpp>
 #include <circuitous/Lifter/CircuitSmithy.hpp>
@@ -137,4 +139,16 @@ namespace circ
         return lower_fn( &*circuit_fn, ctx.ptr_size );
     }
 
+    auto CircuitSmithy_v2::forge_v3( atoms_t &&atoms ) -> circuit_ptr_t
+    {
+        auto producer = circuit_producer( ctx );
+        auto worklist = categorize( std::move( atoms ) );
+
+        log_info() << "[smithy]:" << "Worklist contains:" << worklist.size() << "entries!";
+
+        for ( auto &unit : worklist )
+            producer.exalt( unit );
+        auto circuit_fn = std::move( producer ).take_fn();
+        return lower_fn( &*circuit_fn, ctx.ptr_size );
+    }
 } // namespace circ

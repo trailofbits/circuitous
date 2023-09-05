@@ -85,10 +85,16 @@ namespace circ
         auto smelt( concretes_t &&concretes ) -> atoms_t;
 
         auto forge( atoms_t &&atoms ) -> circuit_ptr_t;
+        auto forge_v3( atoms_t &&atoms ) -> circuit_ptr_t;
 
         auto default_forge( auto &&raw )
         {
             return forge( std::move( smelt( purify( raw ) ) ) );
+        }
+
+        auto default_forge_v3( auto &&raw )
+        {
+            return forge_v3( std::move( smelt( purify( raw ) ) ) );
         }
 
     };
