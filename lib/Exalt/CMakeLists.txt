@@ -9,6 +9,7 @@ add_headers( Exalt CIRCUITOUS_EXALT_HEADERS
 add_circuitous_library( exalt
   SOURCES
     Components.cpp
+    Lifter.cpp
     States.cpp
   LINK_LIBS
     circuitous::dbg
