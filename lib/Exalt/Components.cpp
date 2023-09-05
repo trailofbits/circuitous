@@ -36,4 +36,9 @@ namespace circ
         return function_context( circuit_function::make( ctx_ref ) );
     }
 
+    void submodules::init( builder_context & )
+    {
+
+    }
+
 }  // namespace circ
