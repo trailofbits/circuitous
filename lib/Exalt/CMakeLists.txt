@@ -1,9 +1,12 @@
 # Copyright (c) 2023 Trail of Bits, Inc.
 
 add_headers( Exalt CIRCUITOUS_EXALT_HEADERS
+    Common.hpp
     Components.hpp
+    Lifter.hpp
     States.hpp
     Syscall.hpp
+    UnitComponents.hpp
 )
 
 add_circuitous_library( exalt
