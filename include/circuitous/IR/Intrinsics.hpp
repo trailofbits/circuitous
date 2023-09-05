@@ -296,6 +296,12 @@ namespace circ::irops
                                        "__circuitous.instbits" );
 
     circuitous_irops_simple_intrinsic( Reg, impl::reg_allocator_t, "__circuitous.reg" );
+    circuitous_irop_leaf_intrinsic( SyscallReg, impl::reg_allocator_t,
+                                    "__circuitous.syscall_reg" );
+
+    circuitous_irops_fixed_sized_leaf( SyscallState, 8,
+                                       impl::fixed_leaf_t,
+                                       "__circuitous.syscall_state" );
 
     circuitous_irops_simple_intrinsic( Commit, impl::commit, "__circuitous.commit" );
 
