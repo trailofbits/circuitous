@@ -280,6 +280,8 @@ namespace circ
         struct external_io : external {};
         struct external_input : external_io {};
         struct external_output : external_io {};
+
+        struct external_computation : external {};
     };
 
     /* Leaves */
