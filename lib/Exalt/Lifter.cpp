@@ -15,6 +15,7 @@ namespace circ
 {
     void unit_lifter::exalt( unit_t &unit )
     {
+        b_ctx.exalt_prologue( unit );
         std::ignore = unit;
     }
 

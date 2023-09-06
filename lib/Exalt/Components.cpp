@@ -41,4 +41,9 @@ namespace circ
 
     }
 
+    void submodules::exalt_prologue( unit_t &unit )
+    {
+        arch_state.reset( fn_ctx.irb() );
+    }
+
 }  // namespace circ
