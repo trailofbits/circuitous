@@ -108,6 +108,8 @@ namespace circ
 
         // TODO( exalt ): Needed?
         void init( builder_context &bld_ctx );
+
+        void exalt_prologue( unit_t &unit );
     };
 
 
@@ -129,6 +131,8 @@ namespace circ
         {
             return &*( fn_ctx.fn );
         }
+
+        auto exalt_prologue( unit_t &unit ) { return sub_mods.exalt_prologue( unit ); }
     };
 
 }  // namespace circ
