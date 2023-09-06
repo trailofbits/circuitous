@@ -288,11 +288,6 @@ namespace circ
             #undef circuitous_tollvm_mk_unary_intrinsic
             #undef circuitous_tollvm_mk_llvm_intrinsic
 
-            llvm::Value *visit( const ExternalComputation *op )
-            {
-                log_kill() << "Not implemented";
-            }
-
             // Helpers
 
             template< typename IROp, typename ... Args >
