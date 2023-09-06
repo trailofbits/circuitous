@@ -126,6 +126,11 @@ namespace circ::run
         void visit(InputSyscallState *) { not_implemented(); }
         void visit(OutputSyscallState *) { not_implemented(); }
 
+        void visit(InputSyscallReg *) { not_implemented(); }
+        void visit(OutputSyscallReg *) { not_implemented(); }
+
+        void visit(SyscallModule *) { not_implemented(); }
+
         void init() {};
     };
 
