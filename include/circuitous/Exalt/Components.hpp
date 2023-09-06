@@ -86,7 +86,7 @@ namespace circ
 
         /* Required to lift semantics. */
         // What about old `Trace` class?
-        State arch_state;
+        ArchState arch_state;
         MemoryPtr mem_ptr;
 
         /* Additional submodules to handle ZK related functionality. */
@@ -101,7 +101,7 @@ namespace circ
         //                submodules on the object level.
         submodules( CtxRef ctx_ref, function_context &fn_ctx )
             : fn_ctx( fn_ctx ),
-              arch_state( fn_ctx.irb(), ctx_ref.state_ptr_type() ),
+              arch_state( fn_ctx.irb(), ctx_ref ),
               mem_ptr( ctx_ref.memory_ptr_type() ),
               syscall( fn_ctx.irb() )
         {}

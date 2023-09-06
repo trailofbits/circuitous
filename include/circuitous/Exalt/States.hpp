@@ -165,6 +165,22 @@ namespace circ
         void commit( builder_t &irb, CtxRef ctx );
     };
 
+    struct ArchState : State, has_ctx_ref
+    {
+        using base = State;
+
+        ArchState( builder_t &irb, CtxRef ctx_ref )
+            : State( irb, ctx_ref.state_ptr_type() ),
+              has_ctx_ref( ctx_ref )
+        {}
+
+        auto reset( builder_t &irb ) { return reset( irb, ctx.regs() ); }
+        using base::reset;
+
+        auto commit( builder_t &irb ) { return commit( irb, ctx ); }
+        using base::commit;
+    };
+
     struct MemoryPtr : wraps_remill_value
     {
         MemoryPtr( type_t t )
