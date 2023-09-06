@@ -35,6 +35,9 @@ namespace circ
             kInputSyscallState,
             kOutputSyscallState,
 
+            kInputSyscallReg,
+            kOutputSyscallReg,
+
             kInputRegister,
             kOutputRegister,
 
@@ -104,7 +107,7 @@ namespace circ
             kOnlyOneCondition,
             kVerifyInstruction,
 
-            kExternalComputation,
+            kSyscallModule,
 
             kLast
         };
@@ -386,6 +389,31 @@ namespace circ
     using InputSyscallState = Input< SyscallState, Operation::kind_t::kInputSyscallState >;
     using OutputSyscallState = Output< SyscallState, Operation::kind_t::kOutputSyscallState >;
 
+    struct SyscallReg : Operation, tag::external_io
+    {
+      protected:
+
+        explicit SyscallReg( Operation::kind_t kind, const std::string &reg_name,
+                             uint32_t size )
+            : Operation( size, kind ), reg_name( reg_name )
+        {}
+
+      public:
+
+        static std::string op_code_str() { return "syscall_reg"; }
+        std::string name() const override { return make_name(reg_name); }
+
+        static std::string make_name(const std::string &reg)
+        {
+            return op_code_str() + "." + reg;
+        }
+
+        std::string reg_name;
+    };
+
+    using InputSyscallReg = Input< SyscallReg, Operation::kind_t::kInputSyscallReg >;
+    using OutputSyscallReg = Input< SyscallReg, Operation::kind_t::kOutputSyscallReg >;
+
     // An undefined value.
     struct Undefined final : Operation
     {
@@ -457,12 +485,12 @@ namespace circ
     using input_leaves_ts = tl::make_list<
         InputInstructionBits, Advice, Memory,
         InputTimestamp, InputErrorFlag, InputRegister,
-        InputSyscallState
+        InputSyscallState, InputSyscallReg
     >;
 
     using output_leaves_ts = tl::make_list<
         OutputTimestamp, OutputErrorFlag, OutputRegister,
-        OutputSyscallState
+        OutputSyscallState, OutputSyscallReg
     >;
 
     using nontrace_leaves_ts = tl::make_list<
@@ -853,39 +881,17 @@ namespace circ
     };
 
 
-    struct ExternalComputation : Operation
+    struct SyscallModule : Operation, tag::external_computation
     {
-        static constexpr Operation::kind_t kind = Operation::kind_t::kParity;
+        static constexpr Operation::kind_t kind = Operation::kind_t::kSyscallModule;
 
-        enum class submodule_t : uint32_t
-        {
-            Syscalls = 0,
-        };
+        explicit SyscallModule() : Operation( 1u, kind ) {}
 
-        static std::string to_string(submodule_t sm)
-        {
-            switch (sm)
-            {
-                case submodule_t::Syscalls : return "syscalls";
-            }
-        }
-
-        explicit ExternalComputation(uint32_t size, submodule_t sm)
-            : Operation(size, kind), submodule_type(sm)
-        {}
-
-        static std::string op_code_str() { return "external_computations"; }
-        std::string name() const override
-        {
-            std::stringstream ss;
-            ss << this->ExternalComputation::op_code_str() << "." << to_string(submodule_type);
-            return ss.str();
-        }
-
-        submodule_t submodule_type;
+        static std::string op_code_str() { return "syscall_module"; }
+        std::string name() const override { return "syscall_module"; }
     };
 
-    using uncategorized_ops_ts = tl::TL< Select, Switch, Option >;
+    using uncategorized_ops_ts = tl::TL< Select, Switch, Option, SyscallModule >;
 
     #define circuitous_make_bool_op(cls, idx) \
     struct cls final : Operation \
@@ -919,7 +925,8 @@ namespace circ
     };
 
     using bool_ops_ts = tl::TL< DecodeCondition, VerifyInstruction, OnlyOneCondition,
-                                DecoderResult >;
+                                DecoderResult
+                              >;
 
     using generic_list_t =
     tl::TL<
