@@ -126,6 +126,7 @@ namespace circ
         }
 
         auto &irb() { return fn_ctx.irb(); }
+        auto &arch_state() { return sub_mods.arch_state; }
 
         llvm::Function *take_fn() &&
         {
