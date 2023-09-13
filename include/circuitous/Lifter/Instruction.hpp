@@ -201,10 +201,16 @@ namespace circ
             return concrete.operands[ i ].size;
         }
 
+        auto type( std::size_t i ) const
+        {
+            return concrete.operands[ i ].type;
+        }
+
         std::size_t encoding_size() const
         {
             return concrete.bytes.size();
         }
+
     };
 
     // template args:
@@ -243,6 +249,8 @@ namespace circ
 
         bool is_read( std::size_t i ) const { return atoms.front().is_read( i ); }
         bool is_write( std::size_t i ) const { return atoms.front().is_write( i ); }
+
+        auto type( std::size_t i ) const { return atoms.front().type( i ); }
     };
 
 
