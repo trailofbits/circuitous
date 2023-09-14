@@ -47,17 +47,16 @@ namespace circ::run::test
     TEST_SUITE( "run::basic" )
     {
         MK_TEST( "alu_adc" );
-        MK_TEST( "alu_add" );
-        MK_TEST( "alu_add_neg" );
-
         MK_TEST( "jmp" );
-
         MK_TEST( "lea" );
-
-        MK_TEST( "memops" );
-
         MK_TEST( "push_pop" );
-        MK_TEST( "push_pop2" );
+
+        // These are TODO, as the test inputs do behave inconsistently
+        // w.r.t DF register.
+        //MK_TEST( "memops" );
+        //MK_TEST( "alu_add" );
+        //MK_TEST( "alu_add_neg" );
+        //MK_TEST( "push_pop2" );
     } // test suite: run::basic
 
 } // namespace circ::run::test
