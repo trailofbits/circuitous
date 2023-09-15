@@ -1,3 +1,32 @@
+## Overview
+
+Circuitous is a set of tools and libraries that focus on production of ZK
+circuits tailored for a specific binary. Using circuit that is tailored for a
+specific binary has many upsides; there are only instructions actually used in
+the binary - no need to pay for what you don't use. Since circuits are
+generated rather than handwritten, they are super easy to extend (just run
+tooling again if your binary changed) or the framework can be used to
+experiment with different approaches to circuit design (different cost models).
+
+While we do provide core parts of the project as a libary, there are also some
+drivers ready to be used - `circuitous-seed` can provide a list of instructions
+to lift from a given binary (some can be blacklisted) and the list can be
+modified afterwards. `circuitous-lift` then takes this input and emits circuit
+with different forms (verilog being the most "end" result). We will eventually
+provide a full step-by step example but for now you can invoke `--help` on the
+respective tools, see the `Usage` section or in the worst case look into
+tests/open us an issue or discussion topic!
+
+Since this is project in active development there are some caveats.
+ * We currently support only subset of x86 (both 32b and 64b) and
+   the API is not super stable yet.
+ * Due to how internals of circuitous work it is hard to produce a circuit with
+   all forms of given instruction (let's say all `add`) - as it ingests the
+   instruction encoding as input.
+ * Reducing circuit size is a really hard task and we are still trying to
+   improve it.
+
+
 [![Build](https://github.com/trailofbits/circuitous/actions/workflows/build.yml/badge.svg)](https://github.com/trailofbits/circuitous/actions/workflows/build.yml)
 
 ## Build
@@ -57,19 +86,34 @@ For python dependencies see `requirements.txt` and for c++ `vcpkg.json`.
 
 # Usage
 
-## circuitous-run
-
-TODO
-
 ## circuitous-lift
 
-There is a bunch of `*_out` options - if you want something human readable your best shot is probably `--dot_out` that produces the dot graph.
+The main binary that produces the circuits. It has several options, which falls
+into few categories.
+ * `--arch` and `--os` are defaulted to mac and current machine (these are
+   needed to initialise libraries circuitous uses under the hood)
+ * Some for of input
+  - `--bytes-in` raw bytes in human readable form (for example `1468` for some
+    version of `ADC`). More encodings should be just concatenated together.
+  - `--ciff-in` a config file provided by `circuitous-seed`. You can find some
+    example in `scripts/seed_sets/*.ciff`
+ * Run informations
+  - `--lift-with` to specify the lifter to use (currently only `v2` is supported
+    with `v1` being deprecated and `v3` in active development. As you probably
+    guessed these are placeholder names.
+ * Outputs
+  - `--verilog-out` outputs the circuit in verilog
+ * Random
+  - `--quiet` to silence outputs
 
-The `--os` and `--arch` are defaulted to mac.
-
-Input can be provided by either `--bytes_in` which accept bytes as hex string (e.g. `--bytes_in ba12000000`) or by `--binary_in` which expects a filename that contains the instructions in binary form (not the assembly code!).
-
-Option `--reduce_imms` will run the (for now) experimental reduction of immediate operands.
+So an example invocation may look like
+```bash
+circuitous-lift --arch amd64 --os macos \
+                --lift-with v2 \
+                --bytes-in 1468 \
+                --verilog-output out.v \
+                --quiet
+```
 
 ## Tests
 
