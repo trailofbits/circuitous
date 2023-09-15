@@ -5,6 +5,7 @@
 #pragma once
 
 #include <circuitous/Exalt/Components.hpp>
+#include <circuitous/Exalt/Interfaces.hpp>
 
 #include <circuitous/Lifter/Instruction.hpp>
 #include <circuitous/Lifter/Components/Decoder.hpp>
@@ -19,76 +20,171 @@
 
 namespace circ
 {
-    // Can we use this as virtual base or just a tag?
-    struct unit_component_base
+    struct isem_lifter_base;
+
+    struct simple_unit_decoder : decoder_base
     {
-        builder_context &b_ctx;
+        using base = decoder_base;
 
-        unit_component_base( builder_context &b_ctx )
-            : b_ctx( b_ctx )
-        {}
-
-        virtual ~unit_component_base() = default;
-
-        virtual void init( unit_t & ) {}
-        virtual exalted_value_t on_isem( isem_range_t ) { return {}; };
-    };
-
-    template< typename T >
-    concept is_unit_component = std::is_base_of_v< T, unit_component_base >;
-
-    using unit_component_t = std::unique_ptr< unit_component_base >;
-
-    template< typename U >
-    struct unit_decoder : unit_component_base
-    {
-        using base = unit_component_base;
-        using unit_t = U;
-
-        values_t atom_decoders;
+        values_t _decoder_checks;
+        value_t _unit_decoder = nullptr;
 
         using base::base;
 
-        void init( unit_t &unit ) override
+        /* component_base */
+
+        auto init( unit_t &unit ) -> exalted_value_buckets override
         {
             auto &irb = b_ctx.irb();
             for ( auto &atom : unit )
-                atom_decoders.push_back( build::AtomDecoder( irb, atom ).get_decoder_tree() );
+                _decoder_checks.push_back( build::AtomDecoder( irb, atom ).get_decoder_tree() );
+
+            auto combined = irops::Or::make( irb, _decoder_checks );
+            _unit_decoder = irops::DecoderResult::make( irb, combined );
+
+            // We need decoder infomarion in the context.
+            exalted_value_buckets out;
+            out[ place::ctx ].emplace( _unit_decoder );
+            return out;
+        }
+
+        /* decoder_base */
+        const values_t &atom_decoders() const override
+        {
+            return _decoder_checks;
+        }
+
+        value_t unit_decoder() const override
+        {
+            return _unit_decoder;
         }
     };
 
     // Replaces the remill memory intrinsics with appropriate circ intrinsics.
-    struct memory_checks : unit_component_base
+    struct memory_checks : uc_with_b_ctx
     {
-        using base = unit_component_base;
+        using base = uc_with_b_ctx;
         using base::base;
 
+        exalted_values_t after_isem( unit_t &unit, isem_range_t isem_range ) override;
     };
 
-    // Replace all undefs with values or die trying.
-    struct undef_resolver : unit_component_base
+    struct error_bit : uc_with_b_ctx
     {
-        using base = unit_component_base;
+        using base = uc_with_b_ctx;
         using base::base;
+
+        exalted_values_t after_isem( unit_t &unit, isem_range_t isem_range ) override;
+    };
+
+    struct timestamp : uc_with_b_ctx
+    {
+        using base = uc_with_b_ctx;
+        using base::base;
+
+        // For now holds only one check that the timestamp is bumped properly.
+        exalted_values_t checks;
+
+        exalted_values_t after_isem( unit_t &unit, isem_range_t isem_range ) override;
+        void init() override;
+        exalted_value_buckets init( unit_t & ) override;
+
+        bool is_persistent() const override { return true; }
     };
 
     struct unit_components
     {
-        builder_context &b_ctx;
-        std::vector< unit_component_t > components;
+        using components_t = std::vector< unit_component_t >;
 
-        template< typename ... Ts >
+        builder_context &b_ctx;
+        components_t components;
+
         unit_components( builder_context &b_ctx )
             : b_ctx( b_ctx )
+        {}
+
+        unit_components( builder_context &b_ctx, components_t &&components )
+            : b_ctx( b_ctx ), components( std::move( components ) )
+        {}
+
+        unit_components( builder_context &b_ctx, const unit_components &other )
+            : b_ctx( b_ctx )
         {
-            ( emplace< Ts >(), ... );
+            copy_persistent_components( other );
         }
+
+        exalted_value_buckets init( unit_t &unit )
+        {
+            exalted_value_buckets out;
+
+            for ( auto &c : components )
+                merge_to( out, c->init( unit ) );
+
+            return out;
+        }
+
+        void copy_persistent_components( const unit_components &other )
+        {
+            for ( auto &c : other.components )
+                if ( c->is_persistent() )
+                    // We are using `shared_ptr` so we can copy and
+                    // *not* destroy `other`.
+                    components.push_back( c );
+        }
+
+        /* Access components */
+
+        template< typename T >
+        T &fetch_or_die()
+        {
+            for ( auto &c : components )
+                if ( auto casted = dynamic_cast< T * >( c.get() ) )
+                    return *casted;
+            log_kill() << "Could not fetch desired interface from unit_components.";
+        }
+
+        auto get_decoder() -> decoder_base &
+        {
+            log_dbg() << "[exalt:ucs]:" << "Fetching decoder.";
+            return fetch_or_die< decoder_base >();
+        }
+
+        auto get_isem_lifter() -> isem_lifter_base &
+        {
+            log_dbg() << "[exalt:ucs]:" << "Fetching isem_lifter.";
+            return fetch_or_die< isem_lifter_base >();
+        }
+
+
+        /* Construction */
 
         template< is_unit_component T >
         unit_component_base &emplace()
         {
-            return components.emplace_back( std::make_unique< T >( b_ctx ) );
+            components.push_back( std::make_shared< T >( b_ctx ) );
+            return *components.back();
+        }
+
+        template< typename ... Ts >
+        static auto make( builder_context &b_ctx )
+        {
+            auto self = unit_components( b_ctx );
+            ( self.emplace< Ts >(), ... );
+            return self;
+        }
+
+        static auto make_default( builder_context &b_ctx )
+        {
+            return make< simple_unit_decoder, memory_checks, error_bit >( b_ctx );
+        }
+
+        exalted_values_gen_t after_isem( unit_t &unit, isem_range_t isem_range )
+        {
+            for ( auto &c : components )
+                for ( auto v : c->after_isem( unit, isem_range ) )
+                    co_yield v;
         }
     };
+
 
 }  // namespace circ

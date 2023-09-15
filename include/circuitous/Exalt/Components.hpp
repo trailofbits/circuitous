@@ -8,6 +8,7 @@
 #include <circuitous/IR/Intrinsics.hpp>
 
 #include <circuitous/Exalt/States.hpp>
+#include <circuitous/Exalt/Value.hpp>
 
 #include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Log.hpp>
@@ -78,6 +79,8 @@ namespace circ
     // TODO( exalt ): I would like this to be simply a vector of things implementing a
     //                virtual interface eventually. Since I don't yet know what
     //                that interface should look like, I am unfolding things.
+    //                Implement this in the similar way to unit_components, bonus points
+    //                for making it the same (use persistent option).
     struct submodules
     {
         // TODO( exalt ): Figure out if this is the correct coupling.
@@ -90,7 +93,7 @@ namespace circ
         MemoryPtr mem_ptr;
 
         /* Additional submodules to handle ZK related functionality. */
-        syscall_submodule syscall;
+        // TODO( syscalls ): Add syscalls.
 
         // TODO( exalt ): Right now, this has 2 phases:
         //                * Construct the data members (ctor/make).
@@ -102,14 +105,13 @@ namespace circ
         submodules( CtxRef ctx_ref, function_context &fn_ctx )
             : fn_ctx( fn_ctx ),
               arch_state( fn_ctx.irb(), ctx_ref ),
-              mem_ptr( ctx_ref.memory_ptr_type() ),
-              syscall( fn_ctx.irb() )
+              mem_ptr( ctx_ref.memory_ptr_type() )
         {}
 
         // TODO( exalt ): Needed?
         void init( builder_context &bld_ctx );
 
-        void exalt_prologue( unit_t &unit );
+        auto exalt_prologue( unit_t &unit ) -> exalted_value_buckets;
     };
 
 
@@ -126,6 +128,8 @@ namespace circ
         }
 
         auto &irb() { return fn_ctx.irb(); }
+        auto &arch_state() { return sub_mods.arch_state; }
+        auto &mem_ptr() { return sub_mods.mem_ptr; }
 
         llvm::Function *take_fn() &&
         {

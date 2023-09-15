@@ -41,9 +41,10 @@ namespace circ
 
     }
 
-    void submodules::exalt_prologue( unit_t &unit )
+    auto submodules::exalt_prologue( unit_t &unit ) -> exalted_value_buckets
     {
         arch_state.reset( fn_ctx.irb() );
+        return {};
     }
 
 }  // namespace circ

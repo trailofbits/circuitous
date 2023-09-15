@@ -81,7 +81,7 @@ namespace circ
 
     void State::reset( llvm::IRBuilder<> &irb, const Ctx::regs_t &regs )
     {
-        log_info() << "[state]: reset";
+        log_dbg() << "[state]: reset";
         for ( const auto &reg : regs )
             store( irb, reg, irops::input_reg( irb, reg ) );
     }
