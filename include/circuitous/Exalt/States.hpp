@@ -147,6 +147,7 @@ namespace circ
         value_t operator*() { return storage; }
     };
 
+    // TODO( next ): Rename
     struct State : wraps_remill_value
     {
         using reg_ptr_t = const remill::Register *;
@@ -170,7 +171,7 @@ namespace circ
         using base = State;
 
         ArchState( builder_t &irb, CtxRef ctx_ref )
-            : State( irb, ctx_ref.state_ptr_type() ),
+            : State( irb, ctx_ref.state_type() ),
               has_ctx_ref( ctx_ref )
         {}
 
