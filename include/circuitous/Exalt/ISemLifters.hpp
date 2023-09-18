@@ -35,7 +35,6 @@ namespace circ
         // { reg, [ ( condition, value of that reg if condition holds ) ] }
         using reg_final_values_t = std::map< reg_ptr_t, std::vector< cond_to_value_t > >;
 
-        parsed_writes_t parsed_writes;
         reg_final_values_t final_values;
 
         using lifted_operands_t = values_t;
@@ -66,7 +65,7 @@ namespace circ
         }
 
         // TODO( exalt ): Should these be part of a component?
-        void parse_writes( unit_t &unit, decoder_base &decoder, writes_t );
+        parsed_writes_t parse_writes( unit_t &unit, decoder_base &decoder, writes_t );
         reg_to_vals write_conditions( unit_t &unit, decoder_base &decoder, std::size_t idx );
         stores_t stores_to( llvm::Instruction *v );
 
