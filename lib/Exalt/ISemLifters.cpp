@@ -293,12 +293,21 @@ namespace circ
         }
     }
 
-    auto mux_heavy_lifter::finalize_circuit() -> exalted_value_buckets
+    auto mux_heavy_lifter::finalize_circuit( exalted_value_buckets buckets ) -> value_t
     {
-        exalted_value_buckets out;
         for ( auto reg : l_ctx().regs() )
-            out[ place::root ].insert( reg_check( reg ) );
-        return out;
+            buckets[ place::root ].insert( reg_check( reg ) );
+
+        auto &bld = irb();
+        auto mk_args = [ & ]( auto roots )
+        {
+            return values_t( roots.begin(), roots.end() );
+        };
+
+        auto ctxs = extract( buckets, place::ctx );
+        buckets[ place::root ].emplace( irops::Or::make( bld, mk_args( ctxs ) ) );
+
+        return irops::And::make( bld, mk_args( extract( buckets, place::root ) ) );
     }
 
     auto mux_heavy_lifter::reg_check( reg_ptr_t reg ) -> value_t

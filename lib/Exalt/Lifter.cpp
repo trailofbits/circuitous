@@ -87,7 +87,7 @@ namespace circ
         // TODO( next ): Should something happen here?
         //               Maybe `b_ctx.exalt_epilogue( unit )`?
         auto ctx = make_context( extract( out, place::ctx ) );
-        out[ place::root ].emplace( ctx );
+        out[ place::ctx ].emplace( ctx );
         return out;
     }
 
@@ -122,18 +122,15 @@ namespace circ
 
     void circuit_producer::finalize()
     {
-        // for ( auto reg : ctx.regs() )
-        //     root.emplace_back( reg_check( reg ) );
+        auto ret_val = pucs.get_isem_lifter().finalize_circuit( exalted_buckets );
+        b_ctx.irb().CreateRet( ret_val );
 
-        auto vals = pucs.get_isem_lifter().finalize_circuit();
-        merge_to( exalted_buckets, vals );
-        make_ret();
         auto fn = b_ctx.fn_ctx.fn.get();
 
         ctx.clean_module( { fn } );
         remill::VerifyModule( ctx.module() );
-        // Cleanup
 
+        // Cleanup
         auto exec = [ & ]( auto v ) { return remove_write( v ); };
         irops::AllocateDst::for_all_in( fn, exec );
 

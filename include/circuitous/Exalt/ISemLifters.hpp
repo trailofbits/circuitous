@@ -46,7 +46,7 @@ namespace circ
                                  semantic_fn_t isem )
             -> isem_range_t override;
 
-        auto finalize_circuit() -> exalted_value_buckets override;
+        auto finalize_circuit( exalted_value_buckets ) -> value_t override;
 
         /* Local logic */
 
