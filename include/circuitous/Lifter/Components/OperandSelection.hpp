@@ -270,7 +270,10 @@ namespace circ::build
             check( r_imm && s_imm );
 
             if ( s_imm->regions.marked_size() == 0 )
-                return ctx.zero();
+            {
+                auto trg_type = ctx.zero()->getType();
+                return llvm::ConstantInt::get( trg_type, r_imm->val, r_imm->is_signed );
+            }
             check( s_imm->regions.marked_size() != 0 );
             // This maybe needs to be relaxed?
             check( s_imm->regions.areas.size() == 1 );

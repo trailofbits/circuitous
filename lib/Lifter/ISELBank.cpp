@@ -101,7 +101,6 @@ namespace circ::isem
                 auto call = irb.CreateCall( sem, call_args );
                 irb.CreateRet( call );
 
-                sem->print( llvm::errs() );
                 log_info() << "[isem]: Inlining.";
                 llvm::InlineFunctionInfo info;
                 auto was_inlined = llvm::InlineFunction( *call, info );
@@ -129,7 +128,6 @@ namespace circ::isem
                 post_lift( into );
 
                 log_info() << "[isem]: Created:";
-                into.print( llvm::errs() );
                 return out;
             }
         };
