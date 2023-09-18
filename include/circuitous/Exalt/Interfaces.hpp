@@ -87,8 +87,9 @@ namespace circ
                                                  decoder_base &decoder,
                                                  semantic_fn_t isem ) = 0;
 
-        // TODO( exalt ): Args and return type.
-        virtual exalted_value_buckets finalize_circuit() = 0;
+        // Return the final result.
+        // This allows more freedom on how things will be wired and connected.
+        virtual value_t finalize_circuit(exalted_value_buckets) = 0;
 
         // TODO( exalt ): Is this required?
         bool is_persistent() const override { return true; }
