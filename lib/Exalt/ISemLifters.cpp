@@ -145,23 +145,28 @@ namespace circ
         // TODO( exalt ): How is `inline_flattened` not breaking `irb`?
         auto [ begin, end ] = inline_flattened( sem_call, get_make_breakpoint() );
 
-        parse_writes( unit, decoder, writes );
+        auto parsed_writes = parse_writes( unit, decoder, writes );
         gather_final_values( unit, decoder, parsed_writes );
 
         return { begin, end };
     }
 
-    void mux_heavy_lifter::parse_writes( unit_t &unit, decoder_base &decoder,
+    auto mux_heavy_lifter::parse_writes( unit_t &unit, decoder_base &decoder,
                                          writes_t writes )
+        -> parsed_writes_t
     {
+        parsed_writes_t out;
+
         // TODO( exalt ): Implement/Port from `lifter_v2`.
         for ( auto [ dst, idx ] : writes )
         {
             auto conds = write_conditions( unit, decoder, idx );
             auto stores = stores_to( dst );
-            parsed_writes.emplace( idx, std::make_tuple( std::move( stores ),
-                                                         std::move( conds ) ) );
+            out.emplace( idx, std::make_tuple( std::move( stores ),
+                                                          std::move( conds ) ) );
         }
+
+        return out;
     }
 
     auto mux_heavy_lifter::write_conditions( unit_t &unit, decoder_base &decoder,
