@@ -333,4 +333,19 @@ namespace circ
         auto out_reg = irops::output_reg( bld, reg );
         return irops::OutputCheck::make( bld, { mux, out_reg } );
     }
+
+    auto disjunctions_lifter::make_semantic_call( unit_t &unit, decoder_base &decoder,
+                                                 semantic_fn_t isem )
+        -> isem_range_t
+    {
+        return {};
+    }
+
+
+    auto disjunctions_lifter::finalize_circuit( exalted_value_buckets buckets )
+        -> value_t
+    {
+        return {};
+    }
+
 }  // namespace circ
