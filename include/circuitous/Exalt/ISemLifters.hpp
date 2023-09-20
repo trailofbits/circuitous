@@ -102,11 +102,23 @@ namespace circ
 
         /* Random helpers */
 
-        auto &irb() { return b_ctx.irb(); }
-        auto &arch_state() { return b_ctx.arch_state(); }
-        auto &l_ctx() { return b_ctx.ctx; }
-        auto bw( auto v ) { return l_ctx().bw( v ); }
 
         auto log_prefix() { return "[exalt:mux_heavy_lifter]:"; }
+    };
+
+    struct disjunctions_lifter : isem_lifter_base, isem_lifter_utilities
+    {
+        using base = isem_lifter_base;
+        using base::base;
+
+       protected:
+        builder_context &get_b_ctx() override { return b_ctx; }
+
+       public:
+        /* `isem_lifter_base` interface. */
+        auto make_semantic_call( unit_t &, decoder_base &, semantic_fn_t )
+            -> isem_range_t override;
+
+        auto finalize_circuit( exalted_value_buckets ) -> value_t override;
     };
 }  // namespace circ
