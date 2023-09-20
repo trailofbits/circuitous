@@ -20,7 +20,29 @@
 
 namespace circ
 {
-    struct mux_heavy_lifter : isem_lifter_base
+    /* A bunch of sahred helper functionality to be used by isem_lifters.
+     * TODO( exalt ): Add as base class? Hide in `.cpp`?
+     */
+
+    // For now it is a separate class so we can hide some internal type
+    // aliases.
+    // Not opting for CTRP as I want implementation in the `.cpp`.
+    struct isem_lifter_utilities
+    {
+        virtual ~isem_lifter_utilities() = default;
+
+        void bump_pc( unit_t &unit, decoder_base &decoder );
+
+        auto &irb() { return get_b_ctx().irb(); }
+        auto &arch_state() { return get_b_ctx().arch_state(); }
+        auto &l_ctx() { return get_b_ctx().ctx; }
+        auto bw( auto v ) { return l_ctx().bw( v ); }
+
+      protected:
+        virtual builder_context &get_b_ctx() = 0;
+    };
+
+    struct mux_heavy_lifter : isem_lifter_base, isem_lifter_utilities
     {
         using base = isem_lifter_base;
         using base::base;
@@ -40,6 +62,11 @@ namespace circ
         using lifted_operands_t = values_t;
         using writes_t = std::vector< std::tuple< llvm::Instruction *, std::size_t > >;
 
+       protected:
+        builder_context &get_b_ctx() override { return b_ctx; }
+
+       public:
+
         /* `isem_lifter_base` interface */
 
         auto make_semantic_call( unit_t &unit, decoder_base &decoder,
@@ -49,8 +76,6 @@ namespace circ
         auto finalize_circuit( exalted_value_buckets ) -> value_t override;
 
         /* Local logic */
-
-        void bump_pc( unit_t &unit, decoder_base &decoder );
 
         // TODO( exalt ): Have `unit` as attribute?
         auto get_operands( unit_t &unit, decoder_base &decoder, semantic_fn_t isem )

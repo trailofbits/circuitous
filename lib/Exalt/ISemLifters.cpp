@@ -47,6 +47,27 @@ namespace circ
         }
     } // namespace
 
+    /* Shared helpers */
+
+    void isem_lifter_utilities::bump_pc( unit_t &unit, decoder_base &decoder )
+    {
+        log_dbg() << "Bumping pc";
+        auto decoder_it = decoder.begin();
+        auto &bld = get_b_ctx().irb();
+
+        values_t options;
+        for ( auto &atom : unit )
+        {
+            auto inst_size = llvm::ConstantInt::get( l_ctx().word_type(),
+                                                     atom.encoding_size() );
+            options.emplace_back( irops::Option::make( bld, { inst_size, *( decoder_it++ ) },
+                                                       bw( inst_size ) ) );
+        }
+        auto offet = irops::Switch::make( bld, options );
+        auto next_inst = bld.CreateAdd( arch_state().load( bld, l_ctx().pc_reg() ), offet );
+        arch_state().store( bld, l_ctx().pc_reg(), next_inst );
+    }
+
     auto mux_heavy_lifter::get_operands( unit_t &unit, decoder_base &decoder,
                                          semantic_fn_t isem )
         -> std::tuple< lifted_operands_t, writes_t >
@@ -113,25 +134,6 @@ namespace circ
         return { operands, writes };
     }
 
-    void mux_heavy_lifter::bump_pc( unit_t &unit, decoder_base &decoder )
-    {
-        log_dbg() << "Bumping pc";
-        auto decoder_it = decoder.begin();
-        auto &bld = b_ctx.irb();
-
-        values_t options;
-        for ( auto &atom : unit )
-        {
-            auto inst_size = llvm::ConstantInt::get( l_ctx().word_type(),
-                                                     atom.encoding_size() );
-            options.emplace_back( irops::Option::make( bld, { inst_size, *( decoder_it++ ) },
-                                                       bw( inst_size ) ) );
-        }
-        auto offet = irops::Switch::make( bld, options );
-        auto next_inst = bld.CreateAdd( arch_state().load( bld, l_ctx().pc_reg() ), offet );
-        arch_state().store( bld, l_ctx().pc_reg(), next_inst );
-
-    }
 
     auto mux_heavy_lifter::make_semantic_call( unit_t &unit, decoder_base &decoder,
                                                semantic_fn_t isem )
