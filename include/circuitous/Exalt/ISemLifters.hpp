@@ -31,12 +31,27 @@ namespace circ
     {
         virtual ~isem_lifter_utilities() = default;
 
-        void bump_pc( unit_t &unit, decoder_base &decoder );
+        /* Lifting helpers */
+
+        // Due to how remill semantics work, this is supposed to happen *before*
+        // actual call to semantics.
+        void bump_pc( unit_t &, decoder_base &);
+
+        // `[ ( irops alloca, idx of the operand in instruction ) ]`
+        using writes_t = std::vector< std::tuple< llvm::Instruction *, std::size_t > >;
+        using lifted_operands_t = values_t;
+
+        // Lift operand using stateless requester.
+        auto get_operands( unit_t &, decoder_base &, semantic_fn_t )
+            -> std::tuple< lifted_operands_t, writes_t >;
+
+        /* Accessor shortcuts */
 
         auto &irb() { return get_b_ctx().irb(); }
         auto &arch_state() { return get_b_ctx().arch_state(); }
         auto &l_ctx() { return get_b_ctx().ctx; }
         auto bw( auto v ) { return l_ctx().bw( v ); }
+        auto mem_ptr() { return get_b_ctx().mem_ptr(); }
 
       protected:
         virtual builder_context &get_b_ctx() = 0;
@@ -76,10 +91,6 @@ namespace circ
         auto finalize_circuit( exalted_value_buckets ) -> value_t override;
 
         /* Local logic */
-
-        // TODO( exalt ): Have `unit` as attribute?
-        auto get_operands( unit_t &unit, decoder_base &decoder, semantic_fn_t isem )
-            -> std::tuple< lifted_operands_t, writes_t >;
 
         auto get_make_breakpoint()
         {
