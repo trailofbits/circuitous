@@ -45,6 +45,22 @@ namespace circ
         auto get_operands( unit_t &, decoder_base &, semantic_fn_t )
             -> std::tuple< lifted_operands_t, writes_t >;
 
+        using stores_t = std::vector< llvm::StoreInst * >;
+
+        // Collect all stores to particular pointer.
+        // TODO( exalt ): Pass in `irops::Instance` to be sure this is a destination?
+        stores_t stores_to( llvm::Instruction *v );
+
+        // Create dummy breakpoint llvm instruction to serve as boundary of inlined
+        // LLVM semantic.
+        auto get_make_breakpoint()
+        {
+            return []( auto irb )
+            {
+                return irops::Breakpoint::make( irb, irb.getTrue() );
+            };
+        }
+
         /* Accessor shortcuts */
 
         auto &irb() { return get_b_ctx().irb(); }
@@ -92,18 +108,10 @@ namespace circ
 
         /* Local logic */
 
-        auto get_make_breakpoint()
-        {
-            return []( auto irb )
-            {
-                return irops::Breakpoint::make( irb, irb.getTrue() );
-            };
-        }
 
         // TODO( exalt ): Should these be part of a component?
         parsed_writes_t parse_writes( unit_t &unit, decoder_base &decoder, writes_t );
         reg_to_vals write_conditions( unit_t &unit, decoder_base &decoder, std::size_t idx );
-        stores_t stores_to( llvm::Instruction *v );
 
         void gather_final_values( unit_t &unit,
                                   decoder_base &decoder,

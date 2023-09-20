@@ -133,6 +133,26 @@ namespace circ
         return { operands, writes };
     }
 
+    auto isem_lifter_utilities::stores_to( llvm::Instruction *v ) -> stores_t
+    {
+        stores_t out;
+        auto collect = [ & ]( auto src, auto next ) -> void
+        {
+            for ( auto user : src->users() )
+            {
+                if ( auto store = llvm::dyn_cast< llvm::StoreInst >( user ) )
+                    out.push_back( store );
+                if ( auto bc = llvm::dyn_cast< llvm::BitCastInst >( user ) )
+                    next( bc, next );
+
+                check( !llvm::isa< llvm::PtrToIntInst, llvm::GetElementPtrInst >( user ) );
+            }
+
+        };
+        collect( v, collect );
+        return out;
+    }
+
     /* `mux_heavy_lifter` */
 
     auto mux_heavy_lifter::make_semantic_call( unit_t &unit, decoder_base &decoder,
@@ -223,25 +243,6 @@ namespace circ
         return out;
     }
 
-    auto mux_heavy_lifter::stores_to( llvm::Instruction *v ) -> stores_t
-    {
-        stores_t out;
-        auto collect = [ & ]( auto src, auto next ) -> void
-        {
-            for ( auto user : src->users() )
-            {
-                if ( auto store = llvm::dyn_cast< llvm::StoreInst >( user ) )
-                    out.push_back( store );
-                if ( auto bc = llvm::dyn_cast< llvm::BitCastInst >( user ) )
-                    next( bc, next );
-
-                check( !llvm::isa< llvm::PtrToIntInst, llvm::GetElementPtrInst >( user ) );
-            }
-
-        };
-        collect( v, collect );
-        return out;
-    }
 
     // Computes for each reg what value it holds at the end. Condition that the register
     // is being written to is included.
