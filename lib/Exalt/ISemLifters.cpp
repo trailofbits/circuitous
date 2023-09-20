@@ -68,14 +68,15 @@ namespace circ
         arch_state().store( bld, l_ctx().pc_reg(), next_inst );
     }
 
-    auto mux_heavy_lifter::get_operands( unit_t &unit, decoder_base &decoder,
-                                         semantic_fn_t isem )
+
+    auto isem_lifter_utilities::get_operands( unit_t &unit, decoder_base &decoder,
+                                              semantic_fn_t isem )
         -> std::tuple< lifted_operands_t, writes_t >
     {
         // I have no idea if this should be done somewhere else.
-        lifted_operands_t operands = { *b_ctx.mem_ptr(), *b_ctx.arch_state() };
+        lifted_operands_t operands = { *mem_ptr(), *arch_state() };
         writes_t writes;
-        auto requester = build::StatelessRequester( b_ctx.ctx, arch_state() );
+        auto requester = build::StatelessRequester( l_ctx(), arch_state() );
 
         auto handle_reg_write = [ & ]( auto arg, std::size_t i )
             -> std::optional< llvm::CallInst * >
@@ -110,7 +111,6 @@ namespace circ
 
         for ( std::size_t i = 0; i < unit.operand_count(); ++i )
         {
-            log_dbg() << log_prefix() << "Lifting operand:" << i;
             auto decoder_it = decoder.begin();
 
             auto operand = [ & ]() -> llvm::CallInst *
@@ -130,10 +130,10 @@ namespace circ
 
         }
 
-        log_dbg() << log_prefix() << "All operands lifted.";
         return { operands, writes };
     }
 
+    /* `mux_heavy_lifter` */
 
     auto mux_heavy_lifter::make_semantic_call( unit_t &unit, decoder_base &decoder,
                                                semantic_fn_t isem )
