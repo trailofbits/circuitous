@@ -18,7 +18,7 @@
 #include <tuple>
 #include <type_traits>
 
-namespace circ
+namespace circ::exalt
 {
     /* A bunch of sahred helper functionality to be used by isem_lifters.
      * TODO( exalt ): Add as base class? Hide in `.cpp`?
@@ -31,6 +31,7 @@ namespace circ
     {
         virtual ~isem_lifter_utilities() = default;
 
+      protected:
         /* Lifting helpers */
 
         // Due to how remill semantics work, this is supposed to happen *before*
@@ -61,6 +62,27 @@ namespace circ
             };
         }
 
+        // Register name to vector of condition under which they are written to.
+        using reg_to_vals = std::unordered_map< std::string, values_t >;
+
+        // Collect for given `unit.slice( idx )` what register can be written and
+        // if they are, what is the condition that needs to be satisfied.
+        reg_to_vals write_conditions( unit_t &unit, decoder_base &decoder, std::size_t idx );
+
+        using parsed_writes_t = std::map< std::size_t, std::tuple< stores_t, reg_to_vals > >;
+        parsed_writes_t parse_writes( unit_t &unit, decoder_base &decoder, writes_t );
+
+        using cond_to_value_t = std::tuple< llvm::Value *, llvm::Value * >;
+        // { reg, [ ( condition, value of that reg if condition holds ) ] }
+        using reg_final_values_t = std::map< reg_ptr_t, std::vector< cond_to_value_t > >;
+
+        auto gather_final_values( unit_t &unit,
+                                  decoder_base &decoder,
+                                  const parsed_writes_t &writes ) -> reg_final_values_t;
+
+        auto reg_check( reg_ptr_t reg, const reg_final_values_t & ) -> value_t;
+        auto reg_check( reg_ptr_t reg, const std::vector< cond_to_value_t > & ) -> value_t;
+
         /* Accessor shortcuts */
 
         auto &irb() { return get_b_ctx().irb(); }
@@ -78,20 +100,8 @@ namespace circ
         using base = isem_lifter_base;
         using base::base;
 
-        // TODO( exalt ): This is temporary glue to keep old version working.
-        //                Figure out how to deal with it.
-        using stores_t = std::vector< llvm::StoreInst * >;
-        using reg_to_vals = std::unordered_map< std::string, values_t >;
-        using parsed_writes_t = std::map< std::size_t, std::tuple< stores_t, reg_to_vals > >;
-
-        using cond_to_value_t = std::tuple< llvm::Value *, llvm::Value * >;
-        // { reg, [ ( condition, value of that reg if condition holds ) ] }
-        using reg_final_values_t = std::map< reg_ptr_t, std::vector< cond_to_value_t > >;
-
+        using reg_final_values_t = isem_lifter_utilities::reg_final_values_t;
         reg_final_values_t final_values;
-
-        using lifted_operands_t = values_t;
-        using writes_t = std::vector< std::tuple< llvm::Instruction *, std::size_t > >;
 
        protected:
         builder_context &get_b_ctx() override { return b_ctx; }
@@ -107,21 +117,9 @@ namespace circ
         auto finalize_circuit( exalted_value_buckets ) -> value_t override;
 
         /* Local logic */
-
-
-        // TODO( exalt ): Should these be part of a component?
-        parsed_writes_t parse_writes( unit_t &unit, decoder_base &decoder, writes_t );
-        reg_to_vals write_conditions( unit_t &unit, decoder_base &decoder, std::size_t idx );
-
-        void gather_final_values( unit_t &unit,
-                                  decoder_base &decoder,
-                                  const parsed_writes_t &writes );
-
-        value_t reg_check( reg_ptr_t reg );
+        void account( const reg_final_values_t &other );
 
         /* Random helpers */
-
-
         auto log_prefix() { return "[exalt:mux_heavy_lifter]:"; }
     };
 
@@ -129,6 +127,11 @@ namespace circ
     {
         using base = isem_lifter_base;
         using base::base;
+
+       private:
+        // TODO( next ): Dirty trick to prototype faster. No need for this to be
+        //               an attribute.
+        exalted_values_t ctx_ops;
 
        protected:
         builder_context &get_b_ctx() override { return b_ctx; }
@@ -139,5 +142,8 @@ namespace circ
             -> isem_range_t override;
 
         auto finalize_circuit( exalted_value_buckets ) -> value_t override;
+
+        /* `unit_component_base` */
+        auto after_isem( unit_t &unit, isem_range_t isem ) -> exalted_values_t override;
     };
-}  // namespace circ
+}  // namespace circ::exalt

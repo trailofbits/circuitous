@@ -15,7 +15,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <sstream>
 
-namespace circ
+namespace circ::exalt
 {
     exalted_value_buckets to_buckets( const exalted_values_t &vs )
     {
@@ -63,4 +63,4 @@ namespace circ
         }
         return os.str();
     }
-} // namespace circ
+} // namespace circ::exalt

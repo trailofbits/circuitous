@@ -20,7 +20,7 @@
 CIRCUITOUS_RELAX_WARNINGS
 CIRCUITOUS_UNRELAX_WARNINGS
 
-namespace circ
+namespace circ::exalt
 {
     namespace
     {
@@ -72,7 +72,7 @@ namespace circ
         // TODO( next ): `before_isem( unit )`.
 
         // TODO( next ): Bump pc.
-        auto semantic = isem::semantic_fn( unit.isel, *llvm_module() );
+        auto semantic = circ::isem::semantic_fn( unit.isel, *llvm_module() );
         check( semantic ) << log_prefix() << "Could not fetch semantic for unit!";
         post_lift( **semantic );
 
@@ -103,21 +103,6 @@ namespace circ
     {
         auto u_lifter = unit_lifter( b_ctx, pucs );
         merge_to( exalted_buckets, u_lifter.exalt( unit ) );
-    }
-
-    void circuit_producer::make_ret()
-    {
-        check( exalted_buckets.size() == 1, [&](){ return to_string( exalted_buckets ); } );
-        check( exalted_buckets.count( place::root ) );
-
-        auto &bld = b_ctx.irb();
-
-        auto roots = extract( exalted_buckets, place::root );
-        auto as_args = values_t( roots.begin(), roots.end() );
-        auto result = irops::And::make( bld, as_args );
-
-        bld.CreateRet( result );
-
     }
 
     void circuit_producer::finalize()
@@ -155,8 +140,7 @@ namespace circ
 
     void circuit_producer::init_pucs()
     {
-        pucs.emplace< mux_heavy_lifter >().init();
         pucs.emplace< timestamp >().init();
     }
 
-}  // namespace circ
+}  // namespace circ::exalt

@@ -18,7 +18,7 @@
 #include <tuple>
 #include <type_traits>
 
-namespace circ
+namespace circ::exalt
 {
     struct isem_lifter_base;
 
@@ -123,6 +123,12 @@ namespace circ
             return out;
         }
 
+        void init()
+        {
+            for ( auto &c : components )
+                c->init();
+        }
+
         void copy_persistent_components( const unit_components &other )
         {
             for ( auto &c : other.components )
@@ -163,6 +169,11 @@ namespace circ
         {
             components.push_back( std::make_shared< T >( b_ctx ) );
             return *components.back();
+        }
+
+        void add( unit_component_t component )
+        {
+            components.push_back( std::move( component ) );
         }
 
         template< typename ... Ts >

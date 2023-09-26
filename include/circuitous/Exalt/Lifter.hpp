@@ -18,7 +18,7 @@
 #include <circuitous/Support/Log.hpp>
 #include <circuitous/Support/Check.hpp>
 
-namespace circ
+namespace circ::exalt
 {
     struct unit_lifter
     {
@@ -76,6 +76,13 @@ namespace circ
             init_pucs();
         }
 
+        // TODO( next ): Should be part of ctor?
+        template< typename T >
+        void add_isem_lifter()
+        {
+            pucs.emplace< T >().init();
+        }
+
         void exalt( unit_t &unit );
         void finalize();
 
@@ -84,9 +91,7 @@ namespace circ
             return std::move( b_ctx ).take_fn();
         }
 
-        void make_ret();
-
       protected:
         void init_pucs();
     };
-}  // namespace circ
+}  // namespace circ::exalt

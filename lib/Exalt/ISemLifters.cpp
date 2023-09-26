@@ -20,7 +20,7 @@
 CIRCUITOUS_RELAX_WARNINGS
 CIRCUITOUS_UNRELAX_WARNINGS
 
-namespace circ
+namespace circ::exalt
 {
     namespace
     {
@@ -153,46 +153,9 @@ namespace circ
         return out;
     }
 
-    /* `mux_heavy_lifter` */
-
-    auto mux_heavy_lifter::make_semantic_call( unit_t &unit, decoder_base &decoder,
-                                               semantic_fn_t isem )
-        -> isem_range_t
-    {
-        bump_pc( unit, decoder );
-        auto [ operands, writes ] = get_operands( unit, decoder, isem );
-
-        log_dbg() << log_prefix() << dbg_dump( operands ) << "into" << dbg_dump( isem );
-        auto sem_call = irb().CreateCall( isem, operands );
-        // TODO( exalt ): How is `inline_flattened` not breaking `irb`?
-        auto [ begin, end ] = inline_flattened( sem_call, get_make_breakpoint() );
-
-        auto parsed_writes = parse_writes( unit, decoder, writes );
-        gather_final_values( unit, decoder, parsed_writes );
-
-        return { begin, end };
-    }
-
-    auto mux_heavy_lifter::parse_writes( unit_t &unit, decoder_base &decoder,
-                                         writes_t writes )
-        -> parsed_writes_t
-    {
-        parsed_writes_t out;
-
-        // TODO( exalt ): Implement/Port from `lifter_v2`.
-        for ( auto [ dst, idx ] : writes )
-        {
-            auto conds = write_conditions( unit, decoder, idx );
-            auto stores = stores_to( dst );
-            out.emplace( idx, std::make_tuple( std::move( stores ),
-                                                          std::move( conds ) ) );
-        }
-
-        return out;
-    }
-
-    auto mux_heavy_lifter::write_conditions( unit_t &unit, decoder_base &decoder,
-                                             std::size_t idx ) -> reg_to_vals
+    auto isem_lifter_utilities::write_conditions( unit_t &unit, decoder_base &decoder,
+                                                  std::size_t idx )
+        -> reg_to_vals
     {
         reg_to_vals out;
 
@@ -224,7 +187,11 @@ namespace circ
             {
                 values_t conds;
                 for ( auto key : keys )
-                    conds.emplace_back( irb().CreateICmpEQ( selector, key_as_constant( key ) ) );
+                {
+                    auto eq = irb().CreateICmpEQ( selector, key_as_constant( key ) );
+                    conds.emplace_back( eq );
+                }
+
                 auto selectors = irops::Or::make( bld, conds );
                 out[ name ].emplace_back( irops::And::make( bld, { *decoder_it, selectors } ) );
             }
@@ -243,15 +210,35 @@ namespace circ
         return out;
     }
 
+    auto isem_lifter_utilities::parse_writes( unit_t &unit, decoder_base &decoder,
+                                              writes_t writes )
+        -> parsed_writes_t
+    {
+        parsed_writes_t out;
+
+        // TODO( exalt ): Implement/Port from `lifter_v2`.
+        for ( auto [ dst, idx ] : writes )
+        {
+            auto conds = write_conditions( unit, decoder, idx );
+            auto stores = stores_to( dst );
+            out.emplace( idx, std::make_tuple( std::move( stores ),
+                                                          std::move( conds ) ) );
+        }
+
+        return out;
+    }
 
     // Computes for each reg what value it holds at the end. Condition that the register
     // is being written to is included.
     // If reg is not present, it means it is constant during this semantic.
     // TODO( exalt ): Top-level condition is always `unit_decoder`?
-    void mux_heavy_lifter::gather_final_values( unit_t &unit,
-                                                decoder_base &decoder,
-                                                const parsed_writes_t &writes )
+    auto isem_lifter_utilities::gather_final_values( unit_t &unit,
+                                                     decoder_base &decoder,
+                                                     const parsed_writes_t &writes )
+        -> reg_final_values_t
     {
+        reg_final_values_t out;
+
         auto &bld = irb();
         auto unit_decoder = decoder.unit_decoder();
 
@@ -284,44 +271,37 @@ namespace circ
 
             if ( options.empty() )
             {
-                final_values[ reg ].emplace_back( unit_decoder, normal_flow_value );
+                out[ reg ].emplace_back( unit_decoder, normal_flow_value );
             } else {
                 // Base base in case nothing was written
                 options.push_back( irops::Option::make( bld,
                                                         { normal_flow_value, bld.getTrue() },
                                                         bw( normal_flow_value ) ) );
                 auto s = irops::Switch::make( bld, options );
-                final_values[ reg ].emplace_back( unit_decoder, s );
+                out[ reg ].emplace_back( unit_decoder, s );
             }
         }
+
+        return out;
     }
 
-    auto mux_heavy_lifter::finalize_circuit( exalted_value_buckets buckets ) -> value_t
+    auto isem_lifter_utilities::reg_check( reg_ptr_t reg,
+                                           const reg_final_values_t &final_values )
+        -> value_t
     {
-        for ( auto reg : l_ctx().regs() )
-            buckets[ place::root ].insert( reg_check( reg ) );
-
-        auto &bld = irb();
-        auto mk_args = [ & ]( auto roots )
-        {
-            return values_t( roots.begin(), roots.end() );
-        };
-
-        auto ctxs = extract( buckets, place::ctx );
-        buckets[ place::root ].emplace( irops::Or::make( bld, mk_args( ctxs ) ) );
-
-        return irops::And::make( bld, mk_args( extract( buckets, place::root ) ) );
+        auto it = final_values.find( reg );
+        check( it != final_values.end() );
+        return reg_check( reg, it->second );
     }
 
-    auto mux_heavy_lifter::reg_check( reg_ptr_t reg ) -> value_t
+    auto isem_lifter_utilities::reg_check( reg_ptr_t reg,
+                                           const std::vector< cond_to_value_t > &partials )
+        -> value_t
     {
         auto &bld = irb();
 
         auto muxed_operands = [ & ]() -> gap::generator< value_t >
         {
-            check( final_values.count( reg ) );
-            const auto &partials = final_values[ reg ];
-
             if ( partials.empty() )
                 co_yield irops::input_reg( bld, reg );
             else
@@ -335,18 +315,108 @@ namespace circ
         return irops::OutputCheck::make( bld, { mux, out_reg } );
     }
 
-    auto disjunctions_lifter::make_semantic_call( unit_t &unit, decoder_base &decoder,
-                                                 semantic_fn_t isem )
-        -> isem_range_t
+    /* `mux_heavy_lifter` */
+
+    void mux_heavy_lifter::account( const reg_final_values_t &other )
     {
-        return {};
+        for ( auto [ key, vs ] : other )
+        {
+            auto &into = final_values[ key ];
+            into.insert( into.end(), vs.begin(), vs.end() );
+        }
     }
 
+    auto mux_heavy_lifter::make_semantic_call( unit_t &unit, decoder_base &decoder,
+                                               semantic_fn_t isem )
+        -> isem_range_t
+    {
+        bump_pc( unit, decoder );
+        auto [ operands, writes ] = get_operands( unit, decoder, isem );
+
+        log_dbg() << log_prefix() << dbg_dump( operands ) << "into" << dbg_dump( isem );
+        auto sem_call = irb().CreateCall( isem, operands );
+        // TODO( exalt ): How is `inline_flattened` not breaking `irb`?
+        auto [ begin, end ] = inline_flattened( sem_call, get_make_breakpoint() );
+
+        auto parsed_writes = parse_writes( unit, decoder, writes );
+        account( gather_final_values( unit, decoder, parsed_writes ) );
+
+        return { begin, end };
+    }
+
+
+    auto mux_heavy_lifter::finalize_circuit( exalted_value_buckets buckets ) -> value_t
+    {
+        for ( auto reg : l_ctx().regs() )
+            buckets[ place::root ].insert( reg_check( reg, final_values ) );
+
+        auto &bld = irb();
+        auto mk_args = [ & ]( auto roots )
+        {
+            return values_t( roots.begin(), roots.end() );
+        };
+
+        auto ctxs = extract( buckets, place::ctx );
+        buckets[ place::root ].emplace( irops::Or::make( bld, mk_args( ctxs ) ) );
+
+        return irops::And::make( bld, mk_args( extract( buckets, place::root ) ) );
+    }
+
+
+    /* `disjunction_lifter` */
+
+    auto disjunctions_lifter::make_semantic_call( unit_t &unit, decoder_base &decoder,
+                                                  semantic_fn_t isem )
+        -> isem_range_t
+    {
+        ctx_ops.clear();
+        // TODO( exalt ): This is currently sharing some code with `mux_heavy_lifter`.
+        bump_pc( unit, decoder );
+        auto [ operands, writes ] = get_operands( unit, decoder, isem );
+
+        auto sem_call = irb().CreateCall( isem, operands );
+        auto [ begin, end ] = inline_flattened( sem_call, get_make_breakpoint() );
+
+        auto parsed_writes = parse_writes( unit, decoder, writes );
+        auto final_values = gather_final_values( unit, decoder, parsed_writes );
+
+        for ( auto reg : l_ctx().regs() )
+            ctx_ops.emplace_back( place::ctx, reg_check( reg, final_values ) );
+
+        return { begin, end };
+    }
 
     auto disjunctions_lifter::finalize_circuit( exalted_value_buckets buckets )
         -> value_t
+
     {
-        return {};
+        auto &bld = irb();
+        auto mk_args = [ & ]( auto roots )
+        {
+            return values_t( roots.begin(), roots.end() );
+        };
+
+        auto ctxs = extract( buckets, place::ctx );
+        auto roots = extract( buckets, place::root );
+
+        values_t args;
+        for ( auto &ctx : ctxs )
+        {
+            auto flat = mk_args( roots );
+            flat.push_back( ctx );
+            if ( flat.size() != 1 )
+                args.push_back( irops::And::make( bld, flat ) );
+            else
+                args.push_back( flat[ 0 ] );
+        }
+
+        return irops::Or::make( bld, args );
     }
 
-}  // namespace circ
+    auto disjunctions_lifter::after_isem( unit_t &unit_t, isem_range_t isem )
+        -> exalted_values_t
+    {
+        return ctx_ops;
+    }
+
+} // namespace circ::exalt

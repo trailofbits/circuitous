@@ -19,7 +19,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace circ
+namespace circ::exalt
 {
     // Provides wrapper around syscall related things similar to what we have for
     // remill State.
@@ -214,4 +214,4 @@ namespace circ
         auto &output() { return storage[ 1 ]; }
     };
 
-}  // namespace circ
+}  // namespace circ::exalt

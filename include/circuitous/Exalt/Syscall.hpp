@@ -13,7 +13,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <array>
 #include <ranges>
 
-namespace circ
+namespace circ::exalt
 {
     enum class component_tag : uint32_t
     {
@@ -134,4 +134,4 @@ namespace circ
         }
     };
 
-} // namespace circ
+} // namespace circ::exalt

@@ -15,7 +15,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <sstream>
 
-namespace circ
+namespace circ::exalt
 {
     wraps_remill_value::wraps_remill_value( llvm::Function *fn, llvm::Type *t )
     {
@@ -94,4 +94,4 @@ namespace circ
         irops::make< irops::Commit >( irb, args, 1u );
 
     }
-}  // namespace circ
+} // namespace circ::exalt

@@ -18,7 +18,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <sstream>
 
-namespace circ
+namespace circ::exalt
 {
     /* Initialisation */
     auto circuit_function::make( CtxRef ctx ) -> circuit_function
@@ -47,4 +47,4 @@ namespace circ
         return {};
     }
 
-}  // namespace circ
+} // namespace circ::exalt
