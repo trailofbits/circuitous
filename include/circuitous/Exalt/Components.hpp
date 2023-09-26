@@ -24,7 +24,7 @@
 #include <unordered_map>
 #include <vector>
 
-namespace circ
+namespace circ::exalt
 {
     // Forward declare
     struct InstructionBatch;
@@ -139,4 +139,4 @@ namespace circ
         auto exalt_prologue( unit_t &unit ) { return sub_mods.exalt_prologue( unit ); }
     };
 
-}  // namespace circ
+}  // namespace circ::exalt

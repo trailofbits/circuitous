@@ -13,7 +13,7 @@
 
 #include <type_traits>
 
-namespace circ
+namespace circ::exalt
 {
     // Can we use this as virtual base or just a tag?
     struct unit_component_base
@@ -95,4 +95,4 @@ namespace circ
         bool is_persistent() const override { return true; }
     };
 
-}  // namespace circ
+}  // namespace circ::exalt

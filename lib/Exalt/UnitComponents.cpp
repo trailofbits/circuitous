@@ -13,8 +13,7 @@
 CIRCUITOUS_RELAX_WARNINGS
 CIRCUITOUS_UNRELAX_WARNINGS
 
-
-namespace circ
+namespace circ::exalt
 {
     exalted_values_t memory_checks::after_isem( unit_t &unit, isem_range_t isem )
     {
@@ -54,4 +53,4 @@ namespace circ
     {
         return checks;
     }
-}  // namespace circ
+} // namespace circ::exalt

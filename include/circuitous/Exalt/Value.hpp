@@ -12,7 +12,7 @@
 #include <unordered_set>
 #include <vector>
 
-namespace circ
+namespace circ::exalt
 {
     // TODO( exalt ): For now these are standalone but we may want to wrap it as a separate
     //                class.
@@ -35,4 +35,4 @@ namespace circ
         return ( os << to_string( v ) );
     }
 
-}  // namespace circ
+} // namespace circ::exalt
