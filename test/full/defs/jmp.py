@@ -31,6 +31,16 @@ jmp = {
   .scases(raw, ["ff2500500000"], R=True)
   .scases(intel, ["jmp rax"], R=False),
 
+  VerifyTest("jle").tags({"jle", "cfg", "min"})
+  .bytes(["7e21"])
+  .DI(S(0x4000).RIP(0x200000))
+  .all_defined()
+  .case(run_bytes=0, DI=MS().ZF(1), R=True)
+  .case(run_bytes=0, DI=MS().OF(1), R=True)
+  .case(run_bytes=0, DI=MS().SF(1), R=True)
+  .case(run_bytes=0, DI=MS().ZF(1), DE=MS().RIP(0x200002), R=False)
+  .case(run_bytes=0, DI=MS().ZF(1), DE=MS().RIP(0x200023), R=True),
+
   Test("jmp-e").tags({"jmp", "cfg", "min"})
   .mode("--verify")
   .bytes(["ff25ff340000"])
