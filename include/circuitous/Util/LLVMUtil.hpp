@@ -252,8 +252,9 @@ namespace circ
         if ( name == "NEXT_PC" || name == "RETURN_PC")
             return enclosing_reg( arch, std::string( arch->ProgramCounterRegisterName() ) );
         auto remill_reg = arch->RegisterByName(name);
-        check(remill_reg) << "Was not able to retrieve " << name;
-        check(remill_reg->EnclosingRegister());
+        if ( !remill_reg )
+            return nullptr;
+
         return remill_reg->EnclosingRegister();
     }
 
