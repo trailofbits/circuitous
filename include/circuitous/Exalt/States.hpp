@@ -130,7 +130,7 @@ namespace circ::exalt
         wraps_remill_value() = delete;
         wraps_remill_value( value_t storage ) : storage( storage ) {}
 
-        [[ deprecated ]] wraps_remill_value( llvm::BasicBlock *where, type_t t )
+        wraps_remill_value( llvm::BasicBlock *where, type_t t )
             : storage( builder_t( where ).CreateAlloca( t ) )
         {}
 
@@ -148,38 +148,83 @@ namespace circ::exalt
     };
 
     // TODO( next ): Rename
-    struct State : wraps_remill_value
+    struct State : wraps_remill_value, has_ctx_ref
     {
         using reg_ptr_t = const remill::Register *;
 
-        using wraps_remill_value::wraps_remill_value;
+        State( builder_t &irb, CtxRef ctx_ref )
+            : wraps_remill_value( irb, ctx_ref.state_type() ),
+              has_ctx_ref( ctx_ref )
+        {}
 
-        void store(builder_t &ir, const reg_ptr_t where, value_t what);
-        value_t load(builder_t &ir, const reg_ptr_t where);
+        State( llvm::BasicBlock *where, type_t t, CtxRef ctx_ref )
+            : wraps_remill_value( where, t ),
+              has_ctx_ref( ctx_ref )
+        {}
+
+        virtual ~State() = default;
+
+        virtual void store(builder_t &ir, const reg_ptr_t where, value_t what);
+        virtual value_t load(builder_t &ir, const reg_ptr_t where);
+
+        virtual void store( builder_t &irb, const std::string &name, value_t what )
+        {
+            return this->store( irb, ctx.reg( name ), what );
+        }
+
+        virtual value_t load( builder_t &irb, const std::string &name )
+        {
+            return this->load( irb, ctx.reg( name ) );
+        }
 
         // This is a very random function, but sadly the semantic do store this
         // into a state instead of properly using it as a value, so we do not
         // have much choice.
-        value_t load_interrupt_vector( builder_t &irb );
+        virtual value_t load_interrupt_vector( builder_t &irb );
 
-        void reset( builder_t &irb, const Ctx::regs_t &regs );
-        void commit( builder_t &irb, CtxRef ctx );
+        virtual void reset( builder_t &irb, const Ctx::regs_t &regs );
+        virtual void commit( builder_t &irb, CtxRef ctx );
     };
 
-    struct ArchState : State, has_ctx_ref
+    struct ArchState : State
     {
-        using base = State;
+        using Base = State;
+        using Base::Base;
 
-        ArchState( builder_t &irb, CtxRef ctx_ref )
-            : State( irb, ctx_ref.state_type() ),
-              has_ctx_ref( ctx_ref )
-        {}
+        auto reset( builder_t &irb ) { return this->reset( irb, ctx.regs() ); }
+        using Base::reset;
 
-        auto reset( builder_t &irb ) { return reset( irb, ctx.regs() ); }
-        using base::reset;
+        auto commit( builder_t &irb ) { return this->commit( irb, ctx ); }
+        using Base::commit;
+    };
 
-        auto commit( builder_t &irb ) { return commit( irb, ctx ); }
-        using base::commit;
+    // We need to support storing/loading from pseudo-registers (those present
+    // in semantics but not in the `State` structure itself in llvm).
+    // These are represented as variable in `llvm::BasicBlock` in remill's lifters
+    // but it is better to hide that behind one abstraction if we can.
+    struct RemillArchState : ArchState
+    {
+        using Base = ArchState;
+        using Base::Base;
+
+        using entry_t = std::tuple< llvm::Instruction *, llvm::Type * >;
+        using storage = std::unordered_map< std::string, entry_t >;
+        storage pseudo_regs;
+
+        // Create `State` and all pseudo-regs we need.
+        RemillArchState( builder_t &irb, CtxRef ctx_ref );
+
+        using Base::reset;
+        using Base::commit;
+
+        // We hijack all register accesors to also check the `pseudo_regs`.
+        void store(builder_t &ir, const reg_ptr_t where, value_t what) override;
+        value_t load(builder_t &ir, const reg_ptr_t where) override;
+
+        void reset( builder_t &irb, const Ctx::regs_t &regs ) override;
+
+        void store( builder_t &irb, const std::string &name, value_t what ) override;
+        value_t load( builder_t &irb, const std::string &name ) override;
     };
 
     struct MemoryPtr : wraps_remill_value
