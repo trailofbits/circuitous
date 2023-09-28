@@ -94,4 +94,78 @@ namespace circ::exalt
         irops::make< irops::Commit >( irb, args, 1u );
 
     }
+
+    RemillArchState::RemillArchState( builder_t &irb, CtxRef ctx_ref )
+        : Base( irb, ctx_ref )
+    {
+        // Here we are extracting how remill does things. We are not calling
+        // any of its native api since those methods expect very specific
+        // state of the function (arguments etc.) which we are not adhering to.
+
+        auto u8 = llvm::Type::getInt8Ty( *ctx.llvm_ctx() );
+
+        auto mk = [ & ]( auto name, auto type )
+        {
+            auto var = irb.CreateAlloca( type, nullptr, name );
+            pseudo_regs[ name ] = std::make_tuple( var, type );
+            return var;
+        };
+
+        mk( "BRANCH_TAKEN", u8 );
+
+        // For now we ignore `PC_NEXT` and other control flow related
+        // pseudos, as lifter context aliases them with pc reg.
+    }
+
+    void RemillArchState::store( builder_t &irb, const reg_ptr_t where, value_t what )
+    {
+        auto it = pseudo_regs.find( where->name );
+        if ( it == pseudo_regs.end() )
+            return this->Base::store( irb, where, what );
+
+        auto [ inst, _ ] = it->second;
+        //auto ptr_type = llvm::PointerType::getUnqual( type );
+        irb.CreateStore( what, inst );
+    }
+
+    value_t RemillArchState::load( builder_t &irb, const reg_ptr_t where )
+    {
+        auto it = pseudo_regs.find( where->name );
+        if ( it == pseudo_regs.end() )
+            return this->Base::load( irb, where );
+
+        auto [ inst, type ] = it->second;
+        return irb.CreateLoad( type, inst );
+    }
+
+    void RemillArchState::reset( builder_t &irb, const Ctx::regs_t &regs )
+    {
+        // First we reset all normal regs, since we need the original values.
+        this->Base::reset( irb, regs );
+
+        // BRANCH_TAKEN should not need any special resetting as it starts undefined?
+    }
+
+    void RemillArchState::store( builder_t &irb, const std::string &where, value_t what )
+    {
+        auto it = pseudo_regs.find( where );
+        if ( it == pseudo_regs.end() )
+            return this->Base::store( irb, ctx.reg( where ), what );
+
+        auto [ inst, _ ] = it->second;
+        irb.CreateStore( what, inst );
+    }
+
+    value_t RemillArchState::load( builder_t &irb, const std::string &where )
+    {
+        auto it = pseudo_regs.find( where );
+        if ( it == pseudo_regs.end() )
+        {
+            return this->Base::load( irb, ctx.reg( where ) );
+        }
+
+        auto [ inst, type ] = it->second;
+        return irb.CreateLoad( type, inst );
+    }
+
 } // namespace circ::exalt
