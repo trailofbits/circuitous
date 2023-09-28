@@ -138,6 +138,10 @@ namespace circ::irops
     // N-ary operation, return true iff at least one operand is true
     circuitous_irops_simple_intrinsic( Or, impl::predicate_base_t, "__circuitous.or" );
 
+    // A wrapper that behaves same way as `Or` and is expected to be passed the same operand.
+    // This is used to hinder optimizations.
+    circuitous_irops_simple_intrinsic( Ignore, impl::predicate_base_t, "__circuitous.or" );
+
     // Same as `And`.
     circuitous_irops_simple_intrinsic( VerifyInst,
                                        impl::predicate_base_t,
