@@ -318,7 +318,7 @@ namespace circ
     {
         check(isel.lifted);
 
-        State state { this->head, ctx.state_ptr_type() };
+        State state { this->head, ctx.state_ptr_type(), ctx };
         auto state_ptr = *state;
         llvm::IRBuilder<> ir(this->head);
 
@@ -707,7 +707,8 @@ namespace circ
 
     CircuitFunction_v2::CircuitFunction_v2( Ctx &ctx )
         : fn( mk_function( ctx ) ),
-          trace( ctx, State( &fn, ctx.state_type() ), State( &fn, ctx.state_type() ) ),
+          trace( ctx, State( &*fn.begin(), ctx.state_type(), ctx ),
+                      State( &*fn.begin(), ctx.state_type(), ctx ) ),
           memory_ptr( ctx.memory_ptr_type() ),
           irb_instance( &*fn.begin() )
     {
