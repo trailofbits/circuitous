@@ -157,8 +157,15 @@ namespace circ::build
                     .getLimitedValue();
 
                 check( args.size() > idx + 1 );
-                auto parent_reg = enclosing_reg( ctx.arch(), reg_name );
-                args[ idx + 1 ] = coerce( state.load( irb, parent_reg ) );
+                // Pseudo regs *do not have* remill register objects.
+                auto value = [ & ]()
+                {
+                    auto parent_reg = enclosing_reg( ctx.arch(), reg_name );
+                    if ( parent_reg )
+                        return state.load( irb, parent_reg );
+                    return state.load( irb, reg_name );
+                }();
+                args[ idx + 1 ] = coerce( value );
             }
 
             auto trg_type = [ & ]()
