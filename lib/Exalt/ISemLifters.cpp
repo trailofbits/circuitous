@@ -381,7 +381,18 @@ namespace circ::exalt
         auto final_values = gather_final_values( unit, decoder, parsed_writes );
 
         for ( auto reg : l_ctx().regs() )
-            ctx_ops.emplace_back( place::ctx, reg_check( reg, final_values ) );
+        {
+            auto get_check = [ & ]() -> value_t
+            {
+                auto c = reg_check( reg, final_values );
+                if ( reg->name != "DF" )
+                    return c;
+
+                auto &bld = irb();
+                return irops::Ignore::make( bld, values_t{ c } );
+            };
+            ctx_ops.emplace_back( place::ctx, get_check() );
+        }
 
         return { begin, end };
     }
