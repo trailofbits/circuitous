@@ -13,6 +13,27 @@
 
 namespace circ
 {
+    enum class lifter_kind
+    {
+        v1 = 0,
+        v2,
+        v3,
+        mux_heavy,
+        disjunctions
+    };
+
+    static inline std::string to_string( lifter_kind kind )
+    {
+        switch ( kind )
+        {
+            case lifter_kind::v1 : return "v1";
+            case lifter_kind::v2 : return "v2";
+            case lifter_kind::v3 : return "v3";
+            case lifter_kind::mux_heavy : return "mux_heavy";
+            case lifter_kind::disjunctions : return "disjunctions";
+        }
+    }
+
     struct Circuit;
 
     struct owns_context
@@ -26,38 +47,14 @@ namespace circ
         owns_context( Ctx &&ctx ) : ctx( std::move( ctx ) ) {}
     };
 
-    struct CircuitSmithy
+    namespace exalt
+    {
+        struct circuit_producer;
+    }
+
+    struct CircuitSmithy : owns_context
     {
         using self_t = CircuitSmithy;
-        using circuit_ptr_t = std::unique_ptr< Circuit >;
-
-        using batch_t = InstructionBatch;
-        // This class owns the lifting context.
-        Ctx ctx;
-
-      private:
-        batch_t batch;
-        circuit_ptr_t circuit;
-
-
-      public:
-        CircuitSmithy(const std::string &arch_name, const std::string &os_name);
-        // Take ownership of already existing context.
-        // TODO(lukas): It cannot be retrieved back, should it?
-        CircuitSmithy(Ctx ctx_);
-
-        self_t &smelt(const std::vector< InstBytes > &insts);
-        self_t &smelt(std::string_view raw_bytes);
-        self_t &smelt(std::vector< remill::Instruction > &&rinsts);
-
-        // Returns circuit created from all data provided by `smelt`. Will return owning
-        // pointer to circuit and resets internal state of `this`.
-        circuit_ptr_t forge();
-    };
-
-    struct CircuitSmithy_v2 : owns_context
-    {
-        using self_t = CircuitSmithy_v2;
         using circuit_ptr_t = std::unique_ptr< Circuit >;
 
         using atom_t = Atom;
@@ -84,12 +81,23 @@ namespace circ
 
         auto smelt( concretes_t &&concretes ) -> atoms_t;
 
-        auto forge( atoms_t &&atoms ) -> circuit_ptr_t;
+        auto forge_disjunctions( concretes_t &&concretes ) -> circuit_ptr_t;
+        auto forge_mux_heavy( concretes_t &&concretes ) -> circuit_ptr_t;
 
-        auto default_forge( auto &&raw )
+        auto forge_common( exalt::circuit_producer &producer,
+                           atoms_t &&atoms ) -> circuit_ptr_t;
+
+        template< typename R >
+        auto make( lifter_kind kind, R &&raw ) -> circuit_ptr_t
         {
-            return forge( std::move( smelt( purify( raw ) ) ) );
-        }
+            if ( kind == lifter_kind::disjunctions )
+                return forge_disjunctions( purify( std::forward< R >( raw ) ) );
+            if ( kind == lifter_kind::mux_heavy )
+                return forge_mux_heavy( purify( std::forward< R >( raw ) ) );
 
+            // Unsupported
+            return {};
+        }
     };
+
 }  // namespace circ

@@ -11,6 +11,9 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 #include <circuitous/IR/Circuit.hpp>
 
+#include <circuitous/Exalt/Lifter.hpp>
+#include <circuitous/Exalt/ISemLifters.hpp>
+
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/CircuitBuilder.hpp>
 #include <circuitous/Lifter/CircuitSmithy.hpp>
@@ -19,52 +22,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ
 {
-
-    CircuitSmithy::CircuitSmithy(const std::string &arch_name, const std::string &os_name)
-        : ctx(arch_name, os_name), batch(ctx)
-    {}
-
-    CircuitSmithy::CircuitSmithy(Ctx ctx_) : ctx(std::move(ctx_)), batch(ctx) {}
-
-    auto CircuitSmithy::smelt(const std::vector< InstBytes > &insts) -> self_t &
-    {
-        auto decoder = Decoder(ctx);
-        std::vector< remill::Instruction > rinsts;
-        for (const auto &x : insts)
-        {
-            auto maybe_inst = decoder.decode(x);
-            check(maybe_inst) << "Decoder failed on:" << x.as_hex_str();
-            rinsts.push_back(std::move(*maybe_inst));
-        }
-        return smelt(std::move(rinsts));
-    }
-
-    auto CircuitSmithy::smelt(std::string_view raw_bytes) -> self_t &
-    {
-        return smelt(Decoder(ctx).decode_all(raw_bytes));
-    }
-
-    auto CircuitSmithy::smelt(std::vector< remill::Instruction > &&rinsts) -> self_t &
-    {
-        batch.add(std::move(rinsts));
-        return *this;
-    }
-
-    auto CircuitSmithy::forge() -> circuit_ptr_t
-    {
-        check(!batch->empty()) << "No valid instructions provided, cannot produce circuit.";
-
-        batch.fuzz()
-             .lift< ILifter< OpaqueILifter > >();
-        return lower_fn(CircuitMaker(ctx).make_from(std::move(batch)),
-                        ctx.ptr_size);
-    }
-
-
-    /* v2 */
-
-    // Group by ISEL
-    auto CircuitSmithy_v2::categorize( atoms_t atoms ) -> worklist_t
+    auto CircuitSmithy::categorize( atoms_t atoms ) -> worklist_t
     {
         std::unordered_map< isel_t, atoms_t > groups;
 
@@ -81,33 +39,18 @@ namespace circ
         return out;
     }
 
-    auto CircuitSmithy_v2::purify( const std::vector< InstBytes > &insts ) -> concretes_t
+    auto CircuitSmithy::purify( const std::vector< InstBytes > &insts ) -> concretes_t
     {
         return freeze< std::vector >( decode_all( ctx, insts ) );
     }
 
-    auto CircuitSmithy_v2::purify( std::string_view raw_bytes ) -> concretes_t
+    auto CircuitSmithy::purify( std::string_view raw_bytes ) -> concretes_t
     {
         return decode_all( ctx, raw_bytes );
     }
 
-    auto CircuitSmithy_v2::smelt ( concretes_t &&concretes ) -> atoms_t
+    auto CircuitSmithy::smelt( concretes_t &&concretes ) -> atoms_t
     {
-        auto dsts = []( auto c )
-        {
-            std::size_t got = 0;
-            for ( auto x : c.operands )
-                if ( x.action == remill::Operand::kActionWrite )
-                    ++got;
-            if ( got > 1 )
-                log_info() << "[REPORT]:" << c.Serialize();
-        };
-
-        for ( auto c : concretes )
-        {
-            dsts( c );
-        }
-
         atoms_t out;
         for ( auto concrete : std::move( concretes ) )
         {
@@ -121,20 +64,33 @@ namespace circ
         return out;
     }
 
-    auto CircuitSmithy_v2::forge( atoms_t &&atoms ) -> circuit_ptr_t
+    auto CircuitSmithy::forge_common( exalt::circuit_producer &producer,
+                                         atoms_t &&atoms )
+        -> circuit_ptr_t
     {
-        auto circuit_fn = CircuitFunction_v2( ctx );
         auto worklist = categorize( std::move( atoms ) );
 
         log_info() << "[smithy]:" << "Worklist contains:" << worklist.size() << "entries!";
 
-        auto exalt_context = ExaltationContext( ctx, circuit_fn );
         for ( auto &unit : worklist )
-            exalt_context.exalt( unit );
-
-        exalt_context.finalize();
-
+            producer.exalt( unit );
+        producer.finalize();
+        auto circuit_fn = std::move( producer ).take_fn();
         return lower_fn( &*circuit_fn, ctx.ptr_size );
     }
 
+
+    auto CircuitSmithy::forge_disjunctions( concretes_t &&concrete ) -> circuit_ptr_t
+    {
+        auto producer = exalt::circuit_producer( ctx );
+        producer.add_isem_lifter< exalt::disjunctions_lifter >();
+        return forge_common( producer, smelt( std::move( concrete ) ) );
+    }
+
+    auto CircuitSmithy::forge_mux_heavy( concretes_t &&concrete ) -> circuit_ptr_t
+    {
+        auto producer = exalt::circuit_producer( ctx );
+        producer.add_isem_lifter< exalt::mux_heavy_lifter >();
+        return forge_common( producer, smelt( std::move( concrete ) ) );
+    }
 } // namespace circ
