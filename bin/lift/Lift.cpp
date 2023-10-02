@@ -88,7 +88,7 @@ namespace circ::cli
 
         static inline const std::unordered_set< std::string > allowed =
         {
-            "v1", "v2"
+            "mux-heavy", "disjunctions"
         };
     };
 };
@@ -220,10 +220,16 @@ circ::circuit_owner_t get_input_circuit(auto &cli)
 
         auto lifter_id = *cli.template get< cli::LiftWith >();
 
-        if ( lifter_id == "v1" )
-            return circ::CircuitSmithy(std::move(ctx)).smelt(buf).forge();
-        else if ( lifter_id == "v2" )
-            return circ::CircuitSmithy_v2(std::move(ctx)).default_forge(buf);
+        if ( lifter_id == "mux-heavy" )
+        {
+            auto k = circ::lifter_kind::mux_heavy;
+            return circ::CircuitSmithy(std::move(ctx)).make(k, buf);
+        }
+        else if ( lifter_id == "disjunctions" )
+        {
+            auto k = circ::lifter_kind::disjunctions;
+            return circ::CircuitSmithy(std::move(ctx)).make(k, buf);
+        }
         else
             circ::log_kill() << "Unexpected config of lifter:" << lifter_id;
     };
