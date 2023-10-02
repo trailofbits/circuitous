@@ -107,7 +107,8 @@ namespace circ::run::trace
 
         auto reconstruct() &&
         {
-            return CircuitSmithy_v2( std::move( ctx ) ).default_forge( std::move( seen ) );
+            auto k = lifter_kind::disjunctions;
+            return CircuitSmithy( std::move( ctx ) ).make( k, std::move( seen ) );
         }
     };
 
