@@ -847,7 +847,6 @@ namespace circ::print::verilog
         void declare_out_args()
         {
             this->declare_out_arg("result", 1);
-            this->declare_out_arg("dummy", 1, true);
         }
 
         static std::string current_trace_name() { return "current"; }
@@ -903,7 +902,6 @@ namespace circ::print::verilog
         header.declare_module(module_name, c->root);
         auto ret = OpFmt< ctx_t >(ctx).write(c->root);
         header.assign_out_arg("result", ret);
-        header.assign_out_arg("dummy", impl::bin_zero(1u));
         header.end_module();
     }
 
