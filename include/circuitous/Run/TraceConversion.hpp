@@ -130,10 +130,11 @@ namespace circ::run::trace
                     if ( circ::run::accepted( status ) )
                     {
                         auto [ current , next ] = spawn->to_traces();
-                        // We need to also include the last entry, which will never be the first
+                        // We need to also include the first entry,
+                        // which will never be the first
                         // item of the `to_traces` as it is never an input.
-                        if ( !to_export.empty() )
-                            to_export.back() = std::move( current );
+                        if ( to_export.empty() )
+                            to_export.push_back( std::move( current ) );
 
                         to_export.push_back( std::move( next ) );
                         return;
@@ -176,7 +177,7 @@ namespace circ::run::trace
             // TODO(run:trace): What to do with results?
             std::ignore = circ::run::StatelessControl().test( circuit, traces, collect );
 
-            circ::log_dbg() << "[run::trace]:" << "Conversion done.";
+            circ::log_info() << "[run::trace]:" << "Conversion done.";
             return *this;
         }
 
