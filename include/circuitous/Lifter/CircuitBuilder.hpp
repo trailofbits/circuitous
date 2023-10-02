@@ -7,12 +7,14 @@
 #include <circuitous/IR/IR.hpp>
 #include <circuitous/IR/Intrinsics.hpp>
 
+#include <circuitous/Exalt/Components.hpp>
+#include <circuitous/Exalt/States.hpp>
+#include <circuitous/Exalt/Syscall.hpp>
+
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/Component.hpp>
 #include <circuitous/Lifter/BaseLifter.hpp>
 #include <circuitous/Lifter/Lifter.hpp>
-#include <circuitous/Lifter/Exalt.hpp>
-#include <circuitous/Lifter/Syscall.hpp>
 
 #include <circuitous/Util/Warnings.hpp>
 
@@ -33,6 +35,10 @@ namespace circ
 {
     // Forward declare
     struct InstructionBatch;
+
+    using State = exalt::State;
+    using MemoryPtr = exalt::MemoryPtr;
+    using Trace = exalt::Trace;
 
     namespace isem
     {
