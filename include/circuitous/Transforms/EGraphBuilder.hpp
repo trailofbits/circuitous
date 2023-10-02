@@ -45,6 +45,11 @@ namespace circ
         node_template visit(OutputSyscallState *op);
         node_template visit(InputSyscallState *op);
 
+        node_template visit(OutputSyscallReg *op);
+        node_template visit(InputSyscallReg *op);
+
+        node_template visit(SyscallModule *op);
+
         node_template visit(Undefined *op);
 
         node_template visit(Memory *op);
