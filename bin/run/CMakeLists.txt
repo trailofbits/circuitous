@@ -17,6 +17,8 @@ add_circuitous_executable( run
   LINK_LIBS
     gflags
     circuitous::ir
+    circuitous::lifter
+    circuitous::exalt
     circuitous::printers
     circuitous::run
   HEADERS

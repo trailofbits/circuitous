@@ -6,6 +6,7 @@ add_circuitous_executable( lift
   LINK_LIBS
     gflags
     circuitous::lifter
+    circuitous::exalt
     circuitous::ir
     circuitous::printers
     circuitous::transforms
