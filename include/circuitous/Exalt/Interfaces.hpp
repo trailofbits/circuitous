@@ -73,6 +73,8 @@ namespace circ::exalt
         virtual value_t unit_decoder() const = 0;
     };
 
+    struct unit_components;
+
     // Responsible for lifting semantic function in a "circuit-like" manner.
     struct isem_lifter_base : uc_with_b_ctx
     {
@@ -84,7 +86,7 @@ namespace circ::exalt
         // TODO( exalt ): Should `requested` be part of this api? If not should it be
         //                a member?
         virtual isem_range_t make_semantic_call( unit_t &unit,
-                                                 decoder_base &decoder,
+                                                 unit_components &ucs,
                                                  semantic_fn_t isem ) = 0;
 
         // Return the final result.
