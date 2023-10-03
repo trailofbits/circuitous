@@ -20,7 +20,7 @@
 
 namespace circ::exalt
 {
-    /* A bunch of sahred helper functionality to be used by isem_lifters.
+    /* A bunch of shared helper functionality to be used by isem_lifters.
      * TODO( exalt ): Add as base class? Hide in `.cpp`?
      */
 
