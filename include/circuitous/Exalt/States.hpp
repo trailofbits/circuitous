@@ -95,7 +95,7 @@ namespace circ::exalt
             // TODO( ir ): Fix the intrinsic code that forces this.
             auto in = [ & ] { return irops::io_type::in; };
 
-            auto mk_reg = [ & ]( auto name )
+            auto mk_reg = [ & ]( const auto &name )
             {
                 return irops::make_leaf< irops::SyscallReg >( irb, 32u, name, in() );
             };
@@ -103,7 +103,7 @@ namespace circ::exalt
             // TODO( exalt ): Do we want to encode this as we do
             //                in let's say alien trace parsing?
             values_t out = { irops::make_leaf< irops::SyscallState >( irb, in() ) };
-            for ( auto reg_name : syscall_regs )
+            for ( const auto &reg_name : syscall_regs )
                 out.push_back( mk_reg( reg_name ) );
 
             return out;
