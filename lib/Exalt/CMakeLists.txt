@@ -7,6 +7,7 @@ add_headers( Exalt CIRCUITOUS_EXALT_HEADERS
     Interfaces.hpp
     ISemLifters.hpp
     Lifter.hpp
+    OperandSelection.hpp
     States.hpp
     Syscall.hpp
     Value.hpp
@@ -18,6 +19,7 @@ add_circuitous_library( exalt
     Components.cpp
     ISemLifters.cpp
     Lifter.cpp
+    OperandSelection.cpp
     States.cpp
     UnitComponents.cpp
     Value.cpp
