@@ -77,9 +77,9 @@ namespace circ::exalt
         post_lift( **semantic );
 
         // Make the actual call
-        auto &decoder = local_components.get_decoder();
         auto &isem_lifter = local_components.get_isem_lifter();
-        auto [ begin, end ] = isem_lifter.make_semantic_call( unit, decoder, *semantic );
+        auto [ begin, end ] = isem_lifter.make_semantic_call( unit, local_components,
+                                                              *semantic );
 
         auto values = local_components.after_isem( unit, isem_range_t{ begin, end } );
         collect( to_buckets( freeze< std::vector >( values ) ) );
