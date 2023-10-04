@@ -101,13 +101,13 @@ namespace circ::exalt
 
     void circuit_producer::exalt( unit_t &unit )
     {
-        auto u_lifter = unit_lifter( b_ctx, pucs );
+        auto u_lifter = unit_lifter( b_ctx, pcs );
         merge_to( exalted_buckets, u_lifter.exalt( unit ) );
     }
 
     void circuit_producer::finalize()
     {
-        auto ret_val = pucs.get_isem_lifter().finalize_circuit( exalted_buckets );
+        auto ret_val = pcs.get_isem_lifter().finalize_circuit( exalted_buckets );
         b_ctx.irb().CreateRet( ret_val );
 
         auto fn = b_ctx.fn_ctx.fn.get();
@@ -138,9 +138,9 @@ namespace circ::exalt
         optimize_silently( { fn } );
     }
 
-    void circuit_producer::init_pucs()
+    void circuit_producer::init_pcs()
     {
-        pucs.emplace< timestamp >().init();
+        pcs.emplace< timestamp >().init();
     }
 
 }  // namespace circ::exalt

@@ -12,6 +12,8 @@
 #include <circuitous/Exalt/Value.hpp>
 #include <circuitous/Exalt/States.hpp>
 #include <circuitous/Exalt/Components.hpp>
+#include <circuitous/Exalt/ComponentStorage.hpp>
+#include <circuitous/Exalt/OperandSelection.hpp>
 #include <circuitous/Exalt/UnitComponents.hpp>
 
 #include <circuitous/Util/Warnings.hpp>
@@ -23,13 +25,13 @@ namespace circ::exalt
     struct unit_lifter
     {
         builder_context &b_ctx;
-        unit_components local_components;
+        component_storage local_components;
 
-        unit_lifter( builder_context &b_ctx, unit_components &pucs )
+        unit_lifter( builder_context &b_ctx, component_storage &pcs )
             : b_ctx( b_ctx ),
-              local_components( unit_components::make_default( b_ctx ) )
+              local_components( component_storage::make_default( b_ctx ) )
         {
-            local_components.copy_persistent_components( pucs );
+            local_components.copy_persistent_components( pcs );
         }
 
         // TODO( exalt ): Change to only work on `&&` of `unit_lifter` if an internal
@@ -63,7 +65,7 @@ namespace circ::exalt
         builder_context b_ctx;
 
         // persistent unit components
-        unit_components pucs;
+        component_storage pcs;
 
         // exalted values gathered by subsequent runs of components/lifters
         exalted_value_buckets exalted_buckets;
@@ -71,16 +73,16 @@ namespace circ::exalt
         circuit_producer( CtxRef ctx_ref )
             : base( ctx_ref ),
               b_ctx( ctx_ref ),
-              pucs( b_ctx )
+              pcs( b_ctx )
         {
-            init_pucs();
+            init_pcs();
         }
 
         // TODO( next ): Should be part of ctor?
         template< typename T >
         void add_isem_lifter()
         {
-            pucs.emplace< T >().init();
+            pcs.emplace< T >().init();
         }
 
         void exalt( unit_t &unit );
@@ -92,6 +94,6 @@ namespace circ::exalt
         }
 
       protected:
-        void init_pucs();
+        void init_pcs();
     };
 }  // namespace circ::exalt

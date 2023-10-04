@@ -7,6 +7,7 @@
 #include <circuitous/Exalt/Interfaces.hpp>
 #include <circuitous/Exalt/Components.hpp>
 #include <circuitous/Exalt/UnitComponents.hpp>
+#include <circuitous/Exalt/ComponentStorage.hpp>
 
 #include <circuitous/Lifter/Instruction.hpp>
 #include <circuitous/Lifter/Components/Decoder.hpp>
@@ -111,7 +112,7 @@ namespace circ::exalt
 
         /* `isem_lifter_base` interface */
 
-        auto make_semantic_call( unit_t &unit, unit_components &ucs,
+        auto make_semantic_call( unit_t &unit, component_storage &cs,
                                  semantic_fn_t isem )
             -> isem_range_t override;
 
@@ -139,7 +140,7 @@ namespace circ::exalt
 
        public:
         /* `isem_lifter_base` interface. */
-        auto make_semantic_call( unit_t &, unit_components &, semantic_fn_t )
+        auto make_semantic_call( unit_t &, component_storage &, semantic_fn_t )
             -> isem_range_t override;
 
         auto finalize_circuit( exalted_value_buckets ) -> value_t override;
