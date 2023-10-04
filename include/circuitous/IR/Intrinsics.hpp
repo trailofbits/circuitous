@@ -24,6 +24,7 @@ CIRCUITOUS_UNRELAX_WARNINGS
 #include <circuitous/IR/Memory.hpp>
 
 #include <gap/core/generator.hpp>
+#include <gap/core/ranges.hpp>
 
 namespace circ::irops
 {
@@ -91,6 +92,42 @@ namespace circ::irops
         {
             using leaf< self_t >::make;
             using default_construction< self_t >::make;
+        };
+
+        template< typename self_t >
+        struct Option : default_construction< self_t >
+        {
+            using default_construction< self_t >::make;
+
+            template< typename Bld, gap::ranges::range R >
+            static auto make( Bld &&bld, llvm::Value *value, R &&conds )
+            {
+                std::vector< llvm::Value * > args = { value };
+                for ( auto a : conds )
+                    args.push_back( a );
+
+                return default_construction< self_t >::make( bld, args, bw( bld, value ) );
+            }
+        };
+
+        template< typename self_t >
+        struct Switch : default_construction< self_t >
+        {
+            using default_construction< self_t >::make;
+
+            // `T` should *always* be `irops::Option`. But because it is defined later
+            // in the file and I cannot easily move it forward, we need to delay the
+            // resolution by introducing a template arg.
+            // TODO( irops ): Remove this workaround if possible.
+            template< typename T, typename Bld, typename MapLike >
+            static auto make( Bld &&bld, MapLike &&runtime_args )
+            {
+                std::vector< llvm::Value * > args;
+                for ( const auto &[ val, conds ] : runtime_args )
+                    args.push_back( T::make( bld, val, conds ) );
+
+                return default_construction< self_t >::make( std::forward< Bld >( bld ), args );
+            }
         };
 
     } // namespace impl
@@ -313,8 +350,8 @@ namespace circ::irops
     circuitous_irops_simple_intrinsic( Leave, impl::bitcast, "__circuitous.leave" );
 
 
-    circuitous_irops_simple_intrinsic( Switch, impl::predicate_base_t, "__circuitous.switch" );
-    circuitous_irops_simple_intrinsic( Option, impl::option_t, "__circuitous.option" );
+    circuitous_irops_unique_ctor( Switch, impl::predicate_base_t, "__circuitous.switch" );
+    circuitous_irops_unique_ctor( Option, impl::option_t, "__circuitous.option" );
 
     /* Component specific */
     circuitous_irops_simple_intrinsic( SyscallSubmodule,
