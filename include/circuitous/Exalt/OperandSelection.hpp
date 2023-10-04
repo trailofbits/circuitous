@@ -102,4 +102,28 @@ namespace circ::exalt
         //                long as each has a state with it).
 
     };
+
+    // Used by operand lifter to request operands based on shadow regs or translation
+    // maps.
+    // TODO( next ): Formulate requirements on state/lifetime.
+    // TODO( next ): Formulate requirements on construction
+    struct requester_base
+    {
+        using translation_map_t = shadowinst::TM_t;
+        using shadow_reg_t = shadowinst::Reg;
+
+        virtual ~requester_base() = default;
+
+        // Callback to be invoked on every value in the mux excluding the selector.
+        using coerce_function_t = std::function< value_t( value_t ) >;
+        virtual value_t request( builder_t &irb, const translation_map_t &tm,
+                                 bool is_read, coerce_function_t ) = 0;
+        virtual value_t request( builder_t &irb, const shadow_reg_t &s_reg,
+                                 bool is_read, coerce_function_t ) = 0;
+
+        value_t request( builder_t &irb, const auto &thing, bool is_read )
+        {
+            return this->request( irb, thing, is_read, []( auto val ) { return val; } );
+        }
+    };
 } // namespace circ::exalt
