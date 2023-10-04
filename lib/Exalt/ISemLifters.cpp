@@ -4,7 +4,6 @@
 
 #include <circuitous/Exalt/ISemLifters.hpp>
 
-#include <circuitous/Exalt/Components.hpp>
 #include <circuitous/Exalt/Value.hpp>
 
 #include <circuitous/Lifter/ISELBank.hpp>
@@ -327,11 +326,11 @@ namespace circ::exalt
     }
 
     auto mux_heavy_lifter::make_semantic_call( unit_t &unit,
-                                               unit_components &ucs,
+                                               component_storage &cs,
                                                semantic_fn_t isem )
         -> isem_range_t
     {
-        auto &decoder = ucs.get_decoder();
+        auto &decoder = cs.get_decoder();
         bump_pc( unit, decoder );
         auto [ operands, writes ] = get_operands( unit, decoder, isem );
 
@@ -368,13 +367,13 @@ namespace circ::exalt
     /* `disjunction_lifter` */
 
     auto disjunctions_lifter::make_semantic_call( unit_t &unit,
-                                                  unit_components &ucs,
+                                                  component_storage &cs,
                                                   semantic_fn_t isem )
         -> isem_range_t
     {
         ctx_ops.clear();
 
-        auto &decoder = ucs.get_decoder();
+        auto &decoder = cs.get_decoder();
         // TODO( exalt ): This is currently sharing some code with `mux_heavy_lifter`.
         bump_pc( unit, decoder );
         auto [ operands, writes ] = get_operands( unit, decoder, isem );
