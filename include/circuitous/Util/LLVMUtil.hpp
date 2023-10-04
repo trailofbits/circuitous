@@ -352,4 +352,11 @@ namespace circ
         auto dl = m.getDataLayout();
         return dl.getTypeSizeInBits( type );
     }
+
+    static inline std::size_t bw( const llvm::IRBuilder<> &irb, llvm::Value *v )
+    {
+        auto mod = irb.GetInsertBlock()->getParent()->getParent();
+        check( mod );
+        return bw( *mod, v->getType() );
+    }
 } // namespace circ
