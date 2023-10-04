@@ -93,8 +93,13 @@ namespace circ::exalt
         // Concrete materialization of given select.
         // Key is the index into `storage` (which can be used to
         // spawn a new value).
-        std::map< std::size_t, values_t > read_map;
-        std::map< std::size_t, values_t > write_map;
+        std::map< std::size_t, std::vector< operand_selector > > read_map;
+
+        // TODO( exalt ): Currently we are only handling the read operands (output
+        //                operands are not always lifted this way - see difference
+        //                between let's say `mux-heavy` and `disjunctions`). We
+        //                eventually want to support both (or really any number as
+        //                long as each has a state with it).
 
     };
 } // namespace circ::exalt
