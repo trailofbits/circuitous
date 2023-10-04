@@ -12,6 +12,14 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ::exalt
 {
+    struct State;
+
+    // Makes mux from translation map in "a default" way used by this infrastructure.
+    // Mapping with partials register are *not* emitted (always the biggest reg is
+    // loaded) - it is expected users of the mux will coerce their operands accordingly.
+    // Additionally, each register is then extended to `word_size` using `llvm::ZExt`.
+    value_t make_mux( builder_t &irb, State &state, const shadowinst::TM_t &tm );
+
     struct TM_cache : has_ctx_ref
     {
         using base = has_ctx_ref;
@@ -68,14 +76,14 @@ namespace circ::exalt
         // We are building the selector separately to avoid
         // having to mutate the `mux` everytime a new user is added.
         // Mapping is same as `irops::Option` - `[ value, conditions ]`
-        std::unordered_map< value_t, values_t > selectors;
+        std::unordered_map< value_t, value_set_t > selectors;
 
       public:
 
-        operand_selector( const shadowinst::TM_t &tm );
+        operand_selector( builder_t &irb, State &state, const shadowinst::TM_t &tm );
 
-        void add_user( value_t condition, value_t selector );
-        value_t build_mux();
+        void add_user( value_t condition, value_t value );
+        value_t update_mux( builder_t &irb );
     };
 
     struct TM_allocator
