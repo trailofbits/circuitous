@@ -5,6 +5,8 @@
 #pragma once
 
 #include <circuitous/Exalt/Common.hpp>
+#include <circuitous/Exalt/Interfaces.hpp>
+#include <circuitous/Exalt/States.hpp>
 #include <circuitous/Exalt/UnitComponents.hpp>
 
 CIRCUITOUS_RELAX_WARNINGS
@@ -18,8 +20,6 @@ namespace circ::exalt
     // Mapping with partials register are *not* emitted (always the biggest reg is
     // loaded) - it is expected users of the mux will coerce their operands accordingly.
     // Additionally, each register is then extended to `word_size` using `llvm::ZExt`.
-    value_t make_mux( builder_t &irb, State &state, const shadowinst::TM_t &tm );
-
     struct TM_cache : has_ctx_ref
     {
         using base = has_ctx_ref;
@@ -38,6 +38,15 @@ namespace circ::exalt
                 if ( tm.is_subset_of( item ) )
                     return true;
             return false;
+        }
+
+        auto map_idx( const translation_map_t &tm ) const
+            -> std::optional< std::size_t >
+        {
+            for ( std::size_t i = 0; i < storage.size(); ++i )
+                if ( tm.is_subset_of( storage[ i ] ) )
+                    return { i };
+            return {};
         }
 
         /* build methods */
@@ -84,10 +93,98 @@ namespace circ::exalt
 
         void add_user( value_t condition, value_t value );
         value_t update_mux( builder_t &irb );
+
+        value_t operator*() { return mux; };
     };
 
-    struct TM_allocator
+    // Used by operand lifter to request operands based on shadow regs or translation
+    // maps.
+    // TODO( next ): Formulate requirements on state/lifetime.
+    // TODO( next ): Formulate requirements on construction - I do not see how this
+    //               works without `CtxRef` and `State` as they are required to
+    //               materialize translation maps.
+    struct requester_base : has_ctx_ref, component_base
     {
+        using translation_map_t = shadowinst::TM_t;
+        using shadow_reg_t = shadowinst::Reg;
+
+        State &state;
+        builder_t &irb;
+
+        requester_base( CtxRef ctx_ref, State &state, builder_t &irb )
+            : has_ctx_ref( ctx_ref ),
+              state( state ),
+              irb( irb )
+        {}
+
+        virtual ~requester_base() = default;
+
+        // Callback to be invoked on every value in the mux excluding the selector.
+        using coerce_function_t = std::function< value_t( value_t ) >;
+        virtual value_t request( const translation_map_t &tm, bool is_read ) = 0;
+        virtual value_t request( const shadow_reg_t &s_reg, bool is_read ) = 0;
+
+        value_t request( const auto &thing, bool is_read )
+        {
+            return this->request( irb, thing, is_read, []( auto val ) { return val; } );
+        }
+
+        // TODO( next ): This needs a finalizer.
+    };
+
+    struct operand_allocator_base;
+
+    struct requester_proxy : requester_base
+    {
+        value_t ctx_cond;
+        operand_allocator_base &allocator;
+
+        // TODO( exalt ): Should have separate idxs for read/write?
+        // Maps `idx` into `storage` into count.
+        std::map< std::size_t, std::size_t > used;
+
+        requester_proxy( CtxRef ctx_ref, State &state,
+                         builder_t &irb,
+                         value_t ctx_cond,
+                         operand_allocator_base &allocator )
+            : requester_base( ctx_ref, state, irb ),
+              ctx_cond( ctx_cond ),
+              allocator( allocator )
+        {}
+
+        value_t request( const shadow_reg_t &s_reg, bool is_read ) override;
+        value_t request( const translation_map_t &tm, bool is_read ) override;
+    };
+
+
+    struct operand_allocator_base : has_ctx_ref, component_base
+    {
+        using translation_map_t = typename requester_base::translation_map_t;
+        using coerce_function_t = typename requester_base::coerce_function_t;
+
+        virtual ~operand_allocator_base() = default;
+
+        virtual std::size_t map_idx( const translation_map_t & ) = 0;
+
+        virtual auto allocate( builder_t &, const translation_map_t &,
+                               bool is_read,
+                               std::size_t idx )
+            -> operand_selector & = 0;
+
+
+        using requester_ptr = std::unique_ptr< requester_base >;
+        virtual requester_ptr get_requester( builder_t &irb, State &state,
+                                             value_t ctx_cond );
+    };
+
+    struct TM_allocator : operand_allocator_base
+    {
+        using base = operand_allocator_base;
+        using translation_map_t = typename base::translation_map_t;
+        using coerce_function_t = typename base::coerce_function_t;
+        using shadow_reg_t = typename requester_base::shadow_reg_t;
+
+        // TODO( XXX ): In ctor initialize `read_map` with nothings.
         TM_cache storage;
 
         // Concrete materialization of given select.
@@ -101,29 +198,31 @@ namespace circ::exalt
         //                eventually want to support both (or really any number as
         //                long as each has a state with it).
 
+        std::size_t map_idx( const translation_map_t & ) override;
+
+        auto allocate( builder_t &, const translation_map_t &,
+                       bool is_read,
+                       std::size_t idx )
+            -> operand_selector & override;
     };
 
-    // Used by operand lifter to request operands based on shadow regs or translation
-    // maps.
-    // TODO( next ): Formulate requirements on state/lifetime.
-    // TODO( next ): Formulate requirements on construction
-    struct requester_base
-    {
-        using translation_map_t = shadowinst::TM_t;
-        using shadow_reg_t = shadowinst::Reg;
+    // TODO( exalt:design ): Maybe something like `mux_[maker,materializer]`
+    //                       could be passed in?
+    //                       Would allow us to bind `coerce` and `irb`?
+    // ... initialization ...
+    // auto cache = TM_cache.compute( worklist );
+    // pcs.add< TM_allocator >( ctx_ref, cache );
+    //
+    // ... later in make_semantic_call ...
+    // auto tm_allocator = pcs.get< operand_allocator_base >();
+    // auto operand_lifter = OperandLifter( tm_allocator );
+    // ... in OperandLifter ...
+    //
+    // auto req = tm_allocator.get_requester( irb(), state, ctx_cond );
+    // auto tm = req.request( ... );
+    //
+    // ... at the circuit end ...
+    // cache.finalize();
 
-        virtual ~requester_base() = default;
 
-        // Callback to be invoked on every value in the mux excluding the selector.
-        using coerce_function_t = std::function< value_t( value_t ) >;
-        virtual value_t request( builder_t &irb, const translation_map_t &tm,
-                                 bool is_read, coerce_function_t ) = 0;
-        virtual value_t request( builder_t &irb, const shadow_reg_t &s_reg,
-                                 bool is_read, coerce_function_t ) = 0;
-
-        value_t request( builder_t &irb, const auto &thing, bool is_read )
-        {
-            return this->request( irb, thing, is_read, []( auto val ) { return val; } );
-        }
-    };
 } // namespace circ::exalt
