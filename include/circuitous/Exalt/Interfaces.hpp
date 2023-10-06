@@ -30,6 +30,9 @@ namespace circ::exalt
 
         // Local init per `unit`.
         virtual exalted_value_buckets init( unit_t & ) { return {}; }
+
+        // Called at the end of lifting process, after circuit is finalized.
+        virtual void finalize() {}
     };
 
     // Provides hooks to interpose on lifting process.
