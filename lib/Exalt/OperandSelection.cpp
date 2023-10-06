@@ -150,4 +150,59 @@ namespace circ::exalt
         return mux;
     }
 
+    /* `TM_allocator` */
+
+    std::size_t TM_allocator::map_idx( const translation_map_t &tm )
+    {
+        auto maybe_idx = storage.map_idx( tm );
+        check( maybe_idx ) << "Failed to map tm.";
+        return *maybe_idx;
+    }
+
+    auto TM_allocator::allocate( builder_t &irb, const translation_map_t &tm,
+                                 bool is_read,
+                                 std::size_t idx )
+        -> operand_selector &
+    {
+        check( is_read ) << "Cannot allocate operand for writing";
+
+        auto maybe_storage_idx = map_idx( tm );
+        // This should not fire as spec requires first calling `map_idx`.
+        check( maybe_storage_idx );
+        auto storage_idx = maybe_storage_idx;
+
+        auto &materalized = read_map[ storage_idx ];
+        // We ran out of muxes.
+        if ( materalized.size() < idx )
+        {
+            check( materalized.size() == idx );
+            // Make new `operand_selector`.
+        }
+
+        return materalized[ idx ];
+    }
+
+    auto operand_allocator_base::get_requester( builder_t &irb, State &state, value_t ctx_cond )
+        -> requester_ptr
+    {
+        return std::make_unique< requester_proxy >( ctx, state, irb, ctx_cond, *this );
+    }
+
+    /* `requester_proxy` */
+
+    value_t requester_proxy::request( const translation_map_t &tm, bool is_read )
+    {
+        auto tm_idx = allocator.map_idx( tm );
+        if ( !used.count( tm_idx ) )
+            tm_idx = 0;
+        auto &current = used[ tm_idx ];
+        auto selector = allocator.allocate( irb, tm, is_read, current++ );
+        return *selector;
+    }
+
+    value_t requester_proxy::request( const shadow_reg_t &s_reg, bool is_read )
+    {
+        return request( s_reg.translation_map, is_read );
+    }
+
 } // namespace circ::exalt
