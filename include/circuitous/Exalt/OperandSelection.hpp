@@ -167,7 +167,7 @@ namespace circ::exalt
         virtual std::size_t map_idx( const translation_map_t & ) = 0;
 
         virtual auto allocate( builder_t &, const translation_map_t &,
-                               bool is_read,
+                               State &state,
                                std::size_t idx )
             -> operand_selector & = 0;
 
@@ -201,7 +201,7 @@ namespace circ::exalt
         std::size_t map_idx( const translation_map_t & ) override;
 
         auto allocate( builder_t &, const translation_map_t &,
-                       bool is_read,
+                       State &state,
                        std::size_t idx )
             -> operand_selector & override;
     };
