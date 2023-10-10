@@ -60,7 +60,7 @@ namespace circ::exalt
         return irops::Select::make( irb, args );
     }
 
-    auto TM_cache::upcast( const translation_map_t &tm )
+    auto TM_cache::upcast( const translation_map_t &tm ) const
         -> translation_map_t
     {
         auto out = translation_map_t( tm.bitsize );
