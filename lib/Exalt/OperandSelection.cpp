@@ -160,12 +160,10 @@ namespace circ::exalt
     }
 
     auto TM_allocator::allocate( builder_t &irb, const translation_map_t &tm,
-                                 bool is_read,
+                                 State &state,
                                  std::size_t idx )
         -> operand_selector &
     {
-        check( is_read ) << "Cannot allocate operand for writing";
-
         auto maybe_storage_idx = map_idx( tm );
         // This should not fire as spec requires first calling `map_idx`.
         check( maybe_storage_idx );
