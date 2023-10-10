@@ -8,6 +8,7 @@ add_headers( Exalt CIRCUITOUS_EXALT_HEADERS
     ISemLifters.hpp
     Lifter.hpp
     OperandSelection.hpp
+    OperandLifter.hpp
     States.hpp
     Syscall.hpp
     Value.hpp
