@@ -175,6 +175,9 @@ namespace circ::exalt
         using requester_ptr = std::unique_ptr< requester_base >;
         virtual requester_ptr get_requester( builder_t &irb, State &state,
                                              value_t ctx_cond );
+
+        /* `component_base` */
+        bool is_persistent() const override { return true; }
     };
 
     struct TM_allocator : operand_allocator_base
