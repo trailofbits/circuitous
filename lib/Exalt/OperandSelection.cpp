@@ -171,10 +171,13 @@ namespace circ::exalt
 
         auto &materalized = read_map[ storage_idx ];
         // We ran out of muxes.
-        if ( materalized.size() < idx )
+        if ( materalized.size() <= idx )
         {
-            check( materalized.size() == idx );
+            // We only can increase size by one
+            check( materalized.size() == idx ) << "Requesting allocation too far ahead, got;"
+                                               << materalized.size() << "requested:" << idx;
             // Make new `operand_selector`.
+            materalized.emplace_back( irb, state, tm );
         }
 
         return materalized[ idx ];
