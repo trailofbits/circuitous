@@ -52,7 +52,7 @@ namespace circ::exalt
 
         /* build methods */
 
-        translation_map_t upcast( const translation_map_t &tm );
+        translation_map_t upcast( const translation_map_t &tm ) const;
 
         void add_sat( const translation_map_t &tm );
         void add_unsat( const translation_map_t &tm );
