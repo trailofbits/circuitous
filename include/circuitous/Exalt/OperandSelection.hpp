@@ -43,8 +43,9 @@ namespace circ::exalt
         auto map_idx( const translation_map_t &tm ) const
             -> std::optional< std::size_t >
         {
+            auto generic = upcast( tm );
             for ( std::size_t i = 0; i < storage.size(); ++i )
-                if ( tm.is_subset_of( storage[ i ] ) )
+                if ( generic.is_subset_of( storage[ i ] ) )
                     return { i };
             return {};
         }
