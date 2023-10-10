@@ -197,7 +197,7 @@ namespace circ::exalt
         if ( !used.count( tm_idx ) )
             used[ tm_idx ] = 0;
         auto &current = used[ tm_idx ];
-        auto selector = allocator.allocate( irb, tm, is_read, current++ );
+        auto selector = allocator.allocate( irb, tm, state, current++ );
         return *selector;
     }
 
