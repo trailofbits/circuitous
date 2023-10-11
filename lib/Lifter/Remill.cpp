@@ -45,6 +45,13 @@ namespace circ
 {
 namespace
 {
+    using call_t = llvm::CallInst *;
+    using function_t = llvm::Function *;
+
+    using inst_t = llvm::Instruction *;
+    using value_t = llvm::Value *;
+    using values_t = std::vector< value_t >;
+
     // Returning a vector as a size is sometimes required.
     auto frozen_call_args( llvm::CallInst *call ) -> std::vector< llvm::Value * >
     {
