@@ -484,7 +484,7 @@ namespace
             if ( irops::Operand::is(fn)) {
                 auto [type, _] = irops::Operand::parse_args(fn);
                 auto size = irops::impl::suffix::llvm_type::to_bw< uint32_t >(type);
-                return VisitGenericIntrinsic< Advice >(call, fn, static_cast< uint32_t >(size), ++advice_idx);
+                return VisitGenericIntrinsic< Advice >(call, fn, size, ++advice_idx);
             }
 
             if ( irops::RegSelector::is(fn)) {
@@ -523,12 +523,14 @@ namespace
                 return VisitGenericIntrinsic< UnusedConstraint >(call, fn);
             }
             if (irops::ErrorBit::is(fn)) {
-                auto [size, io_type] = irops::ErrorBit::parse_args(fn);
-                return VisitIOLeaf< InputErrorFlag, OutputErrorFlag >(call, fn, io_type, static_cast< uint32_t >(size));
+                auto [raw_size, io_type] = irops::ErrorBit::parse_args(fn);
+                auto size = static_cast< uint32_t >( raw_size );
+                return VisitIOLeaf< InputErrorFlag, OutputErrorFlag >(call, fn, io_type, size);
             }
             if (irops::Timestamp::is(fn)) {
-                auto [size, io_type] = irops::Timestamp::parse_args(fn);
-                return VisitIOLeaf< InputTimestamp, OutputTimestamp >(call, fn, io_type, static_cast< uint32_t >(size));
+                auto [raw_size, io_type] = irops::Timestamp::parse_args(fn);
+                auto size = static_cast< uint32_t >( raw_size );
+                return VisitIOLeaf< InputTimestamp, OutputTimestamp >(call, fn, io_type, size);
             }
             if (irops::InstBits::is(fn)) {
                 auto [size, io_type] = irops::InstBits::parse_args(fn);
