@@ -214,9 +214,7 @@ namespace
                              llvm::Function *circuit_fn )
             : dl( dl ), circuit_fn( circuit_fn ),
               impl( impl )
-        {
-            clock = std::chrono::steady_clock::now();
-        }
+        {}
 
         target_t unknown( llvm::Value *v )
         {
@@ -998,8 +996,6 @@ namespace
 
         std::unordered_map< std::string, Operation * > bits_to_constants;
 
-        std::chrono::time_point< std::chrono::steady_clock > clock =
-            std::chrono::steady_clock::now();
       private:
         IRImporter() = delete;
     };
