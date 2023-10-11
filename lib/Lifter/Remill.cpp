@@ -405,6 +405,43 @@ namespace
             }
         }
 
+        template< typename Intrinsic >
+        auto parse_size( llvm::Function *fn )
+        {
+            auto [ size ] = Intrinsic::parse_args( fn );
+            return static_cast< uint32_t >( size );
+        }
+
+        template< typename Intrinsic, typename Op, typename ... Tail, typename Make >
+        auto visit_generic( Make &&make, call_t call, function_t fn ) -> Operation *
+        {
+            if ( Intrinsic::is( fn ) )
+                return make.template operator()< Intrinsic, Op >( call, fn );
+
+            if constexpr ( sizeof ... ( Tail ) <= 1 )
+                return nullptr;
+            else
+                return visit_generic< Tail ... >( std::forward< Make >( make ),
+                                                  call, fn );
+        }
+
+        auto mk_sized()
+        {
+            return [ = ]< typename Intrinsic, typename Op >( auto call, auto fn )
+            {
+                auto size = parse_size< Intrinsic >( fn );
+                return VisitGenericIntrinsic< Op >( call, fn, size );
+            };
+        }
+
+        auto mk_without_parse()
+        {
+            return [ = ]< typename Intrinsic, typename Op >( auto call, auto fn )
+            {
+                return VisitGenericIntrinsic< Op >( call, fn );
+            };
+        }
+
         target_t VisitIntrinsic( llvm::CallInst *call, llvm::Function *fn )
         {
             auto name = fn->getName();
@@ -443,45 +480,35 @@ namespace
             if (irops::InstExtractRaw::is(fn)) {
                 return VisitExtractRawIntrinsic(call, fn);
             }
-            if (irops::InputImmediate::is(fn)) {
-                auto [size] = irops::InputImmediate::parse_args(fn);
-                return VisitGenericIntrinsic< InputImmediate >(call, fn, static_cast< uint32_t >(size));
-            }
 
-            if ( irops::Option::is( fn ) )
+            if ( auto val = visit_generic< irops::InputImmediate, InputImmediate
+                                         , irops::Switch, Switch
+                                         , irops::Concat, Concat
+                                         , irops::Option, Option
+                                         >( mk_sized(), call, fn ) )
             {
-                auto [ size ] = irops::Option::parse_args( fn );
-                return VisitGenericIntrinsic< Option >( call, fn, static_cast< uint32_t >( size ) );
+                return val;
             }
 
-            if ( irops::Switch::is( fn ) )
+            if ( auto val = visit_generic< irops::Xor, OnlyOneCondition
+                                         , irops::OutputCheck, RegConstraint
+                                         , irops::DecodeCondition, DecodeCondition
+                                         , irops::VerifyInst, VerifyInstruction
+                                         , irops::AdviceConstraint, AdviceConstraint
+                                         , irops::DecoderResult, DecoderResult
+                                         , irops::ReadConstraint, ReadConstraint
+                                         , irops::WriteConstraint, WriteConstraint
+                                         , irops::UnusedConstraint, UnusedConstraint
+                                         >( mk_without_parse(), call, fn ) )
             {
-                auto [ size ] = irops::Option::parse_args( fn );
-                return VisitGenericIntrinsic< Switch >( call, fn, static_cast< uint32_t >( size ) );
+                return val;
             }
 
-
-            if (irops::Xor::is(fn)) {
-                return VisitGenericIntrinsic< OnlyOneCondition >(call, fn);
-            }
-            if (irops::Concat::is(fn)) {
-                auto [size] = irops::Concat::parse_args(fn);
-                return VisitGenericIntrinsic< Concat >(call, fn, static_cast< uint32_t >(size));
-            }
             if (irops::Select::is(fn)) {
                 // TODO( from-llvm ): Minimal tests did not catch these being swapped.
                 auto [size, select_bits] = irops::Select::parse_args(fn);
                 return VisitGenericIntrinsic< Select >(call, fn,
                         static_cast< uint32_t >(select_bits), static_cast< uint32_t >(size));
-            }
-            if (irops::OutputCheck::is(fn)) {
-                return VisitGenericIntrinsic< RegConstraint >(call, fn);
-            }
-            if (irops::DecodeCondition::is(fn)) {
-                return VisitGenericIntrinsic< DecodeCondition >(call, fn);
-            }
-            if (irops::VerifyInst::is(fn)) {
-                return VisitGenericIntrinsic< VerifyInstruction >(call, fn);
             }
             if (irops::Advice::is(fn)) {
                 auto [type] = irops::Advice::parse_args(fn);
@@ -500,16 +527,11 @@ namespace
                 return VisitGenericIntrinsic< Advice >(call, fn, size, ++advice_idx);
             }
 
-            if (irops::AdviceConstraint::is(fn)) {
-                return VisitGenericIntrinsic< AdviceConstraint >(call, fn);
-            }
             if (irops::Or::is(fn)) {
                 // TODO( from-llvm ): Size should be specified by intrinsic.
                 return VisitGenericIntrinsic< Or >(call, fn, 1u);
             }
-            if (irops::DecoderResult::is(fn)) {
-                return VisitGenericIntrinsic< DecoderResult >(call, fn);
-            }
+
             if (irops::Memory::is(fn)) {
                 auto [_, id] = irops::Memory::parse_args(fn);
                 return unique_intrinsic< Memory >(
@@ -519,15 +541,6 @@ namespace
             if (irops::And::is(fn)) {
                 // TODO( from-llvm ): Size should be specified by intrinsic.
                 return VisitGenericIntrinsic< And >(call, fn, 1u);
-            }
-            if (irops::ReadConstraint::is(fn)) {
-                return VisitGenericIntrinsic< ReadConstraint >(call, fn);
-            }
-            if (irops::WriteConstraint::is(fn)) {
-                return VisitGenericIntrinsic< WriteConstraint >(call, fn);
-            }
-            if (irops::UnusedConstraint::is(fn)) {
-                return VisitGenericIntrinsic< UnusedConstraint >(call, fn);
             }
             if (irops::ErrorBit::is(fn)) {
                 auto [raw_size, io_type] = irops::ErrorBit::parse_args(fn);
