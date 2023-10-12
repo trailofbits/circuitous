@@ -281,6 +281,30 @@ namespace circ::irops
                                        impl::type_idx_t,
                                        "__circuitous.operand_advice" );
 
+    // Next iteration of advice-like functionality.
+    // What we really want is "delayed" initialization of llvm values.
+    // Consider
+    // `%a = call i32 __circuitous.delayed_value()`
+    // ...
+    // call void __circuitous.condbind_value( %a, %value, %cond )
+    // ```
+    // In circuitous IR however, the result will be as
+    // `%a <- ( %cond ) ? value : default`
+    // To have the binding before `%a` in LLVM would be tricky (because `%cond` and `%value`
+    // can be non-trivial computations that happen after introduction of `%a`, but
+    // from construction we know it should be independent.
+    //
+    // TODO(irops): Do we expect some post-processing or should our `llvm->circir` handle
+    //              this?
+    // TODO(irops): Can we somehow enforce the independence?
+    // TODO(irops): This can be actually lowered as both old-style `Advice` or a mux?
+    circuitous_irops_simple_intrinsic( delayed_value,
+                                       impl::option_t,
+                                       "__circuitous.delayed_value" );
+    circuitous_irops_simple_intrinsic( cond_bind_delayed_value,
+                                       impl::option_t,
+                                       "__circuitous.cond_bind_delayed_value" );
+
     // Helps to unify later all decoder related selections and operations
     circuitous_irops_simple_intrinsic( RegSelector,
                                        impl::type_idx_t,
