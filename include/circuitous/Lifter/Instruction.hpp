@@ -232,6 +232,9 @@ namespace circ
         auto begin() { return atoms.begin(); }
         auto end() { return atoms.end(); }
 
+        auto begin() const { return atoms.begin(); }
+        auto end() const { return atoms.end(); }
+
         auto operand_count()
         {
             check( !atoms.empty() );
