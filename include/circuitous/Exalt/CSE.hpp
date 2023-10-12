@@ -58,6 +58,9 @@ namespace circ
         log_dbg() << "[exalt:cse]:" << "Elimination.";
         for ( auto &[ fn, e ] : cache )
         {
+            if ( irops::delayed_value::is( fn ) )
+                continue;
+
             for ( auto &[ _, to_replace ] : e )
             {
                 check( to_replace.size() >= 1 );
