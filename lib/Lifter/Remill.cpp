@@ -405,8 +405,41 @@ namespace
             }
         }
 
+        auto handle_delayed_value( call_t call, function_t fn )
+        {
+            auto size = parse_size< irops::delayed_value >( fn );
+            auto op = emplace< Switch >( size );
+            auto args = frozen_call_args( call );
+            // Only the default is allowed
+            check( args.size() == 1 );
+
+            auto default_arg = get( args[ 0 ] );
+            auto true_val = impl->create< Constant >( "1", 1u );
+            auto option = impl->create< Option >( size );
+            option->add_operands( default_arg, true_val );
+            delayed[ call ] = std::make_tuple( op, option );
+
+            return op;
+        }
+
+        auto handle_cond_bind_delayed_value( call_t call, function_t fn )
+        {
+            auto args = frozen_call_args( call );
+            auto dv = get( args[ 0 ] );
+            check( dv );
+
+            auto value = get( args[ 1 ] );
+            auto cond = get( args[ 2 ] );
+            auto size = bw( *circuit_fn->getParent(), args[ 1 ]->getType() );
+            auto option = impl->create< Option >( static_cast< uint32_t >( size ) );
+            option->add_operands( value, cond );
+            dv->add_operand( option );
+
+            return option;
+        }
+
         template< typename Intrinsic >
-        auto parse_size( llvm::Function *fn )
+        auto parse_size( llvm::Function *fn ) -> uint32_t
         {
             auto [ size ] = Intrinsic::parse_args( fn );
             return static_cast< uint32_t >( size );
@@ -581,6 +614,12 @@ namespace
                 }
                 return get( args[ 0 ] );
             }
+
+            if ( irops::delayed_value::is( fn ) )
+                return handle_delayed_value( call, fn );
+
+            if ( irops::cond_bind_delayed_value::is( fn ) )
+                return handle_cond_bind_delayed_value( call, fn );
 
             unreachable() << "Unsupported function: " << remill::LLVMThingToString(call);
         }
@@ -782,7 +821,7 @@ namespace
             {
                 auto size = value_size( &arg );
 
-                auto trg = [ & ]()
+                auto trg = [ & ]() -> target_t
                 {
                     if ( auto out_name = circuit_builder::is_output_reg( &arg ) )
                         return emplace< OutputRegister >( *out_name, size );
@@ -831,6 +870,17 @@ namespace
             irops::VerifyInst::for_all_in( circuit_fn, visit_context );
             return *this;
         }
+
+        self_t &lower_delayed()
+        {
+            for ( auto &[ _, entry ] : delayed )
+            {
+                auto &[ dv, option ] = entry;
+                dv->add_operand( option );
+            }
+
+            return *this;
+        };
 
         self_t &make_root()
         {
@@ -905,7 +955,7 @@ namespace
         }
 
         template< typename T, typename ... Args >
-        target_t emplace( Args && ... args )
+        T *emplace( Args && ... args )
         {
             return impl->create< T >( std::forward< Args >( args ) ... );
         }
@@ -1012,6 +1062,10 @@ namespace
         std::unordered_map< llvm::Value *, Operation * > val_to_op;
         std::unordered_map< llvm::Value *, Operation * > leaves;
 
+        // At the end, these will require special handling to fill in their operands.
+        using delayed_value_entry = std::tuple< Switch *, Option * >;
+        std::unordered_map< llvm::Value *, delayed_value_entry > delayed;
+
         // TODO( from-llvm ): For some reason llvm does not optimize some melted
         //                    intrinsics (Memory).
         std::unordered_map< llvm::Function *, Operation * > uniques;
@@ -1067,6 +1121,7 @@ circuit_owner_t lower_fn( llvm::Function *circuit_fn,
             .lower_constants()
             .lower_args()
             .lower_insts()
+            .lower_delayed()
             .make_root();
 
     log_info() << "IRImpoter done.";
