@@ -83,6 +83,7 @@ namespace circ
 
         auto forge_disjunctions( concretes_t &&concretes ) -> circuit_ptr_t;
         auto forge_mux_heavy( concretes_t &&concretes ) -> circuit_ptr_t;
+        auto forge_v3( concretes_t &&concretes ) -> circuit_ptr_t;
 
         auto forge_common( exalt::circuit_producer &producer,
                            atoms_t &&atoms ) -> circuit_ptr_t;
@@ -94,6 +95,8 @@ namespace circ
                 return forge_disjunctions( purify( std::forward< R >( raw ) ) );
             if ( kind == lifter_kind::mux_heavy )
                 return forge_mux_heavy( purify( std::forward< R >( raw ) ) );
+            if ( kind == lifter_kind::v3 )
+                return forge_v3( purify( std::forward< R >( raw ) ) );
 
             // Unsupported
             return {};

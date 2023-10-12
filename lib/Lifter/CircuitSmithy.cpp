@@ -93,4 +93,18 @@ namespace circ
         producer.add_isem_lifter< exalt::mux_heavy_lifter >();
         return forge_common( producer, smelt( std::move( concrete ) ) );
     }
+
+    auto CircuitSmithy::forge_v3( concretes_t &&concrete ) -> circuit_ptr_t
+    {
+        log_info() << "[smithy]: Running old v3 lifter.";
+        auto worklist = categorize( smelt( std::move( concrete ) ) );
+
+        auto circuit_fn = CircuitFunction_v2( ctx );
+        auto exalt_context = ExaltationContext( ctx, circuit_fn );
+        for ( auto &unit : worklist )
+            exalt_context.exalt( unit );
+
+        exalt_context.finalize();
+        return lower_fn( &*circuit_fn, ctx.ptr_size );
+    }
 } // namespace circ
