@@ -88,7 +88,7 @@ namespace circ::cli
 
         static inline const std::unordered_set< std::string > allowed =
         {
-            "mux-heavy", "disjunctions"
+            "mux-heavy", "disjunctions", "v3"
         };
     };
 };
@@ -228,6 +228,11 @@ circ::circuit_owner_t get_input_circuit(auto &cli)
         else if ( lifter_id == "disjunctions" )
         {
             auto k = circ::lifter_kind::disjunctions;
+            return circ::CircuitSmithy(std::move(ctx)).make(k, buf);
+        }
+        else if ( lifter_id == "v3" )
+        {
+            auto k = circ::lifter_kind::v3;
             return circ::CircuitSmithy(std::move(ctx)).make(k, buf);
         }
         else
