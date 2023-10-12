@@ -561,10 +561,17 @@ namespace circ::print::verilog
 
             std::stringstream selector_ss;
             auto operand = op->operand(0);
+
+            selector_ss << "(" << get(operand);
+
             auto last = operand->size - 1;
-            selector_ss << "(" << get(operand) << "[" << last << ":" << last << "] == "
+            if ( operand->size != 1 )
+                selector_ss << "[" << last << ":" << last << "]";
+
+            selector_ss << " == "
                         << impl::bin_one(1u)
                         << ") ?" << neg_prefix << " : " << pos_prefix;
+
             auto padding =
                 make_wire("pad_" + std::to_string(op->id()), selector_ss.str(), last + 1);
             return make_wire(op, concat({padding, get(op->operand(0))}));
