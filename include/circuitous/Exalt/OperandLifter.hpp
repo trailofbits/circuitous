@@ -41,43 +41,14 @@ namespace circ::exalt
         template< typename S >
         llvm::Value *request( S &&arg )
         {
-           auto identity = [ & ]( auto v ) { return v; };
-           //return requester.request( irb, std::forward< S >( arg ), is_read, identity );
-           return requester.request( std::forward< S >( arg ), is_read );
+           return requester.request( std::forward< S >( arg ) );
         }
 
         template< bool is_signed, typename S >
         llvm::Value *request_word( S &&arg )
         {
-            auto extend = [ & ]( llvm::Value *v )
-            {
-                if ( ctx.bw( v ) < ctx.ptr_size )
-                {
-                    if constexpr ( is_signed )
-                        return irb.CreateSExt( v, ctx.word_type() );
-                    else
-                        return irb.CreateZExt( v, ctx.word_type() );
-                }
-                return v;
-            };
-            (void)extend;
-            return requester.request( std::forward< S >( arg ), is_read );
-            //return requester.request( irb, std::forward< S >( arg ), is_read, extend );
+            return requester.request( std::forward< S >( arg ) );
         }
-
-        //llvm::Value *lift( const shadowinst::Operand &s_op,
-        //                   const remill::Operand &r_op )
-        //{
-        //    if ( auto imm = s_op.immediate() )
-        //        return lift( *imm );
-        //    if ( auto reg = s_op.reg() )
-        //        return lift( *reg, r_op.reg );
-        //    if ( auto addr = s_op.address() )
-        //        return lift( *addr, r_op.addr );
-        //    check( !s_op.shift() );
-
-        //    return nullptr;
-        //}
 
         llvm::Value *lift( typename Atom::slice_view view )
         {

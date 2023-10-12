@@ -12,7 +12,8 @@ namespace circ::exalt
     value_t make_mux( builder_t &irb, State &state, const shadowinst::TM_t &tm )
     {
         values_t args( ( 1 << tm.bitsize ) + 1, nullptr );
-        args[ 0 ] = irb.getIntN( static_cast< unsigned >( tm.bitsize ), 0 );
+        auto default_value = irb.getIntN( static_cast< unsigned >( tm.bitsize ), 0 );
+        args[ 0 ] = irops::delayed_value::make( irb, values_t{ default_value }, tm.bitsize );
 
         auto &ctx = state.ctx;
         for ( const auto &[ str, reg_name ] : tm.reverse_bitmap() )
@@ -65,15 +66,20 @@ namespace circ::exalt
     {
         auto out = translation_map_t( tm.bitsize );
 
+        auto add = [ & ]( auto &into, const auto &what )
+        {
+            into.insert( what.begin(), what.end() );
+        };
+
         for ( const auto &[ key, vals ] : tm )
         {
             // TODO( exalt ): pseudo-regs.
             auto reg = enclosing_reg( ctx.arch(), key );
             if ( !reg )
             {
-                out[ key ] = vals;
+                add( out[ key ], vals );
             } else {
-                out[ reg->name ] = vals;
+                add( out[ reg->name ], vals );
             }
         }
         return out;
@@ -136,17 +142,18 @@ namespace circ::exalt
         : mux( make_mux( irb, state, tm ) )
     {}
 
-    void operand_selector::add_user( value_t condition, value_t value )
+    void operand_selector::add_user( builder_t &irb, value_t condition, value_t value )
     {
         selectors[ value ].emplace( condition );
+        auto as_inst = llvm::dyn_cast< llvm::Instruction >( &*mux );
+        irops::cond_bind_delayed_value::make( irb, { as_inst->getOperand( 0 ), value,
+                                                     condition },
+                                              bw( irb, mux ) );
     }
 
-    value_t operand_selector::update_mux( builder_t &irb )
+    value_t operand_selector::update_mux( builder_t & )
     {
-        auto selector = irops::Switch::make< irops::Option >( irb, selectors );
-        auto as_inst = llvm::dyn_cast< llvm::Instruction >( mux );
-        check( as_inst );
-        as_inst->setOperand( 0, selector );
+        // For now do nothing as the values are binded using delayed mechanism.
         return mux;
     }
 
@@ -164,10 +171,7 @@ namespace circ::exalt
                                  std::size_t idx )
         -> operand_selector &
     {
-        auto maybe_storage_idx = map_idx( tm );
-        // This should not fire as spec requires first calling `map_idx`.
-        check( maybe_storage_idx );
-        auto storage_idx = maybe_storage_idx;
+        auto storage_idx = map_idx( tm );
 
         auto &materalized = read_map[ storage_idx ];
         // We ran out of muxes.
@@ -191,19 +195,34 @@ namespace circ::exalt
 
     /* `requester_proxy` */
 
-    value_t requester_proxy::request( const translation_map_t &tm, bool is_read )
+    value_t requester_proxy::request( const shadow_reg_t &s_reg )
     {
+        auto &tm = s_reg.translation_map;
         auto tm_idx = allocator.map_idx( tm );
         if ( !used.count( tm_idx ) )
             used[ tm_idx ] = 0;
         auto &current = used[ tm_idx ];
         auto selector = allocator.allocate( irb, tm, state, current++ );
+
+        auto selector_value = pad_selector( *selector, s_reg );
+        selector.add_user( irb, ctx_cond, selector_value );
         return *selector;
     }
 
-    value_t requester_proxy::request( const shadow_reg_t &s_reg, bool is_read )
+    value_t requester_proxy::pad_selector( value_t mux, const shadow_reg_t &s_reg )
     {
-        return request( s_reg.translation_map, is_read );
+        auto raw_selector = shadowinst::Materializer( irb, s_reg ).region_selector();
+        auto as_inst = llvm::dyn_cast< llvm::Instruction >( &*mux );
+        auto requested_size = bw( irb, as_inst->getOperand( 0 ) );
+        auto real_size = bw( irb, raw_selector );
+
+        check( requested_size >= real_size );
+
+        if ( real_size == requested_size )
+            return raw_selector;
+
+        auto padding = irb.getIntN( static_cast< uint32_t >( requested_size - real_size ), 0 );
+        return irops::Concat::make( irb, { padding, raw_selector });
     }
 
 } // namespace circ::exalt

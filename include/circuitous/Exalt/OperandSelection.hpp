@@ -92,7 +92,7 @@ namespace circ::exalt
 
         operand_selector( builder_t &irb, State &state, const shadowinst::TM_t &tm );
 
-        void add_user( value_t condition, value_t value );
+        void add_user( builder_t &irb, value_t condition, value_t value );
         value_t update_mux( builder_t &irb );
 
         value_t operator*() { return mux; };
@@ -122,21 +122,15 @@ namespace circ::exalt
 
         // Callback to be invoked on every value in the mux excluding the selector.
         using coerce_function_t = std::function< value_t( value_t ) >;
-        virtual value_t request( const translation_map_t &tm, bool is_read ) = 0;
-        virtual value_t request( const shadow_reg_t &s_reg, bool is_read ) = 0;
-
-        value_t request( const auto &thing, bool is_read )
-        {
-            return this->request( irb, thing, is_read, []( auto val ) { return val; } );
-        }
-
-        // TODO( next ): This needs a finalizer.
+        virtual value_t request( const shadow_reg_t &s_reg ) = 0;
     };
 
     struct operand_allocator_base;
 
     struct requester_proxy : requester_base
     {
+        using shadow_reg_t = requester_base::shadow_reg_t;
+
         value_t ctx_cond;
         operand_allocator_base &allocator;
 
@@ -153,8 +147,11 @@ namespace circ::exalt
               allocator( allocator )
         {}
 
-        value_t request( const shadow_reg_t &s_reg, bool is_read ) override;
-        value_t request( const translation_map_t &tm, bool is_read ) override;
+        value_t request( const shadow_reg_t &s_reg ) override;
+
+      protected:
+
+        value_t pad_selector( value_t mux, const shadow_reg_t &tm );
     };
 
 
@@ -162,6 +159,8 @@ namespace circ::exalt
     {
         using translation_map_t = typename requester_base::translation_map_t;
         using coerce_function_t = typename requester_base::coerce_function_t;
+
+        using has_ctx_ref::has_ctx_ref;
 
         virtual ~operand_allocator_base() = default;
 
@@ -195,6 +194,10 @@ namespace circ::exalt
         // Key is the index into `storage` (which can be used to
         // spawn a new value).
         std::map< std::size_t, std::vector< operand_selector > > read_map;
+
+        TM_allocator( CtxRef ctx_ref, TM_cache storage )
+            : base( ctx_ref ), storage( std::move( storage ) )
+        {}
 
         // TODO( exalt ): Currently we are only handling the read operands (output
         //                operands are not always lifted this way - see difference
