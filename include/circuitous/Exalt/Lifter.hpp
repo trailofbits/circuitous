@@ -85,6 +85,15 @@ namespace circ::exalt
             pcs.emplace< T >().init();
         }
 
+        template< typename T >
+        void add_operand_selector( const auto &worklist )
+        {
+            TM_cache cache( ctx );
+            cache.build_from( worklist );
+            component_t allocator = std::make_shared< TM_allocator >( ctx, cache );
+            pcs.add( std::move( allocator ) );
+        }
+
         void exalt( unit_t &unit );
         void finalize();
 
