@@ -45,7 +45,7 @@ namespace circ::exalt
         using lifted_operands_t = values_t;
 
         // Lift operand using stateless requester.
-        auto get_operands( unit_t &, decoder_base &, semantic_fn_t )
+        auto get_operands( unit_t &, component_storage &, semantic_fn_t )
             -> std::tuple< lifted_operands_t, writes_t >;
 
         using stores_t = std::vector< llvm::StoreInst * >;

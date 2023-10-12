@@ -5,6 +5,8 @@
 #include <circuitous/Exalt/ISemLifters.hpp>
 
 #include <circuitous/Exalt/Value.hpp>
+#include <circuitous/Exalt/OperandSelection.hpp>
+#include <circuitous/Exalt/OperandLifter.hpp>
 
 #include <circuitous/Lifter/ISELBank.hpp>
 #include <circuitous/Lifter/Components/OperandSelection.hpp>
@@ -68,14 +70,17 @@ namespace circ::exalt
     }
 
 
-    auto isem_lifter_utilities::get_operands( unit_t &unit, decoder_base &decoder,
+    auto isem_lifter_utilities::get_operands( unit_t &unit, component_storage &cs,
                                               semantic_fn_t isem )
         -> std::tuple< lifted_operands_t, writes_t >
     {
+        auto &decoder = cs.get_decoder();
+        auto &allocator = cs.fetch_or_die< operand_allocator_base >();
+        auto caching_requester = allocator.get_requester( irb(), arch_state(),
+                                                         decoder.unit_decoder() );
         // I have no idea if this should be done somewhere else.
         lifted_operands_t operands = { *mem_ptr(), *arch_state() };
         writes_t writes;
-        auto requester = build::StatelessRequester( l_ctx(), arch_state() );
 
         auto handle_reg_write = [ & ]( auto arg, std::size_t i )
             -> std::optional< llvm::CallInst * >
@@ -97,7 +102,8 @@ namespace circ::exalt
         {
             check( decoder_it != decoder.end() );
             auto &bld = irb();
-            auto lifter = build::OperandLifter( l_ctx(), bld, requester, unit.is_read( i ) );
+            auto lifter = exalt::OperandLifter( l_ctx(), bld,
+                                                *caching_requester, unit.is_read( i ) );
             auto operand = lifter.lift( view );
 
             if ( bw( operand ) < bw( arg ) )
@@ -332,7 +338,7 @@ namespace circ::exalt
     {
         auto &decoder = cs.get_decoder();
         bump_pc( unit, decoder );
-        auto [ operands, writes ] = get_operands( unit, decoder, isem );
+        auto [ operands, writes ] = get_operands( unit, cs, isem );
 
         log_dbg() << log_prefix() << dbg_dump( operands ) << "into" << dbg_dump( isem );
         auto sem_call = irb().CreateCall( isem, operands );
@@ -376,7 +382,7 @@ namespace circ::exalt
         auto &decoder = cs.get_decoder();
         // TODO( exalt ): This is currently sharing some code with `mux_heavy_lifter`.
         bump_pc( unit, decoder );
-        auto [ operands, writes ] = get_operands( unit, decoder, isem );
+        auto [ operands, writes ] = get_operands( unit, cs, isem );
 
         auto sem_call = irb().CreateCall( isem, operands );
         auto [ begin, end ] = inline_flattened( sem_call, get_make_breakpoint() );
