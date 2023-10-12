@@ -139,7 +139,7 @@ class Lifter(SimulateCWDMixin):
                 "--os", "macos",
                 "--log-dir", self.test_dir,
                 "--bytes-in", bytes,
-                "--lift-with", "disjunctions",
+                "--lift-with", "mux-heayy",
                 "--json-out", self.locate("out.json"),
                 "--ir-out", self.locate(self.circuit_name(bytes))]
         if dbg_verbose:
