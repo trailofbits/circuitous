@@ -70,7 +70,7 @@ namespace circ
     {
         auto worklist = categorize( std::move( atoms ) );
 
-        producer.add_operand_selector< void >( worklist );
+        producer.add_operand_selector( worklist );
         log_info() << "[smithy]:" << "Worklist contains:" << worklist.size() << "entries!";
 
         for ( auto &unit : worklist )

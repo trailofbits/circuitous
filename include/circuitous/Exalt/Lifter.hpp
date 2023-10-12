@@ -85,7 +85,6 @@ namespace circ::exalt
             pcs.emplace< T >().init();
         }
 
-        template< typename T >
         void add_operand_selector( const auto &worklist )
         {
             TM_cache cache( ctx );
