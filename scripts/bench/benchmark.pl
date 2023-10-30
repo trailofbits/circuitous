@@ -6,6 +6,8 @@ use feature 'say';
 use Getopt::Long;
 Getopt::Long::Configure("pass_through");
 
+use File::Path qw(make_path);
+
 use Pod::Usage;
 use FindBin;
 use lib $FindBin::Bin;
@@ -15,7 +17,9 @@ my $output_dir = "results";
 my $runner = "docker";
 my $container = "circuitous:latest";
 my $nocache;
+my $list;
 my $tabulate;
+my $filter;
 my $verbose;
 my $help;
 
@@ -27,7 +31,9 @@ GetOptions(
     'container=s'   => \$container,
     'verbose'       => \$verbose,
     'no-cache'      => \$nocache,
+    'list'          => \$list,
     'tabulate'      => \$tabulate,
+    'filter=s'      => \$filter,
     'help'          => \$help,
 ) or pod2usage(2);
 
@@ -47,18 +53,19 @@ benchmark.pl [options]
 
 Runner options:
 
-  --output <folder>     Output file for results
-  --runner <string>     Runner (Default: "docker")
-  --container <string>  Container name (Default: "circuitous:latest")
+  --output <folder>     Output file for results.
+  --runner <string>     Runner (Default: "docker").
+  --detached            Runner docker detached.
+  --container <string>  Container name (Default: "circuitous:latest").
   --no-cache            To build container withour cache.
+  --list                List all available benchmarks.
   --tabulate            Print results table on-the-fly.
-  --verbose             Enable verbose mode
-  --help                Display this help message
+  --filter <regex>      Filter benchmarks by regex.
+  --verbose             Enable verbose mode.
+  --help                Display this help message.
 
 Forwarded benchmark options:
 
-  --benchmark_list_tests={true|false}
-  --benchmark_filter=<regex>
   --benchmark_min_time=`<integer>x` OR `<float>s`
   --benchmark_min_warmup_time=<min_warmup_time>
   --benchmark_repetitions=<num_repetitions>
@@ -82,10 +89,12 @@ sub build {
 
     my $output = `$cmd`;
 
-    if ($verbose && $? == 0) {
-        say "Docker built successfully.";
-    } else {
-        say "Error building docker: $?";
+    if ($verbose) {
+        if ($? == 0) {
+            say "Docker built successfully.";
+        } else {
+            say "Error building docker: $?";
+        }
     }
 }
 
@@ -95,7 +104,17 @@ sub run {
         say "Running: $cmd";
     }
 
-    my $output = `$cmd`;
+    `$cmd`;
+
+    if ($tabulate) {
+        my $id = `$runner ps --latest -q`;
+        my $logger = "$runner logs --follow $id";
+        open(my $pipe, "$logger |") or die "Failed to run $logger: $!";
+        while (<$pipe>) {
+            print "Script Output: $_";
+        }
+        close($pipe);
+    }
 }
 
 sub main {
@@ -109,11 +128,27 @@ sub main {
 
     build($build_cmd);
 
-    my $run_cmd = "$runner run -v $output_dir:/tmp/output -dt $container" . " " . join(" ", @unparsed_options);
+    eval { make_path($output_dir) };
+    if ($@) {
+        say("Couldn't create $output_dir: $@");
+        exit;
+    }
+
+    my $run_cmd = "$runner run --rm -v $output_dir:/tmp/$output_dir -dt $container" . " " . join(" ", @unparsed_options);
 
     if ($tabulate) {
-        $run_cmd .= "--benchmark_counters_tabular=true"
+        $run_cmd .= " --benchmark_counters_tabular=true";
     }
+
+    if ($filter) {
+        $run_cmd .= " --benchmark_filter=$filter";
+    }
+
+    if ($list) {
+        $run_cmd .= " --benchmark_list_tests=true";
+    }
+
+    $run_cmd .= " --out_dir=/tmp/$output_dir";
 
     run($run_cmd);
 }
