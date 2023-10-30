@@ -92,3 +92,6 @@ RUN cmake --preset ninja-cxx-common-x64-linux-rel \
     -DVCPKG_OVERLAY_PORTS=/usr/src/cxx-common/ports
 
 RUN cmake --build --preset ninja-cxx-common-linux-rel
+
+WORKDIR /usr/src/circuitous-benchmarks/builds/ninja-cxx-common-x64-linux-rel/
+ENTRYPOINT ["./bench/circ-bench"]
