@@ -385,7 +385,8 @@ using config_options = circ::tl::TL<
 using other_options = circ::tl::TL<
     circ::cli::Help,
     circ::cli::Version,
-    circ::cli::Dbg
+    circ::cli::Dbg,
+    circ::cli::Quiet
 >;
 
 using cmd_opts_list = circ::tl::merge<
@@ -444,11 +445,6 @@ std::optional< circ::ParsedCmd > parse_and_validate(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
-    circ::add_sink< circ::severity::kill >(std::cerr);
-    circ::add_sink< circ::severity::error >(std::cerr);
-    circ::add_sink< circ::severity::warn >(std::cerr);
-    circ::add_sink< circ::severity::info >(std::cout);
-
     auto maybe_cli = parse_and_validate(argc, argv);
     if (!maybe_cli)
     {
@@ -457,6 +453,14 @@ int main(int argc, char *argv[])
     }
 
     auto cli = std::move(*maybe_cli);
+
+    if (!cli.present< circ::cli::Quiet >())
+    {
+        circ::add_sink< circ::severity::kill >(std::cerr);
+        circ::add_sink< circ::severity::error >(std::cerr);
+        circ::add_sink< circ::severity::warn >(std::cerr);
+        circ::add_sink< circ::severity::info >(std::cout);
+    }
 
     if (cli.present< circ::cli::Help >())
     {
