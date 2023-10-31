@@ -2,17 +2,17 @@
 
 ## Overview
 
-Circuitous is a set of tools and libraries used in Trail of Bits' work on the DARPA SIEVE program 
-to generate circuits used in zero-knowledge proofs of exploit. It is unique in that 
-the circuits it produces are tailored to a specific binary. Circuitous accomplishes this 
-by lifting binaries to LLVM and recovering instruction decoding via fuzzing. 
-It lowers to a custom CircIR, further optimizing using an equality saturation-based framework. 
+Circuitous is a set of tools and libraries used in Trail of Bits' work on the DARPA SIEVE program
+to generate circuits used in zero-knowledge proofs of exploit. It is unique in that
+the circuits it produces are tailored to a specific binary. Circuitous accomplishes this
+by lifting binaries to LLVM and recovering instruction decoding via fuzzing.
+It lowers to a custom CircIR, further optimizing using an equality saturation-based framework.
 CircIR can be targeted to output circuits in a variety of formats: we use Verilog on SIEVE.
 
-Using a binary-specific circuit has many benefits: principally, it reduces circuit area 
+Using a binary-specific circuit has many benefits: principally, it reduces circuit area
 by only modeling instructions actually used in the binary
-(as opposed to the entirety of an instruction set supported by a processor)- 
-no need to pay for what you don't use. 
+(as opposed to the entirety of an instruction set supported by a processor)-
+no need to pay for what you don't use.
 Since circuits are generated rather than handwritten, they are super easy to extend (just run
 the tooling again if your binary changes). The framework can also be used to
 experiment with different approaches to circuit design (e.g., different gate cost models).
@@ -20,19 +20,19 @@ experiment with different approaches to circuit design (e.g., different gate cos
 While we do provide core parts of the project as a libary, there are also some
 drivers ready to be used. `circuitous-seed` can provide a list of instructions
 to lift from a given binary. (This list can subsequently be modified to exclude instructions.)
-`circuitous-lift` then takes this input and emits a circuit, generally in Verilog. 
+`circuitous-lift` then takes this input and emits a circuit, generally in Verilog.
 We will eventually provide a full step-by step example, but for now, you can invoke `--help` on the
 respective tools, check out the `Usage` section and tests, or open an issue or discussion topic!
 
 Since this project is in active development, there are some caveats:
- * We currently support only a subset of x86 (both 32-bit and 64-bit - 
+ * We currently support only a subset of x86 (both 32-bit and 64-bit -
    see [Tiny86](https://github.com/trailofbits/sholva) for more details)
    and the API is not super stable yet.
  * Due to how the internals of Circuitous work, it is hard to produce a circuit with
    all forms of given instruction (e.g., all variants of `add`) - since it ingests the
    instruction encoding as input.
  * Reducing circuit size is a really hard task, and we are still trying to
-   improve effectiveness of some of our optimizations. 
+   improve effectiveness of some of our optimizations.
 
 
 ## Build
@@ -139,6 +139,10 @@ docker push ghcr.io/trailofbits/circuitous-ubuntu-22.04-dev:latest
 ```
 
 This requires to have CLI access to github resources.
+
+## Benchmarks
+
+See `scripts/bench/README.md`.
 
 ## Distribution and Licensing
 This research was developed with funding from the Defense Advanced Research
