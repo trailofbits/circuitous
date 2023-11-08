@@ -17,7 +17,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
     && apt-get -y install --no-install-recommends \
         software-properties-common \
         build-essential ninja-build ccache cmake-curses-gui libedit-dev libpfm4-dev \
-        zlib1g-dev python3-pip \
+        zlib1g-dev python3-pip ruby \
         verilator
 
 # Install LLVM 16
