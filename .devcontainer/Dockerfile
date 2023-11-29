@@ -18,7 +18,7 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         software-properties-common \
         build-essential ninja-build ccache cmake-curses-gui libedit-dev libpfm4-dev \
         zlib1g-dev python3-pip ruby \
-        verilator
+        verilator iverilog
 
 # Install LLVM 16
 RUN wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
