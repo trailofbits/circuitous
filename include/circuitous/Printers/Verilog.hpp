@@ -855,7 +855,7 @@ namespace circ::print::verilog
 
         void declare_out_args()
         {
-            this->declare_out_arg("result", 1);
+            this->declare_out_arg("result", 1, true);
         }
 
         static std::string current_trace_name() { return "current"; }
