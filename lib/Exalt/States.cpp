@@ -168,4 +168,75 @@ namespace circ::exalt
         return irb.CreateLoad( type, inst );
     }
 
+    /* `ExtendedState` */
+
+    void ExtendedState::add( builder_t &irb, state_value_t config )
+    {
+        check( !storage.count( config->name ) );
+
+        auto mat = irb.CreateAlloca( config->type, nullptr, config->name );
+        storage.emplace( config->name, std::make_tuple( mat, std::move( config ) ) );
+    }
+
+    void ExtendedState::add( builder_t &irb, std::vector< state_value_t > configs )
+    {
+        for ( auto &&c : std::move( configs ) )
+            add( irb, std::move( c ) );
+    }
+
+    value_t ExtendedState::load( builder_t &irb, const std::string &name )
+    {
+        if ( auto it = storage.find( name ); it != storage.end())
+        {
+            auto &[ val, config ] = it->second;
+            return irb.CreateLoad( config->type, val );
+        }
+
+        return this->base::load( irb, name );
+    }
+
+    void ExtendedState::store( builder_t &irb, const std::string &name, value_t what )
+    {
+        if ( auto it = storage.find( name ); it != storage.end())
+        {
+            auto &[ val, _ ] = it->second;
+            irb.CreateStore( val, what );
+        }
+
+        return this->base::store( irb, name, what );
+    }
+
+    void ExtendedState::reset( builder_t &irb )
+    {
+        for ( const auto &[ _, mat ] : storage )
+        {
+            const auto &[ val, config ] = mat;
+            irb.CreateStore( val, config->in() );
+        }
+
+        return base::reset( irb );
+    }
+
+    void ExtendedState::commit( builder_t &irb )
+    {
+        // I do not think `commit` is actually useful anymore.
+        log_kill() << "Not implemented, should not be used?";
+    }
+
+    std::string ExtendedState::to_string() const
+    {
+        std::stringstream ss;
+        ss << "ExtendedState:\n"
+           << "{\n";
+        for ( const auto &[ k, m ] : storage )
+        {
+            ss << "\t" << k;
+            const auto &[ _, config ] = m;
+            ss << config->to_string() << "\n";
+        }
+
+        ss << "}\n";
+        return ss.str();
+    }
+
 } // namespace circ::exalt

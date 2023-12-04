@@ -89,6 +89,11 @@ namespace circ::exalt
 
         virtual void reset( builder_t &irb, const Ctx::regs_t &regs );
         virtual void commit( builder_t &irb, CtxRef ctx );
+
+        virtual std::string to_string() const
+        {
+            return {};
+        }
     };
 
     struct ArchState : State
@@ -96,10 +101,10 @@ namespace circ::exalt
         using Base = State;
         using Base::Base;
 
-        auto reset( builder_t &irb ) { return this->reset( irb, ctx.regs() ); }
+        virtual void reset( builder_t &irb ) { return this->reset( irb, ctx.regs() ); }
         using Base::reset;
 
-        auto commit( builder_t &irb ) { return this->commit( irb, ctx ); }
+        virtual void commit( builder_t &irb ) { return this->commit( irb, ctx ); }
         using Base::commit;
     };
 
@@ -130,6 +135,154 @@ namespace circ::exalt
 
         void store( builder_t &irb, const std::string &name, value_t what ) override;
         value_t load( builder_t &irb, const std::string &name ) override;
+
+    };
+
+    struct state_backed_value
+    {
+        std::string name;
+        std::string prefix;
+
+        llvm::Type *type = nullptr;
+        values_t values = { nullptr, nullptr };
+
+        state_backed_value( const std::string &name,
+                            const std::string &prefix,
+                            llvm::Type *type )
+            : name( name ),
+              prefix( prefix ),
+              type( type )
+        {}
+
+        virtual ~state_backed_value() = default;
+
+        // Primary key into state structure
+        virtual std::string key() const
+        {
+            return prefix + name;
+        }
+
+        // If the value has trace entry, these will return those values
+        // If not, `nullptr` is returned;
+        virtual value_t in() const
+        {
+            return values[ 0 ];
+        }
+
+        virtual value_t out() const
+        {
+            return values[ 1 ];
+        }
+
+        template< typename I, typename ... Args >
+        void bind_to_intrinsic( builder_t &irb, Args && ... args )
+        {
+            auto in  = irops::make_leaf< I >( irb, args ..., irops::io_type::in );
+            auto out = irops::make_leaf< I >( irb, args ..., irops::io_type::out );
+
+            values[ 0 ] = in;
+            values[ 1 ] = out;
+        }
+
+        virtual void bind( builder_t &irb );
+
+        virtual std::string to_string() const = 0;
+    };
+
+    struct syscall_reg_value : state_backed_value
+    {
+        using base = state_backed_value;
+
+        syscall_reg_value( const reg_ptr_t reg )
+            : base( reg->name, "syscall.", reg->type )
+        {}
+
+        void bind( builder_t &irb ) override
+        {
+            return this->base::bind_to_intrinsic< irops::SyscallReg >( irb, 32u, name );
+        }
+
+        std::string to_string() const override
+        {
+            return "[syscall_reg_value]: " + this->key();
+        }
+    };
+
+    struct syscall_state_value : state_backed_value
+    {
+        using base = state_backed_value;
+
+        syscall_state_value( builder_t &irb )
+            : base( "state", "syscall.", irb.getIntNTy( 8 ) )
+        {}
+
+        void bind( builder_t &irb ) override
+        {
+            return this->base::bind_to_intrinsic< irops::SyscallState >( irb );
+        }
+
+        std::string to_string() const override
+        {
+            return "[syscall_state_value]: " + this->key();
+        }
+    };
+
+    struct ExtendedState : RemillArchState
+    {
+        using base = RemillArchState;
+        using base::base;
+
+        using state_value_t = std::unique_ptr< state_backed_value >;
+        using materialized = std::tuple< value_t, state_value_t >;
+
+        using key_t = std::string;
+        std::unordered_map< key_t, materialized > storage;
+
+        // Will take ownership of ptrs.
+        void add( builder_t &irb, state_value_t config );
+        void add( builder_t &irb, std::vector< state_value_t > configs );
+
+        using base::load;
+        value_t load( builder_t &irb, const std::string &name ) override;
+        using base::store;
+        void store( builder_t &irb, const std::string &name, value_t what ) override;
+
+        using base::reset;
+        void reset( builder_t &irb ) override;
+        using base::commit;
+        void commit( builder_t &irb ) override;
+
+        value_t in( builder_t &irb, const key_t &key )
+        {
+            if ( auto it = storage.find( key ); it != storage.end() )
+            {
+                return std::get< 1 >( it->second )->in();
+            }
+
+            return irops::input_reg( irb, ctx.reg( key ) );
+        }
+
+        value_t out( builder_t &irb, const key_t &key )
+        {
+            if ( auto it = storage.find( key ); it != storage.end() )
+            {
+                return std::get< 1 >( it->second )->out();
+            }
+
+            return irops::output_reg( irb, ctx.reg( key ) );
+        }
+
+        gap::generator< key_t > trace_fields()
+        {
+            for ( const auto &[ name, _ ] : storage )
+                co_yield key_t( name );
+
+            for ( const auto &reg : ctx.regs() )
+                co_yield key_t( reg->name );
+        }
+
+        std::string to_string() const override;
+
     };
 
     struct MemoryPtr : wraps_remill_value
