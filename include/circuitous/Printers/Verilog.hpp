@@ -141,10 +141,15 @@ namespace circ::print::verilog
             return impl::get_bit(get(op), idx);
         }
 
-        std::string make_wire(const std::string name, std::string lhs, auto size)
+        std::string emit_wire(const std::string &name, const std::string &lhs, auto size)
         {
             ctx.os() << impl::wire_decl(name, std::move(lhs), size);
             return name;
+        }
+
+        std::string make_wire(const std::string &name, std::string lhs, auto size)
+        {
+            return emit_wire(name, lhs, size);
         }
 
         std::string make_wire(Operation *op, std::string lhs)
