@@ -623,11 +623,8 @@ namespace circ::print::verilog
             auto name = impl::wire_name(op);
             auto aux = name + "_aux";
 
-            ctx.os() << "wire " << impl::wire_size(rsize) << " " << aux << " = "
-                     << ss.str() << ";\n";
-            ctx.os() << "wire " << name << " = "
-                     << concat({impl::bin_zero(pad_size), aux}) << ";\n";
-            return name;
+            emit_wire(aux, ss.str(), rsize);
+            return emit_wire(name, concat({impl::bin_zero(pad_size), aux}), 1);
         }
 
         std::string visit(CountLeadingZeroes *op)
