@@ -355,6 +355,12 @@ void convert_trace( const auto &cli )
     auto circuit = produce_circuit( cli, std::move( loader ) );
 
     circ::run::trace::trace_converter().convert_trace( traces, circuit.get() ).dump( out );
+
+    if ( auto ir_out = cli.template get< circ::cli::IROut >() )
+        serialize(*ir_out, circuit.get());
+
+    if (auto verilog_out = cli.template get< circ::cli::VerilogOut >())
+        circ::print_circuit(*verilog_out, circ::VerilogPrinter("circuit", true), circuit.get());
 }
 
 using run_modes = circ::tl::TL<
@@ -374,7 +380,9 @@ using input_options = circ::tl::TL<
 using output_options = circ::tl::TL<
     circ::cli::run::ExportDerived,
     circ::cli::DotOut,
-    circ::cli::run::Output
+    circ::cli::run::Output,
+    circ::cli::IROut,
+    circ::cli::VerilogOut
 >;
 using config_options = circ::tl::TL<
     circ::cli::run::Traces,
