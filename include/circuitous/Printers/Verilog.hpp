@@ -79,6 +79,29 @@ namespace circ::print::verilog
             return ss.str();
         }
 
+        static inline std::string wire_decl(const std::string &name, auto size)
+        {
+            return "wire " + impl::wire_size(size) + " " + name;
+        }
+
+        static inline std::string runtime_debug_print(const std::string &name)
+        {
+            std::stringstream ss;
+            ss << "$display(\"Runtime value of " << name << " := 0x%h \", " << name << ");\n";
+            return ss.str();
+        }
+
+        static inline auto debug_wire_decl(const std::string &name, const std::string &lhs,
+                                           auto size, Operation *op = nullptr )
+            -> std::tuple< std::string, std::string, std::string >
+        {
+            auto decl = wire_decl(name, size) + ";\n";
+            auto assign = "assign " + name + " = " + lhs + ";\n";
+            auto print_msg = "$display(\"" + name + ": %b\\n\", " + name + ");\n";
+
+            return { decl, assign, print_msg };
+        }
+
         static inline std::string to_signed(const std::string &what)
         {
             return "$signed(" + what + ")";
@@ -86,29 +109,63 @@ namespace circ::print::verilog
 
     } // namespace impl
 
-    struct dbg_verbose
-    {
-        std::stringstream _dbg;
-    };
-
-    struct ToStream : dbg_verbose
+    struct ToStream
     {
         std::ostream &_os;
         Circuit *circuit;
-        std::unordered_map< Operation *, std::string > op_names;
 
-        ToStream(std::ostream &os_, Circuit *circuit_) : _os(os_), circuit(circuit_) {}
+        // TODO(print:verilog): This should be abstracted in a class. Use runtime inheritance
+        //                      to make this cleaner.
+        const bool emit_runtime_debug = false;
+
+        std::unordered_map< Operation *, std::string > op_names;
+        std::unordered_set< std::string > declared;
+
+        // TODO(print:verilog): Not really needed in the case we are not emitting
+        //                      the runtime debug logs.
+        std::stringstream _decls;
+        std::stringstream _assigns;
+        std::stringstream _print_msg;
+
+        ToStream(std::ostream &os, Circuit *circuit, bool emit_runtime_debug=false)
+            : _os(os), circuit(circuit), emit_runtime_debug(emit_runtime_debug)
+        {}
+
+        auto &decls() { return _decls; }
+        auto &assigns() { return _assigns; }
+
+        auto &print_msg() { return _print_msg; }
 
         auto &os() { return _os; }
-        auto &dbg() { return _dbg; }
+
+        std::string construct_monitor()
+        {
+            std::stringstream ss;
+            ss << "always @* begin\n#1;\n";
+            ss << _print_msg.str();
+            ss << "end\n";
+            return ss.str();
+        }
+
+        void flush_aux_streams()
+        {
+            if ( emit_runtime_debug )
+            {
+                os() << _decls.str();
+                os() << construct_monitor();
+                os() << _assigns.str();
+            }
+        }
+
 
         std::string &give_name(Operation *op, std::string name)
         {
             auto [it, flag] = op_names.emplace(op, std::move(name));
-            check(flag, [&](){ return "\n" + dbg().str(); });
+            check(flag, [&](){ return "Could not name op"; });
             return it->second;
         }
 
+        bool is_declared( const std::string &name ) { return declared.count( name ); }
         bool has_name(Operation *op) { return op_names.count(op); }
 
         std::optional< std::string > get_name(Operation *op)
@@ -117,6 +174,71 @@ namespace circ::print::verilog
             if (it != op_names.end())
                 return { it->second };
             return {};
+        }
+
+        std::string runtime_trace_operands( Operation *op )
+        {
+            // If we build this better we could retrieve all verilog operands,
+            // but for now aux variables are not really represented anyhow.
+            auto print_op_msg = [ & ]( auto o )
+            {
+                auto name = impl::wire_name( o );
+                std::stringstream ss;
+                ss << "$display(\"\\t";
+                auto is_node = has_name( o ) && is_declared( name ) && *get_name( o ) == name;
+
+                if ( is_node )
+                {
+                    ss << name << " " << o->name()
+                       << " : %b\","
+                       << name;
+                } else {
+                    ss << "(not a node)\"";
+                }
+                ss << ");\n";
+                return ss.str();
+            };
+
+            std::string print_msg;
+            for ( auto o : op->operands() )
+                print_msg += print_op_msg( o );
+
+            return print_msg;
+        }
+
+        // TODO(print:verilog): Settle on type of `size`.
+        std::string emit_wire( Operation *op, const std::string &name,
+                               const std::string &lhs, auto size )
+        {
+            if (emit_runtime_debug)
+                return do_emit_runtime_debug_wire(op, name, lhs, size);
+            return do_emit_wire(op, name, lhs, size);
+
+        }
+
+        std::string do_emit_runtime_debug_wire( Operation *op, const std::string &name,
+                                                const std::string &lhs, auto size )
+        {
+            auto [ decl, assign, msg ] = impl::debug_wire_decl( name, lhs, size, op );
+
+            declared.insert( name );
+
+            decls() << decl;
+            assigns() << assign;
+
+            print_msg() << msg;
+            if ( op )
+                print_msg() << runtime_trace_operands( op );
+
+            return name;
+        }
+
+        std::string do_emit_wire( Operation *op, const std::string &name,
+                                  const std::string &lhs, auto size )
+        {
+            // TODO(print:verilog): Probably shouldn't touch the underlying stream?
+            os() << impl::wire_decl( name, lhs, size );
+            return name;
         }
     };
 
@@ -141,20 +263,23 @@ namespace circ::print::verilog
             return impl::get_bit(get(op), idx);
         }
 
-        std::string emit_wire(const std::string &name, const std::string &lhs, auto size)
+
+        std::string emit_wire(const std::string &name, const std::string &lhs, auto size,
+                              Operation *op = nullptr)
         {
-            ctx.os() << impl::wire_decl(name, std::move(lhs), size);
-            return name;
+            return ctx.emit_wire( op, name, lhs, size );
+
         }
 
-        std::string make_wire(const std::string &name, std::string lhs, auto size)
+        std::string make_wire(const std::string &name, std::string lhs,
+                              auto size, Operation *op = nullptr)
         {
-            return emit_wire(name, lhs, size);
+            return emit_wire(name, lhs, size, op);
         }
 
         std::string make_wire(Operation *op, std::string lhs)
         {
-            return make_wire(impl::wire_name(op), std::move(lhs), op->size);
+            return make_wire(impl::wire_name(op), std::move(lhs), op->size, op);
         }
 
         std::string concat(const std::vector< std::string > &ops)
@@ -422,7 +547,7 @@ namespace circ::print::verilog
         std::string visit(Operation *op)
         {
             log_kill() << "Cannot print in verilog: " << pretty_print< true >(op)
-                       << "\n" << ctx.dbg().str();
+                       << "\n";
         }
 
         // Each extra operand V(n + 1) introduces
@@ -636,7 +761,9 @@ namespace circ::print::verilog
         /* Leaves */
         std::string visit(Constant *op)
         {
-            return make_wire(op, std::to_string(op->size) + "'b" + op->bits);
+            // TODO(print:verilog): Should this be a method of `Constant`?
+            auto b = std::string( op->bits.rbegin(), op->bits.rend() );
+            return make_wire(op, std::to_string(op->size) + "'b" + b);
         }
 
         std::string visit(Undefined *op)
@@ -948,6 +1075,7 @@ namespace circ::print::verilog
 
         header.declare_module(module_name, c->root);
         auto ret = OpFmt< ctx_t >(ctx).write(c->root);
+        ctx.flush_aux_streams();
         header.assign_out_arg("result", ret);
         header.end_module();
     }
