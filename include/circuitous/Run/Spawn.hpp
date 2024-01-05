@@ -204,6 +204,40 @@ namespace circ::run
             std::string current_trace( trace.total_size, '0' );
             std::string next_trace( trace.total_size, '0' );
 
+            auto pad_head = [ & ]( uint32_t trg_size, auto &str )
+            {
+                auto diff = trg_size - str.size();
+                if ( diff == 0 )
+                    return;
+
+                auto pad = std::string( diff, '0' );
+                str.insert( 0, pad );
+            };
+
+            auto by_bytes = [ & ]( auto op, const auto &val ) -> std::string
+            {
+                auto out = std::string( op->size, '0' );
+                for ( std::size_t i = 0; i < val.getBitWidth(); i += 8 )
+                {
+                    auto idx = static_cast< unsigned >( i );
+                    auto byte_str = llvm::toString( val.extractBits( 8, idx ), 2, false );
+                    pad_head( 8, byte_str );
+                    auto ip = op->size - i - 8;
+                    out.replace( ip, 8, byte_str );
+                }
+                return out;
+
+            };
+
+            auto serialize = [ & ]( const auto &val, auto op ) -> std::string
+            {
+                if ( isa< InputInstructionBits >( op ) )
+                    return by_bytes( op, val );
+                auto str = llvm::toString( val, 2, false );
+                pad_head( op->size, str );
+                return str;
+            };
+
             auto inject = [ & ]( auto &where, auto op, auto &field )
             {
                 const auto &[ start, size, _ ] = field;
@@ -215,14 +249,10 @@ namespace circ::run
                 auto maybe_value = node_state.get( op );
                 check( maybe_value );
 
-                auto val_as_str = llvm::toString( *maybe_value, 2, false );
-                if ( val_as_str.size() < size )
-                {
-                    auto diff = size - val_as_str.size();
-                    val_as_str.insert( 0, std::string( diff, '0' ) );
-                }
+                auto val_as_str = serialize( *maybe_value, op );
 
-                where.replace( start, size, val_as_str );
+                auto ip = where.size() - size - start;
+                where.replace( ip, size, val_as_str );
             };
 
             for ( auto &[ op, field ] : trace.parse_map )
@@ -236,7 +266,8 @@ namespace circ::run
             }
             check( current_trace.size() == trace.total_size );
             check( next_trace.size() == trace.total_size );
-            return { current_trace, next_trace };
+
+            return { std::move( current_trace ), std::move( next_trace ) };
         }
 
         result_t run() {
@@ -262,7 +293,6 @@ namespace circ::run
                 return result_t::value_not_reached;
             }
 
-            log_dbg() << node_state.to_string();
             if ( auto res = node_state.get( circuit->root ) )
                 return ( *res == semantics.true_val() )
                        ? result_t::accepted
