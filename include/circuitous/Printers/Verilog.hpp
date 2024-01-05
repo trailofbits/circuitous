@@ -199,28 +199,66 @@ namespace circ::print::verilog
         /* Switch, Option */
         std::string switch_as_mux( Switch *op )
         {
-            std::map< Operation *, std::unordered_set< Operation * > > val_to_cond;
-            for ( auto o : *op )
-            {
-                auto option = dyn_cast< Option >( o );
-                check( option );
+            using conds_t = std::unordered_set< Operation * >;
+            using entry_t = std::tuple< Operation *, conds_t >;
 
-                auto &conds = val_to_cond[ option->value() ];
+            // Last entry can have same value as something in the middle but it is
+            // possible it is guarded by `true` so we don't want to merge it. Can be
+            // improved upon - most notably `Switch` should simply have a default operand
+            // instead of guarding things with `true`.
+            std::vector< entry_t > val_to_cond;
+
+            auto populate_entry = [ & ]( auto &entry, auto option )
+            {
+                auto &[ _, conds ] = entry;
+
                 for ( auto c : option->conditions() )
                     conds.emplace( c );
+            };
+
+            auto mk_entry = [ & ]( auto option ) -> entry_t &
+            {
+                val_to_cond.emplace_back( option->value(), conds_t{} );
+                return val_to_cond.back();
+            };
+
+            auto get_or_make_entry = [ & ]( auto option ) -> entry_t &
+            {
+                for ( auto &e : val_to_cond )
+                {
+                    auto &[ v, _  ] = e;
+                    if ( option->value() == v )
+                        return e;
+                }
+
+                return mk_entry( option );
+            };
+
+
+            // Last one is special case, possibly with `true` as condition - never
+            // merge it for now.
+            for ( auto it = op->begin(); it != std::prev( op->end() ); ++it )
+            {
+                auto option = dyn_cast< Option >( *it );
+                check( option );
+
+                populate_entry( get_or_make_entry( option ), option );
             }
+
+            // Now simply add the default.
+            auto last = *std::prev( op->end() );
+            auto option = dyn_cast< Option >( last );
+            check( option );
+            populate_entry( mk_entry( option ), option );
 
             using cond_val_t = std::tuple< std::string, std::string >;
             std::vector< cond_val_t > cases;
 
             for ( auto [ val, cond ] : val_to_cond )
             {
-
                 auto cond_body = bin_apply( "|", cond );
-                // TODO( print-verilog ): This is a hack, because currently wire
-                //                        needs to be associated with `Operation *`?
-                //auto cond = make_wire( option, cond_body );
-
+                // TODO(print:verilog): This is a hack, because currently wire
+                //                      needs to be associated with `Operation *`?
                 cases.emplace_back( std::move( cond_body ), get( val ) );
             }
 
