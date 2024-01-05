@@ -123,6 +123,8 @@ namespace circ::run::trace
     template< typename self_t >
     struct collector_base
     {
+        auto &self() { return static_cast< self_t & >( *this ); }
+
         auto get_collector(auto &to_export)
         {
             return [ & ]( const auto &result_spawn_pairs )
@@ -130,18 +132,51 @@ namespace circ::run::trace
                 for ( auto &[ status, spawn ] : result_spawn_pairs )
                     if ( circ::run::accepted( status ) )
                     {
+                        self().dbg_accepted_spawn( spawn );
                         auto [ current , next ] = spawn->to_traces();
                         // We need to also include the first entry,
                         // which will never be the first
                         // item of the `to_traces` as it is never an input.
                         if ( to_export.empty() )
                             to_export.push_back( std::move( current ) );
+                        else
+                            to_export.back() = std::move( current );
 
                         to_export.push_back( std::move( next ) );
                         return;
                     }
-                static_cast< self_t & >( *this ).on_error( result_spawn_pairs );
+                self().on_error( result_spawn_pairs );
             };
+        }
+
+        void dbg_accepted_spawn(auto &) {}
+    };
+
+    // Really simple logging that will print states of accepted spawns
+    struct print_accepted_spawns
+    {
+        std::string root_name = "circuitous.trace_conversion.spawn";
+        uint32_t idx = 0;
+
+
+        void dbg_accepted_spawn(auto &spawn)
+        {
+            std::ofstream os( current() );
+            check( os );
+            os << "Spawn number: " << idx << "\n";
+            os << spawn->node_state.to_string();
+            next();
+        }
+
+        std::string current() const
+        {
+            return root_name + "." + std::to_string( idx );
+        }
+
+        std::string next()
+        {
+            ++idx;
+            return current();
         }
     };
 
