@@ -1,0 +1,52 @@
+#!/usr/bin/env ruby
+# run-tests: collect all .vvps and run each, parsing the output of each run
+# produce output in TAP format
+
+$VERBOSE = true
+
+require_relative "common"
+
+require "pathname"
+require "yaml"
+
+vvps = ARGF.argv
+barf "no testbenches found; run make?" if vvps.empty?
+verbose "discovered #{vvps.size} testbenches: #{vvps}"
+
+puts "1..#{vvps.size}"
+
+vvps.each_with_index do |vvp, i|
+  lines = `vvp #{vvp} -lxt2`.split "\n"
+
+  abort "uh oh" if lines.any? { |l| l.start_with? "ERROR:" }
+
+  failures = lines
+    .select { |l| l.start_with? "TBGEN-FAIL" }
+    .map! { |f| [f.split[1].split(":")[1].to_i, f.split(" ", 3)[2]] }
+
+  done = lines.find { |l| l.start_with? "TBGEN-DONE" }.split
+  testcase = done[1]
+  ntests = done[2].to_i
+  nerrors = done[3].split("=")[1].to_i
+
+  if nerrors.zero?
+    puts "ok #{i + 1} #{testcase} ran #{ntests} internal tests"
+  else
+    puts "not ok #{i + 1} #{testcase} ran #{ntests} internal tests, #{nerrors} failed"
+
+    spec = begin
+      spec_path = Pathname.new(vvp).sub_ext ".yml"
+      YAML.safe_load spec_path.read
+    end
+
+    failures.each do |f|
+      if spec["vector_specs"][f[0]].nil?
+        verbose "failed ##{f[0]}: (extra_vectors) #{f[1]}"
+      else
+        verbose "failed ##{f[0]}: #{spec["vector_specs"][f[0]]["_description"]}: #{f[1]}"
+      end
+    end
+
+    exit 1
+  end
+end

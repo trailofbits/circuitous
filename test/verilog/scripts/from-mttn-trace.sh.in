@@ -1,0 +1,33 @@
+#!/bin/sh
+
+# Nothing can produce an error
+set -e
+
+run=@PROJECT_BINARY_DIR@/bin/run/circuitous-run
+
+mttn_trace=$1
+
+circuit_root=`basename $mttn_trace ".trace.txt"`
+circuit_v="$circuit_root.v"
+circuit_c="$circuit_root.circir"
+
+trace_out="$circuit_root.$circuit_root.circuitous_trace"
+if    [ ! -z "${CIRCUITOUS_VERILOG_TEST_CACHE}" ] \
+   && [ -f "$trace_out" ] \
+   && [ -f "$circuit_c" ] \
+   && [ -f "$circuit_v" ];
+then
+    echo "Found cached trace $trace_out"
+else
+    echo "Converting traces and producing circuit: $mttn -> $trace_out"
+    $run --convert-trace mttn \
+         --traces $mttn_trace \
+         --quiet \
+         --construct-circuit \
+         --verilog-out $circuit_v \
+         --ir-out $circuit_c \
+         --output $trace_out
+fi
+
+sh scripts/circuitous-test-harness.sh $circuit_v $trace_out
+exit $?
