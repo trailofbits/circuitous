@@ -1,7 +1,7 @@
 #!/bin/sh
 
 # Nothing can produce an error
-set -e -x
+set -e
 
 run=@PROJECT_BINARY_DIR@/bin/run/circuitous-run
 run=@PROJECT_BINARY_DIR@/bin/lift/circuitous-lift
