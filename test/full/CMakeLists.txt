@@ -10,5 +10,5 @@ file( COPY defs DESTINATION . )
 file( COPY tools DESTINATION . )
 
 add_test( NAME min-tests
-    COMMAND ${Python3_EXECUTABLE} run.py --tags min
+    COMMAND ${Python3_EXECUTABLE} run.py --tags min not_ebit
 )
