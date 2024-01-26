@@ -38,15 +38,16 @@ class CookedCircuit:
 
 # Needs to be lifted
 class RawCircuit(RunsPopen):
-    __slots__ = ('insts')
+    __slots__ = ('insts', 'lift_opts')
 
     # TODO(lukas): I do not expect there are multiple ways to compile a circuit.
     #              If they arise, this can be moved to an attribute - currently there
     #              is no nice way to do it.
     runner = None
 
-    def __init__(self, instructions):
+    def __init__(self, instructions, lift_opts):
         self.insts = instructions
+        self.lift_opts = lift_opts
 
     def flattened(self):
         return "".join(self.insts.compile())
@@ -62,6 +63,7 @@ class RawCircuit(RunsPopen):
                 '--bytes-in', self.flattened(),
                 '--ir-out', circuit_path,
                 '--logtostderr']
+        args += self.lift_opts
         # TODO(lukas): Configurable
         args += ['--arch', 'amd64', '--os', 'macos']
 

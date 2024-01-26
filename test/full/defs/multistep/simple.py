@@ -10,12 +10,13 @@ import tools.tgen as tgen
 
 def mk_nop():
     tt = TraceTest('nop-trace-a', state=random_state(42)) \
-        .tags({'min', 'trace'}) \
-        .raw_circuit(intel(['nop', 'mov rax, 0x0', 'push rax', 'pop rbx']))
+        .tags({'trace', 'min'}) \
+        .lift_opts(["--lift-with", "mux-heavy"]) \
+        .raw_circuit(intel(['nop', 'mov rax, 0x0']))
     base = tt.make_case(R=True) \
         .add_maker(microx_gen())
 
-    base.add_steps(intel(['nop', 'mov rax, 0x0', 'push rax', 'pop rbx']))
+    base.add_steps(intel(['nop', 'mov rax, 0x0', 'nop', 'mov rbx, 0x10']))
     return { tt }
 
 circuitous_tests = [mk_nop()]

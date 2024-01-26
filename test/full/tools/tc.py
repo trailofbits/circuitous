@@ -782,7 +782,7 @@ class TraceTest():
     __slots__ = ('cases', 'name', '_name_counter',
                  '_initial_state', '_name_counter', '_tags',
                  # Remove
-                 'metafiles', 'lift_opts', 'arch', 'circuit'
+                 'metafiles', '_lift_opts', 'arch', 'circuit'
                  )
 
     def __init__(self, name_, **kwargs):
@@ -794,7 +794,7 @@ class TraceTest():
 
         self._initial_state = kwargs.get('state', None)
         self.metafiles = {}
-        self.lift_opts = []
+        self._lift_opts = []
         self.arch = 'amd64'
 
         self.circuit = None
@@ -813,8 +813,12 @@ class TraceTest():
         return self.cases[-1]
 
     def extra_lift_opts(self):
-        return self.lift_opts + ['--arch', self.arch]
+        return self._lift_opts + ['--arch', self.arch]
 
+
+    def lift_opts(self, args):
+        self._lift_opts += args
+        return self
 
     def resolve_undefs(self):
         pass
@@ -823,7 +827,7 @@ class TraceTest():
         raise Exception("Not implemented")
 
     def raw_circuit(self, input_bytes):
-        self.circuit = RawCircuit(input_bytes)
+        self.circuit = RawCircuit(input_bytes, self._lift_opts)
         return self
 
 
