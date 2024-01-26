@@ -22,7 +22,7 @@ bts = {
     .case(run_bytes = 0, DE=aflag_mut(MS()), R=True),
 
     # NOTE(lukas): Microx has bug when immediate is grater than size
-    Test("bts-b_corner_big_imm") \
+    VerifyTest("bts-b_corner_big_imm") \
     .bytes(intel(["bts WORD PTR [r8d + 2 * eax + 0x50], 0x20"]))
     .tags({"bts", "min"})
     .mode("--verify")
@@ -30,15 +30,17 @@ bts = {
                  .rwmem(0x2800, "11" * 0x100)
                  .rwmem(0x3800, "00" * 0x100))
     .case(run_bytes = 0,
-          DE = aflag_mut(MS()).CF(1).ts(1).RIP(0x8012 + 9).RAX(0x380)
-                          .mem_hint(MemHint.read(0x2854, 0x1111, 2))
-                          .mem_hint(MemHint.write(0x2854, 0x1111, 2)),
+          M=True,
+          DE = aflag_mut(MS()).CF(1).ts(1).RIP(0x8012 + 9).RAX(0x380),
+          DI = MS().mem_hint(MemHint.read(0x2854, 0x1111, 2))
+                   .mem_hint(MemHint.write(0x2854, 0x1111, 2)),
           R=True)
     .case(run_bytes = intel(["bts WORD PTR [r8d + 2 * eax + 0x50], 0x21"]),
-          DI = MS().RAX(0xb80),
-          DE = aflag_mut(MS()).RAX(0xb80).CF(0).ts(1).RIP(0x8012 + 9)
-                          .mem_hint(MemHint.read(0x3854, 0x0000, 2))
-                          .mem_hint(MemHint.write(0x3854, 0b10, 2)),
+          M=True,
+          DI = MS().RAX(0xb80)
+                   .mem_hint(MemHint.read(0x3854, 0x0000, 2))
+                   .mem_hint(MemHint.write(0x3854, 0b10, 2)),
+          DE = aflag_mut(MS()).RAX(0xb80).CF(0).ts(1).RIP(0x8012 + 9),
           R=True),
 
     VerifyTest("bts-c") \
