@@ -98,6 +98,21 @@ namespace circ::exalt
 
         };
 
+        auto coerce = [ & ]( auto view, auto value, auto trg_type ) -> value_t
+        {
+            auto &bld = irb();
+            if ( auto imm = std::get_if< typename decltype( view )::imm >( &view.raw ) )
+            {
+                auto [ c, _ ] = *imm;
+                if ( c->is_signed )
+                    return bld.CreateSExt( value, trg_type );
+                return bld.CreateZExt( value, trg_type );
+            }
+
+            return bld.CreateZExt( value, trg_type );
+
+        };
+
         auto handle = [ & ]( auto view, auto &decoder_it, auto arg, std::size_t i )
         {
             check( decoder_it != decoder.end() );
@@ -107,7 +122,8 @@ namespace circ::exalt
             auto operand = lifter.lift( view );
 
             if ( bw( operand ) < bw( arg ) )
-                operand = bld.CreateSExt( operand, arg->getType() );
+                operand = coerce( view, operand, arg->getType() );
+
             return irops::Option::make( bld,
                                         { operand, *( decoder_it++ ) },
                                         bw( operand ) );
