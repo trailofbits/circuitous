@@ -20,9 +20,33 @@ namespace circ::run::trace
         {
             static const auto fmt = [](const auto &what) -> std::string
             {
-                if (!what)
+                if ( !what )
                     return "( none )";
-                return llvm::toString(*what, 16, false);
+
+                return llvm::toString( *what, 16, false );
+            };
+
+            static const auto fmt_inst_bits = []( const auto &what ) -> std::string
+            {
+                std::string out;
+                for ( unsigned int i = 0; i < what.getBitWidth(); i += 8 )
+                {
+                    auto slice = what.extractBits( 8, i );
+                    out += llvm::toString(slice, 16, false);
+                    out += " ";
+                }
+                return out;
+            };
+
+            static const auto fmt_entry = [&]( auto key, const auto &what ) -> std::string
+            {
+                if ( !what )
+                    return "( none )";
+
+                if ( key == "instruction_bits" )
+                    return fmt_inst_bits( *what );
+
+                return fmt( what );
             };
 
             std::stringstream ss;
@@ -38,7 +62,7 @@ namespace circ::run::trace
             {
                 ss << "\t" << i << "\n";
                 for (const auto &[name, val] : entries[i])
-                    ss << "\t | " << name << " = " << fmt(val) << "\n";
+                    ss << "\t | " << name << " = " << fmt_entry(name, val) << "\n";
             }
 
             return ss.str();
