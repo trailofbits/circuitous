@@ -107,6 +107,4 @@ class ResultAccumulator:
         return msg
 
     def succeeded(self):
-        if self.case_count == self.counts[ResultValue.PASS]:
-            return True
-        return False
+        return self.case_count == self.counts[ResultValue.PASS]
