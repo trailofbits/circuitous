@@ -185,6 +185,7 @@ class Interpreter(SimulateCWDMixin):
                 "--verify",
                 "--log-dir", self.test_dir,
                 "--traces", self.create_trace_json(case, case.name, self.test_dir),
+                "--ctl", "verify",
                 "--export-derived", self.locate(case.name + ".result.json"),
                 "--ir-in", ir]
         if dbg_verbose:
