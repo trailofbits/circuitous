@@ -317,6 +317,10 @@ namespace circ
                 case Advice::kind:
                 case InputErrorFlag::kind:
                 case OutputErrorFlag::kind:
+                case InputSyscallReg::kind:
+                case OutputSyscallReg::kind:
+                case InputSyscallState::kind:
+                case OutputSyscallState::kind:
                     return exactly(0, op);
                 case InputImmediate::kind:
                 case Not::kind:
@@ -346,6 +350,7 @@ namespace circ
                 case Or::kind:
                 case And::kind:
                 case DecoderResult::kind:
+                case SyscallModule::kind:
                     return not_exactly(0, op);
                 default:
                     break;
