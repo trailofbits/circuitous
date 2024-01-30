@@ -4,7 +4,10 @@
 
 #pragma once
 
-#include <circuitous/IR/Intrinsics.hpp>
+#include <circuitous/Util/Warnings.hpp>
+
+#include <circuitous/Exalt/UnitComponents.hpp>
+
 
 CIRCUITOUS_RELAX_WARNINGS
 #include <llvm/IR/IRBuilder.h>
@@ -15,122 +18,278 @@ CIRCUITOUS_UNRELAX_WARNINGS
 
 namespace circ::exalt
 {
-    enum class component_tag : uint32_t
+
+    struct syscall_component : uc_with_b_ctx
     {
-        syscall = 0,
-        ebit = 1
-    };
+        using base = uc_with_b_ctx;
 
-    // A simple wrapper - for now just useful to help
-    // with tag dispatch.
-    struct syscall_reg
-    {
-        std::string name;
-        std::size_t size;
-    };
+        values_t args;
+        value_t submodule;
+        values_t parsed_results;
 
-    // Maybe rename just to `component`?
-    struct dfa_component
-    {
-        using builder_t = llvm::IRBuilder<>;
-        using reg_ptr_t = Ctx::reg_ptr_t;
+        // on_entry -> on_transition -> on_exit -> on_inactive
+        std::array< value_t, 4 > dfa = { nullptr };
 
-        using maybe_value_t = std::optional< llvm::Value * >;
+        // `syscall_active => ???`
+        exalted_values_t checks;
 
-        virtual ~dfa_component() = default;
-
-        // Return `irops::instance< irops::Option >` ?
-        // `flag` is the data that should be passed in? For example current ebit or syscall
-        // What if I need to pass in more things?
-        virtual maybe_value_t in_mux( builder_t &, reg_ptr_t,
-                                      llvm::Value *current, llvm::Value *flag ) = 0;
-
-        virtual maybe_value_t out_mux( builder_t &, reg_ptr_t,
-                                       llvm::Value *current, llvm::Value *flag ) = 0;
-
-        /* Syscall related hooks */
-
-        virtual maybe_value_t in_mux( builder_t &, syscall_reg,
-                                      llvm::Value *current, llvm::Value *flag ) = 0;
-
-        /* Generic hooks */
-
-        virtual component_tag component() const = 0;
-    };
-
-    struct dfa_base : dfa_component, has_ctx_ref
-    {
-        using has_ctx_ref::has_ctx_ref;
-    };
-
-    struct syscall_dfa : dfa_base
-    {
-        using builder_t = dfa_base::builder_t;
-        using reg_ptr_t = dfa_base::reg_ptr_t;
-
-        using dfa_base::dfa_base;
-
-        // State and other context related things will live outside in the main
-        // owner.
-        syscall_submodule &submodule;
-        State &state;
-
-        syscall_dfa( CtxRef ctx_ref, syscall_submodule &submodule, State &state )
-            : dfa_base( ctx_ref ),
-              submodule( submodule ),
-              state( state )
-        {}
-
-        /* Static information per given dfa - we may need a way to override this later on. */
-
-
-        /* Generic helpers related to syscalls. */
-
-        static llvm::Value *past_state( builder_t &irb )
+        // EAX, EBX, ECX, State
+        static const inline std::array< std::size_t, 4 > entries =
         {
-            return irops::make_leaf< irops::SyscallState >( irb, irops::io_type::in );
+            32, 32, 32, 8
+        };
+
+        static inline const std::vector< std::string > syscall_regs =
+        {
+            "EAX", "EBX", "ECX"
+        };
+
+
+        static inline const std::unordered_set< std::string > output_regs =
+        {
+            "EAX"
+        };
+
+        using base::base;
+
+        /* Value helpers */
+
+        auto state_input() { return args[ 0 ]; }
+        auto state_runtime() { return parsed_results[ 0 ]; }
+        auto state_output()
+        {
+            auto out = irops::io_type::out;;
+            return irops::make_leaf< irops::SyscallState >( irb(), out );
         }
 
-        static llvm::Value *future_state( builder_t &irb )
+        auto state_transition_check()
         {
-            return irops::make_leaf< irops::SyscallState >( irb, irops::io_type::out );
+            return irops::OutputCheck::make( irb(), { state_runtime(), state_output() } );
         }
 
-        static llvm::Value *is_active( builder_t &irb, llvm::Value *state )
+        value_t reg_runtime( const std::string &reg_name )
         {
-            auto zero = llvm::ConstantInt::get( state->getType(), 0 );
-            return irb.CreateICmpNE( state, zero );
+            for ( std::size_t i = 0; i < syscall_regs.size(); ++i )
+                if ( reg_name == syscall_regs[ i ] )
+                    return parsed_results[ i + 1 ];
+            log_kill() << "Could not fetch syscall arg" << reg_name << ".";
         }
 
-        static llvm::Value *is_inactive( builder_t &irb, llvm::Value *state )
+        auto reg_output( const std::string &reg_name )
         {
-            return irb.CreateNot( is_active( irb, state ) );
+            auto out = irops::io_type::out;;
+            return irops::make_leaf< irops::SyscallReg >( irb(), 32u, reg_name, out );
         }
 
-        /* `dfa_component` implementation. */
+        /* `component_base` */
 
-        component_tag component() const override
+        bool is_persistent() const override { return true; }
+
+        // Emit the call
+        void init() override
         {
-            return component_tag::syscall;
+            args = make_args( irb() );
+            submodule = irops::make< irops::SyscallSubmodule >( irb(), args );
+            parsed_results = get_all( irb(), submodule );
+
+            // NEXT: Is this needed.
+            b_ctx.arch_state().reset( irb() );
+
+            build_on_entry();
+            build_on_transition();
+            build_on_exit();
+            build_on_inactive();
+        };
+
+        value_t constant( llvm::Type *t, auto i )
+        {
+            return llvm::ConstantInt::get( t, i );
         }
 
-        maybe_value_t out_mux( builder_t &irb, reg_ptr_t reg,
-                               llvm::Value *current, llvm::Value *flag ) override
+        value_t constant( value_t val, auto i ) { return constant( val->getType(), i ); }
+
+        value_t is_inactive( value_t val )
         {
-            // We only care if the syscall is ending -> value of EAX should be propagated.
-            // Otherwise, every transition happens in syscall registers.
-            if ( !submodule.is_output( reg ) )
-                return {};
-            auto sys_reg = submodule.get( reg );
-            auto bw = ctx.bw( current );
-            return irops::Option::make( irb, { flag, sys_reg }, bw );
+            auto zero = llvm::ConstantInt::get( val->getType(), 0 );
+            return irb().CreateICmpEQ( val, zero );
         }
 
-        maybe_value_t in_mux( builder_t &irb, syscall_reg reg,
-                              llvm::Value *current, llvm::Value *flag ) override
+        value_t is_active( value_t val )
         {
-            // TODO: Here I need hook for state.
-            return {};
+            return irb().CreateXor( is_inactive( val ), irb().getTrue() );
+        }
+
+        auto mk_check( value_t a, value_t b )
+        {
+            return irops::OutputCheck::make( irb(), { a, b } );
+        }
+
+
+        void build_on_entry()
+        {
+            values_t top;
+
+            // Si == 0 && ( Sr == So =! 0)
+            values_t ctx_partials =
+            {
+                irb().CreateICmpEQ( state_runtime(), state_output() ),
+                is_inactive( state_input() ),
+                is_active( state_output() )
+            };
+            top.emplace_back( irops::And::make( irb(), ctx_partials ) );
+
+            // Now we we need to forward normal regs to syscall regs
+            for ( const auto &reg_name : syscall_regs )
+            {
+                auto loaded = b_ctx.arch_state().load( irb(), reg_name );
+                values_t check_args = { loaded, reg_output( reg_name ) };
+                top.emplace_back( irops::OutputCheck::make( irb(), check_args ) );
+            }
+
+            // Output state is initialized to truncated EAX
+            auto eax = b_ctx.arch_state().load( irb(), "EAX" );
+            auto trunc = irb().CreateTrunc( eax, state_output()->getType() );
+            top.emplace_back( mk_check( trunc, state_output() ) );
+
+            dfa[ 0 ] = irops::And::make( irb(), top );
+
+        }
+
+        void build_on_transition()
+        {
+            values_t top;
+
+            // Si != 0 && ( Sr == So =! 0)
+            values_t ctx_partials =
+            {
+                irb().CreateICmpEQ( state_runtime(), state_output() ),
+                is_active( state_input() ),
+                is_active( state_output() )
+            };
+            top.emplace_back( irops::And::make( irb(), ctx_partials ) );
+
+            // Nothing special, returned values from the submodule must equal
+            // to their output trace fields.
+            // Same goes for the state itself.
+            for ( const auto &reg_name : syscall_regs )
+            {
+                values_t check_args = { reg_runtime( reg_name ), reg_output( reg_name ) };
+                top.emplace_back( irops::OutputCheck::make( irb(), check_args ) );
+            }
+            top.emplace_back( state_transition_check() );
+
+            dfa[ 1 ] = irops::And::make( irb(), top );
+        }
+
+        void build_on_exit()
+        {
+            values_t top;
+
+            // Si != 0 && ( Sr == So == 0)
+            values_t ctx_partials =
+            {
+                irb().CreateICmpEQ( state_runtime(), state_output() ),
+                is_active( state_input() ),
+                is_inactive( state_output() )
+            };
+            top.emplace_back( irops::And::make( irb(), ctx_partials ) );
+
+            // We do not care? about syscall regs anymore. Only check needed
+            // is that syscall outputs are forwarded to their respective real
+            // registers.
+            for ( const auto &reg_name : output_regs )
+            {
+                auto current = reg_output( reg_name );
+                b_ctx.arch_state().store( irb(), reg_name, current );
+            }
+        }
+
+        void build_on_inactive()
+        {
+            values_t top;
+
+            // Si == 0 && ( Sr == So == 0)
+            values_t ctx_partials =
+            {
+                irb().CreateICmpEQ( state_runtime(), state_output() ),
+                is_inactive( state_input() ),
+                is_inactive( state_output() )
+            };
+            top.emplace_back( irops::And::make( irb(), ctx_partials ) );
+        }
+
+        // I think we do not need local init per unit
+
+        // We may need to tie some delayed computations
+        void finalize() override {};
+
+        /* `unit_component_base` */
+
+        // If the `unit` is interrupt.
+        // * Check number
+        //   + Set input syscall_regs => add output_checks.
+        //   + Set syscall state?
+        //   + Set syscall_computation on => add output_check.
+        exalted_values_t after_isem( unit_t &, isem_range_t ) override { return {}; }
+
+        /* Local helpers */
+
+        static bool has_syscall_variant( reg_ptr_t reg )
+        {
+            return std::ranges::count( syscall_regs, reg->name );
+        }
+
+        static bool is_output( reg_ptr_t reg ) { return output_regs.count( reg->name ); }
+
+        static std::size_t bw()
+        {
+            std::size_t out = 0;
+            for ( auto x : entries )
+                out += x;
+            return out;
+        }
+
+        static values_t get_all( builder_t &irb, value_t submodule )
+        {
+            values_t out;
+
+            std::size_t offset = 0;
+            for ( auto size : entries )
+            {
+                auto val = irops::ExtractRaw::make( irb, submodule, offset, size );
+                offset += size;
+
+                out.push_back( val );
+            }
+            return out;
+        }
+
+        static values_t make_args( builder_t &irb )
+        {
+            // Needs to an rvalue.
+            // TODO( ir ): Fix the intrinsic code that forces this.
+            auto in = [ & ] { return irops::io_type::in; };
+
+            auto mk_reg = [ & ]( const auto &name )
+            {
+                return irops::make_leaf< irops::SyscallReg >( irb, 32u, name, in() );
+            };
+
+            // TODO( exalt ): Do we want to encode this as we do
+            //                in let's say alien trace parsing?
+            values_t out = { irops::make_leaf< irops::SyscallState >( irb, in() ) };
+            for ( const auto &reg_name : syscall_regs )
+                out.push_back( mk_reg( reg_name ) );
+
+            return out;
+        }
+
+        value_t get( reg_ptr_t reg )
+        {
+            for ( std::size_t i = 0; i < syscall_regs.size(); ++i )
+                if ( reg->name == syscall_regs[ i ] )
+                    return parsed_results[ i + 1 ];
+            log_kill() << "Could not fetch syscall arg" << reg->name << ".";
         }
     };
 
