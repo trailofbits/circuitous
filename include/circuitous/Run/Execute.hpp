@@ -188,6 +188,12 @@ namespace circ::run
                 .set( step )
                 .fill_memory()
                 .template all< Undefined >( {} )
+                // TODO( run ): Just to make tests work during prototyping of syscall
+                //              submodule.
+                .template all< InputSyscallReg >( 0ul )
+                .template all< InputSyscallState >( 0ul )
+                .template all< OutputSyscallReg >( 0ul )
+                .template all< OutputSyscallState >( 0ul )
                 .take();
             auto interpreter = SVI( circuit, std::move( node_state ) );
             auto result_spawn_pairs = interpreter.run_all();
