@@ -193,9 +193,30 @@ class MemInput:
         return self
 
 
+class mttnSyscalls:
+    __slots__ = ('registers', 'state')
+
+    def __init__(self):
+        self.registers = {
+            "RAX" : 0,
+            "RBX" : 0,
+            "RCX" : 0
+        }
+        self.state = 0
+
+    def get(self):
+        out = { "regs" : {} }
+        out["state"] = hex(self.state)[2:]
+
+        for reg, val in self.registers.items():
+            if val is not None:
+                out["regs"][reg] = hex(val)[2:]
+        return { "mttn_syscall" : out }
+
+
 class StateBase:
     __slots__ = ('registers', '_ebit', 'timestamp', 'undefined', 'mem_hints',
-                 'memory', '_seed', 'instruction_bits')
+                 'memory', '_seed', 'instruction_bits', 'submodules')
 
     def __init__(self):
         self.registers = {}
@@ -205,6 +226,8 @@ class StateBase:
         self.mem_hints = []
 
         self.instruction_bits = None
+
+        self.submodules = [ mttnSyscalls() ]
 
         self.memory = None
         self._seed = 42
@@ -315,6 +338,7 @@ class StateImpl(StateBase):
                "error_flag" : hex(self._ebit)[2:],
                "timestamp" : hex(self.timestamp)[2:],
                "regs" : {},
+               "submodules" : [],
                "memory_hints" : []}
         for reg, val in self.registers.items():
             if val is not None:
@@ -324,6 +348,9 @@ class StateImpl(StateBase):
             out["memory_hints"].append(hint.circ_runner_export())
             out["memory_hints"][-1]["id"] = hex(idx)[2:]
             idx += 1
+
+        for submodule in self.submodules:
+            out["submodules"] = submodule.get()
         return out
 
 class State32(StateImpl):
