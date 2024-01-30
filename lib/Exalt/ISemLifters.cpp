@@ -264,9 +264,8 @@ namespace circ::exalt
         auto &bld = irb();
         auto unit_decoder = decoder.unit_decoder();
 
-        for ( auto &reg : l_ctx().regs() )
+        for ( auto &field_name : arch_state().trace_fields() )
         {
-            auto field_name = reg->name;
             auto normal_flow_value = arch_state().load( bld, field_name );
             values_t options;
             for ( auto [ _, data ] : writes )
@@ -378,8 +377,8 @@ namespace circ::exalt
 
     auto mux_heavy_lifter::finalize_circuit( exalted_value_buckets buckets ) -> value_t
     {
-        for ( auto reg : l_ctx().regs() )
-            buckets[ place::root ].insert( reg_check( reg->name, final_values ) );
+        for ( const auto &field_name : arch_state().trace_fields() )
+            buckets[ place::root ].insert( reg_check( field_name, final_values ) );
 
         auto &bld = irb();
         auto mk_args = [ & ]( auto roots )
@@ -414,9 +413,8 @@ namespace circ::exalt
         auto parsed_writes = parse_writes( unit, decoder, writes );
         auto final_values = gather_final_values( unit, decoder, parsed_writes );
 
-        for ( auto reg : l_ctx().regs() )
+        for ( const auto &field_name : arch_state().trace_fields() )
         {
-            auto field_name = reg->name;
             auto get_check = [ & ]() -> value_t
             {
                 auto c = reg_check( field_name, final_values );
