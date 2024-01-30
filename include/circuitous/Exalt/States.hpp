@@ -184,7 +184,7 @@ namespace circ::exalt
             values[ 1 ] = out;
         }
 
-        virtual void bind( builder_t &irb );
+        virtual void bind( builder_t &irb ) = 0;
 
         virtual std::string to_string() const = 0;
     };
