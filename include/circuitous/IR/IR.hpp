@@ -887,7 +887,7 @@ namespace circ
     {
         static constexpr Operation::kind_t kind = Operation::kind_t::kSyscallModule;
 
-        explicit SyscallModule() : Operation( 1u, kind ) {}
+        explicit SyscallModule( uint32_t size ) : Operation( size, kind ) {}
 
         static std::string op_code_str() { return "syscall_module"; }
         std::string name() const override { return "syscall_module"; }
