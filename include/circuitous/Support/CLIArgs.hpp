@@ -151,6 +151,19 @@ namespace circ::cli
         }
     };
 
+    struct Submodules : circ::DefaultCmdOpt, Arity< -1 >, circ::HasAllowed< Submodules >
+    {
+        static inline const auto opt = circ::CmdOpt("--with-submodules", false);
+        static inline const std::unordered_set< std::string > allowed = {
+            "external-syscalls"
+        };
+
+        using strings = std::vector< std::string >;
+        static std::optional< strings > cast(strings tokens) {
+            return { std::move( tokens ) };
+        }
+    };
+
     struct CiffIn : circ::DefaultCmdOpt, PathArg
     {
         static inline const auto opt = circ::CmdOpt("--ciff-in", false);
