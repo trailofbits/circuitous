@@ -30,6 +30,9 @@ namespace circ
 
     using reg_ptr_t = Ctx::reg_ptr_t;
 
+    // This is superset of "real" registers.
+    using trace_field_t = std::string;
+
     using unit_t = Unit< Atom >;
 
     /* Components that are useful only on per-unit scope.

@@ -30,7 +30,8 @@ namespace circ::exalt
             // NOTE( exalt ): It is expected that if there are multiple stores,
             //                Flattener component will make sure they are properly guarded
             //                wrt path condition.
-            check( stores.size() >= 1, [ & ]{ return dbg_dump( stores ); } );
+            if ( stores.size() == 0 )
+                return nullptr;
 
             // Next they are being ordered to determine which is last, therefore
             // they need to be in the same basic block
@@ -54,7 +55,7 @@ namespace circ::exalt
     {
         log_dbg() << "Bumping pc";
         auto decoder_it = decoder.begin();
-        auto &bld = get_b_ctx().irb();
+        auto &bld = irb();
 
         values_t options;
         for ( auto &atom : unit )
@@ -265,20 +266,27 @@ namespace circ::exalt
 
         for ( auto &reg : l_ctx().regs() )
         {
-            auto normal_flow_value = arch_state().load( bld, reg );
+            auto field_name = reg->name;
+            auto normal_flow_value = arch_state().load( bld, field_name );
             values_t options;
             for ( auto [ _, data ] : writes )
             {
                 auto [ stores, conds ] = data;
                 for ( auto &[ key, vals ] : conds )
                 {
-                    if ( enclosing_reg( l_ctx().arch(), key ) != reg )
+                    auto enc_reg = enclosing_reg( l_ctx().arch(), key );
+                    if ( !enc_reg || enc_reg->name != field_name )
                         continue;
 
                     auto runtime_value = last_store( stores );
-                    arch_state().store( bld, l_ctx().reg( key ), runtime_value );
+                    if (!runtime_value)
+                    {
+                        log_dbg() << "Did not find last_store() for" << field_name;
+                        continue;
+                    }
+                    arch_state().store( bld, key, runtime_value );
 
-                    auto full_value = arch_state().load( bld, reg );
+                    auto full_value = arch_state().load( bld, field_name );
                     auto full_conds = irops::Or::make( bld, vals );
 
                     options.emplace_back( irops::Option::make( bld,
@@ -286,36 +294,36 @@ namespace circ::exalt
                                                                bw( full_value ) ) );
                     // Because we are modifying value of state in the bitcode, we need to
                     // reset it now
-                    arch_state().store( bld, reg, normal_flow_value );
+                    arch_state().store( bld, field_name, normal_flow_value );
                 }
             }
 
             if ( options.empty() )
             {
-                out[ reg ].emplace_back( unit_decoder, normal_flow_value );
+                out[ field_name ].emplace_back( unit_decoder, normal_flow_value );
             } else {
                 // Base base in case nothing was written
                 options.push_back( irops::Option::make( bld,
                                                         { normal_flow_value, bld.getTrue() },
                                                         bw( normal_flow_value ) ) );
                 auto s = irops::Switch::make( bld, options );
-                out[ reg ].emplace_back( unit_decoder, s );
+                out[ field_name ].emplace_back( unit_decoder, s );
             }
         }
 
         return out;
     }
 
-    auto isem_lifter_utilities::reg_check( reg_ptr_t reg,
+    auto isem_lifter_utilities::reg_check( const trace_field_t &field,
                                            const reg_final_values_t &final_values )
         -> value_t
     {
-        auto it = final_values.find( reg );
-        check( it != final_values.end() );
-        return reg_check( reg, it->second );
+        auto it = final_values.find( field );
+        check( it != final_values.end() ) << field;
+        return reg_check( field, it->second );
     }
 
-    auto isem_lifter_utilities::reg_check( reg_ptr_t reg,
+    auto isem_lifter_utilities::reg_check( const trace_field_t &field,
                                            const std::vector< cond_to_value_t > &partials )
         -> value_t
     {
@@ -324,7 +332,7 @@ namespace circ::exalt
         auto muxed_operands = [ & ]() -> gap::generator< value_t >
         {
             if ( partials.empty() )
-                co_yield irops::input_reg( bld, reg );
+                co_yield arch_state().in( bld, field );
             else
                 for ( auto [ unit_decoder, runtime ] : partials )
                     co_yield irops::Option::make( bld, { runtime, unit_decoder },
@@ -332,7 +340,7 @@ namespace circ::exalt
         };
 
         auto mux = irops::make< irops::Switch >( bld, muxed_operands() );
-        auto out_reg = irops::output_reg( bld, reg );
+        auto out_reg = arch_state().out( bld, field );
         return irops::OutputCheck::make( bld, { mux, out_reg } );
     }
 
@@ -371,7 +379,7 @@ namespace circ::exalt
     auto mux_heavy_lifter::finalize_circuit( exalted_value_buckets buckets ) -> value_t
     {
         for ( auto reg : l_ctx().regs() )
-            buckets[ place::root ].insert( reg_check( reg, final_values ) );
+            buckets[ place::root ].insert( reg_check( reg->name, final_values ) );
 
         auto &bld = irb();
         auto mk_args = [ & ]( auto roots )
@@ -408,10 +416,11 @@ namespace circ::exalt
 
         for ( auto reg : l_ctx().regs() )
         {
+            auto field_name = reg->name;
             auto get_check = [ & ]() -> value_t
             {
-                auto c = reg_check( reg, final_values );
-                if ( reg->name != "DF" )
+                auto c = reg_check( field_name, final_values );
+                if ( field_name != "DF" )
                     return c;
 
                 auto &bld = irb();

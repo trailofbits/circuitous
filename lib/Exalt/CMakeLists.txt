@@ -19,6 +19,7 @@ add_circuitous_library( exalt
   SOURCES
     Components.cpp
     ISemLifters.cpp
+    Interfaces.cpp
     Lifter.cpp
     OperandSelection.cpp
     States.cpp

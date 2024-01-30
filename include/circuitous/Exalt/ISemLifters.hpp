@@ -76,14 +76,16 @@ namespace circ::exalt
 
         using cond_to_value_t = std::tuple< llvm::Value *, llvm::Value * >;
         // { reg, [ ( condition, value of that reg if condition holds ) ] }
-        using reg_final_values_t = std::map< reg_ptr_t, std::vector< cond_to_value_t > >;
+        using reg_final_values_t = std::map< trace_field_t, std::vector< cond_to_value_t > >;
 
         auto gather_final_values( unit_t &unit,
                                   decoder_base &decoder,
                                   const parsed_writes_t &writes ) -> reg_final_values_t;
 
-        auto reg_check( reg_ptr_t reg, const reg_final_values_t & ) -> value_t;
-        auto reg_check( reg_ptr_t reg, const std::vector< cond_to_value_t > & ) -> value_t;
+        auto reg_check( const trace_field_t &, const reg_final_values_t & )
+            -> value_t;
+        auto reg_check( const trace_field_t &, const std::vector< cond_to_value_t > & )
+            -> value_t;
 
         /* Accessor shortcuts */
 
@@ -109,6 +111,8 @@ namespace circ::exalt
         builder_context &get_b_ctx() override { return b_ctx; }
 
        public:
+
+        auto &irb() { return base::irb(); }
 
         /* `isem_lifter_base` interface */
 
@@ -139,6 +143,9 @@ namespace circ::exalt
         builder_context &get_b_ctx() override { return b_ctx; }
 
        public:
+
+        auto &irb() { return base::irb(); }
+
         /* `isem_lifter_base` interface. */
         auto make_semantic_call( unit_t &, component_storage &, semantic_fn_t )
             -> isem_range_t override;

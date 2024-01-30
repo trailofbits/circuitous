@@ -89,7 +89,7 @@ namespace circ::exalt
 
         /* Required to lift semantics. */
         // What about old `Trace` class?
-        RemillArchState arch_state;
+        ExtendedState arch_state;
         MemoryPtr mem_ptr;
 
         /* Additional submodules to handle ZK related functionality. */

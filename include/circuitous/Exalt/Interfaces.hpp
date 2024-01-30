@@ -66,6 +66,8 @@ namespace circ::exalt
         uc_with_b_ctx( builder_context &b_ctx )
             : b_ctx( b_ctx )
         {}
+
+        builder_t &irb();
     };
 
     struct decoder_base : uc_with_b_ctx
