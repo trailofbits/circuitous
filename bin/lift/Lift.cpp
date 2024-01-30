@@ -66,6 +66,7 @@ DEFINE_bool(no_advices, false, "Lower all advices. Cannot be used with conjure-a
 DEFINE_bool(dbg, false, "Enable various debug dumps");
 DEFINE_bool(quiet, false, "");
 DEFINE_string(lift_with, "", "");
+DEFINE_string(with_submodules, "", "");
 
 namespace cli = circ::cli;
 
@@ -156,7 +157,8 @@ namespace
 
 
 using lifter_config = circ::tl::TL<
-    cli::LiftWith
+    cli::LiftWith,
+    circ::cli::Submodules
 >;
 
 using input_options = circ::tl::TL<
@@ -212,31 +214,48 @@ using cmd_opts_list = circ::tl::merge<
     lifter_config
 >;
 
+auto producer_kind( auto &cli )
+{
+    auto lifter_id = *cli.template get< cli::LiftWith >();
+    if ( lifter_id == "mux-heavy" )
+        return circ::lifter_kind::mux_heavy;
+    if ( lifter_id == "disjunctions" )
+        return circ::lifter_kind::disjunctions;
+    if ( lifter_id == "v3" )
+        return circ::lifter_kind::v3;
+    circ::log_kill() << "Unexpected config of lifter:" << lifter_id;
+}
+
+// TODO( bin:lift ): This can actually be a list
+auto submodules( auto &cli ) -> gap::generator< circ::circuit_submodule >
+{
+    auto id = cli.template get< circ::cli::Submodules >();
+    if ( !id )
+        co_return;
+
+    for ( auto raw : *id )
+    {
+        if ( raw == "external-syscalls" )
+            co_yield circ::circuit_submodule::external_syscalls;
+        else
+            circ::log_kill() << "Unexpected config of submodules to use: " << raw;
+    }
+}
+
 circ::circuit_owner_t get_input_circuit(auto &cli)
 {
     auto make_circuit = [&](auto buf) {
         circ::log_info() << "Going to make circuit";
         circ::Ctx ctx{ *cli.template get< cli::OS >(), *cli.template get< cli::Arch >() };
 
-        auto lifter_id = *cli.template get< cli::LiftWith >();
+        auto lifter_kind = producer_kind( cli );
 
-        if ( lifter_id == "mux-heavy" )
-        {
-            auto k = circ::lifter_kind::mux_heavy;
-            return circ::CircuitSmithy(std::move(ctx)).make(k, buf);
-        }
-        else if ( lifter_id == "disjunctions" )
-        {
-            auto k = circ::lifter_kind::disjunctions;
-            return circ::CircuitSmithy(std::move(ctx)).make(k, buf);
-        }
-        else if ( lifter_id == "v3" )
-        {
-            auto k = circ::lifter_kind::v3;
-            return circ::CircuitSmithy(std::move(ctx)).make(k, buf);
-        }
-        else
-            circ::log_kill() << "Unexpected config of lifter:" << lifter_id;
+        auto producer = circ::CircuitSmithy( std::move( ctx ) );
+
+        for ( auto &kind : submodules( cli ) )
+            producer.with_module( kind );
+
+        return producer.make( lifter_kind, buf );
     };
 
     if (auto bytes = cli.template get< cli::BytesIn >())
