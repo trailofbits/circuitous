@@ -465,6 +465,7 @@ namespace circ::irops
     static inline llvm::Value *mk_reg( auto &&irb, const auto &reg, auto io )
     {
         auto &m = *irb.GetInsertBlock()->getParent()->getParent();
+        check( reg ) << "mk_reg received ( null )!";
         auto type = int_reg_type( m, reg );
         return irops::make_leaf< irops::Reg >( irb, bw( m, type ), reg->name, io );
     }
