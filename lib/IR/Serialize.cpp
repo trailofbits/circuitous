@@ -191,6 +191,9 @@ namespace circ
         void visit( InputRegister *op ) { write( op->reg_name, op->size ); }
         void visit( OutputRegister *op ) { write( op->reg_name, op->size ); }
 
+        void visit( InputSyscallReg *op ) { write( op->reg_name, op->size ); }
+        void visit( OutputSyscallReg *op ) { write( op->reg_name, op->size ); }
+
         void visit( Constant *op ) { write( op->bits, op->size ); }
 
         void visit( Extract *op ) { write( op->low_bit_inc, op->high_bit_exc ); }
@@ -268,12 +271,18 @@ namespace circ
                                 SDef< Memory, unsigned, unsigned >,
                                 SDef< InputRegister, std::string, unsigned >,
                                 SDef< OutputRegister, std::string, unsigned >,
-                                SDef< Constant, std::string, unsigned >
+                                SDef< Constant, std::string, unsigned >,
+
+                                SDef< InputSyscallReg, std::string, unsigned >,
+                                SDef< OutputSyscallReg, std::string, unsigned >
                                >;
 
     using sized_ops_t = tl::TL<
                                InputTimestamp,
                                OutputTimestamp,
+
+                               InputSyscallState,
+                               OutputSyscallState,
 
                                InputErrorFlag,
                                OutputErrorFlag,
