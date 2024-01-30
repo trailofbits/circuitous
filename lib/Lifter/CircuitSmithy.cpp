@@ -64,6 +64,21 @@ namespace circ
         return out;
     }
 
+    void CircuitSmithy::register_submodules( exalt::circuit_producer &producer ) const
+    {
+        auto add = [ & ]( auto cs )
+        {
+            switch ( cs )
+            {
+                case circuit_submodule::external_syscalls:
+                    return producer.add_syscalls();
+            }
+        };
+
+        for ( auto cs : submodules )
+            add( cs );
+    }
+
     auto CircuitSmithy::forge_common( exalt::circuit_producer &producer,
                                          atoms_t &&atoms )
         -> circuit_ptr_t
@@ -71,6 +86,7 @@ namespace circ
         auto worklist = categorize( std::move( atoms ) );
 
         producer.add_operand_selector( worklist );
+        register_submodules( producer );
         log_info() << "[smithy]:" << "Worklist contains:" << worklist.size() << "entries!";
 
         for ( auto &unit : worklist )

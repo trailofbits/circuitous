@@ -34,6 +34,20 @@ namespace circ
         }
     }
 
+    enum class circuit_submodule
+    {
+        external_syscalls = 0
+    };
+
+    static inline std::string to_string( circuit_submodule cs )
+    {
+        switch ( cs )
+        {
+            case circuit_submodule::external_syscalls: return "external_syscalls";
+        }
+    }
+
+
     struct Circuit;
 
     struct owns_context
@@ -72,7 +86,20 @@ namespace circ
 
         worklist_t categorize( atoms_t atoms );
 
+      protected:
+
+        // TODO( lifter ): Should be generic enough to include also lifter kind.
+        std::vector< circuit_submodule > submodules;
+
+        void register_submodules( exalt::circuit_producer & ) const;
+
       public:
+
+        CircuitSmithy &with_module( circuit_submodule cs )
+        {
+            submodules.push_back( cs );
+            return *this;
+        }
 
         auto purify( const std::vector< InstBytes > &insts ) -> concretes_t;
         auto purify( std::string_view raw_bytes ) -> concretes_t;
