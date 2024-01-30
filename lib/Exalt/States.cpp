@@ -172,10 +172,11 @@ namespace circ::exalt
 
     void ExtendedState::add( builder_t &irb, state_value_t config )
     {
-        check( !storage.count( config->name ) );
+        check( !storage.count( config->key() ) );
 
-        auto mat = irb.CreateAlloca( config->type, nullptr, config->name );
-        storage.emplace( config->name, std::make_tuple( mat, std::move( config ) ) );
+        auto as_ptr = llvm::PointerType::get( config->type, 0 );
+        auto mat = irb.CreateAlloca( as_ptr, nullptr, config->key() );
+        storage.emplace( config->key(), std::make_tuple( mat, std::move( config ) ) );
     }
 
     void ExtendedState::add( builder_t &irb, std::vector< state_value_t > configs )
@@ -200,7 +201,7 @@ namespace circ::exalt
         if ( auto it = storage.find( name ); it != storage.end())
         {
             auto &[ val, _ ] = it->second;
-            irb.CreateStore( val, what );
+            irb.CreateStore( what, val );
         }
 
         return this->base::store( irb, name, what );
@@ -211,7 +212,7 @@ namespace circ::exalt
         for ( const auto &[ _, mat ] : storage )
         {
             const auto &[ val, config ] = mat;
-            irb.CreateStore( val, config->in() );
+            irb.CreateStore( config->in(), val );
         }
 
         return base::reset( irb );
@@ -230,7 +231,7 @@ namespace circ::exalt
            << "{\n";
         for ( const auto &[ k, m ] : storage )
         {
-            ss << "\t" << k;
+            ss << "\t" << k << " -> ";
             const auto &[ _, config ] = m;
             ss << config->to_string() << "\n";
         }
