@@ -128,6 +128,18 @@ namespace circ::run
             return *this;
         }
 
+        template< typename T >
+        self_t &all( uint64_t val )
+        {
+            // We have no guarantees? that they are all the same size.
+            for ( auto op : circuit->attr< T >() )
+            {
+                auto cooked = llvm::APInt( op->size, val, false );
+                node_state.set( op, cooked );
+            }
+            return *this;
+        }
+
         self_t &fill_memory()
         {
             for ( auto memory_op : circuit->attr< ::circ::Memory >() )
