@@ -518,6 +518,7 @@ namespace
                                          , irops::Switch, Switch
                                          , irops::Concat, Concat
                                          , irops::Option, Option
+                                         , irops::SyscallSubmodule, SyscallModule
                                          >( mk_sized(), call, fn ) )
             {
                 return val;
@@ -620,6 +621,21 @@ namespace
 
             if ( irops::cond_bind_delayed_value::is( fn ) )
                 return handle_cond_bind_delayed_value( call, fn );
+
+            if ( irops::SyscallReg::is( fn ) )
+            {
+                auto [ size, reg, io_type ] = irops::SyscallReg::parse_args(fn);
+                return VisitIOLeaf< InputSyscallReg, OutputSyscallReg >(
+                        call, fn, io_type, reg, static_cast< uint32_t >( size ) );
+            }
+
+            if ( irops::SyscallState::is( fn ) )
+            {
+                auto [raw_size, io_type] = irops::SyscallState::parse_args( fn );
+                auto size = static_cast< uint32_t >( raw_size );
+                return VisitIOLeaf< InputSyscallState, OutputSyscallState >( call, fn,
+                                                                             io_type, size );
+            }
 
             unreachable() << "Unsupported function: " << remill::LLVMThingToString(call);
         }
