@@ -11,7 +11,7 @@ test_shr = {
     .case(I = S(0x100).RAX(0b101).aflags(0), R = True)
     .case(I = S(0x100).RAX(0b1010).aflags(0), R = True),
 
-    VerifyTest("shr rbx imm8").tags({"min", "shr"}).bytes(intel(["shr rbx, 0x5"]))
+    VerifyTest("shr rbx imm8").tags({"min", "shr", "todo"}).bytes(intel(["shr rbx, 0x5"]))
     .case(I = S(0x100).RBX(0b1011111).aflags(0), R = True)
     .case(I = S(0x100).RBX(0b1000000).aflags(0), R = True),
 

@@ -19,7 +19,7 @@ test_rcl = {
     .case(I = S(0x100).RBX(0b101).aflags(1), R = True),
 
     # In `min` because it tests undefs.
-    VerifyTest("rcl_rdx_cl").tags({"rcl", "min"}).bytes(intel(["rcl rdx, cl"]))
+    VerifyTest("rcl_rdx_cl").tags({"rcl", "min", "todo"}).bytes(intel(["rcl rdx, cl"]))
     .case(I = S(0x100).RDX(0x7fffffffffffffff).RCX(63).aflags(0), DE = MS(), R = False)
     .case(I = S(0x100).RDX(0x7fffffffffffffff).RCX(63).aflags(0), DE = MS().uOF(), R = True)
     .case(I = S(0x100).RDX(0x7fffffffffffffff).RCX(63).aflags(1), DE = MS().uOF(), R = True)
