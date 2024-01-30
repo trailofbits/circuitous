@@ -148,10 +148,14 @@ namespace circ
             void visit(InputRegister *op)        { add_entry(op->parent_t::name(), op); }
             void visit(InputErrorFlag *op)       { add_entry(op->parent_t::name(), op); }
             void visit(InputTimestamp *op)       { add_entry(op->parent_t::name(), op); }
+            void visit(InputSyscallReg *op)      { add_entry(op->parent_t::name(), op); }
+            void visit(InputSyscallState *op)    { add_entry(op->parent_t::name(), op); }
 
             void visit(OutputRegister *op)        { add_entry(op->parent_t::name(), op); }
             void visit(OutputErrorFlag *op)       { add_entry(op->parent_t::name(), op); }
             void visit(OutputTimestamp *op)       { add_entry(op->parent_t::name(), op); }
+            void visit(OutputSyscallReg *op)      { add_entry(op->parent_t::name(), op); }
+            void visit(OutputSyscallState *op)    { add_entry(op->parent_t::name(), op); }
 
             void visit(InputInstructionBits *op) { add_entry(op->name(), op); }
             void visit(Advice *op)               { add_entry(op->name(), op); }
