@@ -15,6 +15,7 @@
 #include <circuitous/Exalt/ComponentStorage.hpp>
 #include <circuitous/Exalt/OperandSelection.hpp>
 #include <circuitous/Exalt/UnitComponents.hpp>
+#include <circuitous/Exalt/Syscall.hpp>
 
 #include <circuitous/Util/Warnings.hpp>
 #include <circuitous/Support/Log.hpp>
@@ -91,6 +92,15 @@ namespace circ::exalt
             cache.build_from( worklist );
             component_t allocator = std::make_shared< TM_allocator >( ctx, cache );
             pcs.add( std::move( allocator ) );
+        }
+
+        void add_syscalls()
+        {
+            auto sc = std::make_shared< syscall_component >( b_ctx );
+            sc->init();
+            pcs.add( std::move( sc ) );
+            // To check that syscall registers and state got injected properly.
+            log_dbg() << "[exalt]:" << b_ctx.arch_state().to_string();
         }
 
         void exalt( unit_t &unit );
