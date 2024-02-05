@@ -18,6 +18,10 @@ namespace circ::exalt
     // Universal tag for storage purposes.
     struct component_base
     {
+        // To ease usage w.r.t. persistent components. There is nothing preventing us from
+        // having this as `unique_ptr` and passing them around.
+        using component_t = std::shared_ptr< component_base >;
+
         virtual ~component_base() = default;
 
         // Is this per function or per unit only?
@@ -52,9 +56,8 @@ namespace circ::exalt
     template< typename T >
     concept is_unit_component = std::is_base_of_v< unit_component_base, T >;
 
-    // To ease usage w.r.t. persistent components. There is nothing preventing us from
-    // having this as `unique_ptr` and passing them around.
-    using component_t = std::shared_ptr< component_base >;
+    using component_t = component_base::component_t;
+    using component_list_t = std::vector< component_t >;
 
     // Forward declare to avoid include hell.
     struct builder_context;

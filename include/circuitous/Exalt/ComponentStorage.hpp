@@ -17,8 +17,6 @@
 
 namespace circ::exalt
 {
-    using component_list_t = std::vector< component_t >;
-
     // TODO( exalt ): Figure out if we even need this separation.
     struct has_components_base
     {
