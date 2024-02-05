@@ -75,7 +75,7 @@ namespace circ::exalt
                                               semantic_fn_t isem )
         -> std::tuple< lifted_operands_t, writes_t >
     {
-        auto &decoder = cs.get_decoder();
+        auto &decoder = cs.get_active_decoder( unit );
         auto &allocator = cs.fetch_or_die< operand_allocator_base >();
         auto caching_requester = allocator.get_requester( irb(), arch_state(),
                                                          decoder.unit_decoder() );
@@ -359,7 +359,7 @@ namespace circ::exalt
                                                semantic_fn_t isem )
         -> isem_range_t
     {
-        auto &decoder = cs.get_decoder();
+        auto &decoder = cs.get_active_decoder( unit );
         bump_pc( unit, decoder );
         auto [ operands, writes ] = get_operands( unit, cs, isem );
 
@@ -402,7 +402,7 @@ namespace circ::exalt
     {
         ctx_ops.clear();
 
-        auto &decoder = cs.get_decoder();
+        auto &decoder = cs.get_active_decoder( unit );
         // TODO( exalt ): This is currently sharing some code with `mux_heavy_lifter`.
         bump_pc( unit, decoder );
         auto [ operands, writes ] = get_operands( unit, cs, isem );
