@@ -45,19 +45,39 @@ namespace circ::exalt
 
         /* Access components */
 
-        template< typename T >
-        T &fetch_or_die()
+        template< typename T, typename Pred >
+        T &fetch_or_die( Pred &&pred )
         {
             for ( auto &c : components() )
                 if ( auto casted = dynamic_cast< T * >( c.get() ) )
-                    return *casted;
+                    if ( pred( casted ) )
+                        return *casted;
             log_kill() << "Could not fetch desired interface from unit_components.";
         }
 
-        auto get_decoder() -> decoder_base &
+        template< typename T >
+        T &fetch_or_die()
+        {
+            return fetch_or_die< T >( [ & ]( auto ) { return true; } );
+        }
+
+        auto get_active_decoder( unit_t &unit ) -> decoder_base &
         {
             log_dbg() << "[exalt:ucs]:" << "Fetching decoder.";
-            return fetch_or_die< decoder_base >();
+            auto is_active = [ & ]( auto decoder )
+            {
+                return decoder->is_active( unit );
+            };
+            return fetch_or_die< decoder_base >( is_active );
+        }
+
+        auto get_decoders() -> std::vector< decoder_base * >
+        {
+            std::vector< decoder_base * > out;
+            for ( auto &c : components() )
+                if ( auto casted = dynamic_cast< decoder_base * >( c.get() ) )
+                    out.push_back( casted );
+            return out;
         }
 
         auto get_isem_lifter() -> isem_lifter_base &
@@ -113,6 +133,9 @@ namespace circ::exalt
                     // *not* destroy `other`.
                     _components.push_back( c );
         }
+
+        auto begin() const { return _components.begin(); }
+        auto end() const { return _components.end(); }
 
         /* `has_components_base` */
 
