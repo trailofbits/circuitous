@@ -33,6 +33,9 @@ namespace circ::exalt
               local_components( component_storage::make_default( b_ctx ) )
         {
             local_components.copy_persistent_components( pcs );
+            for ( const auto &c : local_components )
+                for ( auto spawn : c->spawn_on_unit( b_ctx ) )
+                    local_components.add( std::move( spawn ) );
         }
 
         // TODO( exalt ): Change to only work on `&&` of `unit_lifter` if an internal

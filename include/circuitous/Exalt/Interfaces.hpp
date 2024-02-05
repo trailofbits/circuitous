@@ -15,6 +15,8 @@
 
 namespace circ::exalt
 {
+    struct builder_context;
+
     // Universal tag for storage purposes.
     struct component_base
     {
@@ -37,6 +39,11 @@ namespace circ::exalt
 
         // Called at the end of lifting process, after circuit is finalized.
         virtual void finalize() {}
+
+        virtual std::vector< component_t > spawn_on_unit( builder_context & ) const
+        {
+            return {};
+        }
     };
 
     // Provides hooks to interpose on lifting process.
