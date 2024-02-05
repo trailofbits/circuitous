@@ -225,6 +225,9 @@ namespace circ
         isel_t isel;
         atoms_t atoms;
 
+        // Various external submodules
+        std::unordered_set< std::string > external_submodules;
+
         Unit( isel_t isel, atoms_t atoms )
             : isel( isel ), atoms( std::move( atoms ) )
         {}
@@ -254,6 +257,16 @@ namespace circ
         bool is_write( std::size_t i ) const { return atoms.front().is_write( i ); }
 
         auto type( std::size_t i ) const { return atoms.front().type( i ); }
+
+        bool external_submodule( const std::string &name ) const
+        {
+            return external_submodules.contains( name );
+        }
+
+        bool any_external_submodule() const
+        {
+            return !external_submodules.empty();
+        }
     };
 
 
