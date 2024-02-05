@@ -58,6 +58,11 @@ namespace circ::exalt
         {
             return _unit_decoder;
         }
+
+        bool is_active( unit_t & unit ) const override
+        {
+            return unit.any_external_submodule();
+        }
     };
 
     // Replaces the remill memory intrinsics with appropriate circ intrinsics.

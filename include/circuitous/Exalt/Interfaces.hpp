@@ -84,6 +84,8 @@ namespace circ::exalt
         auto end()   const { return atom_decoders().end(); }
 
         virtual value_t unit_decoder() const = 0;
+
+        virtual bool is_active( unit_t & ) const = 0;
     };
 
     struct component_storage;
