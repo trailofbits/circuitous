@@ -1,7 +1,5 @@
 #!/bin/sh
 
-set -x
-
 circuit=""
 os="linux"
 arch="x86"
