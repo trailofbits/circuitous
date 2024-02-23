@@ -66,11 +66,12 @@ namespace circ::run::trace
 
     struct loader_base
     {
-      protected:
-        circ::Ctx ctx{ "macos", "x86" };
+        loader_base(const std::string &os, const std::string &arch)
+            : ctx(os, arch)
+        {}
 
-      public:
-        loader_base() = default;
+      protected:
+        circ::Ctx ctx;
 
       protected:
 
