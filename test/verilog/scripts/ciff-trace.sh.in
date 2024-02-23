@@ -10,6 +10,7 @@ use_cache=true
 os="linux"
 arch="x86"
 quiet_flag=""
+lift_with="disjunctions"
 
 help() {
     echo "Usage: $0 [OPTIONS] <ciff_file> <mttn_trace>"
@@ -20,6 +21,7 @@ help() {
     echo "  -q, --quiet                     Run in quiet mode"
     echo "  --os <operating_system>         Specify the operating system (default: $os)"
     echo "  --arch <architecture>           Specify the architecture (default: $arch)"
+    echo "  --lift-with <lift_option>       Specify the --lift-with option (default: $lift_with)"
     echo "  --no-cache                      Disable caching"
     echo "  --help                          Display this help message"
     exit 1
@@ -50,6 +52,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --arch)
             arch="$2"
+            shift 2
+            ;;
+        --lift-with)
+            lift_with="$2"
             shift 2
             ;;
         --no-cache)
@@ -86,7 +92,7 @@ else
           --arch "$arch" \
           --logtostderr \
           $quiet_flag \
-          --lift-with disjunctions \
+          --lift-with "$lift_with" \
           --ciff-in "$ciff" \
           --verilog-out "$circuit_v" \
           --ir-out "$circuit_c"
