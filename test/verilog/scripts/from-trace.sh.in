@@ -1,6 +1,7 @@
 #!/bin/sh
 
 set -e
+set -x
 
 # Default values for parameters
 run="@PROJECT_BINARY_DIR@/bin/run/circuitous-run"
@@ -15,6 +16,8 @@ display_usage() {
     echo "  -r, --run <run_command>       Specify the run executable (default: $run)"
     echo "  -t, --convert-trace <type>    Specify the trace type (default: $convert_trace_type)"
     echo "  -q, --quiet                   Run in quiet mode"
+    echo "  --os <operating_system>         Specify the operating system (default: $os)"
+    echo "  --arch <architecture>           Specify the architecture (default: $arch)"
     echo "  --no-cache                    Disable caching"
     echo "  --help                        Display this help message"
     exit 1
@@ -34,6 +37,14 @@ while [ "$#" -gt 0 ]; do
         -q|--quiet)
             quiet_flag="--quiet"
             shift
+            ;;
+        --os)
+            os="$2"
+            shift 2
+            ;;
+        --arch)
+            arch="$2"
+            shift 2
             ;;
         --no-cache)
             use_cache=false
@@ -68,6 +79,8 @@ else
     echo "Converting traces and producing circuit: $mttn_trace -> $trace_out"
     $run --convert-trace "$convert_trace_type" \
          --traces "$mttn_trace" \
+         --os "$os" \
+         --arch "$arch" \
          $quiet_flag \
          --construct-circuit \
          --verilog-out "$circuit_v" \
