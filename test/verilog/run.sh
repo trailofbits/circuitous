@@ -39,7 +39,7 @@ done
 if [ -z "$circuit" ]; then
     process_traces scripts/from-trace.sh
 else
-    process_traces "scripts/ciff-and-mttn-trace.sh $circuit"
+    process_traces "scripts/ciff-trace.sh $circuit"
 fi
 
 exit $?

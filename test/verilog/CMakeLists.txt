@@ -2,7 +2,7 @@
 # Copyright (c) 2024 Trail of Bits, Inc.
 #
 
-configure_file( scripts/ciff-and-mttn-trace.sh.in scripts/ciff-and-mttn-trace.sh @ONLY )
+configure_file( scripts/ciff-trace.sh.in scripts/ciff-trace.sh @ONLY )
 configure_file( scripts/from-trace.sh.in scripts/from-trace.sh @ONLY )
 
 file( COPY scripts DESTINATION . )
