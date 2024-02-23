@@ -3,7 +3,7 @@
 failed=0
 
 for trace in input_mttn_traces/*; do
-    sh scripts/from-mttn-trace.sh $trace >&2 || failed=1
+    sh scripts/from-trace.sh $trace >&2 || failed=1
 done
 
 if [ $failed -ne 0 ]; then

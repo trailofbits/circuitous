@@ -3,7 +3,7 @@
 #
 
 configure_file( scripts/ciff-and-mttn-trace.sh.in scripts/ciff-and-mttn-trace.sh @ONLY )
-configure_file( scripts/from-mttn-trace.sh.in scripts/from-mttn-trace.sh @ONLY )
+configure_file( scripts/from-trace.sh.in scripts/from-trace.sh @ONLY )
 
 file( COPY scripts DESTINATION . )
 file( COPY external DESTINATION . )
