@@ -1,50 +1,98 @@
 #!/bin/sh
 
-# Nothing can produce an error
 set -e
 
-run=@PROJECT_BINARY_DIR@/bin/run/circuitous-run
-run=@PROJECT_BINARY_DIR@/bin/lift/circuitous-lift
+# Default values for parameters
+run="@PROJECT_BINARY_DIR@/bin/run/circuitous-run"
+lift="@PROJECT_BINARY_DIR@/bin/lift/circuitous-lift"
+use_cache=true
 
-ciff=$1
-mttn_trace=$2
+# Function to display usage
+display_usage() {
+    echo "Usage: $0 [OPTIONS] <ciff_file> <mttn_trace>"
+    echo "Options:"
+    echo "  -r, --run <run_command>       Specify the run executable (default: $run)"
+    echo "  -l, --lift <lift_command>     Specify the lift executable (default: $lift)"
+    echo "  -t, --convert-trace <type>    Specify the trace type (default: $convert_trace_type)"
+    echo "  -q, --quiet                   Run in quiet mode"
+    echo "  --no-cache                    Disable caching"
+    echo "  --help                        Display this help message"
+    exit 1
+}
 
-circuit_root=`basename $ciff ".ciff"`
+# Parse command-line options
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -r|--run)
+            run="$2"
+            shift 2
+            ;;
+        -t|--convert-trace)
+            convert_trace_type="$2"
+            shift 2
+            ;;
+        -q|--quiet)
+            quiet_flag="--quiet"
+            shift
+            ;;
+        -l|--lift)
+            lift="$2"
+            shift 2
+            ;;
+        --no-cache)
+            use_cache=false
+            shift
+            ;;
+        --help)
+            display_usage
+            ;;
+        *)
+            ciff="$1"
+            mttn_trace="$2"
+            shift 2
+            ;;
+    esac
+done
+
+# Check if required arguments are provided
+if [ -z "$ciff" ] || [ -z "$mttn_trace" ]; then
+    echo "Error: Missing required arguments."
+    display_usage
+fi
+
+# Extracting root name and file paths
+circuit_root=$(basename "$ciff" ".ciff")
 circuit_v="$circuit_root.v"
 circuit_c="$circuit_root.circir"
 
-# We are caching as this can be quite expensive time wise for
-# prototyping
-if    [ ! -z "${CIRCUITOUS_VERILOG_TEST_CACHE}" ] \
-   && [ -f "$circuit_v" ] \
-   && [ -f  "$circuit_c" ];
-then
+# Check if cached circuit files exist
+if [ "$use_cache" = true ] && [ -f "$circuit_c" ] && [ -f "$circuit_v" ]; then
     echo "Found cached circuit files: $circuit_v $circuit_c"
 else
     $lift --os macos \
           --arch x86 \
           --logtostderr \
-          --quiet \
+          $quiet_flag \
           --lift-with disjunctions \
-          --ciff-in $ciff \
-          --verilog-out $circuit_v \
-          --ir-out $circuit_c
+          --ciff-in "$ciff" \
+          --verilog-out "$circuit_v" \
+          --ir-out "$circuit_c"
 fi
 
-mttn_root=`basename $mttn_trace ".mttn"`
-trace_out="$mttn_root.$circuit_root.circuitous_trace"
-if    [ ! -z "${CIRCUITOUS_VERILOG_TEST_CACHE}" ]\
-   && [ -f "$trace_out" ];
-then
+mttn_root=$(basename "$mttn_trace" ".mttn")
+trace_out="$mttn_root.circuitous_trace"
+
+# Check if cached trace exists
+if [ "$use_cache" = true ] && [ -f "$trace_out" ]; then
     echo "Found cached trace $trace_out"
 else
-    echo "Converting traces: $mttn -> $trace_out"
-    $run --ir-in $circuit_c \
-         --convert-trace mttn \
-         --traces $mttn_trace \
-         --quiet \
-         --output $trace_out
+    echo "Converting traces: $mttn_trace -> $trace_out"
+    $run --ir-in "$circuit_c" \
+         --convert-trace "$convert_trace_type" \
+         --traces "$mttn_trace" \
+         $quiet_flag \
+         --output "$trace_out"
 fi
 
-sh scripts/circuitous-test-harness.sh $circuit_v $trace_out
+sh scripts/circuitous-test-harness.sh "$circuit_v" "$trace_out"
 exit $?
