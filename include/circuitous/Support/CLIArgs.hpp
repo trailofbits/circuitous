@@ -303,5 +303,22 @@ namespace circ::cli
       }
     };
 
-} // namespace circ::cli
+    struct ConjureALU : circ::DefaultCmdOpt, Arity< 0 > {
+        static inline const auto opt = circ::CmdOpt( "--conjure-alu", false );
+    };
 
+    struct NoAdvices : circ::DefaultCmdOpt, Arity< 0 > {
+        static inline const auto opt = circ::CmdOpt( "--no-advices", false );
+    };
+
+    struct LiftWith : DefaultCmdOpt, HasAllowed< LiftWith >,
+                      PathArg
+    {
+        static inline const auto opt = circ::CmdOpt( "--lift-with", true );
+
+        static inline const std::unordered_set< std::string > allowed =
+        {
+            "mux-heavy", "disjunctions", "v3"
+        };
+    };
+} // namespace circ::cli
