@@ -34,6 +34,23 @@ namespace circ
         }
     }
 
+    static inline std::optional< lifter_kind > lifter_kind_from_string(const std::string &str)
+    {
+        static const std::unordered_map<std::string, lifter_kind> string_to_enum{
+            {"v1", lifter_kind::v1},
+            {"v2", lifter_kind::v2},
+            {"v3", lifter_kind::v3},
+            {"mux_heavy", lifter_kind::mux_heavy},
+            {"disjunctions", lifter_kind::disjunctions}
+        };
+
+        if (auto it = string_to_enum.find(str); it != string_to_enum.end()) {
+            return it->second;
+        }
+
+        return std::nullopt;
+    }
+
     struct Circuit;
 
     struct owns_context

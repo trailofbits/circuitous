@@ -196,23 +196,11 @@ circ::circuit_owner_t get_input_circuit(auto &cli)
 
         auto lifter_id = *cli.template get< cli::LiftWith >();
 
-        if ( lifter_id == "mux-heavy" )
-        {
-            auto k = circ::lifter_kind::mux_heavy;
-            return circ::CircuitSmithy(std::move(ctx)).make(k, buf);
-        }
-        else if ( lifter_id == "disjunctions" )
-        {
-            auto k = circ::lifter_kind::disjunctions;
-            return circ::CircuitSmithy(std::move(ctx)).make(k, buf);
-        }
-        else if ( lifter_id == "v3" )
-        {
-            auto k = circ::lifter_kind::v3;
-            return circ::CircuitSmithy(std::move(ctx)).make(k, buf);
-        }
-        else
+        if (auto lifter = circ::lifter_kind_from_string(lifter_id)) {
+            return circ::CircuitSmithy(std::move(ctx)).make(lifter.value(), buf);
+        } else {
             circ::log_kill() << "Unexpected config of lifter:" << lifter_id;
+        }
     };
 
     if (auto bytes = cli.template get< cli::BytesIn >())
