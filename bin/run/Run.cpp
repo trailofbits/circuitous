@@ -353,9 +353,17 @@ void convert_trace( const auto &cli )
     auto out = *cli.template get< circ::cli::run::Output >();
 
     auto trace_file = *cli.template get< circ::cli::run::Traces >();
+    auto lifter_id = *cli.template get< circ::cli::LiftWith >();
+    auto lifter = circ::lifter_kind_from_string(lifter_id);
+
+    if (!lifter) {
+        circ::log_kill() << "Unexpected config of lifter:" << lifter_id;
+    }
+
     auto loader = circ::run::trace::with_reconstructor(
         *cli.template get< circ::cli::OS >(),
-        *cli.template get< circ::cli::Arch >()
+        *cli.template get< circ::cli::Arch >(),
+        lifter.value()
     );
     auto traces = loader.parse_alien_trace( trace_file );
     auto circuit = produce_circuit( cli, std::move( loader ) );
@@ -406,6 +414,9 @@ using other_options = circ::tl::TL<
     circ::cli::Dbg,
     circ::cli::Quiet
 >;
+using lifter_config = circ::tl::TL<
+    circ::cli::LiftWith
+>;
 
 using cmd_opts_list = circ::tl::merge<
     run_modes,
@@ -414,6 +425,7 @@ using cmd_opts_list = circ::tl::merge<
     output_options,
     config_options,
     remill_config_options,
+    lifter_config,
     other_options
 >;
 
@@ -454,7 +466,9 @@ std::optional< circ::ParsedCmd > parse_and_validate(int argc, char *argv[])
         return {};
     }
 
-    if (v.check(are_exclusive< input_options >()).process_errors(yield_err))
+    if (v.check(are_exclusive< input_options >())
+         .check(is_present< cli::LiftWith >())
+         .process_errors(yield_err))
     {
         return {};
     }

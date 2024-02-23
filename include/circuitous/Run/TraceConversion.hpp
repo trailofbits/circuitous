@@ -96,8 +96,11 @@ namespace circ::run::trace
 
     struct with_reconstructor : loader_base
     {
-        using loader_base::loader_base;
+        with_reconstructor(const std::string &os, const std::string &arch, lifter_kind lifter)
+            : loader_base(os, arch), lifter(lifter)
+        {}
 
+        lifter_kind lifter;
         std::vector< remill::Instruction > seen;
 
         auto parse_alien_trace( const std::string &source_file )
@@ -108,8 +111,7 @@ namespace circ::run::trace
 
         auto reconstruct() &&
         {
-            auto k = lifter_kind::disjunctions;
-            return CircuitSmithy( std::move( ctx ) ).make( k, std::move( seen ) );
+            return CircuitSmithy( std::move( ctx ) ).make( lifter, std::move( seen ) );
         }
     };
 
