@@ -62,7 +62,7 @@ circuit_c="$circuit_root.circir"
 trace_out="$circuit_root.circuitous_trace"
 
 # Check if cached files exist (if use_cache is true)
-if [ "$use_cache" = true ] && [ -n "${CIRCUITOUS_VERILOG_TEST_CACHE}" ] && [ -f "$trace_out" ] && [ -f "$circuit_c" ] && [ -f "$circuit_v" ]; then
+if [ "$use_cache" = true ] && [ -f "$trace_out" ] && [ -f "$circuit_c" ] && [ -f "$circuit_v" ]; then
     echo "Found cached trace $trace_out"
 else
     echo "Converting traces and producing circuit: $mttn_trace -> $trace_out"
