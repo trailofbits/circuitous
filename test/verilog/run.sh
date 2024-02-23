@@ -5,12 +5,13 @@ os="linux"
 arch="x86"
 use_cache_flag=""
 quiet_flag=""
+lift_with="disjunctions"
 
 process_traces() {
     local script="$1"
     local failed=0
     for trace in input_mttn_traces/*; do
-        sh "$script" --os "$os" --arch "$arch" "$use_cache_flag" "$quiet_flag" "$trace" >&2 || failed=1
+        sh "$script" --os "$os" --arch "$arch" --lift-with "$lift_with" "$use_cache_flag" "$quiet_flag" "$trace" >&2 || failed=1
     done
     return $failed
 }
@@ -21,6 +22,7 @@ help() {
     echo "  --circuit <circuit_file>    Specify the circuit for execution"
     echo "  --os <operating_system>     Specify the operating system (default: $os)"
     echo "  --arch <architecture>       Specify the architecture (default: $arch)"
+    echo "  --lift-with <lift_option>   Specify the --lift-with option (default: $lift_with)"
     echo "  --no-cache                  Disable caching"
     echo "  --quiet                     Run in quiet mode"
     echo "  --help                      Display this help message"
@@ -40,6 +42,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --arch)
             arch="$2"
+            shift 2
+            ;;
+        --lift-with)
+            lift_with="$2"
             shift 2
             ;;
         --no-cache)

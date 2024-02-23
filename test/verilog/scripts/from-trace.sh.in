@@ -7,6 +7,7 @@ run="@PROJECT_BINARY_DIR@/bin/run/circuitous-run"
 convert_trace_type="mttn"
 quiet_flag="--quiet"
 use_cache=true
+lift_with="disjunctions"
 
 help() {
     echo "Usage: $0 [OPTIONS] <mttn_trace>"
@@ -14,8 +15,9 @@ help() {
     echo "  -r, --run <run_command>       Specify the run executable (default: $run)"
     echo "  -t, --convert-trace <type>    Specify the trace type (default: $convert_trace_type)"
     echo "  -q, --quiet                   Run in quiet mode"
-    echo "  --os <operating_system>         Specify the operating system (default: $os)"
-    echo "  --arch <architecture>           Specify the architecture (default: $arch)"
+    echo "  --os <operating_system>       Specify the operating system (default: $os)"
+    echo "  --arch <architecture>         Specify the architecture (default: $arch)"
+    echo "  --lift-with <lift_option>     Specify the --lift-with option (default: $lift_with)"
     echo "  --no-cache                    Disable caching"
     echo "  --help                        Display this help message"
     exit 1
@@ -42,6 +44,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         --arch)
             arch="$2"
+            shift 2
+            ;;
+        --lift-with)
+            lift_with="$2"
             shift 2
             ;;
         --no-cache)
@@ -80,6 +86,7 @@ else
          --os "$os" \
          --arch "$arch" \
          $quiet_flag \
+         --lift-with "$lift_with" \
          --construct-circuit \
          --verilog-out "$circuit_v" \
          --ir-out "$circuit_c" \
