@@ -8,8 +8,7 @@ convert_trace_type="mttn"
 quiet_flag="--quiet"
 use_cache=true
 
-# Function to display usage
-display_usage() {
+help() {
     echo "Usage: $0 [OPTIONS] <mttn_trace>"
     echo "Options:"
     echo "  -r, --run <run_command>       Specify the run executable (default: $run)"
@@ -50,7 +49,7 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         --help)
-            display_usage
+            help
             ;;
         *)
             mttn_trace="$1"
@@ -62,7 +61,7 @@ done
 # Check if required argument is provided
 if [ -z "$mttn_trace" ]; then
     echo "Error: Missing <mttn_trace> argument."
-    display_usage
+    help
 fi
 
 # Extracting root name and file paths
