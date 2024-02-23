@@ -4,4 +4,5 @@
 
 add_subdirectory( unit )
 add_subdirectory( full )
+add_subdirectory( verilog )
 # add_subdirectory( decoder )
