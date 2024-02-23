@@ -5,18 +5,24 @@ set -e
 # Default values for parameters
 run="@PROJECT_BINARY_DIR@/bin/run/circuitous-run"
 lift="@PROJECT_BINARY_DIR@/bin/lift/circuitous-lift"
+convert_trace_type="mttn"
 use_cache=true
+os="linux"
+arch="x86"
+quiet_flag=""
 
 # Function to display usage
 display_usage() {
     echo "Usage: $0 [OPTIONS] <ciff_file> <mttn_trace>"
     echo "Options:"
-    echo "  -r, --run <run_command>       Specify the run executable (default: $run)"
-    echo "  -l, --lift <lift_command>     Specify the lift executable (default: $lift)"
-    echo "  -t, --convert-trace <type>    Specify the trace type (default: $convert_trace_type)"
-    echo "  -q, --quiet                   Run in quiet mode"
-    echo "  --no-cache                    Disable caching"
-    echo "  --help                        Display this help message"
+    echo "  -r, --run <run_command>         Specify the run executable (default: $run)"
+    echo "  -l, --lift <lift_command>       Specify the lift executable (default: $lift)"
+    echo "  -t, --convert-trace <type>      Specify the trace type (default: $convert_trace_type)"
+    echo "  -q, --quiet                     Run in quiet mode"
+    echo "  --os <operating_system>         Specify the operating system (default: $os)"
+    echo "  --arch <architecture>           Specify the architecture (default: $arch)"
+    echo "  --no-cache                      Disable caching"
+    echo "  --help                          Display this help message"
     exit 1
 }
 
@@ -27,6 +33,10 @@ while [ "$#" -gt 0 ]; do
             run="$2"
             shift 2
             ;;
+        -l|--lift)
+            lift="$2"
+            shift 2
+            ;;
         -t|--convert-trace)
             convert_trace_type="$2"
             shift 2
@@ -35,8 +45,12 @@ while [ "$#" -gt 0 ]; do
             quiet_flag="--quiet"
             shift
             ;;
-        -l|--lift)
-            lift="$2"
+        --os)
+            os="$2"
+            shift 2
+            ;;
+        --arch)
+            arch="$2"
             shift 2
             ;;
         --no-cache)
@@ -69,8 +83,8 @@ circuit_c="$circuit_root.circir"
 if [ "$use_cache" = true ] && [ -f "$circuit_c" ] && [ -f "$circuit_v" ]; then
     echo "Found cached circuit files: $circuit_v $circuit_c"
 else
-    $lift --os macos \
-          --arch x86 \
+    $lift --os "$os" \
+          --arch "$arch" \
           --logtostderr \
           $quiet_flag \
           --lift-with disjunctions \
