@@ -6,6 +6,7 @@ set -e
 run="@PROJECT_BINARY_DIR@/bin/run/circuitous-run"
 convert_trace_type="mttn"
 quiet_flag="--quiet"
+use_cache=true
 
 # Function to display usage
 display_usage() {
@@ -14,6 +15,7 @@ display_usage() {
     echo "  -r, --run <run_command>       Specify the run executable (default: $run)"
     echo "  -t, --convert-trace <type>    Specify the trace type (default: $convert_trace_type)"
     echo "  -q, --quiet                   Run in quiet mode"
+    echo "  --no-cache                    Disable caching"
     echo "  --help                        Display this help message"
     exit 1
 }
@@ -31,6 +33,10 @@ while [ "$#" -gt 0 ]; do
             ;;
         -q|--quiet)
             quiet_flag="--quiet"
+            shift
+            ;;
+        --no-cache)
+            use_cache=false
             shift
             ;;
         --help)
@@ -55,8 +61,8 @@ circuit_v="$circuit_root.v"
 circuit_c="$circuit_root.circir"
 trace_out="$circuit_root.$circuit_root.circuitous_trace"
 
-# Check if cached files exist
-if [ -n "${CIRCUITOUS_VERILOG_TEST_CACHE}" ] && [ -f "$trace_out" ] && [ -f "$circuit_c" ] && [ -f "$circuit_v" ]; then
+# Check if cached files exist (if use_cache is true)
+if [ "$use_cache" = true ] && [ -n "${CIRCUITOUS_VERILOG_TEST_CACHE}" ] && [ -f "$trace_out" ] && [ -f "$circuit_c" ] && [ -f "$circuit_v" ]; then
     echo "Found cached trace $trace_out"
 else
     echo "Converting traces and producing circuit: $mttn_trace -> $trace_out"
