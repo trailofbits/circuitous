@@ -15,7 +15,7 @@ process_traces() {
     return $failed
 }
 
-display_help() {
+help() {
     echo "Usage: $0 [--circuit <circuit_file>] [--os <operating_system>] [--arch <architecture>] [--no-cache] [--quiet] [--help]"
     echo "Options:"
     echo "  --circuit <circuit_file>    Specify the circuit for execution"
@@ -51,7 +51,7 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         --help)
-            display_help
+            help
             ;;
         *)
             shift

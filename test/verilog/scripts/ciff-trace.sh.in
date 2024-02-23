@@ -11,8 +11,7 @@ os="linux"
 arch="x86"
 quiet_flag=""
 
-# Function to display usage
-display_usage() {
+help() {
     echo "Usage: $0 [OPTIONS] <ciff_file> <mttn_trace>"
     echo "Options:"
     echo "  -r, --run <run_command>         Specify the run executable (default: $run)"
@@ -58,7 +57,7 @@ while [ "$#" -gt 0 ]; do
             shift
             ;;
         --help)
-            display_usage
+            help
             ;;
         *)
             ciff="$1"
@@ -71,7 +70,7 @@ done
 # Check if required arguments are provided
 if [ -z "$ciff" ] || [ -z "$mttn_trace" ]; then
     echo "Error: Missing required arguments."
-    display_usage
+    help
 fi
 
 # Extracting root name and file paths
