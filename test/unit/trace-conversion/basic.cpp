@@ -24,7 +24,7 @@ namespace circ::run::test
     {
         setup_loggers();
 
-        trace::with_reconstructor loader;
+        trace::with_reconstructor loader( "linux", "x86" );
         auto traces = loader.parse_alien_trace( fname );
         auto circuit = std::move( loader ).reconstruct();
 

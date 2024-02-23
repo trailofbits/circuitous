@@ -323,7 +323,10 @@ auto parse_alien_trace( const auto &cli )
 {
     circ::log_dbg() << "[run]:" << "Converting traces";
     auto trace_file = *cli.template get< circ::cli::run::Traces >();
-    return circ::run::trace::alien_loader().parse_alien_trace( trace_file );
+    return circ::run::trace::alien_loader(
+        *cli.template get< circ::cli::OS >(),
+        *cli.template get< circ::cli::Arch >()
+    ).parse_alien_trace( trace_file );
 }
 
 void parse_trace( const auto &cli )
@@ -350,7 +353,10 @@ void convert_trace( const auto &cli )
     auto out = *cli.template get< circ::cli::run::Output >();
 
     auto trace_file = *cli.template get< circ::cli::run::Traces >();
-    auto loader = circ::run::trace::with_reconstructor();
+    auto loader = circ::run::trace::with_reconstructor(
+        *cli.template get< circ::cli::OS >(),
+        *cli.template get< circ::cli::Arch >()
+    );
     auto traces = loader.parse_alien_trace( trace_file );
     auto circuit = produce_circuit( cli, std::move( loader ) );
 
@@ -390,6 +396,10 @@ using config_options = circ::tl::TL<
     circ::cli::run::Die,
     circ::cli::run::Ctl
 >;
+using remill_config_options = circ::tl::TL<
+    circ::cli::Arch,
+    circ::cli::OS
+>;
 using other_options = circ::tl::TL<
     circ::cli::Help,
     circ::cli::Version,
@@ -403,6 +413,7 @@ using cmd_opts_list = circ::tl::merge<
     input_options,
     output_options,
     config_options,
+    remill_config_options,
     other_options
 >;
 
