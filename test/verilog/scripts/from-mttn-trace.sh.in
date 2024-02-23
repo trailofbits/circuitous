@@ -1,33 +1,70 @@
 #!/bin/sh
 
-# Nothing can produce an error
 set -e
 
-run=@PROJECT_BINARY_DIR@/bin/run/circuitous-run
+# Default values for parameters
+run="@PROJECT_BINARY_DIR@/bin/run/circuitous-run"
+convert_trace_type="mttn"
+quiet_flag="--quiet"
 
-mttn_trace=$1
+# Function to display usage
+display_usage() {
+    echo "Usage: $0 <mttn_trace>"
+    echo "Options:"
+    echo "  -r, --run <run_command>       Specify the run command (default: $run)"
+    echo "  -t, --convert-trace <type>   Specify the trace conversion type (default: $convert_trace_type)"
+    echo "  -q, --quiet                   Run in quiet mode"
+    exit 1
+}
 
-circuit_root=`basename $mttn_trace ".trace.txt"`
-circuit_v="$circuit_root.v"
-circuit_c="$circuit_root.circir"
+# Parse command-line options
+while [ "$#" -gt 0 ]; do
+    case "$1" in
+        -r|--run)
+            run="$2"
+            shift 2
+            ;;
+        -t|--convert-trace)
+            convert_trace_type="$2"
+            shift 2
+            ;;
+        -q|--quiet)
+            quiet_flag="--quiet"
+            shift
+            ;;
+        *)
+            mttn_trace="$1"
+            shift
+            ;;
+    esac
+done
 
-trace_out="$circuit_root.$circuit_root.circuitous_trace"
-if    [ ! -z "${CIRCUITOUS_VERILOG_TEST_CACHE}" ] \
-   && [ -f "$trace_out" ] \
-   && [ -f "$circuit_c" ] \
-   && [ -f "$circuit_v" ];
-then
-    echo "Found cached trace $trace_out"
-else
-    echo "Converting traces and producing circuit: $mttn -> $trace_out"
-    $run --convert-trace mttn \
-         --traces $mttn_trace \
-         --quiet \
-         --construct-circuit \
-         --verilog-out $circuit_v \
-         --ir-out $circuit_c \
-         --output $trace_out
+# Check if required argument is provided
+if [ -z "$mttn_trace" ]; then
+    echo "Error: Missing <mttn_trace> argument."
+    display_usage
 fi
 
-sh scripts/circuitous-test-harness.sh $circuit_v $trace_out
+# Extracting root name and file paths
+circuit_root=$(basename "$mttn_trace" ".trace.txt")
+circuit_v="$circuit_root.v"
+circuit_c="$circuit_root.circir"
+trace_out="$circuit_root.$circuit_root.circuitous_trace"
+
+# Check if cached files exist
+if [ -n "${CIRCUITOUS_VERILOG_TEST_CACHE}" ] && [ -f "$trace_out" ] && [ -f "$circuit_c" ] && [ -f "$circuit_v" ]; then
+    echo "Found cached trace $trace_out"
+else
+    echo "Converting traces and producing circuit: $mttn_trace -> $trace_out"
+    $run --convert-trace "$convert_trace_type" \
+         --traces "$mttn_trace" \
+         $quiet_flag \
+         --construct-circuit \
+         --verilog-out "$circuit_v" \
+         --ir-out "$circuit_c" \
+         --output "$trace_out"
+fi
+
+# Execute test harness
+sh scripts/circuitous-test-harness.sh "$circuit_v" "$trace_out"
 exit $?
