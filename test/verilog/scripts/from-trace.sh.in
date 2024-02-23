@@ -9,11 +9,12 @@ quiet_flag="--quiet"
 
 # Function to display usage
 display_usage() {
-    echo "Usage: $0 <mttn_trace>"
+    echo "Usage: $0 [OPTIONS] <mttn_trace>"
     echo "Options:"
-    echo "  -r, --run <run_command>       Specify the run command (default: $run)"
-    echo "  -t, --convert-trace <type>   Specify the trace conversion type (default: $convert_trace_type)"
+    echo "  -r, --run <run_command>       Specify the run executable (default: $run)"
+    echo "  -t, --convert-trace <type>    Specify the trace type (default: $convert_trace_type)"
     echo "  -q, --quiet                   Run in quiet mode"
+    echo "  --help                        Display this help message"
     exit 1
 }
 
@@ -31,6 +32,9 @@ while [ "$#" -gt 0 ]; do
         -q|--quiet)
             quiet_flag="--quiet"
             shift
+            ;;
+        --help)
+            display_usage
             ;;
         *)
             mttn_trace="$1"
