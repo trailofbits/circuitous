@@ -29,7 +29,7 @@ namespace circ
             case lifter_kind::v1 : return "v1";
             case lifter_kind::v2 : return "v2";
             case lifter_kind::v3 : return "v3";
-            case lifter_kind::mux_heavy : return "mux_heavy";
+            case lifter_kind::mux_heavy : return "mux-heavy";
             case lifter_kind::disjunctions : return "disjunctions";
         }
     }
@@ -40,7 +40,7 @@ namespace circ
             {"v1", lifter_kind::v1},
             {"v2", lifter_kind::v2},
             {"v3", lifter_kind::v3},
-            {"mux_heavy", lifter_kind::mux_heavy},
+            {"mux-heavy", lifter_kind::mux_heavy},
             {"disjunctions", lifter_kind::disjunctions}
         };
 
