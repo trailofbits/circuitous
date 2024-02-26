@@ -183,6 +183,7 @@ class Interpreter(SimulateCWDMixin):
     def run_case(self, case, ir, parent):
         args = [self.binary,
                 "--verify",
+                "--lift-with", "disjunctions",
                 "--log-dir", self.test_dir,
                 "--traces", self.create_trace_json(case, case.name, self.test_dir),
                 "--ctl", "verify",
