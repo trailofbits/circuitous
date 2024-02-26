@@ -42,6 +42,7 @@ class BaseRunner(RunsPopen):
 
         args = [self.runner,
                 '--verify',
+                '--lift-with', "disjunctions",
                 '--log-dir', self.test_dir,
                 '--traces', self.store_trace(self.test_case.as_json()),
                 '--export-derived', result,
